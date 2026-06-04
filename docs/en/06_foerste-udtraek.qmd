@@ -4,9 +4,268 @@ subtitle: "From register to analysis-ready data — step by step"
 date: last-modified
 ---
 
-::: {.callout-note}
-## Translation in progress
-This chapter is currently being translated into English.
+This page shows the complete process from a raw register to a saved dataset ready for analysis.
+You will see the pattern that recurs in almost every register extraction.
 
-[See the Danish version →](../da/06_foerste-udtraek.qmd)
+::: {.callout-important}
+**These examples cannot be run on the DST server.**
+The synthetic dataset (`fakeregs`) is not available there.
+You need **RStudio installed locally on your computer**:
+
+1. Download R: [cran.r-project.org](https://cran.r-project.org/)
+2. Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
+3. Open RStudio, create a new script (**File → New File → R Script**), and copy the code there.
+
+When you are ready to work with real register data, you use the same pattern — but on the DST server and with your project's register data.
 :::
+
+::: {.callout-note}
+**The examples use synthetic data from the package [`fakeregs`](https://github.com/steno-aarhus/fakeregs)** (MIT licence, Anders Aasted Isaksen, Steno Diabetes Center Aarhus) — fictitious persons with the structure and column names of DST registers.
+The package uses `generate_*()` functions to create synthetic data, which you save as parquet and practise `open_dataset()` on.
+:::
+
+
+::: {.callout-note}
+**Next step: hospital diagnoses (LPR)**
+This example uses `lpr_adm` (hospital contacts — contact dates only, no diagnosis join). When working with **diagnosis data from LPR** (ICD codes), additional rules apply: the register is split into two periods (LPR2 and LPR3), codes have a D-prefix that must be removed, and you must choose diagnosis types. All of this is covered in [Phase 9 — Hospital contacts (LPR)](09_hospitalskontakter-lpr.qmd).
+:::
+
+---
+
+## Preparation: install fakeregs and generate synthetic data
+
+`fakeregs` is not on CRAN — install directly from GitHub:
+
+```r
+install.packages("pak")             # only the first time
+pak::pak("steno-aarhus/fakeregs")   # install fakeregs
+```
+
+```r
+library(fakeregs)    # synthetic DST register data
+library(dplyr)       # filter, select, mutate, collect
+library(arrow)       # open_dataset, write_parquet
+
+# Generate synthetic data and save as parquet (done only once)
+bp        <- generate_background_pop()                           # synthetic background population
+bef_synth <- generate_bef(background_df = bp)                    # synthetic BEF register
+lpr_synth <- generate_lpr_adm(background_df = bp)                # synthetic LPR contact register
+
+dir.create("synth_data/bef",     recursive = TRUE, showWarnings = FALSE)   # create folders
+dir.create("synth_data/lpr_adm", recursive = TRUE, showWarnings = FALSE)
+write_parquet(bef_synth,  "synth_data/bef/bef.parquet")                    # save as parquet
+write_parquet(lpr_synth,  "synth_data/lpr_adm/lpr_adm.parquet")
+```
+
+::: {.callout-tip}
+**The path is relative to your working directory.**
+`"synth_data/bef/"` is created in the folder R is set to work in — check which one with `getwd()`.
+To save elsewhere, use a full path: `"C:/Users/yourname/projects/synth_data/bef/"`.
+:::
+
+You can now practise `open_dataset()` exactly as on the DST server.
+
+---
+
+## Step 1 — Define your cohort
+
+Every extraction starts with a list of pnr's — the people you want data for.
+In practice this comes from your cohort script. Here we build a small practice cohort
+directly from the BEF register.
+
+```{.r filename="step1_cohort.R"}
+# Open BEF — lazy connection, no data in R yet
+bef_data <- open_dataset("synth_data/bef/") %>%
+  rename_with(tolower)
+
+# Fetch 200 random pnr's as your cohort
+cohort_pnrs <- bef_data %>%
+  filter(year == 2015) %>%                # take one snapshot year
+  select(pnr) %>%
+  collect() %>%                           # HERE data is fetched into R
+  slice_sample(n = 200) %>%
+  pull(pnr)
+
+length(cohort_pnrs)                      # check: should return 200
+```
+
+::: {.callout-tip}
+In a real project, `cohort_pnrs` is a vector you built in a previous script
+and reload with `readRDS("datasets/full_cohort.rds") %>% pull(pnr)`.
+:::
+
+<details>
+<summary>Recode BEF variables — what do koen, civst and reg mean?</summary>
+
+::: {.callout-note}
+## Attribution
+
+The code below was written by **Anders Aasted Isaksen** (Steno Diabetes Center Aarhus)
+and is taken directly from the vignette
+[`common_tasks_dplyr.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/vignettes/common_tasks_dplyr.qmd)
+in the package [`fakeregs`](https://github.com/steno-aarhus/fakeregs) (MIT licence).
+The code is reproduced unchanged.
+:::
+
+The BEF register stores `koen`, `civst` and `reg` as codes — not as text.
+This recoding translates them into analysis-ready variables:
+
+```r
+# Continuing from Step 1 — bef_data is already opened with open_dataset()
+
+bef_clean <- bef_data %>%
+  filter(year == 2015, alder >= 18) %>%
+  select(pnr, year, foed_dag, koen, civst, reg, opr_land) %>%
+  collect() %>%                          # fetch into R before mutate
+  mutate(
+    foed_dato    = as.Date(foed_dag),    # date format
+
+    # koen: 1 = male, 2 = female (Anders Aasted Isaksen, fakeregs)
+    koen_text    = if_else(koen == "1", "Male", "Female"),
+
+    # civst: marital status (Anders Aasted Isaksen, fakeregs)
+    civil_status = case_when(
+      civst %in% c("G", "P") ~ "Married/partner",
+      civst %in% c("F", "O", "E", "L") ~ "Divorced/widowed",
+      civst == "U"            ~ "Single",
+      TRUE                    ~ NA_character_
+    ),
+
+    # reg: region codes (Anders Aasted Isaksen, fakeregs)
+    region       = case_when(
+      reg == 81 ~ "Region Nordjylland",
+      reg == 82 ~ "Region Midtjylland",
+      reg == 83 ~ "Region Syddanmark",
+      reg == 84 ~ "Region Hovedstaden",
+      reg == 85 ~ "Region Sjælland",
+      TRUE      ~ NA_character_
+    ),
+
+    # opr_land: 5100 = Denmark (Anders Aasted Isaksen, fakeregs)
+    immigrant    = opr_land != 5100
+  )
+
+head(bef_clean)
+```
+
+Source: [`fakeregs/vignettes/common_tasks_dplyr.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/vignettes/common_tasks_dplyr.qmd),
+Anders Aasted Isaksen, Steno Diabetes Center Aarhus (MIT licence).
+
+This is only an excerpt. Isaksen's full vignette is more thorough and covers additional variables and patterns —
+see it directly here: [steno-aarhus.github.io/fakeregs/articles/common_tasks_dplyr.html](https://steno-aarhus.github.io/fakeregs/articles/common_tasks_dplyr.html)
+
+</details>
+
+---
+
+## Step 2 — Extract data from a register
+
+Now we extract hospital contacts from `lpr_adm` for our cohort.
+The pattern is always the same: **open → filter → select columns → collect**.
+
+```{.r filename="step2_extraction.R"}
+# Open lpr_adm — lazy connection
+lpr_adm <- open_dataset("synth_data/lpr_adm/") %>%
+  rename_with(tolower)
+
+# Extract: filter BEFORE collect — otherwise the session will crash
+contacts <- lpr_adm %>%
+  filter(pnr %in% !!cohort_pnrs) %>%           # only our cohort
+  select(pnr, recnum, d_inddto) %>%             # only the columns we use
+  collect()                                     # HERE data is moved into R
+
+nrow(contacts)                                  # how many contact rows?
+head(contacts)                                  # the first six rows
+```
+
+**What happened?**
+
+- `open_dataset()` opened a lazy connection — no data in R yet
+- `filter()` and `select()` sent instructions to Arrow/DuckDB — still no data in R
+- `collect()` executed the query and fetched only the necessary rows into R
+
+See [The universal pattern](05_universelle-moenster.qmd) for a detailed explanation of lazy evaluation.
+
+::: {.callout-tip}
+**Test on a small sample first.** Before running a heavy extraction on the full cohort, test the code on a few people or rows — this catches errors quickly without waiting. E.g. `filter(pnr %in% !!head(cohort_pnrs, 10))`, or `collect() %>% head(100)` while building the code.
+:::
+
+---
+
+## Step 3 — Build analysis variables
+
+Add variables with `mutate()` *after* `collect()` — now you are in R and can use all functions.
+
+```r
+contacts <- contacts %>%
+  mutate(
+    date = as.Date(d_inddto),                            # explicit date class
+    year = as.integer(format(date, "%Y"))                # year from contact date
+  )
+```
+
+---
+
+## Step 4 — Save and reload
+
+Save with `saveRDS()` so the next script can reload it without re-running all the extractions.
+
+```{.r filename="step4_save.R"}
+saveRDS(contacts, "datasets/extract_contacts.rds")   # save to disk — change path to your own folder
+
+# Reload in the next script:
+contacts <- readRDS("datasets/extract_contacts.rds")
+```
+
+If you do not write a full path, the file is saved in your working directory. Run `getwd()` to see which folder that is.
+
+::: {.callout-warning}
+**The `datasets/` folder is stored locally on the DST server only.**
+Intermediate results are repatriated via output control — see [15 — Export and repatriation](15_eksport-hjemsendelse.qmd).
+:::
+
+---
+
+## Inspect the result
+
+Right after an extraction you should check that you got what you expected:
+
+```r
+head(contacts)                     # the first six rows — does it look right?
+nrow(contacts)                     # number of rows — as expected?
+length(unique(contacts$pnr))       # how many unique individuals?
+colSums(is.na(contacts))           # missing values per column
+class(contacts$d_inddto)           # is the date column Date? (not character)
+```
+
+If your extraction includes exclusion steps — e.g. "remove persons with an early diagnosis" — it is good practice to count N for each step. Replace `raw` and `clean` with your own variable names:
+
+```r
+# Template — replace raw and clean with your own variable names:
+cat("Raw extraction:        ", nrow(raw),                         "\n")   # all rows before exclusion
+cat("After exclusions:      ", nrow(clean),                       "\n")   # after each step
+cat("Excluded in total:     ", nrow(raw) - nrow(clean),           "\n")   # difference
+```
+
+These lines cannot be run with the synthetic practice data — they are a template for use when working with your own data and an exclusion sequence. The pattern is repeated for each exclusion step and forms the basis for a CONSORT flow diagram (a standardised flow diagram showing how many were excluded at each step and why).
+
+This is a quick sanity check. The full toolkit for exploring data — `summary()`, `table()`, cross-tables and NA handling — is covered in [Phase 7 — Inspect your data](07_inspicer-data.qmd).
+
+---
+
+## Next steps
+
+You have now made a complete extraction and saved it. Next steps are to learn to explore data thoroughly:
+
+- [Phase 7 — Inspect your data](07_inspicer-data.qmd) — the full toolkit for understanding what you have
+- [Phase 9 — Hospital contacts (LPR)](09_hospitalskontakter-lpr.qmd) — the complete pattern for diagnosis extractions
+- [Phase 11 — Joins and pivots](11_data-manipulation.qmd) — combine two extracts
+
+---
+
+## Source and adaptation
+
+Step 1 (cohort construction from BEF) is adapted from Anders Aasted Isaksen's vignette
+[`common_tasks_dplyr.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/vignettes/common_tasks_dplyr.qmd)
+in the `fakeregs` package (MIT licence, Steno Diabetes Center Aarhus).
+Steps 2–4 and the checklist are written for this guide.
