@@ -1,0 +1,223 @@
+---
+title: "Socioøkonomiske variable"
+subtitle: "Uddannelse, indkomst og beskæftigelse efter SEPLINE-tilgangen"
+date: last-modified
+---
+
+Du kender nu mønstret: `open_dataset → filter → collect → left_join`. Det er præcis det, du bruger her. To ting er **nye** i denne fase:
+
+1. **"Hent for året inden index-dato"** — SES-registrene er årsbaserede snapshots. Du kan ikke bare filtrere på `pnr`; du skal også matche på *hvilket år* der er relevant per person (`year(index_date) - 1`). Det gøres ved at beregne baseline-året per person og bruge det som join-nøgle.
+2. **FAIK via `familie_id`** — Indkomst er knyttet til *husstanden*, ikke personen direkte. Du skal bruge BEF som bro: hent `familie_id` fra BEF for baseline-året, og join derefter til FAIK på `familie_id`.
+
+Resten er kategorisering per SEPLINE-guidelines.
+
+---
+
+Socioøkonomisk position (SEP) måles i registerbaserede studier via tre dimensioner:
+uddannelse (UDDA), indkomst (FAIK) og beskæftigelse (AKM).
+Denne side viser, hvordan du udtrækker og kategoriserer dem efter **SEPLINE**-guidelinen.
+
+**SEPLINE-artikel:** Hjorth et al. *Clinical Epidemiology* 2025 —
+[doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772).
+Se artiklen for fuld begrundelse, anbefalede referencegrupper og kategoriseringer.
+
+::: {.callout-important}
+**Under udvikling — kode-eksempler, ikke valideret kode.**
+Kategoriseringerne nedenfor er **ikke** valideret og bør ikke bruges direkte i analyser uden gennemgang. De vises som strukturelle eksempler på, hvordan man kan kode variablerne — ikke som en godkendt implementering.
+Har du kode der allerede virker, eller input til kategoriseringerne, så hører jeg meget gerne fra dig:
+**Sara Schwartz — [saras@clin.au.dk](mailto:saras@clin.au.dk)**
+:::
+
+::: {.callout-note}
+**Adgang til registrene — tre veje:**
+
+1. **Parquet (anbefalet):** Brug `open_dataset("E:/workdata/[proj]/cleaned-data/parquet-registers/akm/")` + `rename_with(tolower)`. Eksemplerne nedenfor bruger dette mønster.
+2. **DARTER / projekt 708421:** Brug `load_database("akm")` direkte — `dstDataPrep` finder stien automatisk. Erstat blot `open_dataset(...)` med `load_database("akm")` i eksemplerne.
+3. **SAS-filer (hvis parquet ikke er klar):** Brug `haven::read_sas("sti/akm.sas7bdat")` — men dette læser hele filen ind i RAM. **Anbefalet:** konvertér til parquet én gang og arbejd derfra (se [Fase 4 — Konvertér SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet)).
+
+Dine kolonner kan hedde noget andet — tjek med `names(din_data)`.
+:::
+
+::: {.callout-warning}
+Alle tre registre er **årsbaserede**. Hent variablen for **året inden index-dato** (din kohortes indgangsdato — fx operationsdatoen eller diagnosedatoen), da registerdata for et givet år typisk beskriver status ved årets udgang.
+:::
+
+---
+
+## De tre dimensioner
+
+| Dimension | Register | Variabel |
+|---|---|---|
+| **Uddannelse** | UDDA | `hfaudd` — højeste afsluttede uddannelse (ISCED-kode) |
+| **Indkomst** | FAIK | `famaekvivadisp_13` — husstandsækvivaleret disponibel indkomst |
+| **Beskæftigelse** | AKM | `socio13` — arbejdsmarkedsklassifikation |
+
+SEPLINE specificerer både **hvordan** disse variable kategoriseres og **hvornår** i forløbet de måles.
+
+---
+
+## Beskæftigelse — AKM (`socio13`)
+
+```r
+library(arrow)       # open_dataset()
+library(dplyr)       # filter, select, mutate, left_join, collect
+library(lubridate)   # year() til at trække årstal ud af datoer
+
+# Erstat stien med din projekts parquet-sti — DARTER: load_database("akm")
+akm <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/akm/") %>%
+  rename_with(tolower)   # standardisér kolonnenavne
+
+# Hent beskæftigelsesstatus for året inden index-dato
+# (antager at kohort har kolonnerne pnr og index_date)
+index_aar <- unique(lubridate::year(kohort$index_date) - 1)   # baseline-år = index-år minus 1
+
+akm_data <- akm %>%
+  filter(pnr %in% !!kohort$pnr, aar %in% !!index_aar) %>%   # kun kohortens pnr'er i baseline-år
+  select(pnr, aar, socio13) %>%                              # kun de kolonner vi bruger
+  collect()                                                  # hent ind i R
+
+# Tilknyt til kohort med index-år som join-nøgle
+kohort_akm <- kohort %>%
+  mutate(aar_baseline = lubridate::year(index_date) - 1) %>%        # beregn baseline-år
+  left_join(akm_data, by = c("pnr", "aar_baseline" = "aar"))        # join på pnr og år
+
+# Kategorisér per SEPLINE
+kohort_akm <- kohort_akm %>%
+  mutate(occupation_cat = case_when(
+    socio13 %in% c(110, 111, 112, 113, 114, 120, 131, 132, 133, 134, 135, 139) ~ "Beskæftiget",
+    socio13 == 310                              ~ "Studerende",
+    socio13 %in% c(210, 410)                   ~ "Ledig",
+    socio13 %in% c(220, 321, 330)              ~ "Udenfor arbejdsmarked",   # sygedagpenge, førtidspension, fleksjob
+    socio13 %in% c(322, 323)                   ~ "Pensionist",
+    TRUE                                        ~ "Ukendt"                   # 0, 420 eller manglende
+  ))
+```
+
+---
+
+## Uddannelse — UDDA (`hfaudd`)
+
+Kategoriseres ud fra ISCED-koden i `hfaudd`: kort (`10`/`15`), mellemlang (`20`/`30`/`35`), lang (`40`–`80`), ukendt (`90` eller manglende).
+
+```r
+# DARTER: load_database("udda")
+udda <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/udda/") %>%
+  rename_with(tolower)   # standardisér kolonnenavne
+
+udda_data <- udda %>%
+  filter(pnr %in% !!kohort$pnr, aar %in% !!index_aar) %>%   # kun kohortens pnr'er i baseline-år
+  select(pnr, aar, hfaudd) %>%                               # kun de kolonner vi bruger
+  collect()                                                   # hent ind i R
+
+# Tag den seneste post hvis en person optræder flere gange
+udda_data <- udda_data %>%
+  group_by(pnr) %>%           # gruppér for at finde nyeste post per person
+  arrange(desc(aar)) %>%      # nyeste år først
+  slice(1) %>%                # behold kun den nyeste post
+  ungroup()                   # frigiv gruppering
+
+# Kategorisér per SEPLINE
+udda_data <- udda_data %>%
+  mutate(education_cat = case_when(
+    substr(as.character(hfaudd), 1, 2) %in% c("10", "15") ~ "Kort",
+    substr(as.character(hfaudd), 1, 2) %in% c("20", "30", "35") ~ "Mellemlang",
+    as.numeric(substr(as.character(hfaudd), 1, 2)) >= 40  ~ "Lang",
+    is.na(hfaudd) | substr(as.character(hfaudd), 1, 2) == "90" ~ "Ukendt",
+    TRUE ~ "Ukendt"
+  ))
+```
+
+---
+
+## Indkomst — FAIK via BEF (`famaekvivadisp_13`)
+
+Indkomst er knyttet til husstanden, ikke personen. Du skal bruge `familie_id` fra BEF som bro.
+SEPLINE anbefaler 3-årsgennemsnit inddelt i kvintiler stratificeret på køn × 5-årsaldersgruppe × referenceår.
+
+```r
+# DARTER: load_database("bef") og load_database("faik")
+bef  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/")  %>% rename_with(tolower)
+faik <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/faik/") %>% rename_with(tolower)
+
+# Hent familie_id fra BEF for baseline-år
+bef_familie <- bef %>%
+  filter(pnr %in% !!kohort$pnr, aar %in% !!index_aar) %>%   # kun kohortens pnr'er i baseline-år
+  select(pnr, aar, familie_id) %>%                           # familie_id er broen til FAIK
+  collect()                                                  # hent ind i R
+
+# Hent indkomst fra FAIK for baseline-år
+faik_data <- faik %>%
+  filter(aar %in% !!index_aar) %>%                           # kun baseline-år
+  select(familie_id, aar, famaekvivadisp_13) %>%             # kun de kolonner vi bruger
+  collect()                                                  # hent ind i R
+
+# Join: pnr → familie_id → indkomst
+indkomst <- bef_familie %>%
+  left_join(faik_data, by = c("familie_id", "aar"))          # to-nøgle join: husstand og år
+```
+
+<details>
+<summary>3-årsgennemsnit og kvintiler (SEPLINE-anbefaling)</summary>
+
+SEPLINE anbefaler 3-årsgennemsnit af indkomst og kvintiler stratificeret på køn × 5-årsaldersgruppe × år.
+Her er en forenklet version med kvintiler per år:
+
+```r
+library(dplyr)   # filter, select, left_join, group_by, summarise, mutate
+
+# Hent 3 år: index-år samt de to foregående
+aar_3 <- c(index_aar, index_aar - 1, index_aar - 2)   # 3-års vindue til gennemsnit
+
+bef_3aar <- bef %>%
+  filter(pnr %in% !!kohort$pnr, aar %in% !!aar_3) %>%   # kun kohortens pnr'er i de 3 år
+  select(pnr, aar, familie_id) %>%                       # familie_id er broen til FAIK
+  collect()                                              # hent ind i R
+
+faik_3aar <- faik %>%
+  filter(aar %in% !!aar_3) %>%                           # kun de 3 baseline-år
+  select(familie_id, aar, famaekvivadisp_13) %>%         # kun de kolonner vi bruger
+  collect()                                              # hent ind i R
+
+# Beregn 3-årsgennemsnit per person
+indkomst_mean <- bef_3aar %>%
+  left_join(faik_3aar, by = c("familie_id", "aar")) %>%   # kobl indkomst på via husstand og år
+  group_by(pnr) %>%                                       # gruppér for at beregne gennemsnit per person
+  summarise(
+    mean_indkomst = mean(famaekvivadisp_13, na.rm = TRUE),   # gennemsnitlig disponibel indkomst
+    .groups = "drop"                                          # frigiv gruppering automatisk
+  )
+
+# Inddel i kvintiler
+indkomst_kvintil <- indkomst_mean %>%
+  mutate(income_cat = ntile(mean_indkomst, 5))   # ntile(x, 5): 5 grupper — 1 = lavest, 5 = højest
+```
+
+</details>
+
+---
+
+## Saml alle SES-variable på kohorten
+
+```r
+kohort_ses <- kohort %>%
+  left_join(kohort_akm     %>% select(pnr, occupation_cat), by = "pnr") %>%   # tilknyt beskæftigelse
+  left_join(udda_data      %>% select(pnr, education_cat),  by = "pnr") %>%   # tilknyt uddannelse
+  left_join(indkomst_kvintil %>% select(pnr, income_cat),   by = "pnr")        # tilknyt indkomstkvintil
+```
+
+---
+
+## Se også
+
+- [SEPLINE-artiklen (Hjorth et al. 2025)](https://doi.org/10.2147/CLEP.S520772) — fuld metodebeskrivelse og anbefalede referencegrupper
+- [Fase 14 — Formateringstabeller](14b_formateringstabeller.qmd) — DST's SAS-filer til label-oversættelse
+- [Fase 14 — Registerreference](14d_register_reference.qmd) — bekræftede kolonnenavne for AKM, FAIK og UDDA
+
+---
+
+## Næste skridt
+
+Du har nu SES-kovariater. Næste skridt afhænger af hvad du mangler:
+
+- **Specialpakker** (OSDC til diabetesklassifikation, NMI til comorbiditetsscore, analyseværktøjer)? → [Fase 13 — Pakker og specialfunktioner](13a_pakker-oversigt.qmd)
+- **Klar til at eksportere resultater?** → [Fase 15 — Eksport og hjemsendelse](15_eksport-hjemsendelse.qmd)

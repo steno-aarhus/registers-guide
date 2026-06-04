@@ -1,0 +1,251 @@
+---
+title: "Inspicér og forstå din data"
+subtitle: "De vigtigste kommandoer til at se hvad du faktisk har"
+date: last-modified
+---
+
+I Fase 6 lavede du dit første udtræk — med syntetiske data fra `fakeregs`. Nu har du data, og inden du analyserer det, skal du forstå hvad du har.
+Det er først her, disse kommandoer giver mening: de er værktøjer til at *kigge på* et datasæt, så de er meningsløse uden data at kigge på.
+
+Denne side viser de kommandoer, du vil bruge igen og igen til at inspicere dine udtræk.
+
+::: {.callout-note}
+**`$` — tilgå én kolonne i en tabel**
+`data$koen` betyder: "kolonnen `koen` i tabellen `data`". Erstat `data` med dit eget datasætnavn og `koen` med dit eget kolonnenavn. Du vil se `$` overalt i R-kode.
+:::
+
+::: {.callout-tip}
+**Vil du øve kommandoerne i RStudio?**
+Alle eksempler på siden bruger `bef_data` — et BEF-udtræk med kolonner som `koen`, `alder` og `foed_dag`. Du kan generere det med to linjer, forudsat du har kørt forberedelsesblokken i [Fase 6](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data):
+
+```r
+# Fortsætter fra Fase 6 — bef_data er allerede åbnet som doven Arrow-forbindelse
+bef_data <- bef_data %>% filter(year == 2015) %>% collect()   # filtrer og hent ind i R
+```
+:::
+
+---
+
+## Ser du en rød fejlbesked? {#ser-du-en-rød-fejlbesked}
+
+Inden du leder i koden — gør dette i rækkefølge:
+
+1. **Læs fejlbeskeden** — hvilken linje er nævnt? Hvilket objektnavn dukker op?
+2. **Kør `class(objektet)`** — er det data (`"data.frame"`) eller stadig en forbindelse (`"tbl_duckdb_connection"`)?
+3. **Kør `names(objektet)`** — hedder kolonnen præcis det, du tror? Et enkelt bogstav eller stor/lille skrift er nok til at fejle.
+4. **Isolér den fejlende linje** — kør den alene og se hvad der sker.
+5. **Brug `?funktionsnavn`** — skriv fx `?colSums` i konsollen for at åbne hjælpedokumentationen i **Help**-panelet (nederst til højre). Den viser hvad funktionen gør, hvilke argumenter den tager, og eksempler.
+6. **Spørg en kollega eller søg på fejlbeskeden** — se [2 — R: det allermest nødvendige](02_r-intro.qmd#når-du-sidder-fast) for prioriteret hjælpeliste.
+
+En oversigt over hyppige fejlbeskeder og hvad de typisk betyder finder du i [Fase 14c — Faldgruber på DST](14c_dst_faldgruber.qmd#de-hyppigste-fejlbeskeder-og-hvad-de-betyder).
+
+---
+
+## Se hvad du har
+
+```r
+dim(bef_data)          # antal rækker og kolonner — fx "1200 rows, 8 columns"
+nrow(bef_data)         # kun antal rækker
+ncol(bef_data)         # kun antal kolonner
+names(bef_data)        # kolonnenavne som en vektor
+```
+
+`names()` virker også på et dovent Arrow-objekt inden `collect()` — fx `names(bef)` hvis du vil tjekke, hvilke kolonner registret har, inden du beslutter hvad du vil `select()`.
+
+<details>
+<summary>Eksempel med simpel data</summary>
+
+```r
+df <- data.frame(
+  pnr        = c("001", "002", "003"),
+  koen       = c("M", "K", "M"),
+  index_date = as.Date(c("2015-03-01", "2016-07-14", "2014-11-30"))
+)
+
+names(df)
+# [1] "pnr"        "koen"       "index_date"
+```
+
+</details>
+
+---
+
+## Forstå strukturen
+
+```r
+glimpse(bef_data)      # kolonnenavn, type og første værdier — kompakt og læsbar (kræver dplyr)
+str(bef_data)          # samme information, men mere verbose output
+class(bef_data)        # objekttype — er data faktisk i R, eller er det stadig en forbindelse?
+class(bef_data$alder)  # type for én kolonne: "numeric", "character", "Date" mv.
+```
+
+`class(bef_data)` fortæller om du har rigtige data (`"data.frame"`/`"tbl_df"`) eller stadig bare en usendt forespørgsel. Du kan se tre forskellige returværdier:
+
+- `"data.frame"` / `"tbl_df"` — data er i R. Du kan bruge alle funktioner.
+- `"tbl_duckdb_connection"` / `"Table"` — doven Arrow/DuckDB-forespørgsel. Mangler `collect()`.
+- `"arrow_dplyr_query"` — en Arrow-forespørgsel med et eller flere piped trin (fx `filter()` eller `select()`), men endnu ikke kørt. Mangler `collect()`.
+
+::: {.callout-tip}
+**`class()` kan hjælpe dig med at fejlfinde**
+Ser objektet ud som data men opfører sig mærkeligt, eller fejler din kode med en mystisk besked? Kør `class(dit_objekt)` — er det ikke `"data.frame"`, mangler du formentlig et `collect()`. Den fulde tabel over hvad `class()` kan returnere — og hvorfor — står i [Fase 5 — Det universelle mønster](05_universelle-moenster.qmd#tjek-har-du-data-eller-bare-en-forbindelse).
+:::
+
+---
+
+## Se de første og sidste rækker
+
+```r
+head(bef_data)         # de første 6 rækker — ser kolonnerne og typerne rigtige ud?
+head(bef_data, 10)     # de første 10 rækker
+tail(bef_data)         # de sidste 6 rækker — nyttigt til at opdage ufuldstændige datasæt
+```
+
+---
+
+## Udforsk indholdet
+
+Som nævnt øverst på siden er `$`-tegnet R's måde at sige "denne kolonne i denne tabel": `data$koen` er kolonnen `koen` i tabellen `data`.
+
+```r
+unique(bef_data$koen)                     # hvilke unikke værdier findes i kolonnen koen?
+table(bef_data$koen)                      # frekvenstabel: hvor mange rækker har hver værdi?
+table(bef_data$koen, bef_data$civst)      # krydstabel: fordeling af køn på tværs af civilstatus
+```
+
+<details>
+<summary>Eksempel med simpel data</summary>
+
+```r
+# Et lille eksempel med tre patienter og to variable:
+df <- data.frame(
+  koen         = c("M", "K", "M", "K", "M"),
+  alder_gruppe = c("18-40", "18-40", "41-60", "41-60", "41-60")
+)
+
+table(df$koen)
+#  K  M
+#  2  3       # 2 kvinder, 3 mænd
+
+table(df$koen, df$alder_gruppe)
+#    18-40  41-60
+# K      1      1    # 1 kvinde i 18-40, 1 kvinde i 41-60
+# M      1      2    # 1 mand i 18-40, 2 mænd i 41-60
+```
+
+</details>
+
+---
+
+## Opsummering af data
+
+::: {.callout-note}
+**Hvad er NA?**
+`NA` (*Not Available*) er R's betegnelse for en manglende eller ukendt værdi.
+En celle kan have `NA` fordi oplysningen ikke er registreret, ikke er indberettet eller ikke findes for den person.
+De fleste beregningsfunktioner returnerer `NA` hvis der er én `NA` i data — medmindre du skriver `na.rm = TRUE` ("remove NAs").
+`is.na(x)` returnerer `TRUE` for NA-værdier og `FALSE` for alt andet.
+:::
+
+**Hvornår er NA et problem?**
+Det afhænger af *hvilken* kolonne der mangler:
+
+- **NA i en nøglevariabel** (index-dato, pnr, udfald) er alvorligt — disse personer kan ikke indgå korrekt i analysen, og du skal beslutte om de skal ekskluderes.
+- **NA i en kovariat** (fx indkomst) kan ofte håndteres — fx med en separat "ukendt"-kategori eller [imputation](https://pmc.ncbi.nlm.nih.gov/articles/PMC8499698/).
+- **NA fra et join** betyder ofte, at en person ikke fandtes i det højre datasæt — fx ingen receptregistrering. Her er `NA` reelt et "nej/ingen", ikke en fejl.
+
+Tjek altid `colSums(is.na(data))` lige efter et udtræk eller et join, så du opdager uventede huller, før de forplanter sig stille gennem analysen.
+
+```r
+summary(bef_data)              # min, max, median, gennemsnit og kvartiler for alle kolonner
+summary(bef_data$foed_dag)     # opsummering af én kolonne
+```
+
+For kontinuerte variable:
+
+```r
+min(bef_data$alder, na.rm = TRUE)    # mindste værdi (na.rm fjerner NA'er - rm = remove)
+max(bef_data$alder, na.rm = TRUE)    # største værdi
+mean(bef_data$alder, na.rm = TRUE)   # gennemsnit
+median(bef_data$alder, na.rm = TRUE) # median
+sd(bef_data$alder, na.rm = TRUE)     # standardafvigelse
+IQR(bef_data$alder, na.rm = TRUE)    # interkvartilbredde (Q3 - Q1)
+```
+
+---
+
+## Tjek manglende værdier
+
+```r
+sum(is.na(bef_data$koen))    # antal NA'er i kolonnen koen — erstat med dit eget kolonnenavn
+colSums(is.na(bef_data))     # antal NA'er per kolonne — giver overblik over hele datasættet
+```
+
+`colSums(is.na(bef_data))` returnerer én linje med en tæller per kolonne:
+
+```
+#  pnr  koen  alder  foed_dag  year  civst  opr_land  reg
+#    0     0      0         3     0      0         0    0
+```
+
+Her er `foed_dag` manglende for 3 — alt andet er komplet. En kolonne med `0` er helt uden NA'er.
+
+---
+
+## Tjek datoer
+
+Datokolonner kan indeholde umulige værdier — datoer langt uden for studieperioden er et tegn på en konverteringsfejl eller forkert kolonne.
+
+```r
+min(bef_data$foed_dag, na.rm = TRUE)   # er den tidligste fødselsdato plausibel?
+max(bef_data$foed_dag, na.rm = TRUE)   # er den seneste fødselsdato plausibel?
+
+# Tjek om der er datoer FØR et forventet interval:
+sum(bef_data$foed_dag < as.Date("1900-01-01"), na.rm = TRUE)   # erstat datoen med din nedre grænse
+
+# Tjek om der er datoer EFTER et forventet interval:
+sum(bef_data$foed_dag > as.Date("2015-12-31"), na.rm = TRUE)   # erstat datoen med din øvre grænse
+```
+
+Se [Fase 14c — Faldgruber](14c_dst_faldgruber.qmd#4-datokolonner-er-ikke-altid-i-date-format) for de hyppigste datokonverteringsfejl og hvordan du retter dem.
+
+---
+
+<details>
+<summary>Mere udforskning: tæl, sortér og hurtige plots</summary>
+
+**Tæl og sortér** (dplyr):
+
+Erstat `bef_data` med dit eget datasætnavn og kolonnenavne med dine egne.
+
+```r
+bef_data %>% count(koen)               # antal rækker per kategori
+bef_data %>% count(koen, civst)        # per kombination af to variable
+bef_data %>% arrange(foed_dag)         # sortér stigende efter fødselsdato
+bef_data %>% arrange(desc(foed_dag))   # sortér faldende
+```
+
+**Hurtige visualiseringer** — til at danne sig et overblik, ikke til publikation:
+
+Erstat `bef_data` med dit eget datasætnavn og kolonnenavne med dine egne.
+
+```r
+# Kontinuerte variable:
+hist(bef_data$alder)                            # histogram
+boxplot(bef_data$alder)                         # boksplot
+boxplot(alder ~ koen, data = bef_data)          # boksplot opdelt på køn
+
+# Kategoriske variable:
+barplot(table(bef_data$koen))                   # søjlediagram
+```
+
+</details>
+
+---
+
+## Næste skridt
+
+Du kan nu inspicere et datasæt. Næste skridt er at vide, *hvilke* registre der indeholder hvad:
+
+- [Fase 8 — Kend dine registre](08_kend-dine-registre.qmd) — beslutningstabel: hvilket register indeholder hvad
+- [Fase 14a — Funktioner: oversigt](14a_guide_til_funktioner.qmd) — `filter()`, `select()`, `mutate()`, `left_join()` og mere
+- [`dataReporter`](13a_pakker-oversigt.qmd#datareporter-automatisk-datakvalitetsrapport) — genererer automatisk en HTML-rapport over alle kolonner (fordeling, missingness, outliers). Bekræftet på DST.

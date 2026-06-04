@@ -1,0 +1,95 @@
+---
+title: "OSDC — Open Source Diabetes Classifier"
+subtitle: "Klassificering af diabetestype i danske registerdata"
+date: last-modified
+---
+
+OSDC er en open source-algoritme, der klassificerer alle personer i Danmark
+som havende type 1-diabetes (T1D), type 2-diabetes (T2D) eller ingen diabetes,
+ud fra data i de nationale registre.
+
+**Artikel:** [doi:10.2147/CLEP.S407019](https://doi.org/10.2147/CLEP.S407019)
+**Dokumentation og kode:** [steno-aarhus.github.io/osdc](https://steno-aarhus.github.io/osdc/)
+
+---
+
+## Hvad giver OSDC dig?
+
+En færdigberegnet population med:
+- **Diabetestype:** T1D, T2D eller ingen diabetes
+- **Debutdato:** hvornår diabetesbetingelserne første gang var opfyldt
+- **Alder ved debut**
+
+Klassifikationen bygger på en kombination af diagnosekoder (LPR), medicinoplysninger (LMDB) og laboratoriesvar.
+
+---
+
+## Hvornår bruges det?
+
+- Til at **definere en diabetes-population** som eksponering eller inklusionskriterium
+- Til at **ekskludere** diabetespatienter fra en kontrolgruppe
+- Til at **klassificere type** — LPR alene er ikke tilstrækkeligt til at skelne T1D fra T2D pålideligt
+
+---
+
+## Sådan bruges OSDC
+
+### DARTER — projekt 708421 (færdigberegnet fil)
+
+På DARTER er OSDC-klassifikationen allerede beregnet og klar som en `.rds`-fil.
+Du behøver ikke køre algoritmen selv.
+
+```r
+# Indlæs den færdigberegnede klassifikation:
+dm_pop <- readRDS("E:/workdata/708421/cleaned-data/diabetes-register-pop/dm_population_1977_2022.rds")
+
+names(dm_pop)
+# [1] "PNR"           "diabetes_type"  "do_dm"          "age_at_onset"
+
+library(dplyr)
+dm_pop <- dm_pop %>% rename(pnr = PNR)   # omdøb PNR til lowercase pnr
+
+# diabetes_type: 1 = T1D, 2 = T2D  |  do_dm: debutdato
+```
+
+<details>
+<summary>Eksempel: filtrer til T1D-patienter</summary>
+
+```r
+t1d <- dm_pop %>%
+  filter(diabetes_type == 1) %>%
+  select(pnr, diabetes_type, do_dm) %>%
+  rename(date_diabetes = do_dm)
+```
+
+</details>
+
+---
+
+### Andre projekter — kør algoritmen selv
+
+Hvis din OSDC-klassifikation ikke er præberegnet, skal du køre algoritmen selv.
+
+::: {.callout-warning}
+**Er OSDC-pakken tilgængelig på DST for dit projekt?**
+Det er endnu ikke bekræftet om `osdc`-pakken (GitHub: [steno-aarhus/osdc](https://github.com/steno-aarhus/osdc)) er tilgængelig i dit projekts CRAN-snapshot. Tjek med `"osdc" %in% rownames(installed.packages())` på serveren. Hvis den ikke er der, skal den importeres via din datamanager.
+:::
+
+Se dokumentation og installationsvejledning på [steno-aarhus.github.io/osdc](https://steno-aarhus.github.io/osdc/).
+
+---
+
+## Dækning og begrænsninger
+
+- DARTER-versionen dækker diagnoser frem til **2022** — tjek hvornår din version er beregnet
+- Klassificerer **alle** personer i Danmark — ikke kun din kohorte
+- Bruger LPR, LMDB og laboratoriesvar — kræver adgang til disse registre
+
+Se den fulde metodebeskrivelse i artiklen og dokumentationssitet.
+
+---
+
+## Næste skridt
+
+- **Comorbiditetsjustering med NMI?** → [Fase 13 — NMI](13c_nmi.qmd)
+- **Klar til at eksportere?** → [Fase 15 — Eksport og hjemsendelse](15_eksport-hjemsendelse.qmd)

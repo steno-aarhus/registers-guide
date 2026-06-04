@@ -1,0 +1,196 @@
+---
+title: "DARTER — Projekt 708421"
+subtitle: "Projektspecifik vejledning til BS & Demens-kohortestudiet"
+date: last-modified
+---
+
+Denne sektion er **kun** for dem der arbejder på DARTER-projektet (projekt 708421).
+Indholdet her bygger ovenpå den generelle DST-vejledning og tilføjer det projekt-specifikke.
+
+Ny på projektet? Start med den generelle vejledning og vend tilbage hertil:
+→ [Fase 1 — Planlæg dit studie](../01_studieforberedelse.qmd)
+→ [Fase 2 — R: det allermest nødvendige](../02_r-intro.qmd)
+→ [Fase 3 — Log ind på DST](../03_log-ind-dst.qmd)
+
+::: {.callout-tip}
+**Praktisk introduktion fra projektet selv**
+I Lukes mappe på serveren finder du en grundig vejledning til at arbejde med data på DST skrevet specifikt til dette projekt:
+
+```
+E:/workdata/708421/workspaces/luke/dstDataPrep/
+```
+
+Find `.qmd`-filen i denne mappe — den gennemgår `dstDataPrep`, `load_database()` og det praktiske workflow på DARTER trin for trin med rigtige eksempler fra projektet. God supplerende læsning til denne vejledning.
+:::
+
+### I denne sektion
+
+| Side | Indhold |
+|---|---|
+| Denne side | Setup (`dstDataPrep` + `duckplyr`) og en genanvendelig LPR-udtræksfunktion |
+| [Registersti og datastores](01_registersti-datastores.qmd) | Bekræftede stier og adgangsmetoder til alle registre på 708421 |
+| [DARTER-specifikke faldgruber](02_darter-faldgruber.qmd) | Quirks der er specifikke for dette projekt |
+
+---
+
+## Initielle setup-trin for DARTER
+
+To trin skal gennemføres **inden du skriver kode** på DARTER:
+
+::: {.callout-important}
+**Trin 1 — Byg `dstDataPrep`**
+
+`dstDataPrep` er den pakke, der giver adgang til `load_database()` og alle registerdata.
+Den skal bygges manuelt, da DST-serveren nulstiller installerede pakker.
+
+1. **File → Open Project in New Session**
+2. Naviger til `E:/workdata/708421/workspaces/luke/dstDataPrep/dstDataPrep.Rproj`
+3. Tryk **Ctrl+Shift+B** (Build) — eller på Mac via menuen: **Build → Install Package**
+4. Vent på "Done" og luk sessionen
+
+Gør det igen hvis `library(dstDataPrep)` melder `Error: there is no package called 'dstDataPrep'`.
+:::
+
+::: {.callout-important}
+**Trin 2 — Geninstaller `duckplyr` i starten af hver session**
+
+```r
+install.packages("duckplyr")   # kør inden library() — nulstilles ved logout
+```
+:::
+
+::: {.callout-tip}
+**Alternativ: brug `compute()` til DuckDB-forbindelse**
+`load_database()` returnerer en Arrow-forbindelse der kun understøtter et subset af dplyr-funktioner.
+Har du brug for DuckDB-specifik funktionalitet eller oplever du langsom ydeevne, kan du pipe til `compute()`:
+
+```r
+lmdb <- load_database("lmdb") %>%
+  filter(pnr %in% !!kohort$pnr) %>%   # filtrer i Arrow FØR compute — reducer data
+  compute()                             # konvertér til DuckDB-forbindelse
+```
+
+Reducer altid data med `filter()`/`select()` inden `compute()`. Se [osdc-dokumentationen](https://steno-aarhus.github.io/osdc/) for DuckDB-konfiguration og memory limits.
+:::
+
+---
+
+**Inden du kører et script:** kontroller at `path_output` øverst i hvert script peger på din workspace-mappe.
+
+### Anbefaling: lav en hjælpefunktion til LPR-udtræk
+
+LPR-udtræk kræver at du kombinerer LPR2 somatisk, LPR2 psykiatrisk og LPR3 — og gør det samme for hvert nyt udfald i projektet.
+Det betaler sig at samle dette i én genanvendelig funktion fremfor at kopiere koden gentagne gange.
+
+**Fordele:**
+- Ét sted at rette, hvis noget ændres (fx et nyt register eller en ny kolonne)
+- Kodeblokken til hvert udfald reduceres fra ~40 linjer til ét funktionskald
+- Fejl introduceres ét sted i stedet for i hver kopi
+
+**Sådan laver du funktionen** — definer den øverst i dit script eller i en separat `functions.R`-fil:
+
+<details>
+<summary>Se den fulde <code>get_lpr_diagnoses()</code>-funktion</summary>
+
+```r
+library(dstDataPrep)
+library(dplyr)
+
+get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_only = FALSE) {
+  # Åbn registre
+  lpr_adm   <- load_database("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatisk kontakter
+  lpr_diag  <- load_database("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatisk diagnoser
+  psyk_adm  <- load_database("t_psyk_adm")  %>% rename_with(tolower) %>%
+    rename(pnr = v_cpr, recnum = k_recnum)                            # LPR2 psykiatrisk kontakter
+  psyk_diag <- load_database("t_psyk_diag") %>% rename_with(tolower) %>%
+    rename(recnum = v_recnum)                                          # LPR2 psykiatrisk diagnoser
+  lpr3_k    <- load_database("lpr_a_kontakt")  %>% rename_with(tolower) %>%
+    filter(lprindberetningssystem == "LPR3")                               # KRITISK: undgå duplikerede rækker fra LPR_F-format
+  lpr3_d    <- load_database("lpr_a_diagnose") %>% rename_with(tolower)  # LPR3 diagnoser
+
+  # Filtrer på indlæggelsestype hvis ønsket
+  if (inpatient_only) {
+    lpr_adm <- lpr_adm %>% filter(c_pattype == "0")          # "0" = indlagt i LPR2
+    lpr3_k  <- lpr3_k  %>% filter(kont_type == "ALCA00")     # "ALCA00" = indlagt i LPR3
+  }
+
+  # LPR2 somatisk
+  lpr2_dx <- lpr_adm %>%
+    filter(pnr %in% !!pnr_vector) %>%
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      by = "recnum"
+    ) %>%
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))                       # strip D-præfiks
+
+  # LPR2 psykiatrisk
+  lpr2_psyk_dx <- psyk_adm %>%
+    filter(pnr %in% !!pnr_vector) %>%
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      by = "recnum"
+    ) %>%
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))
+
+  # LPR3
+  lpr3_dx <- lpr3_k %>%
+    filter(pnr %in% !!pnr_vector) %>%
+    select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
+    inner_join(
+      lpr3_d %>%
+        filter(diag_kode_type %in% !!diagtypes,
+               is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+        select(dw_ek_kontakt, c_diag = diag_kode),
+      by = "dw_ek_kontakt"
+    ) %>%
+    collect() %>%
+    mutate(date_contact = as.Date(date_contact),               # datetime → dato
+           icd3 = substr(c_diag, 2, 4))
+
+  bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)                   # returner samlet tabel
+}
+```
+
+</details>
+
+**Brug funktionen** — ét kald pr. udtræk, skift kun `KODER`:
+
+```r
+kohort    <- readRDS("datasets/full_cohort.rds")
+pnr_liste <- unique(kohort$pnr)
+
+# Hent alle diagnoser for kohorten (Fase 1 — se hospitalskontakter-siden)
+alle_dx <- get_lpr_diagnoses(
+  pnr_vector    = pnr_liste,
+  diagtypes     = c("A", "B"),
+  inpatient_only = FALSE
+)
+# Returnerer: pnr | date_contact | c_diag | icd3
+
+# Udtræk ét udfald — skift kun KODER (Fase 2)
+KODER <- c("F00", "F01", "F02", "F03", "G30", "G31")   # demens
+
+demens <- alle_dx %>%
+  filter(icd3 %in% KODER) %>%
+  inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact > index_date) %>%
+  group_by(pnr) %>% arrange(date_contact) %>% slice(1) %>% ungroup() %>%
+  select(pnr, demens_dato = date_contact)
+
+resultat <- kohort %>% select(pnr) %>% left_join(demens, by = "pnr")
+saveRDS(resultat, "datasets/extract_dementia.rds")
+```
+
+---
+
+## Se også
+
+`get_lpr_diagnoses()` ovenfor pakker mønstret fra den generelle vejledning ind:
+
+- [Fase 9 — Hospitalskontakter (LPR)](../09_hospitalskontakter-lpr.qmd) — forklaringen bag to-fase strategien, LPR2/LPR3 og D-præfikset
+- [Fase 8 — Kend dine registre](../08_kend-dine-registre.qmd) — hvilket register indeholder hvad
+- [Registersti og datastores](01_registersti-datastores.qmd) — de bekræftede stier på 708421

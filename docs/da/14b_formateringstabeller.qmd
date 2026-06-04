@@ -1,0 +1,170 @@
+---
+title: "Formateringstabeller"
+subtitle: "Oversæt koder til tekst med DST's SAS-formateringsfiler"
+date: last-modified
+---
+
+::: {.callout-note}
+**Forudsætning:** Denne side bruger `left_join()` til at koble formateringstabeller på dine data.
+Kender du ikke joins endnu, læs [Fase 11 — Joins og pivots](11_data-manipulation.qmd) først.
+:::
+
+Mange variable i DST-registre er gemt som koder — kommunenumre, uddannelseskoder, beskæftigelseskoder.
+For at give dem meningsfulde labels bruger du DST's **formateringstabeller**: SAS-filer på serveren der oversætter koder til tekst.
+
+En formateringstabel har altid mindst to kolonner:
+
+| Kolonne | Indhold | Eksempel |
+|---|---|---|
+| `START` | Den rå kode fra dit register | `101` (kommunenummer) |
+| Label-kolonne | Den tilsvarende tekstlabel | `"København"` |
+
+Du joiner formateringstabellen på dit datasæt med `START` som nøgle — præcis som et opslag i en ordbog.
+
+::: {.callout-note}
+Rækker i dit datasæt uden match i formateringstabellen får `NA` i label-kolonnen — ingen fejlmeddelelse.
+Tjek altid med `sum(is.na(data$label_kolonne))` efter join.
+:::
+
+---
+
+## Hvor er formateringstabellerne?
+
+```
+E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/
+```
+
+Stjernen (`*`) på Windows-skrivebordet inde på DST-serveren åbner en HTML-guide til at finde den rigtige tabel.
+Der ligger også PDF-vejledninger i SAS-formater her:
+
+```
+E:/Formater/SAS formater i Danmarks Statistik/Vejledning mv/
+```
+
+Undermapper er organiseret efter emne — bl.a.:
+```
+Geokoder/                ← kommuner, regioner
+Times_personstatistik/   ← beskæftigelse (socio13)
+Disced/                  ← uddannelse (hfaudd)
+Brancher/                ← brancher
+Sundhed/                 ← sundhed
+Uddannelser/             ← uddannelser
+... og flere
+```
+
+::: {.callout-warning}
+**Find selv de konkrete filnavne i mappen.** Basestien og undermappestrukturen ovenfor er bekræftet på DST. Men de **konkrete filnavne og kolonnenavne** længere nede på siden (fx `c_kom_v4_t.sas7bdat`, `KOM_V4_T`) er **illustrative eksempler** — navngivningen varierer, og du skal selv finde den rigtige fil i den relevante undermappe. Brug stjerne-guiden / PDF-vejledningen til at finde filen, og `names()`/`head()` til at se de faktiske kolonnenavne.
+:::
+
+---
+
+## Indlæs en formateringstabel
+
+Formateringstabeller er SAS-filer og indlæses med `haven::read_sas()`:
+
+```r
+library(haven)   # read_sas — indlæsning af SAS-filer
+
+kom_tabel <- read_sas(   # hent formateringstabel som data frame
+  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Geokoder/c_kom_v4_t.sas7bdat"
+)
+```
+
+::: {.callout-note}
+Formateringstabeller er indlæst direkte i R's hukommelse (ikke doven evaluering).
+Du skal bruge `collect()` på DuckDB-data inden du joiner med dem.
+:::
+
+---
+
+## De tre tabeller du vil bruge oftest
+
+### Kommunenavne
+
+```r
+kom_tabel <- read_sas(
+  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Geokoder/c_kom_v4_t.sas7bdat"
+)
+# Kolonner: START (kommunenummer), KOM_V4_T (kommunenavn)
+# Brug til år efter kommunalreformen 2007 (V4)
+
+bef_med_kommune <- bef_data %>%
+  collect() %>%                                             # collect INDEN join med SAS-fil
+  left_join(kom_tabel, by = c("bopkom" = "START"))          # tilknyt kommunenavn via bopkom-kode
+```
+
+---
+
+### Beskæftigelsesstatus (socio13)
+
+Vil du have de rå kode-labels fra DST's formateringstabel:
+
+```r
+socio13_tabel <- read_sas(   # hent label-tabel fra formateringsmappen
+  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Times_personstatistik/n_socio13_kt.sas7bdat"
+)
+# Kolonner: START (socio13-kode), N_SOCIO13_KT (label)
+
+akm_med_labels <- akm_data %>%
+  left_join(socio13_tabel, by = c("socio13" = "START"))   # tilknyt label per kode
+```
+
+Vil du i stedet bruge SEPLINE-kategoriseringen direkte (anbefalet til analyse):
+
+```r
+library(dplyr)   # mutate, case_when
+
+akm_kategoriseret <- akm_data %>%
+  mutate(occupation_cat = case_when(             # SEPLINE-kategorier
+    socio13 %in% c(110:114, 120, 131:135, 139) ~ "Beskæftiget",
+    socio13 == 310                              ~ "Studerende",
+    socio13 %in% c(210, 410)                   ~ "Ledig",
+    socio13 %in% c(220, 321, 330)              ~ "Udenfor arbejdsmarked",
+    socio13 %in% c(322, 323)                   ~ "Pensionist",
+    TRUE                                        ~ "Ukendt"   # ukendt kode eller NA
+  ))
+```
+
+---
+
+### Uddannelsesniveau (hfaudd)
+
+```r
+# Varighed af uddannelse i måneder (norm-varighed + adgangskrav):
+udda_tabel <- read_sas(
+  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Disced/n_audd_pria_l1lx_k.sas7bdat"
+)
+# Kolonner: START (hfaudd-kode), AUDD_PRIA_L1LX_K (varighed i måneder)
+
+# Kategorisering per SEPLINE-guidelines:
+udda_kategoriseret <- udda_data %>%
+  left_join(udda_tabel, by = c("hfaudd" = "START")) %>%
+  mutate(education_cat = case_when(
+    substr(as.character(hfaudd), 1, 2) %in% c("10", "15") ~ "Kort",
+    substr(as.character(hfaudd), 1, 2) %in% c("20", "30", "35") ~ "Mellemlang",
+    as.numeric(substr(as.character(hfaudd), 1, 2)) >= 40  ~ "Lang",
+    TRUE ~ "Ukendt"
+  ))
+```
+
+---
+
+## Tips til at finde den rigtige tabel
+
+1. Åbn stjernen på skrivebordet eller naviger til `E:/Formater/...` i Stifinder
+2. Kig på suffikset:
+   - `_T` = kun tekst-label
+   - `_K` = kun kode
+   - `_KT` = både kode og tekst
+3. Indlæs tabellen og kig på kolonnerne med `names()` og `head()`
+
+```r
+names(kom_tabel)   # se hvad kolonnerne hedder — find START og label-kolonnen
+head(kom_tabel)    # se de første rækker og forstå strukturen
+```
+
+---
+
+## Se også
+
+- [Socioøkonomiske variable](12_socioekonomiske-variable.qmd) — SEPLINE-tilgang med kodeeksempler for AKM, FAIK og UDDA

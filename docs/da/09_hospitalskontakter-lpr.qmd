@@ -1,0 +1,430 @@
+---
+title: "Hospitalskontakter (LPR)"
+subtitle: "LPR2 og LPR3 kombineret — diagnoser og ICD-koder"
+date: last-modified
+---
+
+Det Nationale Patientregister (LPR) er kilden til diagnoser og hospitalskontakter.
+Det dækker alle offentlige hospitalsindlæggelser og ambulante kontakter i Danmark.
+
+Du bruger det samme udtræksmønster som i [Fase 5](05_universelle-moenster.qmd) og [Fase 6](06_foerste-udtraek.qmd) — men LPR er mere komplekst end de fleste registre, fordi det skiftede format i 2019 og er splittet i somatiske og psykiatriske tabeller. Denne side viser, hvordan du håndterer det. Det er den vigtigste og nok den mest komplekse del af guiden.
+
+::: {.callout-note}
+**Denne side og Fase 10 hænger cirkulært sammen — det er bevidst.**
+For at bygge din kohorte (Fase 10) skal du vide, hvordan man udtrækker diagnosekoder og procedurer fra LPR. For at udtrække diagnosekoder fra LPR (denne side) har du brug for en kohorte. Vi løser det sådan: **Fase 9 lærer dig udtræksmønstret** — vi antager at du allerede har en kohorte. **[Fase 10](10_byg-din-kohorte.qmd) viser dig, hvordan du bygger den kohorte** ved at bruge præcis det mønster du lige har lært. Læs faserne i rækkefølge, og kom tilbage til Fase 9-koden, når du har din kohorte klar.
+:::
+
+::: {.callout-note}
+Kodeeksemplerne bruger de kolonnenavne DST's parquet-registre typisk har. Dine kolonner kan hedde noget andet — tjek med `names(din_data)` eller slå dem op i [Fase 14 — Registerreference](14d_register_reference.qmd).
+:::
+
+---
+
+## LPR er opdelt i to perioder
+
+I marts 2019 skiftede LPR format. Studier der dækker perioden på tværs af 2019 skal forespørge **begge systemer** og kombinere dem.
+
+| | LPR2 somatisk | LPR2 psykiatrisk | LPR3 |
+|---|---|---|---|
+| **Periode** | frem til marts 2019 | frem til marts 2019 | marts 2019 og frem |
+| **Kontaktregister** | `lpr_adm` | `t_psyk_adm` | `lpr_a_kontakt` |
+| **Diagnoseregister** | `lpr_diag` | `t_psyk_diag` | `lpr_a_diagnose` |
+| **Dækker psykiatri** | Nej | Ja | Ja (begge samlet) |
+| **Join-nøgle** | `recnum` | `k_recnum` / `v_recnum`¹ | `dw_ek_kontakt` |
+| **Datokolonne** | `d_inddto` (Date) | `d_inddto` (Date) | `kont_starttidspunkt` (datetime)² |
+| **pnr-kolonne** | `pnr` | `v_cpr`³ | `pnr` |
+| **Diagnosekode** | `c_diag` | `c_diag` | `diag_kode` |
+| **Diagnosetype** | `c_diagtype` | `c_diagtype` | `diag_kode_type` |
+| **Kontakttype** | `c_pattype` (`"0"` = indlagt) | `c_pattype` | `kont_type` (`"ALCA00"` = indlagt) |
+
+¹ `t_psyk_adm` har `k_recnum`; `t_psyk_diag` har `v_recnum` — omdøb begge til `recnum` inden join.
+² datetime-format — konverter med `as.Date()`.
+³ Omdøb: `rename(pnr = v_cpr)`.
+
+::: {.callout-note}
+**Psykiatri: separat i LPR2, samlet i LPR3**
+Inden 2019 var psykiatriske diagnoser (F-koder: demens, depression mv.) gemt i separate registre (`t_psyk_adm`, `t_psyk_diag`). Strukturen ligner somatisk LPR2, men kolonnenavnene afviger — se tabelnoterne ovenfor. Fra marts 2019 samler LPR3 begge: somatiske og psykiatriske kontakter og diagnoser indgår i de samme tabeller, og du behøver ikke en særskilt psykiatrisk forespørgsel.
+:::
+
+```{mermaid}
+gantt
+    title LPR-registre
+    dateFormat  YYYY
+    axisFormat  %Y
+    section LPR2 somatisk
+    lpr_adm + lpr_diag               :done,   1977, 2019
+    section LPR2 psykiatrisk
+    t_psyk_adm + t_psyk_diag         :done,   1995, 2019
+    section LPR3 samlet
+    lpr_a_kontakt + lpr_a_diagnose   :active, 2019, 2027
+```
+
+---
+
+## ICD-koder og D-præfikset
+
+**ICD-10** (International Classification of Diseases, 10. revision) er WHO's internationale system til klassifikation af sygdomme og tilstande. Alle hospitaldiagnoser i Danmark kodes med ICD-10, fx `G30` for Alzheimers sygdom og `F00` for demens ved Alzheimers.
+
+Alle ICD-10-koder i DST har et foranstillet `"D"`:
+`"DG30"` (Alzheimers), `"DF00"` (demens), `"DI21"` (akut myokardieinfarkt).
+
+**Sammenlign aldrig med D-præfikset.** Strip det altid inden sammenligning:
+
+```r
+mutate(icd3 = substr(c_diag, 2, 4))   # "DG30" → "G30" (3-tegns kode)
+mutate(icd4 = substr(c_diag, 2, 5))   # "DI219" → "I219" (4-tegns kode)
+```
+
+`substr(x, start, stop)` beholder tegnene fra position `start` til og med `stop` (talt fra 1). `substr(c_diag, 2, 4)` springer position 1 (D-præfikset) over og beholder tegn 2, 3 og 4: `"DG30"` → `"G30"`. Brug 2–5 til 4-tegns koder: `"DI219"` → `"I219"`.
+
+---
+
+## Diagnosetyper: A, B og G
+
+| Kode | Betydning | Hvornår inkluderes den |
+|---|---|---|
+| A | Aktionsdiagnose — primær årsag til kontakten | Altid til udfald |
+| B | Bidiagnose — yderligere tilstand til stede | Altid til udfald |
+| G | Grundmorbus — underliggende baggrundstilstand | Kun til baseline-komorbiditet |
+
+```r
+# Til udfald og eksklusionsdiagnoser:
+filter(c_diagtype %in% c("A", "B"))
+
+# Til baseline-komorbiditet (NMI, Charlson):
+filter(c_diagtype %in% c("A", "B", "G"))
+```
+
+---
+
+## Det psykiatriske LPR2-register
+
+Psykiatriske diagnoser (fx demens F00–F03) stillet **før marts 2019** er gemt i separate registre.
+Glemmer du dem, misser du alle demensdiagnoser fra geropsykiatriske afdelinger og hukommelsesklinikker.
+
+```r
+psyk_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_adm/")  %>%
+  rename_with(tolower) %>%
+  rename(pnr = v_cpr, recnum = k_recnum)    # kolonnenavne afviger fra somatisk LPR2: v_cpr → pnr, k_recnum → recnum
+psyk_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
+  rename_with(tolower) %>%
+  rename(recnum = v_recnum)                 # v_recnum → recnum: gør join-nøgle ens med psyk_adm
+```
+
+Fra marts 2019 dækker LPR3 begge — ingen separat psykiatrisk forespørgsel nødvendig.
+
+---
+
+## `senere_afkraeftet` i LPR3
+
+LPR3 markerer diagnoser der er tilbagekaldt. Standardfiltret:
+
+```r
+filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
+```
+
+`is.na()`-delen er bevidst. R's standardadfærd er: `NA != "Ja"` returnerer `NA` — ikke `TRUE`. Et filter betragter `NA` som `FALSE` og *dropper* rækken. `filter(senere_afkraeftet != "Ja")` *alene* ville derfor fjerne alle diagnoser der slet ikke har en tilbagekaldelsesmarkering (dvs. `NA`-felter) — selvom de bestemt ikke er tilbagekaldt. `is.na(...)` retter det: "behold rækken hvis feltet er `NA` ELLER hvis det ikke er `"Ja"`". Filtret beholder dermed ukategoriserede diagnoser, hvilket er den sikreste antagelse.
+
+---
+
+## To-fase strategi for diagnoseudtræk
+
+Har du ét udfald, kan du gå direkte til filtrering. Men har du **to eller flere udfald** — fx demens, hjertesygdom og nyresygdom — er to-fase-strategien langt mere effektiv og fejlsikker.
+
+### Fase 1 — byg én udfaldsagnostisk diagnosetabel
+
+Forespørg LPR2 og LPR3 **én enkelt gang** og byg en samlet tabel med *alle* diagnoser for dine kohortemedlemmer — uden at filtrere på specifikke ICD-koder endnu.
+
+Resultatet er `alle_dx`: én stor tabel med én række per diagnose per person, D-præfiks fjernet. Kolonnerne `pnr`, `date_contact` og `icd3` er alt, hvad du behøver til alle efterfølgende udfald.
+
+**Hvorfor?** LPR er meget store registre. At forespørge dem gentagne gange — én gang per udfald — er langsomt og øger risikoen for fejl: en stille copy-paste-fejl i ét udtræk er svær at opdage, fordi koden stadig kører. Byg `alle_dx` én gang og genbrug den.
+
+### Fase 2 — filtrer på det specifikke udfald
+
+For hvert udfald:
+
+1. Definer `KODER <- c(...)` med de relevante ICD-koder
+2. Filtrer `alle_dx` på koderne og på `date_contact > index_date` (kun hændelser efter studiestart)
+3. Find **første** forekomst per person: `group_by(pnr) %>% arrange(date_contact) %>% slice(1)`
+4. Join til `kohort_renset` med `left_join()` — `NA` i `event_date` = ingen hændelse = personen censureres ved studieafslutning
+
+**Den eneste linje du ændrer mellem udfald er `KODER <- c(...)`.**
+
+Vil du i stedet trække **baseline-komorbiditet** (dvs. diagnoser *inden* studiestart), bruger du `filter(date_contact < index_date)` i trin 2 — resten er identisk.
+
+---
+
+## Komplet mønster: hent alle diagnoser for din kohorte
+
+Dette er Fase 1 — koden til at bygge `alle_dx`.
+
+::: {.callout-note}
+Eksemplet kræver at registrene er tilgængelige som parquet-filer og bruger `open_dataset()` med generiske stier — justér stierne til dit projekt. Er dine registre endnu kun i SAS-format, konverter dem først: [Fase 4 — SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet). Vil du øve koden med syntetiske data lokalt, se fold-ud'en **Prøv det selv** nedenfor.
+:::
+
+::: {.callout-note}
+**Dette eksempel forudsætter en færdigbygget kohorte.**
+`kohort` er den data.frame med `pnr` og `index_date` per person, som du har bygget i [Fase 10 — Byg din kohorte](10_byg-din-kohorte.qmd). `unique(kohort$pnr)` trækker alle pnr'er som en vektor til at filtrere LPR.
+
+**Øver du LPR-mønstre og har ikke bygget en rigtig kohorte endnu?** Brug en testkohorte fra [Fase 6 — Første udtræk](06_foerste-udtraek.qmd) (200 tilfældige pnr'er fra BEF), eller gennemgå koden uden at køre den. Denne side lærer selve LPR-udtræksmønstret — kohorteopbygning er fase 10.
+:::
+
+```r
+library(arrow)         # open_dataset() — doven forbindelse til parquet
+library(dplyr)         # filter, select, mutate, inner_join, bind_rows
+
+kohort_pnrs <- unique(kohort$pnr)   # vektor af alle unikke pnr i din kohort — se note ovenfor
+
+# ── LPR2 somatisk (frem til marts 2019) ─────────────────────────────────
+lpr_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)   # LPR2 kontakttabel — doven forbindelse
+lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosetabel — doven forbindelse
+
+lpr2_dx <- lpr_adm %>%
+  filter(pnr %in% !!kohort_pnrs) %>%               # kun kohortens pnr'er
+  select(pnr, recnum, date_contact = d_inddto) %>%   # recnum er join-nøglen til lpr_diag
+  inner_join(
+    lpr_diag %>%
+      filter(c_diagtype %in% c("A", "B")) %>%    # kun aktions- og bidiagnoser
+      select(recnum, c_diag),                    # kun join-nøgle og diagnosekode
+    by = "recnum"                                # join på kontaktnummer
+  ) %>%
+  collect() %>%                                  # hent ind i R
+  mutate(icd3 = substr(c_diag, 2, 4))           # strip D-præfiks: "DG30" → "G30"
+
+# ── LPR3 (marts 2019 og frem) ────────────────────────────────────────────
+lpr3_k <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 kontakttabel — doven forbindelse
+lpr3_d <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosetabel — doven forbindelse
+
+lpr3_dx <- lpr3_k %>%
+  filter(pnr %in% !!kohort_pnrs) %>%                              # kun kohortens pnr'er
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%   # dw_ek_kontakt er join-nøgle til lpr_a_diagnose
+  inner_join(
+    lpr3_d %>%
+      filter(diag_kode_type %in% c("A", "B"),
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%   # ekskluder tilbagekaldte
+      select(dw_ek_kontakt, c_diag = diag_kode),                         # omdøb til c_diag for konsistens med LPR2
+    by = "dw_ek_kontakt"                                                  # join på LPR3-nøgle
+  ) %>%
+  collect() %>%                                                  # hent ind i R
+  mutate(
+    date_contact = as.Date(date_contact),  # datetime → dato
+    icd3 = substr(c_diag, 2, 4)           # strip D-præfiks: "DG30" → "G30"
+  )
+
+# ── Kombiner ─────────────────────────────────────────────────────────────
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # én diagnosetabel der dækker begge perioder
+```
+
+---
+
+## Ekskluder prævalente tilfælde
+
+Inden du udtrækker nye hændelser, skal du ekskludere personer der allerede havde diagnosen *inden* index-dato — ellers tæller de som nye tilfælde, selvom de ikke er det.
+
+```r
+EKSKL_KODER <- c("G30", "F00", "F01", "F02", "F03")   # her definerer du en ny R-variabel med dine eksklusionskoder — skift til dine egne; oftest de samme som dit udfald
+
+# Find alle med diagnosen FØR index-dato
+praevalente <- alle_dx %>%
+  filter(icd3 %in% EKSKL_KODER) %>%                                    # behold kun disse koder
+  inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%       # tilføj index-dato
+  filter(date_contact < index_date) %>%                                 # KUN pre-index diagnoser
+  distinct(pnr)                                                         # én række per person
+
+# Ekskluder fra kohorten — gøres FØR udfaldsudtrækket
+cat("Kohort inden ekskludering:  ", nrow(kohort),                       "\n")
+kohort_renset <- kohort %>%
+  anti_join(praevalente, by = "pnr")                                    # fjern prævalente tilfælde
+cat("Kohort efter ekskludering:  ", nrow(kohort_renset),                "\n")
+cat("Ekskluderede:               ", nrow(kohort) - nrow(kohort_renset), "\n")
+```
+
+::: {.callout-tip}
+**Lookback-periode:** Overvej at begrænse `date_contact < index_date` yderligere — fx kun de 5 år inden index — for at undgå falske eksklusioner baseret på meget gamle diagnoser. Det afhænger af din definition af "prævalent".
+
+Med 5-års lookback (erstat `365*5` med din ønskede periode):
+
+```r
+filter(date_contact >= index_date - 365*5,   # tidligste grænse: 5 år inden index
+       date_contact < index_date)             # kun pre-index diagnoser
+```
+:::
+
+---
+
+## Udtræk et specifikt udfald (Fase 2)
+
+Nu hvor kohorten er renset for prævalente tilfælde, kan du trække nye hændelser.
+Skift `KODER` til de ICD-koder du vil have — brug `kohort_renset` i stedet for `kohort`.
+
+```r
+KODER <- c("G30", "F00", "F01", "F02", "F03")   # demens — skift til dit udfald
+
+udfald <- alle_dx %>%
+  filter(icd3 %in% KODER) %>%                                                # behold kun de ønskede koder
+  inner_join(kohort_renset %>% select(pnr, index_date), by = "pnr") %>%      # brug den rensede kohort
+  filter(date_contact > index_date) %>%   # post-index; brug < for baseline-kovariat
+  group_by(pnr) %>%                                                           # gruppér for at finde første hændelse
+  arrange(date_contact) %>%                                                   # ældste dato først
+  slice(1) %>%                            # første forekomst per person
+  ungroup() %>%                                                               # frigiv gruppering
+  select(pnr, event_date = date_contact)                                      # omdøb til event_date
+
+# Join til kohort — NA = ingen hændelse (fortsat i risiko, censureres ved studieafslutning)
+resultat <- kohort_renset %>%
+  select(pnr) %>%                         # behold kun pnr fra renset kohort
+  left_join(udfald, by = "pnr")           # tilknyt event_date — NA = censureret
+
+saveRDS(resultat, "datasets/extract_demens.rds")   # skift filnavn for hvert nyt udfald
+```
+
+---
+
+<details>
+<summary>Tilføj psykiatrisk LPR2 (nødvendigt for F-koder, fx demens)</summary>
+
+```r
+psyk_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_adm/")  %>%
+  rename_with(tolower) %>%
+  rename(pnr = v_cpr, recnum = k_recnum)   # v_cpr → pnr; k_recnum → recnum (join-nøgle)
+psyk_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
+  rename_with(tolower) %>%
+  rename(recnum = v_recnum)                # v_recnum → recnum: gør join-nøgle ens med psyk_adm
+
+lpr2_psyk_dx <- psyk_adm %>%
+  filter(pnr %in% !!kohort_pnrs) %>%               # kun kohortens pnr'er
+  select(pnr, recnum, date_contact = d_inddto) %>%   # recnum er join-nøglen
+  inner_join(
+    psyk_diag %>%
+      filter(c_diagtype %in% c("A", "B")) %>%    # kun aktions- og bidiagnoser
+      select(recnum, c_diag),                    # kun join-nøgle og diagnosekode
+    by = "recnum"                                # join på kontaktnummer
+  ) %>%
+  collect() %>%                                  # hent ind i R
+  mutate(icd3 = substr(c_diag, 2, 4))           # strip D-præfiks: "DF00" → "F00"
+
+alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)   # kombinér alle tre kilder
+```
+
+</details>
+
+---
+
+<details>
+<summary>Prøv det selv — kørbart eksempel med syntetiske data</summary>
+
+::: {.callout-important}
+Dette eksempel kræver **RStudio installeret lokalt på din computer** — ikke DST-serveren.
+Det syntetiske datasæt (`fakeregs`) er ikke tilgængeligt på DST.
+Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
+:::
+
+Eksemplet trækker CVD-diagnoser (iskæmisk hjertesygdom, ICD-10 I20–I25) fra LPR2 og LPR3 kombineret — det komplette mønster fra teoriafsnittet ovenfor, men kørbart lokalt med syntetiske data.
+
+De syntetiske LPR-data genereres med `fakeregs`-pakken, som du allerede kender fra [Fase 6 — Første udtræk](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data). Har du allerede genereret og gemt data der, er `synth_data/lpr_adm/` klar og du kan springe forberedelsesblokken over.
+
+Tilpasset fra Anders Aasted Isaksens
+[`dev/common_tasks_datatable.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/dev/common_tasks_datatable.qmd)
+i [`fakeregs`](https://github.com/steno-aarhus/fakeregs) (MIT-licens, Steno Diabetes Center Aarhus).
+Omskrevet til dplyr + arrow og tilpasset denne vejlednings mønster.
+
+```r
+# Installer fakeregs første gang:
+# install.packages("pak"); pak::pak("steno-aarhus/fakeregs")
+
+library(fakeregs)   # syntetiske DST-registerdata
+library(dplyr)      # filter, select, mutate, inner_join, bind_rows
+library(arrow)      # open_dataset, write_parquet
+
+# ── Forberedelse: generer syntetiske data og gem som parquet (gøres kun én gang) ────
+bp             <- generate_background_pop()
+lpr_adm_synth  <- generate_lpr_adm(background_df = bp)
+lpr_diag_synth <- generate_lpr_diag(background_df = lpr_adm_synth)
+lpr_a_k_synth  <- generate_lpr_a_kontakt(background_df = bp)
+lpr_a_d_synth  <- generate_lpr_a_diagnose(background_df = lpr_a_k_synth)
+
+dir.create("synth_data/lpr_adm",        recursive = TRUE, showWarnings = FALSE)
+dir.create("synth_data/lpr_diag",       recursive = TRUE, showWarnings = FALSE)
+dir.create("synth_data/lpr_a_kontakt",  recursive = TRUE, showWarnings = FALSE)
+dir.create("synth_data/lpr_a_diagnose", recursive = TRUE, showWarnings = FALSE)
+write_parquet(lpr_adm_synth,  "synth_data/lpr_adm/lpr_adm.parquet")
+write_parquet(lpr_diag_synth, "synth_data/lpr_diag/lpr_diag.parquet")
+write_parquet(lpr_a_k_synth,  "synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet")
+write_parquet(lpr_a_d_synth,  "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet")
+```
+
+::: {.callout-tip}
+**Stien er relativ til dit working directory** — tjek med `getwd()`.
+Har du allerede kørt forberedelsesblokken i [Fase 6](06_foerste-udtraek.qmd), er `synth_data/lpr_adm/` allerede gemt.
+:::
+
+```r
+# De ICD-koder vi søger — skift disse til dit eget udfald
+CVD_KODER <- c("I20", "I21", "I22", "I23", "I24", "I25")   # iskæmisk hjertesygdom
+
+# ── LPR2 somatisk (frem til marts 2019) ──────────────────────────────────
+lpr_adm  <- open_dataset("synth_data/lpr_adm/")  %>% rename_with(tolower)   # LPR2 kontakttabel — syntetisk
+lpr_diag <- open_dataset("synth_data/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosetabel — syntetisk
+
+lpr2_cvd <- lpr_adm %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%           # vælg kun nødvendige kolonner
+  inner_join(
+    lpr_diag %>%
+      filter(c_diagtype %in% c("A", "B"),                    # kun aktions- og bidiagnoser
+             substr(c_diag, 2, 4) %in% !!CVD_KODER) %>%       # !! sender den lokale R-vektor til DuckDB
+      select(recnum, c_diag),                    # kun join-nøgle og diagnosekode
+    by = "recnum"                                             # join-nøgle i LPR2
+  ) %>%
+  collect() %>%                                              # HER hentes data ind i R
+  mutate(icd3 = substr(c_diag, 2, 4))                        # gem renset kode som ny kolonne
+
+# ── LPR3 (marts 2019 og frem) ─────────────────────────────────────────────
+lpr3_k <- open_dataset("synth_data/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 kontakttabel — syntetisk
+lpr3_d <- open_dataset("synth_data/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosetabel — syntetisk
+
+lpr3_cvd <- lpr3_k %>%
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%   # dw_ek_kontakt er join-nøgle til lpr_a_diagnose
+  inner_join(
+    lpr3_d %>%
+      filter(diag_kode_type %in% c("A", "B"),
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # ekskluder tilbagekaldte
+             substr(diag_kode, 2, 4) %in% !!CVD_KODER) %>%   # !! sender den lokale R-vektor til DuckDB
+      select(dw_ek_kontakt, c_diag = diag_kode),             # omdøb til c_diag for konsistens med LPR2
+    by = "dw_ek_kontakt"                                     # join-nøgle i LPR3
+  ) %>%
+  collect() %>%                                              # hent ind i R
+  mutate(
+    date_contact = as.Date(date_contact),                    # datetime → dato
+    icd3         = substr(c_diag, 2, 4)                      # strip D-præfiks: "DI21" → "I21"
+  )
+
+# ── Kombiner og gem ────────────────────────────────────────────────────────
+alle_cvd <- bind_rows(lpr2_cvd, lpr3_cvd)                   # sæt LPR2 og LPR3 sammen
+
+nrow(alle_cvd)                                               # tjek: antal diagnoserækker
+length(unique(alle_cvd$pnr))                                 # tjek: antal unikke personer
+table(alle_cvd$icd3)                                         # fordeling på koder
+
+saveRDS(alle_cvd, "datasets/extract_cvd.rds")                # gem — skift sti til din egen mappe
+```
+
+</details>
+
+---
+
+## Næste skridt
+
+Du har nu trukket diagnoser fra to LPR-generationer. Næste skridt er at forme og kombinere dine udtræk:
+
+→ [Fase 11 — Joins og pivots](11_data-manipulation.qmd)
+
+## Se også
+
+- [Fase 14 — Registerreference](14d_register_reference.qmd) — bekræftede kolonnenavne for alle LPR-registre
+- [Fase 14 — Faldgruber](14c_dst_faldgruber.qmd) — kendte problemer med LPR på DST
+- [Fase 6 — Første udtræk](06_foerste-udtraek.qmd) — trin-for-trin introduktion til open_dataset, collect og saveRDS
+
+### Eksternt om LPR3 og 2019-overgangen
+
+- [ctpteam/DST — "Guide to LPR3"](https://github.com/ctpteam/DST) — institutionel guide til LPR3-strukturen
+- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) — peer-reviewed, gennemarbejdet eksempel på diagnostisk stabilitet hen over LPR2→LPR3-overgangen (metodisk inspiration, ikke kode til genbrug)

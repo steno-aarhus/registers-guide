@@ -1,0 +1,219 @@
+---
+title: "Faldgruber på DST"
+subtitle: "9 fejl der koster tid og giver uinformative fejlmeddelelser"
+date: last-modified
+---
+
+Denne side samler de fejl, der hyppigst rammer nye brugere af DST-registrene.
+Fælles for dem: fejlmeddelelserne er enten forvirrende, eller der er slet ingen fejlmeddelelse —
+resultatet er bare stille forkert.
+
+---
+
+## 1. `dodsaars` vs `dodsaasg` — brug det rigtige dødsregister
+
+Der er to registre med lignende navne:
+
+| Register | Indeholder | Bruges til |
+|---|---|---|
+| `dodsaars` | Individuelle dødsregistreringer med præcis dødsdato (`d_dodsdto`) | **Censurering ved dødsfald** |
+| `dodsaasg` | Dødsårsagsklassifikation | Kun analyse af dødsårsag |
+
+`dodsaasg` har ikke dødsdatoen i det rigtige format og er ikke den autoritative kilde til individuelle dødsdatoer.
+
+::: {.callout-warning}
+**Kontrollér dodsaars' dækning i din projektvejledning.**
+`dodsaars` dækker ikke nødvendigvis hele din studieperiode — i projekt 708421 dækker det kun ~1970–2001 (pr. juni 2026), og post-2001 dødsfald kræver separat udtræk. Andre projekter kan have anden dækning.
+:::
+
+```r
+# KORREKT — erstat "sti/til/dodsaars/" med din projekts parquet-sti
+# DARTER: load_database("dodsaars") %>% rename_with(tolower)
+dod <- open_dataset("sti/til/dodsaars/") %>%
+  rename_with(tolower)                       # kontrollér dækning i din projektvejledning
+dod_person <- dod %>%
+  filter(pnr %in% !!kohort_pnrs) %>%
+  select(pnr, death_date = d_dodsdto) %>%   # d_dodsdto er den bekræftede kolonne
+  collect()
+
+# FORKERT — brug ikke dodsaasg til censureringsdatoer
+```
+
+---
+
+## 2. RAM er delt — ryd op efter store udtræk
+
+Du er på en delt server med fælles RAM.
+Når hukommelsesbjælken i RStudio bliver rød, oplever alle på serveren langsomhed.
+
+```r
+# Filtrer tidligt — aldrig collect() først
+# DARTER: load_database("lmdb") %>% rename_with(tolower)
+lmdb <- open_dataset("sti/til/lmdb/") %>%
+  rename_with(tolower)                  # doven forbindelse — ingen RAM brugt endnu
+
+result <- lmdb %>%
+  filter(pnr %in% !!kohort_pnrs, substr(atc, 1, 4) == "N06D") %>%   # filtrer inden collect
+  select(pnr, atc, eksd) %>%
+  collect()                                                            # kun nu flyttes data til R
+
+# Frigør store objekter, når du er færdig med dem
+rm(lmdb)   # slet den dovne forbindelse — den fylder ikke meget, men det er god vane
+gc()       # frigiver hukommelse tilbage til operativsystemet
+```
+
+---
+
+## 3. `rename_with(tolower)` skal kaldes på hvert register
+
+Rå kolonnenavne varierer efter register og år: `PNR`, `pnr`, `Pnr`, `V_CPR`.
+Glemmer du det, fejler `filter(pnr %in% ...)` stille med "Column `pnr` not found" — selvom kolonnen er der.
+
+**Reglen:** hvert `open_dataset()`- eller `load_database()`-kald ender med `%>% rename_with(tolower)` som det første trin i din pipe.
+Se [Det universelle mønster](05_universelle-moenster.qmd) for forklaring og eksempel.
+
+---
+
+## 4. Datokolonner er ikke altid i Date-format
+
+DST-registre gemmer datoer i flere formater — og de ser ens ud, men opfører sig forskelligt.
+
+| Format | Eksempel | Hvad `class()` returnerer | Hvad du skal gøre |
+|---|---|---|---|
+| Date | `2020-05-15` | `"Date"` | Ingenting — kan bruges direkte |
+| Character | `"2020-05-15"` | `"character"` | `as.Date(kolonne)` |
+| Datetime | `"2020-05-15 14:32:00"` | `"POSIXct"` | `as.Date(kolonne)` for at få kun datodel |
+| SAS-heltal | `21990` | `"numeric"` | `as.Date(kolonne, origin = "1960-01-01")` |
+
+**Reglen:** Tjek altid `class()` på en datokolonne inden du bruger den i beregninger.
+
+```r
+class(lpr_a_kontakt$kont_starttidspunkt)   # "POSIXct" — datetime, ikke Date
+# Fix:
+mutate(dato = as.Date(kont_starttidspunkt))
+
+class(bef$foed_dag)   # "Date" — kan bruges direkte
+```
+
+---
+
+## 5. BEF er et status-snapshot — ikke et levende register
+
+BEF er et **statusregister**: det opgør befolkningens sammensætning på et givet referencetidspunkt — ikke løbende.
+DST's referencetid er **ultimo** (typisk 31. december for et årssnap). Siden 2008 leveres BEF desuden **kvartalsvist** (marts, juni, september, december).
+
+::: {.callout-note}
+**"aar == 2020 = 1. januar 2020" er en projektkonvention.**
+I mange projekter omdøbes BEF's snapshots så `aar == 2020` konventionelt refererer til befolkningens sammensætning pr. 1. januar 2020 — men dette fremgår ikke af DST's leverancenavngivning. Bekræft konventionen i din projektvejledning.
+
+Se DST's officielle BEF-dokumentation: [statistikdokumentation/befolkningen →](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen)
+:::
+
+Det betyder, at en person der dør i juni 2020 stadig optræder i BEF-snapshottet for starten af 2020.
+
+```r
+# FEJL: brug ikke BEF til at tjekke "levende på en specifik dato"
+bef_2020 <- bef %>%
+  filter(aar == 2020)   # inkluderer alle i snapshottet for 2020
+                        # — også dem der dør i løbet af 2020
+
+# KORREKT: kombiner med dodsaars for at ekskludere dødsfald
+deaths <- open_dataset("sti/til/dodsaars/") %>%   # DARTER: load_database("dodsaars")
+  rename_with(tolower) %>%
+  filter(pnr %in% !!kohort_pnrs) %>%
+  select(pnr, d_dodsdto) %>%
+  collect()
+
+bef_levende <- bef_data %>%
+  left_join(deaths, by = "pnr") %>%
+  filter(is.na(d_dodsdto) | d_dodsdto > index_date)   # levende på index-dato
+```
+
+---
+
+## 6. LPR3's "a" i `lpr_a_diagnose` er ikke A-type diagnoser
+
+Tabellen hedder `lpr_a_diagnose` — det "a" refererer til "analysemodel" (LPR_A-serien introduceret i 2025).
+Det betyder **ikke**, at tabellen kun indeholder A-type (aktions-)diagnoser.
+
+Tabellen indeholder alle diagnosetyper: A (aktion), B (bi-diagnose) og G (grundmorbus).
+Du skal stadig filtrere på `diag_kode_type`:
+
+```r
+lpr_a_diagnose %>%
+  filter(diag_kode_type %in% c("A", "B")) %>%   # stadig nødvendigt
+  ...
+```
+
+---
+
+## 7. Kategoriske koder er ikke konsistente på tværs af registre
+
+Samme variabel kan have forskellig kodning i forskellige registre — forskellig type (numeric vs. character), forskellige værdier, eller begge dele.
+
+I praksis trækker du demografiske variable (køn, alder) fra BEF og behøver sjældent at sammenligne med samme variabel i et andet register. Men hvis du gør, så tjek altid med `table()` og `class()` inden du bruger variablen:
+
+```r
+table(register_a$koen)   # hvad er de faktiske værdier og typer?
+class(register_a$koen)
+table(register_b$koen)
+class(register_b$koen)
+```
+
+---
+
+## 8. `!!` (bang-bang) glemmes i lazy evaluering
+
+Når du filtrerer med en lokal R-vektor inde i en DuckDB-forespørgsel, skal du bruge `!!`.
+Uden det leder DuckDB efter en kolonne med det navn — og fejler stille eller med en forvirrende besked.
+
+```r
+min_pnr_liste <- c("001", "002", "003")   # lokal R-vektor
+
+# FORKERT — DuckDB leder efter en kolonne kaldet "min_pnr_liste"
+bef %>% filter(pnr %in% min_pnr_liste)   # fejl eller forkert resultat
+
+# KORREKT — !! fortæller DuckDB: "brug den lokale R-vektor"
+bef %>% filter(pnr %in% !!min_pnr_liste)
+```
+
+::: {.callout-note}
+`!!` er nødvendigt for **alle** lokale R-objekter brugt inde i `filter()`, `mutate()` mv.
+på dovne DuckDB-forbindelser. Se [Funktionsguiden](14a_guide_til_funktioner.qmd#bang-bang-to-udråbstegn) for fuld forklaring.
+:::
+
+---
+
+## 9. `nmi_count` ≠ `nmi_score`
+
+Disse to variabler er **ikke** det samme og er ikke udskiftelige:
+
+| Variabel | Hvad den er | Kilde |
+|---|---|---|
+| `nmi_score` | **Vægtet** comorbiditetsscore — Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 prediktorer med individuelle vægte; lungekreft tæller f.eks. 19 point, type 2-diabetes tæller 2. | Se [NMI-siden](13c_nmi.qmd) |
+| `nmi_count` | Simpel **optælling** af antal kroniske tilstande (ud af 33 mulige) personen er diagnosticeret med | Beregnes separat |
+
+Bruger du `nmi_count` i din regressionsmodel i stedet for `nmi_score`, justerer du for noget andet end du tror — og får ingen fejlmeddelelse.
+
+---
+
+## 10. De hyppigste fejlbeskeder og hvad de betyder {#de-hyppigste-fejlbeskeder-og-hvad-de-betyder}
+
+R's fejlbeskeder er korte og tekniske — her er de du oftest møder i et DST-workflow, oversat til hvad de faktisk betyder:
+
+| Fejlbesked | Typisk årsag | Løsning |
+|---|---|---|
+| `Error: Column 'pnr' not found` | `rename_with(tolower)` mangler | Tilføj `%>% rename_with(tolower)` direkte efter `load_database()` — se [faldgrube 3](#3-rename_withtolower-skal-kaldes-på-hvert-register) |
+| `Error: object 'min_liste' not found` | `!!` mangler i `filter()` på en doven forbindelse | Skriv `filter(pnr %in% !!min_liste)` — se [faldgrube 8](#8-bang-bang-glemmes-i-lazy-evaluering) |
+| `Error: could not find function "load_database"` | `library(dstDataPrep)` mangler *(kun DARTER)* | Tilføj `library(dstDataPrep)` øverst i scriptet — kun relevant på DARTER/projekt 708421 |
+| `non-numeric argument to binary operator` | Datokolonne er `character`, ikke `Date` | `mutate(dato = as.Date(dato))` — se [faldgrube 4](#4-datokolonner-er-ikke-altid-i-date-format) |
+| `Error in filter.default(...)` | Filtrering på et dovent objekt uden `%>%` | Skift til `%>%` — se [røret](14a_guide_til_funktioner.qmd#røret) |
+| `Error: Can't convert ... to ...` | Join på kolonner med forskellig type (fx numeric vs. character) | Brug `mutate(pnr = as.character(pnr))` for at matche typer |
+| `object of type 'closure' is not subsettable` | Et variabelnavn overskriver en funktion (fx `data <- ...`) | Brug et unikt variabelnavn — undgå `data`, `df`, `c` som objektnavne |
+
+::: {.callout-tip}
+**Det hurtigste debugging-flow** — hvad du gør trin for trin når du ser en rød fejlbesked — er beskrevet i [Fase 7 — Ser du en rød fejlbesked?](07_inspicer-data.qmd#ser-du-en-rød-fejlbesked).
+:::
+
+---
+

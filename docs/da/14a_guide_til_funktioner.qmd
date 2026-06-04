@@ -1,0 +1,879 @@
+---
+title: "Funktioner: oversigt"
+subtitle: "Hvad hver enkelt funktion gør — forklaret til dem, der aldrig har kodet før"
+date: last-modified
+---
+
+*Kender du funktionens navn? Brug **Ctrl+F** (Windows) eller **Cmd+F** (Mac) og søg direkte på siden.*
+
+::: {.callout-note}
+## Spring direkte til
+
+| Emne | Sektion |
+|---|---|
+| Røret `%>%` | [Røret](#røret) |
+| Indlæs register / åbn parquet-fil | [Dataindlæsning](#dataindlæsning) |
+| Filtrer rækker | [Rækker: filtrer og deduplikér](#rækker-filtrer-og-deduplikér) |
+| Vælg eller tilføj kolonner | [Kolonner: vælg, tilføj, omdan](#kolonner-vælg-tilføj-omdan) |
+| Omdøb kolonner | [Kolonnenavne](#kolonnenavne) |
+| Grupper, tæl og aggregér | [Grupper og aggregering](#grupper-og-aggregering) |
+| Join to tabeller | [Join — sammensæt tabeller](#join-sammensæt-tabeller) |
+| Pivot (bredt ↔ langt format) | [Omformning](#omformning) |
+| `collect()` og doven evaluering | [Doven forespørgsel](#doven-forespørgsel) |
+| Datoer og tekst | [Tekstoperationer](#tekstoperationer) · [Tal og datoer](#tal-og-datoer) |
+| Fejlsøgning | [Diagnostik og fejlsøgning](#diagnostik-og-fejlsøgning) |
+:::
+
+::: {.callout-tip}
+## De vigtigste funktioner — start her
+
+Forstår du de 6 funktioner herunder, kan du læse de fleste linjer registerdata-kode.
+
+| Funktion | Hvad den gør |
+|---|---|
+| `open_dataset("sti")` | Åbner en doven forbindelse til et register (i DARTER: `load_database("navn")`) |
+| `filter(betingelse)` | Beholder kun de rækker, der opfylder betingelsen |
+| `select(kol1, kol2)` | Beholder kun de angivne kolonner |
+| `mutate(ny_kol = ...)` | Tilføjer eller ændrer en kolonne |
+| `left_join(anden_df, by = "nøgle")` | Joiner to tabeller på en fælles nøgle |
+| `collect()` | Henter data fra parquet ind i R-hukommelsen |
+
+Rækkefølgen er intentionel: `open_dataset` → `filter` → `select` → `collect` er det mønster, der optræder i næsten hvert script.
+:::
+
+---
+
+## Hvad er en funktion?
+
+Tænk på en funktion som en maskine på et samlebånd.
+Du sender noget ind i den ene ende, den gør noget ved det, og du får noget nyt ud i den anden ende.
+`filter()` er for eksempel en si: du sender en stor tabel ind, angiver hvilke rækker du vil beholde, og får en mindre tabel ud.
+
+Alle funktioner i R skrives med parenteser: `funktionsnavn(hvad_der_sendes_ind)`.
+
+---
+
+## Røret — `%>%`
+
+Det vigtigste symbol i al koden er `%>%`, "the pipe".
+
+```r
+lpr_adm %>%
+  filter(pnr %in% !!mine_pnrs) %>%
+  select(pnr, recnum) %>%
+  collect()
+```
+
+**Hvad det gør:** røret sender resultatet fra linjen til venstre videre som første argument til funktionen til højre.
+
+**De to skrivemåder gør det samme:**
+
+```r
+# Uden røret — indefra og ud, som russiske dukker:
+collect(select(filter(lpr_adm, pnr %in% !!mine_pnrs), pnr, recnum))
+
+# Med røret — oppefra og ned, som en opskrift:
+lpr_adm %>%
+  filter(pnr %in% !!mine_pnrs) %>%
+  select(pnr, recnum) %>%
+  collect()
+```
+
+Begge versioner giver nøjagtigt det samme resultat. Pipe-versionen er lettere at læse fordi du kan følge trinene i rækkefølge — og lettere at fejlfinde fordi du kan tilføje eller fjerne ét trin ad gangen.
+
+**Anekdote:** Forestil dig at du laver mad.
+Du skærer løgene — og sender dem videre til gryden — som sender indholdet videre til tallerkenen.
+Røret gør præcis det: det kæder trin sammen, så du kan læse koden oppefra og ned som en opskrift.
+
+::: {.callout-note}
+**`%>%` og `|>` er det samme — bare to forskellige måder at skrive røret på.**
+
+`%>%` kommer fra pakken `magrittr` og er tilgængeligt via `library(dplyr)`.
+`|>` er en indbygget version introduceret i R 4.1 — den kræver ingen pakke.
+
+De to virker identisk i næsten alle situationer. Du vil se begge i R-kode på nettet.
+Projektet bruger `%>%`, men hvis du skriver `|>` er det helt fint.
+:::
+
+---
+
+## Dataindlæsning
+
+### `open_dataset("sti")` <small>— `arrow`</small>
+
+**Hvad det gør:** åbner en doven forbindelse til en parquet-fil eller -mappe.
+
+**Anekdote:** Forestil dig at du ringer til biblioteket og beder dem om at finde alle bøger om hjertekirurgi fra 1990 til 2020.
+Bibliotekaren siger "ja, dem finder jeg" — men de er ikke ankommet endnu.
+Det er præcis hvad `open_dataset()` gør: det fortæller computeren *hvad* du vil have, men data er ikke hentet ind i hukommelsen endnu.
+Resten af dine kommandoer (`filter`, `select`) tilføjer yderligere instruktioner, inden du til sidst siger "send dem nu" — det er `collect()`.
+
+::: {.panel-tabset}
+## DST-server
+
+```r
+bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
+  rename_with(tolower)   # standardisér kolonnenavne til lowercase
+```
+
+De bekræftede stier til dit projekt finder du i [Registerreference](14d_register_reference.qmd).
+
+## DARTER
+
+```r
+bef <- load_database("bef") %>% rename_with(tolower)   # doven forbindelse; kolonnenavne til lowercase
+```
+
+`load_database()` fra `dstDataPrep` finder stien automatisk — du behøver ikke kende den fulde sti.
+Se [DARTER — setup →](darter/00_index.qmd) for installation.
+
+## Lokalt (fakeregs)
+
+```r
+bef <- open_dataset("synth_data/bef/") %>% rename_with(tolower)   # sti til lokalt gemt syntetisk register
+```
+
+Generer og gem syntetiske data lokalt inden brug — se [Fase 6 — Første udtræk](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data).
+:::
+
+Bruges til alle registre der er gemt som parquet-filer:
+`bef`, `lpr_adm`, `lpr_diag`, `lmdb`, `dodsaars`, `vnds`, `udda`, `faik`, `akm`,
+`t_psyk_adm`, `t_psyk_diag`, `lpr_a_kontakt`, `lpr_a_diagnose` med flere.
+
+---
+
+### `collect()`
+
+**Hvad det gør:** udfører den dovne forespørgsel og trækker data ind i R-hukommelsen.
+
+Det er det punkt, hvor bibliotekaren rent faktisk bringer bøgerne hen til dig.
+Kald det sent — efter alle `filter()` og `select()` trin — så kun de nødvendige data flyttes.
+
+```r
+resultat <- stort_register %>%
+  filter(pnr %in% !!kohort_pnrs) %>%   # kun kohortens pnr'er
+  select(pnr, d_inddto) %>%            # kun de to kolonner vi bruger
+  collect()                             # data trækkes ind i R-hukommelsen
+```
+
+::: {.callout-note}
+Konceptet med doven evaluering — hvorfor data ikke er i hukommelsen før `collect()` — er forklaret grundigt på siden [Det universelle mønster](05_universelle-moenster.qmd).
+:::
+
+---
+
+### `readRDS("sti/fil.rds")`
+
+**Hvad det gør:** læser en gemt R-fil fra disk ind i hukommelsen.
+
+**Anekdote:** Det er som at åbne en Word-fil, du gemte sidst.
+`.rds`-formatet er R's eget gemmingsformat — hurtigere og mere kompakt end CSV.
+Det bruges til at sende data videre fra ét script til det næste i pipeline'en.
+
+```r
+full_cohort <- readRDS("datasets/full_cohort.rds")   # hent gemt datasæt fra disk
+```
+
+---
+
+### `saveRDS(objekt, "sti/fil.rds")`
+
+**Hvad det gør:** gemmer et R-objekt til disk.
+
+Det modsatte af `readRDS()`.
+Hvert pipeline-script gemmer sit resultat med `saveRDS()`, så det næste script kan hente det.
+
+```r
+saveRDS(full_cohort, "datasets/full_cohort.rds")   # gem datasæt til disk
+```
+
+---
+
+### `haven::read_sas("fil.sas7bdat")`
+
+**Hvad det gør:** læser en SAS-datafil ind i R.
+
+Bruges til at indlæse SAS-filer — fx DST's formateringstabeller eller registre der ikke er konverteret til parquet.
+Se [Filformater](04_filformater.qmd) og [Formateringstabeller](14b_formateringstabeller.qmd) for praktiske eksempler.
+
+---
+
+### `arrow::write_parquet(df, "sti/fil.parquet")`
+
+**Hvad det gør:** gemmer en data frame som en parquet-fil.
+
+Parquet er et særligt effektivt filformat til store datasæt — det er langt hurtigere at læse end CSV.
+Bruges når du vil gemme et R-datasæt som parquet-fil, fx til brug med `open_dataset()` eller `load_database()` i et andet script.
+
+---
+
+### `file.path(mappe, "filnavn.rds")`
+
+**Hvad det gør:** sætter en mappesti og et filnavn korrekt sammen til en fuld sti.
+
+**Anekdote:** Tænk på det som at skrive en adresse: `file.path("C:/data", "resultater.rds")` giver `"C:/data/resultater.rds"`.
+Det er sikrere end bare at klistre strenge sammen med `paste0()`, fordi det håndterer skråstreger korrekt på alle operativsystemer.
+
+---
+
+### `file.exists("sti")`
+
+**Hvad det gør:** returnerer `TRUE` eller `FALSE` — eksisterer filen?
+
+Bruges til at give en forståelig fejlbesked, inden koden forsøger at åbne en fil, der måske ikke er der.
+
+---
+
+### `dir.create(sti, showWarnings = FALSE, recursive = TRUE)`
+
+**Hvad det gør:** opretter en mappe, hvis den ikke allerede eksisterer.
+
+`recursive = TRUE` opretter også eventuelle overordnede mapper.
+`showWarnings = FALSE` undertrykker den harmløse advarsel, du ellers ville få, hvis mappen allerede fandtes.
+
+---
+
+## Kolonnenavne
+
+### `rename_with(tolower)`
+
+**Hvad det gør:** konverterer ALLE kolonnenavne til små bogstaver på én gang.
+
+**Anekdote:** Forestil dig at du får udleveret en patientliste fra fem forskellige afdelinger.
+Den ene skriver "CPR", en anden "cpr", en tredje "Cpr".
+Det er det samme — men computeren behandler dem som tre helt forskellige ting.
+`rename_with(tolower)` fikser det på ét sekund: alle navne bliver ensartede.
+
+```r
+bef <- open_dataset("sti/til/bef") %>% rename_with(tolower)   # alle kolonner bliver lowercase: pnr, koen, foed_dag, ...
+```
+
+**Vigtigt:** kald det altid på samme linje som `open_dataset()` (eller `load_database()` i DARTER).
+Glemmer du det, vil `filter(pnr %in% ...)` fejle, fordi kolonnen måske hedder `PNR`.
+
+---
+
+### `rename(nyt_navn = gammelt_navn)`
+
+**Hvad det gør:** omdøber én eller flere specifikke kolonner.
+
+```r
+rename(surgery_date = index_date)   # index_date omdøbes til surgery_date
+```
+
+---
+
+### `names(df)`
+
+**Hvad det gør:** viser alle kolonnenavne i en data frame.
+
+Nyttigt, når du ikke er sikker på, hvad en tabel indeholder.
+
+```r
+names(full_cohort)   # udskriver alle kolonnenavne
+```
+
+---
+
+## Kolonner: vælg, tilføj, omdan
+
+### `select(kol1, kol2, nyt = gammelt, -fjern)`
+
+**Hvad det gør:** beholder kun de kolonner, du nævner.
+
+**Anekdote:** Du har en stor Excel-fil med 50 kolonner.
+Du skal kun bruge 3.
+`select()` er som at gemme et udsnit med kun de tre kolonner du har brug for.
+Det reducerer mængden af data, der trækkes fra serveren, og er en af grundene til at koden er hurtig.
+
+```r
+select(pnr, recnum, dato = d_inddto)   # beholder tre kolonner; d_inddto omdøbes til dato
+select(-aar)                            # fjerner kolonnen aar; beholder alle andre
+```
+
+Når du omdøber inde i `select()`, er retningen `nyt_navn = gammelt_navn` — det nye navn til venstre, det eksisterende kolonnenavn til højre.
+
+---
+
+### `mutate(ny_kolonne = udtryk)`
+
+**Hvad det gør:** tilføjer en ny kolonne eller ændrer en eksisterende.
+
+**Anekdote:** Du har en kolonne med fødselsdato.
+Du vil gerne have en kolonne med fødselsår.
+`mutate(birth_year = year(foed_dag))` tilføjer den nye kolonne uden at ændre noget andet.
+Antallet af rækker er det samme efter `mutate()` — det tilføjer information, fjerner ikke rækker.
+
+```r
+mutate(icd3 = substr(c_diag, 2, 4))   # ny kolonne: ICD-kode uden D-præfikset, 3 tegn
+mutate(alder = as.numeric(difftime(surgery_date, foed_dag, units = "days")) / 365.25)   # alder ved operation i år
+```
+
+---
+
+### `case_when(betingelse1 ~ værdi1, betingelse2 ~ værdi2, TRUE ~ standard)`
+
+**Hvad det gør:** en avanceret if-else med mange betingelser.
+
+**Anekdote:** Tænk på trafiklyset: er det rødt → stop, er det gult → vær forsigtig, er det grønt → kør.
+`case_when()` fungerer på samme måde: betingelserne evalueres i rækkefølge, og den første betingelse, der er sand, bestemmer resultatet.
+`TRUE ~ standard` er "i alle andre tilfælde"-armen.
+
+```r
+mutate(uddannelse_kat = case_when(
+  edu_level == 1 ~ "Grundskole",
+  edu_level == 2 ~ "Gymnasial",
+  edu_level == 3 ~ "Videregaaende",
+  TRUE           ~ "Ukendt"
+))
+```
+
+---
+
+### `if_else(betingelse, sand_værdi, falsk_værdi)`
+
+**Hvad det gør:** en simpel to-vejs betingelse.
+
+```r
+if_else(is.na(death_date), 0L, 1L)   # 1 hvis personen er død, 0 hvis ikke
+```
+
+Strengere end basis-R's `ifelse()` — begge værdier skal have samme type.
+
+::: {.callout-note}
+`0L` og `1L` er **heltal** (integers) i R.
+`L`-suffikset er R's måde at angive at et tal er et heltal frem for et decimaltal (`0` og `1` uden `L` er double som standard).
+`if_else()` kræver at begge værdier har præcis samme type — brug enten `0L`/`1L` (integer) eller `0`/`1` (double), men ikke en blanding.
+:::
+
+---
+
+### `coalesce(x, erstatning)`
+
+**Hvad det gør:** erstatter `NA`-værdier med en anden værdi.
+
+**Anekdote:** Efter et left join vil mange personer have `NA` i flag-kolonner, fordi de ikke havde den tilstand.
+`coalesce(mi_flag, 0L)` siger: "hvis mi_flag er NA, sæt det til 0 i stedet".
+Bruges systematisk efter hvert left join, der producerer flag-kolonner.
+
+```r
+coalesce(mi_flag, 0L)   # NA (= ikke fundet) -> 0 (= fraværende)
+```
+
+---
+
+### `across(kolonner, funktion)`
+
+**Hvad det gør:** anvender den samme funktion på mange kolonner på én gang inde i `mutate()`.
+
+```r
+mutate(across(all_of(nmi_variabler), ~ coalesce(.x, 0L)))   # erstat NA med 0 i alle nmi-flagkolonner
+```
+
+`~ coalesce(.x, 0L)` er en anonym funktion: `~` betyder "funktion af", og `.x` er den aktuelle kolonne.
+Det svarer til `function(x) coalesce(x, 0L)` — men kortere.
+`across()` kalder denne funktion én gang per kolonne i `nmi_variabler`.
+
+---
+
+### `rowSums(matrix, na.rm = TRUE)`
+
+**Hvad det gør:** lægger værdierne i hver række sammen på tværs af kolonner.
+
+Bruges to steder:
+
+1. **NMI-score** (Nordic Multimorbidity Index): summerer produktet af 0/1-flag-kolonner og deres individuelle vægte → én vægtet comorbiditetsscore per person. En patient med hjertekarsygdom og cancer scorer højere end en patient med to mildere tilstande.
+2. **Multimorbiditetstælling**: summerer alle 0/1-flag → simpel optælling af antal tilstande per person.
+
+---
+
+## Rækker: filtrer og deduplikér
+
+### `filter(betingelse1, betingelse2, ...)`
+
+**Hvad det gør:** beholder kun de rækker, der opfylder betingelserne.
+
+**Anekdote:** Du har en patientliste og vil kun se kvinder over 50 år.
+`filter(koen == 2, alder > 50)` er din si — alt andet ryger ud.
+Alle betingelser kombineres med OG (alle skal være sande).
+Hvis du vil have enten-eller, bruger du `|` inde i filter: `filter(icd3 == "F00" | icd3 == "F01")`.
+
+```r
+filter(pnr %in% !!kohort_pnrs)               # kun kohortmedlemmer
+filter(date_contact >= surgery_date)          # kun post-operative kontakter
+filter(icd3 %in% c("G30", "F00", "F03"))     # kun demenskoder
+```
+
+---
+
+### `%in%` — "er med i listen"
+
+**Hvad det gør:** tjekker om hvert element på venstre side optræder i vektoren på højre side.
+Returnerer `TRUE` eller `FALSE` for hvert element.
+
+**Anekdote:** Forestil dig en gæsteliste til en fest.
+`pnr %in% !!mine_pnrs` er som at stille sig ved indgangen og tjekke: "er dette CPR-nummer på listen?"
+
+```r
+icd3 %in% c("G30", "F00", "F03")   # TRUE for disse tre koder, FALSE for alt andet
+pnr  %in% !!mine_pnrs              # TRUE for alle pnr'er i kohorten
+```
+
+Du vil se `%in%` i næsten alle `filter()`-kald i projektet.
+
+---
+
+### `distinct(kol1, kol2)`
+
+**Hvad det gør:** fjerner duplikater — beholder kun unikke kombinationer.
+
+**Anekdote:** En person kan have fået diagnosen F00 ti gange.
+Du behøver kun at vide, om de nogensinde har haft den.
+`distinct(pnr, icd3)` reducerer det til én række per person per kode.
+`distinct(pnr)` giver dig bare listen over unikke person-ID'er.
+
+---
+
+### `slice(n)`
+
+**Hvad det gør:** beholder kun den n'te række inden for hver gruppe (bruges efter `group_by()`).
+
+```r
+group_by(pnr) %>%          # gruppér per person
+  arrange(desc(aar)) %>%   # nyeste år først
+  slice(1)                 # beholder den nyeste post per person
+```
+
+---
+
+## Grupper og aggregering
+
+### `group_by(kol1, kol2)`
+
+**Hvad det gør:** opdeler data i grupper, så efterfølgende operationer sker separat inden for hver gruppe.
+
+**Anekdote:** Forestil dig at du har en stak patientkurver og sorterer dem i bunker efter CPR-nummer.
+`group_by(pnr)` gør præcis det — men kun i hukommelsen.
+Alle efterfølgende trin (`arrange`, `slice`, `summarise`) sker nu én bunke ad gangen.
+
+```r
+group_by(pnr) %>%             # gruppér per person
+  arrange(date_contact) %>%   # ældste dato først
+  slice(1) %>%                # tidligste kontakt per person
+  ungroup()                   # fjern grupperingen igen bagefter
+```
+
+---
+
+### `ungroup()`
+
+**Hvad det gør:** fjerner grupperingen.
+
+**Vigtigt:** kald altid `ungroup()` efter du er færdig med `group_by()`.
+Glemmer du det, forbliver data grupperet, og senere operationer kan opføre sig uventet.
+
+---
+
+### `arrange(kolonne)` / `arrange(desc(kolonne))`
+
+**Hvad det gør:** sorterer rækkerne stigende (standard) eller faldende (`desc()`).
+
+Bruges typisk med `group_by() %>% slice(1)` for at finde den første eller nyeste post per person.
+
+---
+
+### `summarise(ny_kol = funktion(kol), .groups = "drop")`
+
+**Hvad det gør:** reducerer hver gruppe til én opsummeringsrække.
+
+```r
+group_by(pnr) %>%                                                  # gruppér per person
+  summarise(foerste_e66 = min(date_contact, na.rm = TRUE))         # tidligste E66-dato per person
+```
+
+`.groups = "drop"` fjerner grupperingen automatisk bagefter.
+
+---
+
+### `ntile(x, n)`
+
+**Hvad det gør:** inddeler rækker i `n` lige store grupper (kvantiler).
+
+::: {.callout-warning}
+Bruges **ikke** til indkomstkvintiler i registerbaserede studier der følger SEPLINE-retningslinjerne.
+SEPLINE anbefaler at sammenligne med populationsspecifikke grænseværdier (Q20/Q40/Q60/Q80) stratificeret på køn × 5-årsaldersgruppe × referenceår — ikke `ntile()` på din kohorte alene.
+Se [SEPLINE](12_socioekonomiske-variable.qmd).
+:::
+
+---
+
+## Join — sammensæt tabeller
+
+Det er en af de ting, der tager længst tid at forstå, men som er afgørende for alt registerarbejde.
+En join sætter to tabeller sammen baseret på en fælles nøgle — typisk `pnr`.
+
+### `inner_join(y, by = "nøgle")`
+
+**Hvad det gør:** beholder **kun** rækker, der eksisterer i BEGGE tabeller.
+
+**Anekdote:** Det er som en VIP-liste ved indgangen.
+Du skal stå på BEGGE lister for at komme ind.
+Bruges når en match er meningsfuld — f.eks. `inner_join(bs_kohort)` beholder kun hospitalkontakter for personer, der faktisk er i studiet.
+
+```r
+inner_join(bs_kohort %>% select(pnr, surgery_date), by = "pnr")   # kun kontakter fra BS-kohortens medlemmer
+```
+
+---
+
+### `left_join(y, by = "nøgle")`
+
+**Hvad det gør:** beholder **alle** rækker fra den venstre tabel.
+Rækker uden match i den højre tabel får `NA` for de kolonner, der kom fra højre.
+
+**Anekdote:** Det er som at tjekke, om dine patienter har et bestemt fund, uden at smide nogen væk.
+Alle patienter er der stadig — dem med funnet har en dato, dem uden har `NA`.
+Bruges overalt, når du tilføjer flag og kovariater til kohorten.
+
+```r
+full_cohort %>%                               # start med alle kohortmedlemmer
+  left_join(dementia, by = "pnr")             # alle bevares; kun dem med demens får en dato
+```
+
+---
+
+### `bind_rows(df1, df2, ...)`
+
+**Hvad det gør:** stakker data frames ovenpå hinanden (samme kolonner, flere rækker).
+
+**Anekdote:** Som at tage tre bunker papir og lægge dem i én stak.
+Bruges fx til at kombinere LPR2 + psykiatrisk LPR2 + LPR3 til én samlet diagnosetabel.
+
+```r
+bind_rows(lpr2_resultater, lpr2_psyk_resultater, lpr3_resultater)   # kombinér alle tre kildetabeller
+```
+
+---
+
+## Omformning
+
+### `pivot_wider(names_from = kol, values_from = kol)`
+
+**Hvad det gør:** omdanner et langt format (én række per besøg) til et bredt format (én række per person med én kolonne per tidspunkt).
+
+**Anekdote:** Forestil dig en patient med fem vejebesøg — alle i samme kolonne med fem rækker.
+`pivot_wider()` omdanner det til én enkelt række med fem kolonner: `vaegt_3mo`, `vaegt_6mo`, `vaegt_12mo`, osv.
+Bruges i udtræk af vægt- og insulinudkomme.
+
+---
+
+## Doven forespørgsel
+
+### `!!` (bang-bang, to udråbstegn)
+
+**Hvad det gør:** injicerer en lokal R-variabel ind i en DuckDB/dplyr-forespørgsel.
+
+**Anekdote:** Forestil dig at du beder en assistent om at finde alle patienter på en liste.
+Hvis du siger "find alle patienter på listen `mine_pnrs`", vil assistenten kigge efter en kolonne i databasen med det navn — og den eksisterer ikke.
+Du skal sige: "find alle patienter på *denne* liste" og holde listen frem.
+`!!` er det, der svarer til at holde listen frem.
+
+```r
+filter(pnr %in% !!mine_pnrs)   # !! siger: "mine_pnrs er en R-vektor, ikke et kolonnenavn"
+```
+
+Du vil se `!!` foran næsten alle lokale R-variabler inde i `filter()`-kald.
+
+---
+
+### `!!kolonnenavn := værdi` (inde i `mutate`)
+
+**Hvad det gør:** opretter en kolonne, hvis NAVN er bestemt af en R-variabel — ikke skrevet direkte i koden.
+
+Normalt skriver du et fast kolonnenavn til venstre for `=` i `mutate()`:
+```r
+mutate(mi = 1L)   # opretter altid en kolonne der hedder "mi"
+```
+
+Men i NMI-beregningen (Nordic Multimorbidity Index) kører vi i en løkke over en liste af kroniske tilstande (`"mi"`, `"stroke"`, `"diabetes"`, ...) og vil oprette én kolonne per tilstand. Kolonnens navn er derfor gemt i en variabel:
+```r
+tilstandsnavn <- "mi"   # variablen indeholder navnet som en tekststreng
+
+mutate(!!tilstandsnavn := 1L)   # !! injicerer variablens indhold: svarer til mutate(mi = 1L)
+# Næste iteration: tilstandsnavn <- "stroke" → mutate(stroke = 1L)
+```
+
+To ting er anderledes end normalt:
+- **`!!`** — som i `filter()`: injicerer R-variabelens *indhold* i stedet for at tolke den som et kolonnenavn
+- **`:=`** — bruges i stedet for `=`, fordi R kræver det, når venstre side af en tildeling er dynamisk. Det er ikke muligt at skrive `mutate(!!navn = 1L)` — kun `mutate(!!navn := 1L)` virker.
+
+`1L` er et heltal (se [`as.integer()` / `1L`](#as.integer-x-1l)) — flag-kolonner gemmes som heltal for at spare hukommelse.
+
+---
+
+## Tekstoperationer
+
+### `substr(streng, start, slut)`
+
+**Hvad det gør:** udtrækker en del af en tekststreng baseret på tegnnumre.
+
+**Anekdote:** Du har ICD-koden `"DG30"`.
+DST har tilføjet et "D" foran — det hører ikke til i standard ICD-10.
+`substr("DG30", 2, 4)` siger: "giv mig tegnene fra position 2 til 4" og returnerer `"G30"`.
+
+```r
+substr(c_diag, 2, 4)   # 3-tegns kode: "DG30" -> "G30"
+substr(c_diag, 2, 5)   # 4-tegns kode: "DI110" -> "I110"
+```
+
+---
+
+### `paste0(x, y)`
+
+**Hvad det gør:** sætter tekststrenge sammen uden mellemrum.
+
+```r
+paste0("C", 10:43)   # laver "C10", "C11", "C12", ..., "C43"
+```
+
+Bruges til kompakt opbygning af ICD-kodelister.
+
+---
+
+### `paste(x, y, sep = "_")`
+
+**Hvad det gør:** sætter tekststrenge sammen med et selvvalgt adskillelsestegn.
+
+```r
+paste(koen, foedselsaar, sep = "_")   # laver f.eks. "1_1975" som matchingnøgle
+```
+
+---
+
+### `toupper(x)` / `tolower(x)`
+
+**Hvad det gør:** konverterer tekst til hhv. store eller små bogstaver.
+
+```r
+toupper(c_opr)   # sikrer at operationskoder matcher uanset bogstavsstørrelse
+```
+
+---
+
+### `grepl(monster, x)`
+
+**Hvad det gør:** returnerer `TRUE`/`FALSE` for hvert element i `x`, der matcher et søgemønster (regulært udtryk).
+
+**Anekdote:** Det er som "Ctrl+F" på et tekstdokument, men anvendt på hele kolonner på én gang.
+`grepl("^C34", icd4)` finder alle 4-tegns koder, der starter med `C34`.
+
+```r
+grepl("^C34", icd4)   # TRUE for "C340", "C341", "C342", osv.
+```
+
+Bruges fx til at matche ICD-koder mod diagnosemønstre i comorbiditetsmål som NMI (Nordic Multimorbidity Index).
+
+---
+
+## Tal og datoer
+
+### `as.Date(x)`
+
+**Hvad det gør:** konverterer tekst eller datetime til et simpelt datoobjekt.
+
+DST gemmer nogle dato-tidsangivelser som `"2021-03-15 14:32:00"`.
+`as.Date()` fjerner tidsdelene og giver en ren kalenderdato.
+
+```r
+as.Date(kont_starttidspunkt)   # "2021-03-15 14:32:00" -> 2021-03-15
+```
+
+---
+
+### `year(dato)` (fra `lubridate`)
+
+**Hvad det gør:** trækker årstallet ud af en dato.
+
+```r
+year(surgery_date)   # 2021-03-15 -> 2021
+```
+
+---
+
+### `difftime(dato1, dato2, units = "days")`
+
+**Hvad det gør:** beregner forskellen mellem to datoer.
+
+```r
+as.numeric(difftime(surgery_date, foed_dag, units = "days")) / 365.25   # alder ved operation i år
+```
+
+---
+
+### `min(x, na.rm = TRUE)` / `max(x, na.rm = TRUE)`
+
+**Hvad det gør:** finder det mindste/største element i en vektor og ignorerer `NA`.
+
+```r
+summarise(foerste_dato = min(date_contact, na.rm = TRUE))   # tidligste kontaktdato per person
+```
+
+---
+
+### `pmin(x, y)` / `pmax(x, y)`
+
+**Hvad det gør:** sammenligner to vektorer position for position og returnerer det mindste/største for hvert element.
+
+**Anekdote:** Forestil dig to lister med datoer — dødsdato og studieslutningstidspunkt.
+`pmin(death_date, study_end)` vælger for hver person, hvad der kom først.
+
+```r
+pmin(death_date, as.Date("2024-12-31"))   # censureringsdato: enten dødsdato eller studieslutningstidspunkt
+```
+
+---
+
+### `as.integer(x)` / `1L`
+
+**Hvad det gør:** konverterer til heltal.
+
+`L`-suffikset (f.eks. `1L`, `0L`) angiver at det er et heltal og ikke et decimaltal.
+Flag-kolonner gemmes som heltal (`1L`/`0L`) for at spare hukommelse.
+
+---
+
+### `is.na(x)`
+
+**Hvad det gør:** returnerer `TRUE` for `NA`-værdier (manglende værdier).
+
+```r
+filter(!is.na(pnr))          # fjern rækker uden person-ID
+filter(!is.na(date_dementia)) # fjern rækker uden demensdato
+```
+
+---
+
+### `set.seed(n)`
+
+**Hvad det gør:** fastsætter startpunktet for tilfældig talgeneration.
+
+**Anekdote:** Forestil dig at du blander et kortspil.
+Uden `set.seed()` vil du blande forskelligt hver gang.
+Med `set.seed(42)` blander du altid på den samme måde — og kan dermed reproducere dine resultater præcist.
+Kald det altid inden matching-løkker for at sikre reproducerbarhed.
+
+```r
+set.seed(42)                   # fastsæt tilfældighedsfrø for reproducerbarhed
+sample(pool_pnrs, size = 5)   # vælger altid de samme 5 tilfældige pnrs
+```
+
+---
+
+### `sample(x, størrelse)`
+
+**Hvad det gør:** trækker tilfældige elementer fra en vektor.
+
+Bruges i matchningslogik til at udvælge tilfældige kontrolpersoner fra en pool.
+
+---
+
+## Lister og løkker
+
+### `split(df, gruppevektor)`
+
+**Hvad det gør:** opdeler en data frame i en liste af sub-data-frames, én per unik gruppe.
+
+**Anekdote:** Forestil dig at du sorterer patientkort i bunker efter år og køn.
+`split(pool, paste(koen, foedselsaar, sep = "_"))` giver dig én bunke per kombination,
+så matchning-koden kan arbejde hurtigt inden for én bunke ad gangen.
+
+---
+
+### `vector("list", n)`
+
+**Hvad det gør:** opretter en tom liste med plads til `n` elementer.
+
+Forudallokering er hurtigere end at lade R udvide listen ét element ad gangen i en løkke.
+
+---
+
+### `seq_len(n)`
+
+**Hvad det gør:** genererer talrækken 1, 2, ..., n.
+
+Sikrere end `1:n` i løkker, fordi den håndterer tilfældet `n = 0` korrekt.
+
+---
+
+### `unlist(liste, use.names = FALSE)`
+
+**Hvad det gør:** fladtrykker en liste af vektorer til én lang vektor.
+
+---
+
+## Diagnostik og fejlsøgning
+
+### `class(x)`
+
+**Hvad det gør:** fortæller dig, hvilken type objekt `x` er.
+
+```r
+class(mit_objekt)
+# "tbl_df" "data.frame"        -> data er i R-hukommelsen
+# "tbl_duckdb_connection"      -> doven DuckDB-forespørgsel, ikke hentet endnu
+# "Table" "ArrowObject"        -> doven Arrow-forbindelse, ikke hentet endnu
+```
+
+Tjek altid `class()` som det første, hvis du får en mærkelig fejl.
+
+---
+
+### `nrow(df)`
+
+**Hvad det gør:** returnerer antallet af rækker.
+
+Bruges til at udskrive kohorte-størrelser og kontrollere, at eksklusioner har virket.
+
+---
+
+### `cat("tekst\n")`
+
+**Hvad det gør:** udskriver tekst til konsollen uden anførselstegn. `\n` er linjeskift.
+
+Bruges til fremskridtsbeskeder: `cat("Udtrækker NMI-score...\n")`.
+
+---
+
+### `stop("besked")`
+
+**Hvad det gør:** stopper koden med en fejlbesked.
+
+Bruges til at give en forståelig fejl, hvis en påkrævet fil mangler.
+
+---
+
+### `gc()`
+
+**Hvad det gør:** frigiver ubrugt hukommelse tilbage til operativsystemet.
+
+```r
+rm(stort_register)   # fjern objektet fra R
+gc()                 # frigiv hukommelsen
+```
+
+Brug det efter du er færdig med store registre — I deler RAM med alle andre på DST-serveren.
+
+---
+
+## Pakkeoversigt
+
+Se [Registerreference](14d_register_reference.qmd) for bekræftede kolonnenavne på alle registre disse pakker arbejder mod.
+
+| Pakke | Hvad den leverer |
+|---|---|
+| `dstDataPrep` | `load_database()` — DST-specifik parquet-forbinder *(kun DARTER-projektet)* |
+| `dplyr` | `%>%`, `filter`, `select`, `mutate`, `join`, `group_by`, `arrange`, osv. |
+| `tidyr` | `pivot_wider()` — omformning fra langt til bredt format |
+| `lubridate` | `year()`, `as.Date()`, datoberegninger |
+| `arrow` | `read_parquet()`, `write_parquet()` — parquet-filhåndtering |
+| `haven` | `read_sas()` — læsning af SAS-datafiler (kun `00_prepare_dbso.R`) |
