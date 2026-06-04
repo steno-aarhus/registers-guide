@@ -4,9 +4,557 @@ subtitle: "Shape, combine and prepare your analysis dataset"
 date: last-modified
 ---
 
-::: {.callout-note}
-## Translation in progress
-This chapter is currently being translated into English.
+You have now made a series of extractions and saved them as RDS files — one extraction per register. Before you can analyse, you need to:
 
-[See the Danish version →](../da/11_data-manipulation.qmd)
+1. Shape each extract into **one row per person** (most registers are in long format with many rows per person)
+2. Assemble them into **one analysis-ready dataset** with `left_join()`
+
+That is what this phase is about. The technique for step 1 is either `pivot_wider()` or `group_by() + slice()` — the choice depends on what you want out of the register. Step 2 is always `left_join()`.
+
+::: {.callout-note}
+The code examples use generic paths and variable names. Adapt to your project's folder structure and column names.
 :::
+
+---
+
+## What is an analysis-ready dataset?
+
+An analysis-ready dataset has **one row per person** and **one column per variable** — what we call *wide format*:
+
+| `pnr` | `index_date` | `censor_date` | `followup_years` | `event` | `age` | `sex` | `nmi_score` |
+|---|---|---|---|---|---|---|---|
+| 001 | 2015-03-01 | 2022-07-14 | 7.4 | 0 | 58 | 2 | 12 |
+| 002 | 2016-11-20 | 2019-11-20 | 3.0 | 1 | 63 | 1 | 7 |
+
+The registers you extract from — LPR, LMDB, BEF — are almost always in *long format* with many rows per person. This phase shows how to reshape and assemble them.
+
+### What have you already saved?
+
+Each extraction from Phases 6, 9 and 12 etc. should be saved as its own RDS file — one register, one topic. Example of what you typically have:
+
+| File | Contents | Key columns |
+|---|---|---|
+| `full_cohort.rds` | Cohort with index date | `pnr`, `index_date`, `exposed` |
+| `extract_dementia.rds` | First dementia diagnosis | `pnr`, `event_date` (NA = none) |
+| `extract_deaths.rds` | Date of death | `pnr`, `death_date` (NA = alive) |
+| `extract_emigration.rds` | First emigration | `pnr`, `emigration_date` (NA = not emigrated) |
+| `extract_bef.rds` | Demographics at index | `pnr`, `age`, `sex` |
+| `extract_nmi.rds` | Comorbidity at baseline | `pnr`, `nmi_score` |
+| `extract_ses.rds` | Socioeconomic variables | `pnr`, `education`, `income`, `occupation` |
+
+The goal of this phase is to assemble them into one dataset with `left_join()` — one new column per file.
+
+::: {.callout-important}
+**Assemble only what you need.**
+It is tempting to keep all columns "just in case". Do not. Always end with `select()` and explicitly choose the columns the analysis requires. A dataset with only the necessary columns is far easier to debug and understand.
+:::
+
+---
+
+## Wide vs. long format
+
+Imagine three persons with weight measurements at two time points.
+
+**Wide format** — one row per person, one column per time point:
+
+| pnr | weight_baseline | weight_6mo |
+|---|---|---|
+| 001 | 120 | 95 |
+| 002 | 105 | 88 |
+| 003 | 98 | 80 |
+
+**Long format** — one row per observation, one column for time point and one for value:
+
+| pnr | timepoint | weight |
+|---|---|---|
+| 001 | baseline | 120 |
+| 001 | 6mo | 95 |
+| 002 | baseline | 105 |
+| 002 | 6mo | 88 |
+| 003 | baseline | 98 |
+| 003 | 6mo | 80 |
+
+Both formats contain **the same information** — they are just arranged differently.
+
+---
+
+## Which formats are where?
+
+| Register | Format | Why |
+|---|---|---|
+| BEF | Long | One row per person **per snapshot** — quarterly since 2008, otherwise annual |
+| LPR (lpr_adm + lpr_diag) | Long | One row per **diagnosis per contact** — one admission can have 10 diagnoses |
+| LMDB | Long | One row per **dispensed prescription** — the same person can have hundreds |
+| DODSAARS | Wide | One row per **deceased person** — already one-per-person |
+| Your analysis dataset | Wide | One row per person — one column per covariate |
+
+**Registers are usually in long format. Your analysis dataset should typically be in wide format.**
+
+---
+
+## Pivots — switch between long and wide
+
+### Long → wide with `pivot_wider()`
+
+```r
+library(tidyr)   # pivot_wider, pivot_longer
+
+df_wide <- df_long %>%
+  pivot_wider(
+    names_from  = "timepoint",  # which column should become column names?
+    values_from = "weight"      # which column contains the values?
+  )
+```
+
+::: {.callout-warning}
+**You CANNOT `pivot_wider()` an entire LPR table.**
+LPR potentially has hundreds of unique ICD codes per person — `pivot_wider()` would give you one column per code, i.e. thousands of columns and a dataset that is impossible to work with.
+
+Instead use the pattern from [Phase 9](09_hospitalskontakter-lpr.qmd): extract the first date for one specific diagnosis group, save as `extract_dementia.rds`, and join it as one column with `left_join()`. One outcome variable = one column = one RDS file.
+:::
+
+<details>
+<summary>Practical example: employment status from AKM — long to wide</summary>
+
+AKM (the Labour Classification Module) stores one row per person **per year** — long format. If you want to compare employment status at baseline and follow-up side by side, you can pivot:
+
+```r
+library(dplyr)   # filter, mutate
+library(tidyr)   # pivot_wider
+
+# AKM in long format — two years per person:
+akm_long <- data.frame(
+  pnr   = c("001", "001", "002", "002", "003", "003"),
+  aar   = c(2015, 2020, 2015, 2020, 2015, 2020),
+  socio = c(110, 110, 210, 310, 150, 150)   # employment categories from AKM (socio13)
+)
+
+# Convert to wide — one column per year:
+akm_wide <- akm_long %>%
+  pivot_wider(
+    names_from   = aar,
+    values_from  = socio,
+    names_prefix = "socio_"   # gives columns: socio_2015, socio_2020
+  )
+
+# Result:
+#   pnr   socio_2015  socio_2020
+#   001          110         110
+#   002          210         310
+#   003          150         150
+```
+
+In practice you would typically not pivot AKM — you filter to one specific year with `filter(aar == index_year)` and use `group_by() + slice()` below. Pivot is relevant when you explicitly want two time points side by side in the analysis.
+
+</details>
+
+### Wide → long with `pivot_longer()`
+
+```r
+df_long <- df_wide %>%
+  pivot_longer(
+    cols      = c(weight_baseline, weight_6mo),  # columns to "fold in"
+    names_to  = "timepoint",                     # name for the new timepoint column
+    values_to = "weight"                         # name for the new value column
+  )
+```
+
+---
+
+## Prepare for join — `group_by()` + `slice()`
+
+`left_join()` behaves predictably when both tables have **one row per `pnr`**. Many register extracts have multiple rows per person (long format). `group_by() + slice()` is the primary way to reduce a dataset to one representative row per person before joining — **it is preparation for the join, not the join itself**.
+
+The pattern is always the same: group by `pnr`, sort so the desired row is on top, take the first row per group.
+
+```r
+# BEF: keep only the newest record per person (BEF has one snapshot per year)
+bef_one_per_person <- bef %>%
+  group_by(pnr) %>%          # group: all rows with the same pnr are treated together
+  arrange(desc(aar)) %>%     # sort within group: newest year first (desc = descending)
+  slice(1) %>%               # take only the first row per group — i.e. the newest year
+  ungroup()                  # IMPORTANT: release grouping when done
+```
+
+::: {.callout-important}
+**Always remember `ungroup()`.**
+`group_by()` puts a "grouped_df" tag on your data.frame, which *all* subsequent operations inherit. That means:
+- `mutate()` calculates per group, not across the entire dataset
+- `n()` counts rows per group, not in total
+- `summarize()` gives one result per group
+
+These errors are hard to detect because the code runs without error messages and produces seemingly reasonable numbers. `ungroup()` removes the tag and makes the data.frame normal again. Rule of thumb: always end a `group_by()` chain with `ungroup()`.
+:::
+
+```r
+# LPR / alle_dx: find first diagnosis per person (for outcome definition)
+first_dementia <- alle_dx %>%
+  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # only dementia codes
+  group_by(pnr) %>%              # group per person
+  arrange(date_contact) %>%      # oldest date first (ascending — no desc)
+  slice(1) %>%                   # first diagnosis per person
+  ungroup()                      # release grouping
+# → ready for: cohort %>% left_join(first_dementia, by = "pnr")
+```
+
+```r
+# VNDS: find first emigration per person (a person may have emigrated and returned)
+first_emigration <- vnds %>%
+  filter(indud_kode == "U") %>%   # only emigration events
+  group_by(pnr) %>%
+  arrange(haend_dato) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+::: {.callout-tip}
+**When do you use `group_by() + slice()` vs `pivot_wider()`?**
+If you want **one representative value** per person (newest snapshot, first event, earliest date) — use `group_by() + slice()`.
+If you want **two or more time points side by side** as separate columns in the analysis — use `pivot_wider()`.
+In register-based research, `group_by() + slice()` is by far the most common choice.
+:::
+
+---
+
+## Joins — link two tables {#joins----link-two-tables}
+
+In register-based research you almost always work with data from **two or more tables** that need to be linked.
+All joins in `dplyr` take two tables and one key column they share (e.g. `pnr`).
+
+### The joins you will use
+
+```r
+library(dplyr)   # left_join, inner_join, semi_join, anti_join
+
+# left_join: keep ALL rows from x, add columns from y
+# Persons in x without a match in y get NA.
+result <- cohort %>%
+  left_join(outcome, by = "pnr")   # all cohort members retained; outcome = NA if no event
+
+# inner_join: keep only rows with a match in BOTH tables
+result <- lpr_adm %>%
+  inner_join(lpr_diag, by = "recnum")   # only contacts with at least one diagnosis
+
+# right_join: keep all rows from y (rarely used)
+# full_join: keep all rows from both (rarely used)
+```
+
+### Filter joins — change rows only, not columns
+
+```r
+# semi_join: keep rows in x THAT HAVE a match in y
+bef_in_cohort <- bef %>%
+  semi_join(cohort, by = "pnr")   # only BEF rows for cohort members
+
+# anti_join: keep rows in x THAT DO NOT HAVE a match in y
+bef_not_in_cohort <- bef %>%
+  anti_join(cohort, by = "pnr")   # only BEF rows for non-cohort members
+                                  # also used for diagnostics — see "Validate your join" below
+```
+
+<details>
+<summary>Overview: all joins in one table</summary>
+
+| Function | Keeps rows from | Used for |
+|---|---|---|
+| `left_join(x, y)` | All from x | Add outcomes/covariates to cohort — NA if no match |
+| `inner_join(x, y)` | Only matches in both | Join contacts and diagnoses — only want rows with both |
+| `right_join(x, y)` | All from y | Rarely |
+| `full_join(x, y)` | All from both | Rarely |
+| `semi_join(x, y)` | Only x with match in y | Filter a register to only cohort members |
+| `anti_join(x, y)` | Only x without match in y | Find everyone in BEF NOT in the cohort |
+
+</details>
+
+### Join with multiple keys
+
+When two tables share more than one column as key:
+
+```r
+# Join on pnr AND year
+bef_akm <- bef %>%
+  left_join(akm, by = c("pnr", "aar"))
+```
+
+---
+
+## Validate your join
+
+Joins rarely fail with an error message — but they can produce silently wrong results.
+Always check these three things after a `left_join()`:
+
+```r
+# Before join: what is nrow?
+nrow(cohort)                                   # e.g. 4,823
+
+# Join:
+cohort2 <- cohort %>% left_join(outcome, by = "pnr")
+
+# Check 1: did the row count increase? Duplicated keys in outcome give extra rows.
+nrow(cohort2)                                  # should still be 4,823
+
+# Check 2: how many got a match?
+sum(!is.na(cohort2$event_date))                # number with outcome
+sum(is.na(cohort2$event_date))                 # number without — expected censored?
+
+# Check 3: who did NOT match? (diagnostic — not necessarily an error)
+missing <- anti_join(cohort, outcome, by = "pnr")   # pnr's not found in outcome
+nrow(missing)                                  # 0 = all matched; > 0 = investigate
+```
+
+::: {.callout-tip}
+**`anti_join()` as diagnostics**
+`anti_join(cohort, outcome, by = "pnr")` returns the cohort members that are *not* found in the outcome table.
+Use it for "who in my cohort has no death date record?" (all alive — expected) or "who is missing from register X?" (unexpected — investigate).
+:::
+
+---
+
+## Stack tables vertically — `bind_rows()`
+
+`bind_rows()` and `left_join()` solve **two fundamentally different problems**:
+
+| | `bind_rows()` | `left_join()` |
+|---|---|---|
+| What it does | Stacks tables **vertically** — adds rows | Combines tables **horizontally** — adds columns |
+| Requires | That the columns have the same names | That the tables share one common key column |
+| Result | More rows, same number of columns | Same number of rows, more columns |
+| Matches on key? | No — all rows from both tables | Yes — match on `pnr` or other key |
+| Typical use | LPR2 + LPR3 → one combined register | Link outcome or covariate to cohort table |
+
+`bind_rows()` is **not** a join. It does not look at `pnr` and does not match. It simply places table 2's rows below table 1's rows — like pasting two Excel sheets together vertically.
+
+```r
+# bind_rows: LPR2 and LPR3 have the same columns (pnr, date_contact, icd3)
+# → stack them vertically into one combined diagnosis register
+lpr2_dx    # 45,000 rows — diagnoses up to March 2019
+lpr3_dx    # 32,000 rows — diagnoses from March 2019 onwards
+
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # 77,000 rows — both periods combined
+```
+
+Columns missing in one table (e.g. a column that only exists in LPR3) are automatically filled with `NA` for rows from the other table.
+
+::: {.callout-note}
+**When do you use which?**
+`bind_rows()` — when you have **two versions of the same register** (LPR2 + LPR3, exposed + comparators) and want to merge them into one.
+`left_join()` — when you want to **attach a new variable** (outcome, date of death, age) to your cohort table.
+:::
+
+---
+
+## Practical example: cohort + date of death
+
+```r
+# Cohort data (one row per person):
+kohort <- readRDS("datasets/full_cohort.rds")
+
+# Death dates from DODSAARS:
+dodsaars <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/") %>%
+  rename_with(tolower) %>%               # standardise column names
+  filter(pnr %in% !!kohort$pnr) %>%     # only the cohort's pnr's
+  select(pnr, death_date = d_dodsdto) %>%   # rename d_dodsdto to death_date
+  collect()                              # fetch into R
+
+# Join: all cohort members retained; the living get death_date = NA
+cohort_with_death <- kohort %>%
+  left_join(dodsaars, by = "pnr")       # attach death date — NA = still alive
+```
+
+---
+
+## Practical example: cohort + emigration date
+
+Emigration censors just like death — the person leaves the study on the day they emigrate.
+VNDS contains one row per migration event; use only `"U"` (emigration) and take the first date per person.
+
+```r
+# Emigration dates from VNDS:
+vnds <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/") %>%
+  rename_with(tolower) %>%                       # standardise column names
+  filter(pnr %in% !!kohort$pnr,
+         indud_kode == "U") %>%                  # only emigration events
+  select(pnr, emigration_date = haend_dato) %>%  # rename haend_dato to emigration_date
+  collect() %>%                                  # fetch into R
+  group_by(pnr) %>%                              # group to find first emigration
+  arrange(emigration_date) %>%                   # oldest date first
+  slice(1) %>%                                   # first emigration per person
+  ungroup()                                      # release grouping
+
+# Join: all cohort members retained; non-emigrants get emigration_date = NA
+cohort_with_emigration <- kohort %>%
+  left_join(vnds, by = "pnr")                    # NA = never emigrated during the study period
+```
+
+---
+
+## Calculate follow-up time and event variable
+
+Before you can analyse, each cohort member needs a **censoring date** (when follow-up ends) and an **event variable** (did they experience the outcome?).
+
+The censoring date is the *earliest* of: event date, date of death, emigration date and end of study period.
+
+```r
+study_end <- as.Date("2024-12-31")   # replace with your actual study end date
+                                      # format: "yyyy-mm-dd" (ISO 8601 — R's standard)
+
+kohort <- kohort %>%
+  mutate(
+    # Censoring date = the earliest of all possible stopping reasons
+    censor_date = pmin(event_date, death_date, emigration_date,
+                       study_end, na.rm = TRUE),
+
+    # Follow-up time in years
+    followup_years = as.numeric(censor_date - index_date) / 365.25,
+
+    # Event variable: 1 = outcome occurred before censoring, 0 = censored
+    event = as.integer(!is.na(event_date) & event_date <= censor_date)
+  )
+```
+
+::: {.callout-note}
+`pmin()` compares vectors position by position and returns the smallest value per person — it is the vectorised version of `min()`. `na.rm = TRUE` ensures that a missing death date (= alive) does not make the censoring date `NA`.
+:::
+
+---
+
+## Build your study population
+
+You now have all the building blocks — extractions (Phase 6), registers (Phase 8), LPR/SKS (Phase 9) and joins (above) — to assemble your study population. It happens in four steps:
+
+1. **Define the exposed cohort.** Filter the register that defines the exposure — e.g. bariatric surgery via SKS codes in `lpr_sksopr` / `procedurer_kirurgi` ([Phase 9](09_hospitalskontakter-lpr.qmd)). Keep `pnr` and **index date** (the surgery date).
+2. **Build the comparator cohort.** Match controls to the exposed on e.g. age, sex and calendar year. Controls are assigned the matched exposed person's index date.
+3. **Apply the same inclusion/exclusion criteria** to both groups, and assemble them (`bind_rows()`).
+4. **Link outcomes and covariates** with `left_join()` (one row per person), calculate follow-up time, and end with `select()`.
+
+::: {.callout-important}
+**End with `select()` — keep only the columns the analysis requires.**
+
+```r
+cohort_final <- kohort %>%
+  select(pnr, index_date, censor_date, followup_years, event,
+         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
+
+saveRDS(cohort_final, "datasets/analysis_dataset.rds")   # save the final dataset
+```
+:::
+
+::: {.callout-tip}
+**Design choices** (who is the comparator cohort, immortal time, matching ratio) belong to the planning stage — see [Phase 1 — The comparator cohort](01_studieforberedelse.qmd#comparator-cohort).
+The actual **matching** with `heaven::riskSetMatch()` is shown in the code skeleton below.
+:::
+
+<details>
+<summary>Complete recipe — from cohort to analysis-ready dataset</summary>
+
+```r
+# Complete recipe: all steps in order
+
+# 0. Load your cohort (pnr + index_date, built in Phase 6/9)
+kohort <- readRDS("datasets/full_cohort.rds")   # one row per person
+
+# 1. Exclude prevalent cases BEFORE outcome extraction (see Phase 9)
+# ... cohort_clean <- kohort %>% anti_join(prevalent, by = "pnr")
+
+# 2. Link outcome (e.g. first dementia diagnosis after index date)
+outcome  <- readRDS("datasets/extract_dementia.rds")   # pnr + event_date (NA = no event)
+kohort <- kohort_clean %>% left_join(outcome, by = "pnr")
+
+# 3. Link censoring: death date and emigration
+deaths <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!kohort$pnr) %>%
+  select(pnr, death_date = d_dodsdto) %>% collect()
+
+vnds_data <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!kohort$pnr, indud_kode == "U") %>%
+  select(pnr, emigration_date = haend_dato) %>% collect() %>%
+  group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()
+
+kohort <- kohort %>%
+  left_join(deaths,    by = "pnr") %>%
+  left_join(vnds_data, by = "pnr")
+
+# 4. Calculate follow-up time and event variable
+study_end <- as.Date("2024-12-31")
+kohort <- kohort %>%
+  mutate(
+    censor_date    = pmin(event_date, death_date, emigration_date, study_end, na.rm = TRUE),
+    followup_years = as.numeric(censor_date - index_date) / 365.25,
+    event          = as.integer(!is.na(event_date) & event_date <= censor_date)
+  )
+
+# 5. Link covariates (demographic, SES, comorbidity)
+bef_data <- readRDS("datasets/extract_bef.rds")    # age, sex from BEF
+ses_data <- readRDS("datasets/extract_ses.rds")    # education, income, employment
+nmi_data <- readRDS("datasets/extract_nmi.rds")    # NMI score
+
+kohort <- kohort %>%
+  left_join(bef_data, by = "pnr") %>%
+  left_join(ses_data, by = "pnr") %>%
+  left_join(nmi_data, by = "pnr")
+
+# 6. Keep ONLY the columns the analysis requires
+cohort_final <- kohort %>%
+  select(pnr, index_date, censor_date, followup_years, event,
+         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
+
+saveRDS(cohort_final, "datasets/analysis_dataset.rds")   # save the final dataset
+nrow(cohort_final)                                        # verify number of persons
+names(cohort_final)                                       # verify column names
+```
+
+</details>
+
+<details>
+<summary>More in depth — matching, immortal time and a code skeleton</summary>
+
+**Important pitfalls when building the comparator cohort:**
+
+- **Immortal time bias:** a person in the comparator cohort must be alive, residing in Denmark and meeting the inclusion criteria **on their assigned index date** — not only at study start.
+- **Risk-set / incidence-density sampling:** a person can appear in the comparator cohort and *later* themselves become operated and become a case. Decide how you handle that (heaven supports risk-set matching).
+- **Matching ratio:** e.g. 1:5 exposed:comparator cohort — more controls gives more precision, but with diminishing returns.
+- **The same exclusions** are applied to both groups, otherwise you introduce selection bias.
+
+**Code skeleton** (pattern — not a finished pipeline):
+
+```r
+library(dstDataPrep); library(dplyr); library(heaven)
+
+# 1. Exposed cohort: surgery date as index (SKS codes — see Phase 9)
+exposed <- opr_all %>%                       # from the SKS extraction (Phase 9 / 14d)
+  group_by(pnr) %>% arrange(surgery_date) %>% slice(1) %>% ungroup() %>%
+  transmute(pnr, index_date = surgery_date, exposed = 1L)
+
+# 2. Matchpool from BEF (all who were NOT operated on) — add matching variables
+#    (age at index, sex, calendar year) ...
+
+# 3. Risk-set matching, e.g. 1:5 on sex + birth year
+matched <- riskSetMatch(
+  ptid  = "pnr", event = "exposed",
+  terms = c("koen", "birth_year"),
+  dat   = pool, ratio = 5
+)
+```
+
+::: {.callout-warning}
+**The skeleton is a starting point — use it as inspiration.** Steps 1–3 above can be used now: replace variable names and codes with your own. The full, project-specific and tested pipeline for this study is not yet finished.
+:::
+
+Functions used here are explained in [Phase 14 — Functions: overview](14a_guide_til_funktioner.qmd) (`group_by`, `slice`, `transmute`, `left_join`) and [Phase 13](13a_pakker-oversigt.qmd) (`riskSetMatch`).
+
+</details>
+
+---
+
+## Next steps
+
+You can now shape and combine your extracts. Next step is the socioeconomic variables:
+
+→ [Phase 12 — Socioeconomic variables](12_socioekonomiske-variable.qmd)
+
+## See also
+
+- [Phase 14 — Functions: overview](14a_guide_til_funktioner.qmd) — all functions for transforming data
+- [Phase 9 — Hospital contacts (LPR)](09_hospitalskontakter-lpr.qmd) — practical example of long register data and inner_join
