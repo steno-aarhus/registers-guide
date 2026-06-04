@@ -1,12 +1,447 @@
 ---
 title: "Register reference"
-subtitle: "Column names, types and join keys for all registers"
+subtitle: "Variable names for the most commonly used DST registers"
 date: last-modified
 ---
 
-::: {.callout-note}
-## Translation in progress
-This chapter is currently being translated into English.
+::: {.callout-warning}
+**For DARTER: Check when cleaned-data was last updated before running the pipeline.**
 
-[See the Danish version →](../da/14d_register_reference.qmd)
+The registers in `cleaned-data/` are not necessarily updated to today.
+Check the modification date on the DST server:
+
+```r
+file.info("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/")$mtime
+```
+
+Consider: when does your follow-up extend to, and are the registers updated up to that date?
+An outdated extraction cuts off censoring dates and outcomes too early — no error message, just silently wrong results.
+If the registers do not cover your study period, you need to order a new extraction from DST.
+:::
+
+All column names on this page are confirmed on DST 2026-05-15 via `colnames()`.
+They are shown **after** `rename_with(tolower)` has been called.
+Key columns — the ones you actually use in the code — are marked in bold.
+
+::: {.callout-note}
+**Opening registers — two ways:**
+The code examples on this page use `open_dataset("path/to/register/")` as a generic placeholder — replace with the path to your project's parquet folder.
+**DARTER users** can use `load_database("registername")` — see [DARTER — Register paths and datastores](darter/01_registersti-datastores.qmd).
+:::
+
+See [Pitfalls](14c_dst_faldgruber.qmd) for special quirks with each register.
+Column names apply after `rename_with(tolower)` — inspect your own register with `colnames()` if something does not match.
+
+::: {.callout-tip}
+**Looking for "which register contains X?"** — start with the decision table in [Phase 8 — Know your registers](08_kend-dine-registre.qmd). This page is the deep reference with full column names, types and code examples.
+:::
+
+---
+
+## Overview — all registers
+
+| Register | Register name | Join key | Period | Critical column |
+|---|---|---|---|---|
+| BEF | `"bef"` | `pnr` | All years | `koen`, `foed_dag`, `familie_id` |
+| DODSAARS | `"dodsaars"` | `pnr` | See project guide | **`d_dodsdto`** (death date for censoring) |
+| VNDS | `"vnds"` | `pnr` | All years | `indud_kode`, `haend_dato` |
+| LPR2 contacts | `"lpr_adm"` | `recnum` | Up to March 2019 | `d_inddto`, `c_pattype` |
+| LPR2 diagnoses | `"lpr_diag"` | `recnum` | Up to March 2019 | `c_diag`, `c_diagtype` |
+| LPR2 SKS procedures | `"lpr_sksopr"` | `recnum` | Up to 2018 | `c_opr`, `d_odto` |
+| LPR2 psych contacts | `"t_psyk_adm"` | `k_recnum` → `recnum` | 1995–March 2019 | `v_cpr` → `pnr` |
+| LPR2 psych diagnoses | `"t_psyk_diag"` | `v_recnum` → `recnum` | 1995–March 2019 | `c_diag`, `c_diagtype` |
+| LPR3 contacts | `"lpr_a_kontakt"` | `dw_ek_kontakt` | March 2019+ | `kont_starttidspunkt` (datetime) |
+| LPR3 diagnoses | `"lpr_a_diagnose"` | `dw_ek_kontakt` | March 2019+ | `diag_kode`, `diag_kode_type`, `senere_afkraeftet` |
+| LPR3 SKS procedures | `"procedurer_kirurgi"` | `dw_ek_forloeb` | 2019+ | `procedurekode`, `dato_start` |
+| LMDB | `"lmdb"` | `pnr` | Approx. 1994+ | `atc`, `eksd` |
+| UDDA | `"udda"` | `pnr` | All years | `hfaudd`, `aar` |
+| FAIK | `"faik"` | `familie_id` | All years | `famaekvivadisp_13` |
+| AKM | `"akm"` | `pnr` | All years | `socio13`, `aar` |
+| Project-specific registers | See project guide | `pnr` | Varies | [DARTER: see register paths →](darter/01_registersti-datastores.qmd) |
+
+---
+
+## 1. Demographics and deaths
+
+### BEF — Population Register
+
+Status register — one snapshot per person per reference time point (ultimo the period). Delivered **quarterly since 2008** (March, June, September, December); before 2008 December only. Whether `aar == 2020` corresponds to a particular reference time point depends on the project convention — confirm in your project guide. A person who dies during 2020 still appears in the 2020 snapshot — use DODSAARS to determine whether a person was alive on a specific date.
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`koen`** | numeric | Sex: 1 = male, 2 = female |
+| **`foed_dag`** | Date | Date of birth |
+| **`aar`** | integer | Register year (one record per year) |
+| **`familie_id`** | character | Household key — join to FAIK |
+| `reg` | character | Region |
+| `civst` | character | Marital status |
+
+::: {.callout-note}
+BEF does **not** contain date of death. Use DODSAARS (`d_dodsdto`) for censoring.
+See DST's official BEF documentation: [statistikdokumentation/befolkningen →](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen)
+:::
+
+---
+
+### DODSAARS — Death Register
+
+One row per deceased person.
+
+::: {.callout-note}
+Coverage period and availability depends on your project's cleaned-data. Check the modification date and ask your data manager about current coverage.
+:::
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`d_dodsdto`** | Date | **Date of death — use this for censoring** |
+| `fdato` | Date | Date of birth |
+| `c_sex` | character | Sex |
+| `v_alder` | numeric | Age at death |
+| `year` | integer | Year of death |
+| `c_dod1` | character | Underlying cause of death (ICD-10) |
+| `c_dod2`–`c_dod4` | character | Contributing causes of death |
+| `c_dodskom` | character | Manner/place of death |
+| `c_bopkom` | character | Municipality of residence at death |
+
+::: {.callout-warning}
+**`dodsaasg`** is the classification register for causes of death — it is **not** the source for individual death dates.
+Always use `dodsaars` with the column `d_dodsdto`.
+:::
+
+---
+
+### VNDS — Migration Register
+
+One row per migration event per person.
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`indud_kode`** | character | `"U"` = emigration (use for censoring), `"I"` = immigration |
+| **`haend_dato`** | Date | Event date |
+
+Use: `filter(indud_kode == "U")` → `min(haend_dato)` per pnr for first emigration date.
+Non-emigrants do not appear in VNDS with a "U" event and get `emigration_date = NA`.
+
+---
+
+## 2. LPR2 — Somatic (up to March 2019)
+
+Join: `lpr_adm` **LEFT JOIN** `lpr_diag` **ON** `recnum`.
+
+### lpr_adm — Contacts
+
+| Column | Type | Contents |
+|---|---|---|
+| **`recnum`** | character | Contact key — join to lpr_diag |
+| **`pnr`** | character | Personal identifier |
+| **`d_inddto`** | Date | Admission date — use as contact date |
+| **`c_pattype`** | character | Contact type: `"0"` = inpatient, `"1"` = outpatient, `"2"` = emergency |
+| `d_uddto` | Date | Discharge date |
+| `c_adiag` | character | Action diagnosis (copy — use lpr_diag via join instead) |
+| `c_spec` | character | Specialty code |
+| `year` | integer | Year |
+
+### lpr_diag — Diagnoses
+
+| Column | Type | Contents |
+|---|---|---|
+| **`recnum`** | character | Join key to lpr_adm |
+| **`c_diag`** | character | ICD-10 code **with D-prefix** (e.g. `"DG30"`) — use `substr(c_diag, 2, 4)` |
+| **`c_diagtype`** | character | `"A"` = action diagnosis, `"B"` = secondary diagnosis, `"G"` = underlying condition |
+| `c_diagmod` | character | Diagnosis modifier |
+| `year` | integer | Year |
+
+---
+
+## 3. LPR2 — Psychiatric (1995 – March 2019)
+
+Psychiatric contacts before March 2019 are in **separate registers** from somatic LPR2.
+From March 2019, LPR3 covers both in one table.
+
+::: {.callout-warning}
+**If you forget to query the psychiatric registers** for the period 1995–2019, you miss all dementia diagnoses
+(F00–F03) recorded at geriatric psychiatry outpatient clinics and memory clinics.
+Those patients will appear dementia-free and remain in the cohort as false negatives.
+:::
+
+### t_psyk_adm — Psychiatric contacts
+
+Column names differ from somatic LPR2 — **rename at load**:
+
+```r
+psyk_adm <- open_dataset("path/to/t_psyk_adm/") %>%
+  rename_with(tolower) %>%
+  rename(pnr = v_cpr, recnum = k_recnum)
+```
+
+| Raw column name | After rename | Type | Contents |
+|---|---|---|---|
+| **`v_cpr`** | → **`pnr`** | character | Personal identifier |
+| **`k_recnum`** | → **`recnum`** | character | Contact key — join to t_psyk_diag |
+| **`d_inddto`** | (unchanged) | Date | Contact date — same as lpr_adm |
+| `c_pattype` | (unchanged) | character | Contact type |
+
+### t_psyk_diag — Psychiatric diagnoses
+
+```r
+psyk_diag <- open_dataset("path/to/t_psyk_diag/") %>%
+  rename_with(tolower) %>%
+  rename(recnum = v_recnum)
+```
+
+| Raw column name | After rename | Type | Contents |
+|---|---|---|---|
+| **`v_recnum`** | → **`recnum`** | character | Join key to t_psyk_adm |
+| **`c_diag`** | (unchanged) | character | ICD-10 **with D-prefix** — use `substr(c_diag, 2, 4)` |
+| **`c_diagtype`** | (unchanged) | character | `"A"` / `"B"` / `"G"` — same as lpr_diag |
+
+---
+
+## 4. LPR3 (March 2019 and onwards)
+
+LPR3 covers **both** somatic and psychiatric contacts in one table.
+Join: `lpr_a_kontakt` **LEFT JOIN** `lpr_a_diagnose` **ON** `dw_ek_kontakt`.
+
+::: {.callout-note}
+**The "a" in `lpr_a_diagnose` does not mean A-type diagnoses.**
+It refers to the analysis model designation for the LPR3 series (LPR_A, introduced 2025).
+The table contains all types: A, B and G — you still need to filter on `diag_kode_type`.
+:::
+
+### lpr_a_kontakt — Contacts
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`dw_ek_kontakt`** | character | Contact key — join to lpr_a_diagnose |
+| **`kont_starttidspunkt`** | datetime | Contact start time — **convert with `as.Date()`** |
+| **`kont_type`** | character | Contact type: `"ALCA00"` = inpatient |
+| `kont_sluttidspunkt` | datetime | Contact end time |
+| `kont_ans_hovedspec` | character | Specialty code |
+| `borger_doedsdato` | Date | Date of death (copy from CPR) |
+| `borger_foedselsdato` | Date | Date of birth (copy from CPR) |
+| `borger_koen` | character | Sex (copy from CPR) |
+| `year` | integer | Year |
+
+<details>
+<summary>All confirmed columns in lpr_a_kontakt</summary>
+
+`pnr`, `dw_ek_kontakt`, `kont_starttidspunkt`, `kont_sluttidspunkt`, `kont_type`, `kont_type_tekst`, `kont_patient_type`, `kont_patient_type_tekst`, `kont_ans_hovedspec`, `kont_ans_hovedspec_shak`, `kont_ans_inst`, `kont_ans`, `kont_ans_geo_reg`, `kont_ans_geo_reg_tekst`, `kont_ans_org_reg`, `kont_ans_org_reg_tekst`, `borger_doedsdato`, `borger_foedselsdato`, `borger_koen`, `borger_alder_aar_ind`, `borger_alder_aar_ud`, `borger_bo_kom`, `borger_bo_kom_tekst`, `borger_bo_reg`, `borger_bo_reg_tekst`, `dw_sk_sygehusophold`, `dw_ek_helbredsforloeb`, `dw_ek_forloeb`, `dw_ek_borger`, `adiag`, `adiag_tekst`, `beh_starttidspunkt`, `flag_kont_afsluttet`, `kont_aarsag`, `kont_aarsag_tekst`, `kont_indb_tidspunkt`, `kont_fir_kode`, `kont_fir_tekst`, `kont_fritvalg`, `kont_fritvalg_tekst`, `kont_henv_aarsag`, `kont_henv_aarsag_tekst`, `kont_henv_instans`, `kont_henv_maade`, `kont_henv_maade_tekst`, `kont_henv_tidspunkt`, `kont_inst_ejertype`, `lprindberetningssystem`, `prioritet`, `prioritet_tekst`, `kont_lpr_entity_id`, `cprtjek`, `cprtype`, `year`
+
+</details>
+
+### lpr_a_diagnose — Diagnoses
+
+| Column | Type | Contents |
+|---|---|---|
+| **`dw_ek_kontakt`** | character | Join key to lpr_a_kontakt |
+| **`diag_kode`** | character | ICD-10 **with D-prefix** (e.g. `"DG30"`) — use `substr(diag_kode, 2, 4)` |
+| **`diag_kode_type`** | character | `"A"` = action diagnosis, `"B"` = secondary diagnosis, `"G"` = underlying condition |
+| **`senere_afkraeftet`** | character | `"Ja"` = retracted (exclude), `"Nej"` = confirmed, `NA` = not recorded |
+| `diag_kode_tekst` | character | ICD-10 code text |
+| `diag_parent_kode` | character | Parent diagnosis code |
+| `year` | integer | Year |
+
+Standard filter for `senere_afkraeftet`:
+```r
+filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
+```
+
+---
+
+## 5. LPR — SKS procedure codes
+
+SKS (Sundhedsvæsenets Klassifikations System — the Danish Health Classification System) is the Danish classification system for operations and procedures — equivalent to the NOMESCO codes used in the other Nordic countries.
+Bariatric surgery has e.g. codes `KJDF10` (RYGB) and `KJDF40` (sleeve gastrectomy).
+
+SKS codes are split across two registers depending on period.
+For full coverage both must be queried and the results bound together.
+
+::: {.callout-note}
+**No `pnr` in the procedure tables.**
+`pnr` is fetched via join to `lpr_adm` (LPR2) or `lpr_a_kontakt` (LPR3) respectively.
+:::
+
+### lpr_sksopr — LPR2 SKS procedures (up to 2018)
+
+Location: `parquet-registers/lpr_sksopr`
+
+```r
+lpr_sksopr <- open_dataset("path/to/lpr_sksopr/") %>%
+  rename_with(tolower)
+```
+
+| Column | Type | Contents |
+|---|---|---|
+| **`recnum`** | character | Join key to `lpr_adm` |
+| **`c_opr`** | character | SKS procedure code — use this for matching (e.g. `"KJDF10"`) |
+| **`d_odto`** | Date | Surgery date |
+| `c_oprart` | character | Procedure type code |
+| `c_osgh` | character | Operating hospital |
+| `c_tilopr` | character | Supplementary procedure code |
+| `year` | integer | Year (partition column) |
+
+### procedurer_kirurgi — LPR3 SKS procedures (2019 and onwards)
+
+Location: `parquet-external/procedurer_kirurgi`
+
+```r
+proc_kirurgi <- open_dataset("path/to/procedurer_kirurgi/") %>%
+  rename_with(tolower)
+```
+
+| Column (after tolower) | Type | Contents |
+|---|---|---|
+| **`dw_ek_forloeb`** | character | **Join key to `lpr_a_kontakt`** — use this for pnr lookup |
+| `dw_ek_kontakt` | character | **NA for all rows in this parquet file on DARTER** — use `dw_ek_forloeb` instead |
+| **`procedurekode`** | character | SKS procedure code — use this for matching (e.g. `"KJDF10"`) |
+| **`dato_start`** | Date | Procedure date |
+| `proceduretype` | character | `"P"` = procedure, `"+"` = add-on code |
+| `procedurekode_parent` | character | Parent procedure code |
+| `proceduretype_parent` | character | Parent procedure type |
+| `tidspunkt_start` | datetime | Procedure start time |
+| `dato_slut` | Date | Procedure end date |
+| `tidspunkt_slut` | datetime | Procedure end time |
+| `lprindberetningssystem` | character | LPR reporting system |
+| `sorenhed_pro` | character | SOR unit for the procedure |
+| `procedureregistrering_id` | character | Internal registration ID |
+
+::: {.callout-warning}
+**`dw_ek_kontakt` is NA for all rows in DARTER's parquet version of `procedurer_kirurgi`** (confirmed 2026-06-02).
+Join to `lpr_a_kontakt` via `dw_ek_forloeb` to fetch `pnr`. Applies to DARTER/project 708421 — check on your own project.
+Column names are mixed case in raw data — call `rename_with(tolower)` immediately after loading.
+:::
+
+### Combination across the full period
+
+```r
+# Replace [projectnumber] with your own project number
+# DARTER: use load_database("registername") instead of open_dataset("path")
+
+# SKS from LPR2 (up to 2018)
+surg_lpr2 <- open_dataset("path/to/lpr_sksopr/") %>%
+  rename_with(tolower) %>%
+  filter(toupper(c_opr) %in% !!SKS_CODES) %>%   # !! sends the local R vector to DuckDB
+  left_join(
+    open_dataset("path/to/lpr_adm/") %>%
+      rename_with(tolower) %>%
+      select(recnum, pnr, d_inddto),
+    by = "recnum"
+  ) %>%
+  select(pnr, surgery_date = d_odto, surgery_code = c_opr) %>%
+  collect()
+
+# SKS from LPR3 (2019 and onwards) — join via dw_ek_forloeb
+surg_lpr3 <- open_dataset("path/to/procedurer_kirurgi/") %>%
+  rename_with(tolower) %>%
+  filter(toupper(procedurekode) %in% !!SKS_CODES) %>%   # !! sends the local R vector to DuckDB
+  left_join(
+    open_dataset("path/to/lpr_a_kontakt/") %>%
+      rename_with(tolower) %>%
+      select(dw_ek_forloeb, pnr),
+    by = "dw_ek_forloeb"
+  ) %>%
+  select(pnr, surgery_date = dato_start, surgery_code = procedurekode) %>%
+  collect()
+
+# Combined
+surg_all <- bind_rows(surg_lpr2, surg_lpr3)
+```
+
+---
+
+## 6. LMDB — Prescription Register
+
+One row per dispensed prescription. Covers approximately 1994 onwards.
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`atc`** | character | Full ATC code (e.g. `"N06D01"`) |
+| **`eksd`** | Date | Dispensing date — use as prescription date |
+| `atc1`–`atc4` | character | ATC levels 1–4 |
+| `indo` | character | Indication code |
+| `vnr` | character | Item number |
+| `apk` | numeric | Pack size |
+| `aldr` | numeric | Age at dispensing |
+| `year` | integer | Dispensing year |
+
+<details>
+<summary>All confirmed columns in LMDB</summary>
+
+`pnr`, `eksd`, `ekst`, `atc`, `atc1`, `atc2`, `atc3`, `atc4`, `indo`, `vnr`, `apk`, `aldr`, `bald`, `eksp`, `korr`, `rinr`, `name`, `streng`, `packtext`, `volume`, `voltypecode`, `voltypetxt`, `dosform`, `strnum`, `strunit`, `packsize`, `cprtjek`, `cprtype`, `year`, `etid`, `ovnr`, `patt`, `doso`, `reca`, `abc`
+
+</details>
+
+---
+
+## 7. Socioeconomic registers
+
+All three registers are used for SEP extraction following SEPLINE guidelines
+(Hjorth et al. 2025). No single combined SEP variable is calculated — three separate dimensions.
+
+### UDDA — Education Register
+
+One record per person per year — updated when the education level changes.
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`hfaudd`** | character | ISCED education code (e.g. `"35"` = vocational education) |
+| **`aar`** | integer | Register year |
+
+Categorisation (SEPLINE): `substr(as.character(hfaudd), 1, 2)` → `"10"`/`"15"` = short, `"20"`–`"35"` = medium, `"40"`–`"80"` = long, `"90"` = unknown.
+
+---
+
+### FAIK — Family Income
+
+Household-equivalised disposable income per year.
+Link: join BEF (`pnr`, `familie_id`, `aar`) with FAIK (`familie_id`, `aar`).
+
+| Column | Type | Contents |
+|---|---|---|
+| **`familie_id`** | character | Household key — join to BEF |
+| **`famaekvivadisp_13`** | numeric | Household-equivalised disposable income |
+| **`aar`** | integer | Register year |
+
+Income quintiles are calculated as 3-year averages compared against Q20/Q40/Q60/Q80 cut-points
+from the full BEF population stratified by sex × 5-year age group × reference year.
+
+---
+
+### AKM — Labour Classification Module
+
+Labour market status per person per year.
+
+| Column | Type | Contents |
+|---|---|---|
+| **`pnr`** | character | Personal identifier |
+| **`socio13`** | numeric | Employment code |
+| **`aar`** | integer | Register year |
+
+SEPLINE categorisation of `socio13`:
+- Employed: 110–114, 120, 131–135, 139
+- Student: 310
+- Unemployed: 210, 410
+- Outside labour market: 220, 321, 330
+- Retired: 322, 323
+- Unknown: 0, 420 or missing
+
+---
+
+## 8. Project-specific registers
+
+Many projects have access to registers beyond the standard list above — e.g. quality registers from clinical databases or pre-computed classification files.
+
+These are **project-specific** and not available in all projects on DST.
+
+::: {.callout-tip}
+**Working on DARTER / project 708421?**
+The project uses among others DBSO (the Danish Obesity Treatment Database) and OSDC (Open Source Diabetes Classifier).
+See the full register overview with confirmed column names and paths:
+[DARTER — Register paths and datastores →](darter/01_registersti-datastores.qmd)
 :::

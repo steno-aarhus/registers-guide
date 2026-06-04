@@ -1,12 +1,878 @@
 ---
 title: "Functions: overview"
-subtitle: "Reference for filter, select, mutate, left_join and more"
+subtitle: "What each function does — explained for those who have never coded before"
 date: last-modified
 ---
 
-::: {.callout-note}
-## Translation in progress
-This chapter is currently being translated into English.
+*Know the function name? Use **Ctrl+F** (Windows) or **Cmd+F** (Mac) and search directly on the page.*
 
-[See the Danish version →](../da/14a_guide_til_funktioner.qmd)
+::: {.callout-note}
+## Jump directly to
+
+| Topic | Section |
+|---|---|
+| The pipe `%>%` | [The pipe](#the-pipe) |
+| Load register / open parquet file | [Data loading](#data-loading) |
+| Filter rows | [Rows: filter and deduplicate](#rows-filter-and-deduplicate) |
+| Select or add columns | [Columns: select, add, transform](#columns-select-add-transform) |
+| Rename columns | [Column names](#column-names) |
+| Group, count and aggregate | [Groups and aggregation](#groups-and-aggregation) |
+| Join two tables | [Join — assemble tables](#join-assemble-tables) |
+| Pivot (wide ↔ long format) | [Reshaping](#reshaping) |
+| `collect()` and lazy evaluation | [Lazy query](#lazy-query) |
+| Dates and text | [Text operations](#text-operations) · [Numbers and dates](#numbers-and-dates) |
+| Debugging | [Diagnostics and debugging](#diagnostics-and-debugging) |
 :::
+
+::: {.callout-tip}
+## The most important functions — start here
+
+If you understand the 6 functions below, you can read most lines of register data code.
+
+| Function | What it does |
+|---|---|
+| `open_dataset("path")` | Opens a lazy connection to a register (in DARTER: `load_database("name")`) |
+| `filter(condition)` | Keeps only the rows that satisfy the condition |
+| `select(col1, col2)` | Keeps only the specified columns |
+| `mutate(new_col = ...)` | Adds or changes a column |
+| `left_join(other_df, by = "key")` | Joins two tables on a shared key |
+| `collect()` | Fetches data from parquet into R's memory |
+
+The order is intentional: `open_dataset` → `filter` → `select` → `collect` is the pattern that appears in almost every script.
+:::
+
+---
+
+## What is a function?
+
+Think of a function as a machine on an assembly line.
+You send something in one end, it does something with it, and you get something new out the other end.
+`filter()` is for example a sieve: you send a large table in, specify which rows you want to keep, and get a smaller table out.
+
+All functions in R are written with parentheses: `functionname(what_is_sent_in)`.
+
+---
+
+## The pipe — `%>%` {#the-pipe}
+
+The most important symbol in all the code is `%>%`, "the pipe".
+
+```r
+lpr_adm %>%
+  filter(pnr %in% !!my_pnrs) %>%
+  select(pnr, recnum) %>%
+  collect()
+```
+
+**What it does:** the pipe passes the result from the line on the left forward as the first argument to the function on the right.
+
+**The two ways of writing do the same thing:**
+
+```r
+# Without the pipe — from inside out, like Russian dolls:
+collect(select(filter(lpr_adm, pnr %in% !!my_pnrs), pnr, recnum))
+
+# With the pipe — from top to bottom, like a recipe:
+lpr_adm %>%
+  filter(pnr %in% !!my_pnrs) %>%
+  select(pnr, recnum) %>%
+  collect()
+```
+
+Both versions give exactly the same result. The pipe version is easier to read because you can follow the steps in order — and easier to debug because you can add or remove one step at a time.
+
+**Analogy:** Imagine cooking a meal.
+You chop the onions — and pass them on to the pot — which passes its contents on to the plate.
+The pipe does exactly that: it chains steps together so you can read the code from top to bottom like a recipe.
+
+::: {.callout-note}
+**`%>%` and `|>` are the same — just two different ways of writing the pipe.**
+
+`%>%` comes from the `magrittr` package and is available via `library(dplyr)`.
+`|>` is a built-in version introduced in R 4.1 — it requires no package.
+
+The two work identically in almost all situations. You will see both in R code online.
+The project uses `%>%`, but if you write `|>` that is perfectly fine.
+:::
+
+---
+
+## Data loading {#data-loading}
+
+### `open_dataset("path")` <small>— `arrow`</small>
+
+**What it does:** opens a lazy connection to a parquet file or folder.
+
+**Analogy:** Imagine calling the library and asking them to find all books about cardiac surgery from 1990 to 2020.
+The librarian says "yes, I'll find those" — but they have not arrived yet.
+That is exactly what `open_dataset()` does: it tells the computer *what* you want, but the data has not been fetched into memory yet.
+The rest of your commands (`filter`, `select`) add further instructions, before you finally say "send them now" — that is `collect()`.
+
+::: {.panel-tabset}
+## DST server
+
+```r
+bef <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>%
+  rename_with(tolower)   # standardise column names to lowercase
+```
+
+The confirmed paths for your project are in [Register reference](14d_register_reference.qmd).
+
+## DARTER
+
+```r
+bef <- load_database("bef") %>% rename_with(tolower)   # lazy connection; column names to lowercase
+```
+
+`load_database()` from `dstDataPrep` finds the path automatically — you do not need to know the full path.
+See [DARTER — setup →](darter/00_index.qmd) for installation.
+
+## Local (fakeregs)
+
+```r
+bef <- open_dataset("synth_data/bef/") %>% rename_with(tolower)   # path to locally saved synthetic register
+```
+
+Generate and save synthetic data locally before use — see [Phase 6 — First extraction](06_foerste-udtraek.qmd#preparation-install-fakeregs-and-generate-synthetic-data).
+:::
+
+Used for all registers stored as parquet files:
+`bef`, `lpr_adm`, `lpr_diag`, `lmdb`, `dodsaars`, `vnds`, `udda`, `faik`, `akm`,
+`t_psyk_adm`, `t_psyk_diag`, `lpr_a_kontakt`, `lpr_a_diagnose` and more.
+
+---
+
+### `collect()` {#lazy-query}
+
+**What it does:** executes the lazy query and pulls data into R's memory.
+
+This is the point where the librarian actually brings the books to you.
+Call it late — after all `filter()` and `select()` steps — so only the necessary data is moved.
+
+```r
+result <- large_register %>%
+  filter(pnr %in% !!cohort_pnrs) %>%   # only the cohort's pnr's
+  select(pnr, d_inddto) %>%            # only the two columns we use
+  collect()                             # data is pulled into R's memory
+```
+
+::: {.callout-note}
+The concept of lazy evaluation — why data is not in memory before `collect()` — is explained in detail on the page [The universal pattern](05_universelle-moenster.qmd).
+:::
+
+---
+
+### `readRDS("path/file.rds")`
+
+**What it does:** reads a saved R file from disk into memory.
+
+**Analogy:** It is like opening a Word file you saved last time.
+The `.rds` format is R's own save format — faster and more compact than CSV.
+It is used to pass data from one script to the next in the pipeline.
+
+```r
+full_cohort <- readRDS("datasets/full_cohort.rds")   # fetch saved dataset from disk
+```
+
+---
+
+### `saveRDS(object, "path/file.rds")`
+
+**What it does:** saves an R object to disk.
+
+The opposite of `readRDS()`.
+Each pipeline script saves its result with `saveRDS()`, so the next script can fetch it.
+
+```r
+saveRDS(full_cohort, "datasets/full_cohort.rds")   # save dataset to disk
+```
+
+---
+
+### `haven::read_sas("file.sas7bdat")`
+
+**What it does:** reads a SAS data file into R.
+
+Used to load SAS files — e.g. DST's format tables or registers not yet converted to parquet.
+See [File types](04_filformater.qmd) and [Format tables](14b_formateringstabeller.qmd) for practical examples.
+
+---
+
+### `arrow::write_parquet(df, "path/file.parquet")`
+
+**What it does:** saves a data frame as a parquet file.
+
+Parquet is a particularly efficient file format for large datasets — it is far faster to read than CSV.
+Used when you want to save an R dataset as a parquet file, e.g. for use with `open_dataset()` or `load_database()` in another script.
+
+---
+
+### `file.path(folder, "filename.rds")`
+
+**What it does:** correctly assembles a folder path and filename into a full path.
+
+**Analogy:** Think of it as writing an address: `file.path("C:/data", "results.rds")` gives `"C:/data/results.rds"`.
+It is safer than just pasting strings together with `paste0()`, because it handles slashes correctly on all operating systems.
+
+---
+
+### `file.exists("path")`
+
+**What it does:** returns `TRUE` or `FALSE` — does the file exist?
+
+Used to give an understandable error message before the code tries to open a file that might not be there.
+
+---
+
+### `dir.create(path, showWarnings = FALSE, recursive = TRUE)`
+
+**What it does:** creates a folder if it does not already exist.
+
+`recursive = TRUE` also creates any parent folders.
+`showWarnings = FALSE` suppresses the harmless warning you would otherwise get if the folder already exists.
+
+---
+
+## Column names {#column-names}
+
+### `rename_with(tolower)`
+
+**What it does:** converts ALL column names to lower case at once.
+
+**Analogy:** Imagine receiving a patient list from five different departments.
+One writes "CPR", another "cpr", a third "Cpr".
+It is the same thing — but the computer treats them as three entirely different things.
+`rename_with(tolower)` fixes it in one second: all names become consistent.
+
+```r
+bef <- open_dataset("path/to/bef") %>% rename_with(tolower)   # all columns become lowercase: pnr, koen, foed_dag, ...
+```
+
+**Important:** always call it on the same line as `open_dataset()` (or `load_database()` in DARTER).
+If you forget it, `filter(pnr %in% ...)` will fail because the column might be called `PNR`.
+
+---
+
+### `rename(new_name = old_name)`
+
+**What it does:** renames one or more specific columns.
+
+```r
+rename(surgery_date = index_date)   # index_date is renamed to surgery_date
+```
+
+---
+
+### `names(df)`
+
+**What it does:** shows all column names in a data frame.
+
+Useful when you are not sure what a table contains.
+
+```r
+names(full_cohort)   # prints all column names
+```
+
+---
+
+## Columns: select, add, transform {#columns-select-add-transform}
+
+### `select(col1, col2, new = old, -remove)`
+
+**What it does:** keeps only the columns you name.
+
+**Analogy:** You have a large Excel file with 50 columns.
+You only need 3.
+`select()` is like saving a copy with only the three columns you need.
+It reduces the amount of data pulled from the server, and is one of the reasons the code is fast.
+
+```r
+select(pnr, recnum, date = d_inddto)   # keeps three columns; d_inddto is renamed to date
+select(-aar)                            # removes the column aar; keeps all others
+```
+
+When renaming inside `select()`, the direction is `new_name = old_name` — the new name on the left, the existing column name on the right.
+
+---
+
+### `mutate(new_column = expression)`
+
+**What it does:** adds a new column or modifies an existing one.
+
+**Analogy:** You have a column with date of birth.
+You want a column with birth year.
+`mutate(birth_year = year(foed_dag))` adds the new column without changing anything else.
+The number of rows is the same after `mutate()` — it adds information, does not remove rows.
+
+```r
+mutate(icd3 = substr(c_diag, 2, 4))   # new column: ICD code without D-prefix, 3 characters
+mutate(age = as.numeric(difftime(surgery_date, foed_dag, units = "days")) / 365.25)   # age at surgery in years
+```
+
+---
+
+### `case_when(condition1 ~ value1, condition2 ~ value2, TRUE ~ default)`
+
+**What it does:** an advanced if-else with many conditions.
+
+**Analogy:** Think of a traffic light: is it red → stop, is it yellow → be careful, is it green → go.
+`case_when()` works the same way: conditions are evaluated in order, and the first condition that is true determines the result.
+`TRUE ~ default` is the "in all other cases" arm.
+
+```r
+mutate(education_cat = case_when(
+  edu_level == 1 ~ "Short",
+  edu_level == 2 ~ "Medium",
+  edu_level == 3 ~ "Long",
+  TRUE           ~ "Unknown"
+))
+```
+
+---
+
+### `if_else(condition, true_value, false_value)`
+
+**What it does:** a simple two-way condition.
+
+```r
+if_else(is.na(death_date), 0L, 1L)   # 1 if the person has died, 0 if not
+```
+
+Stricter than base R's `ifelse()` — both values must have the same type.
+
+::: {.callout-note}
+`0L` and `1L` are **integers** in R.
+The `L` suffix is R's way of specifying that a number is an integer rather than a decimal (`0` and `1` without `L` are double by default).
+`if_else()` requires both values to have exactly the same type — use either `0L`/`1L` (integer) or `0`/`1` (double), but not a mix.
+:::
+
+---
+
+### `coalesce(x, replacement)`
+
+**What it does:** replaces `NA` values with another value.
+
+**Analogy:** After a left join, many persons will have `NA` in flag columns because they did not have that condition.
+`coalesce(mi_flag, 0L)` says: "if mi_flag is NA, set it to 0 instead".
+Used systematically after each left join that produces flag columns.
+
+```r
+coalesce(mi_flag, 0L)   # NA (= not found) -> 0 (= absent)
+```
+
+---
+
+### `across(columns, function)`
+
+**What it does:** applies the same function to many columns at once inside `mutate()`.
+
+```r
+mutate(across(all_of(nmi_variables), ~ coalesce(.x, 0L)))   # replace NA with 0 in all nmi flag columns
+```
+
+`~ coalesce(.x, 0L)` is an anonymous function: `~` means "function of", and `.x` is the current column.
+It is equivalent to `function(x) coalesce(x, 0L)` — but shorter.
+`across()` calls this function once per column in `nmi_variables`.
+
+---
+
+### `rowSums(matrix, na.rm = TRUE)`
+
+**What it does:** sums the values in each row across columns.
+
+Used in two places:
+
+1. **NMI score** (Nordic Multimorbidity Index): sums the product of 0/1 flag columns and their individual weights → one weighted comorbidity score per person. A patient with cardiovascular disease and cancer scores higher than a patient with two milder conditions.
+2. **Multimorbidity count**: sums all 0/1 flags → simple count of the number of conditions per person.
+
+---
+
+## Rows: filter and deduplicate {#rows-filter-and-deduplicate}
+
+### `filter(condition1, condition2, ...)`
+
+**What it does:** keeps only the rows that satisfy the conditions.
+
+**Analogy:** You have a patient list and only want to see women over 50.
+`filter(koen == 2, alder > 50)` is your sieve — everything else is removed.
+All conditions are combined with AND (all must be true).
+If you want either-or, use `|` inside filter: `filter(icd3 == "F00" | icd3 == "F01")`.
+
+```r
+filter(pnr %in% !!cohort_pnrs)               # only cohort members
+filter(date_contact >= surgery_date)          # only post-operative contacts
+filter(icd3 %in% c("G30", "F00", "F03"))     # only dementia codes
+```
+
+---
+
+### `%in%` — "is in the list"
+
+**What it does:** checks whether each element on the left side appears in the vector on the right side.
+Returns `TRUE` or `FALSE` for each element.
+
+**Analogy:** Imagine a guest list for a party.
+`pnr %in% !!my_pnrs` is like standing at the entrance and checking: "is this ID on the list?"
+
+```r
+icd3 %in% c("G30", "F00", "F03")   # TRUE for these three codes, FALSE for everything else
+pnr  %in% !!my_pnrs                # TRUE for all pnr's in the cohort
+```
+
+You will see `%in%` in almost every `filter()` call in the project.
+
+---
+
+### `distinct(col1, col2)`
+
+**What it does:** removes duplicates — keeps only unique combinations.
+
+**Analogy:** A person may have received the diagnosis F00 ten times.
+You only need to know whether they ever had it.
+`distinct(pnr, icd3)` reduces it to one row per person per code.
+`distinct(pnr)` gives you just the list of unique person IDs.
+
+---
+
+### `slice(n)`
+
+**What it does:** keeps only the nth row within each group (used after `group_by()`).
+
+```r
+group_by(pnr) %>%          # group per person
+  arrange(desc(aar)) %>%   # newest year first
+  slice(1)                 # keeps the newest record per person
+```
+
+---
+
+## Groups and aggregation {#groups-and-aggregation}
+
+### `group_by(col1, col2)`
+
+**What it does:** divides data into groups so subsequent operations happen separately within each group.
+
+**Analogy:** Imagine you have a stack of patient records and sort them into piles by ID number.
+`group_by(pnr)` does exactly that — but only in memory.
+All subsequent steps (`arrange`, `slice`, `summarise`) now happen one pile at a time.
+
+```r
+group_by(pnr) %>%             # group per person
+  arrange(date_contact) %>%   # oldest date first
+  slice(1) %>%                # earliest contact per person
+  ungroup()                   # remove the grouping afterwards
+```
+
+---
+
+### `ungroup()`
+
+**What it does:** removes the grouping.
+
+**Important:** always call `ungroup()` after you are done with `group_by()`.
+If you forget it, data remains grouped, and later operations can behave unexpectedly.
+
+---
+
+### `arrange(column)` / `arrange(desc(column))`
+
+**What it does:** sorts rows ascending (default) or descending (`desc()`).
+
+Typically used with `group_by() %>% slice(1)` to find the first or newest record per person.
+
+---
+
+### `summarise(new_col = function(col), .groups = "drop")`
+
+**What it does:** reduces each group to one summary row.
+
+```r
+group_by(pnr) %>%                                                  # group per person
+  summarise(first_e66 = min(date_contact, na.rm = TRUE))           # earliest E66 date per person
+```
+
+`.groups = "drop"` removes the grouping automatically afterwards.
+
+---
+
+### `ntile(x, n)`
+
+**What it does:** divides rows into `n` equal groups (quantiles).
+
+::: {.callout-warning}
+**Not** used for income quintiles in register-based studies following SEPLINE guidelines.
+SEPLINE recommends comparing against population-specific cut-points (Q20/Q40/Q60/Q80) stratified by sex × 5-year age group × reference year — not `ntile()` on your cohort alone.
+See [SEPLINE](12_socioekonomiske-variable.qmd).
+:::
+
+---
+
+## Join — assemble tables {#join-assemble-tables}
+
+This is one of the things that takes the longest to understand, but is essential for all register work.
+A join puts two tables together based on a shared key — typically `pnr`.
+
+### `inner_join(y, by = "key")`
+
+**What it does:** keeps **only** rows that exist in BOTH tables.
+
+**Analogy:** It is like a VIP list at the entrance.
+You must be on BOTH lists to get in.
+Used when a match is meaningful — e.g. `inner_join(bs_cohort)` keeps only hospital contacts for persons who are actually in the study.
+
+```r
+inner_join(bs_cohort %>% select(pnr, surgery_date), by = "pnr")   # only contacts from BS cohort members
+```
+
+---
+
+### `left_join(y, by = "key")`
+
+**What it does:** keeps **all** rows from the left table.
+Rows without a match in the right table get `NA` for the columns that came from the right.
+
+**Analogy:** It is like checking whether your patients have a particular finding, without discarding any of them.
+All patients are still there — those with the finding have a date, those without have `NA`.
+Used everywhere when adding flags and covariates to the cohort.
+
+```r
+full_cohort %>%                               # start with all cohort members
+  left_join(dementia, by = "pnr")             # all retained; only those with dementia get a date
+```
+
+---
+
+### `bind_rows(df1, df2, ...)`
+
+**What it does:** stacks data frames on top of each other (same columns, more rows).
+
+**Analogy:** Like taking three piles of paper and putting them in one pile.
+Used e.g. to combine LPR2 + psychiatric LPR2 + LPR3 into one combined diagnosis table.
+
+```r
+bind_rows(lpr2_results, lpr2_psyk_results, lpr3_results)   # combine all three source tables
+```
+
+---
+
+## Reshaping {#reshaping}
+
+### `pivot_wider(names_from = col, values_from = col)`
+
+**What it does:** transforms a long format (one row per visit) to a wide format (one row per person with one column per time point).
+
+**Analogy:** Imagine a patient with five weigh-in visits — all in the same column with five rows.
+`pivot_wider()` transforms it into one single row with five columns: `weight_3mo`, `weight_6mo`, `weight_12mo`, etc.
+Used in extraction of weight and insulin outcomes.
+
+---
+
+## Lazy query
+
+### `!!` (bang-bang, two exclamation marks) {#bang-bang-two-exclamation-marks}
+
+**What it does:** injects a local R variable into a DuckDB/dplyr query.
+
+**Analogy:** Imagine asking an assistant to find all patients on a list.
+If you say "find all patients on the list `my_pnrs`", the assistant will look for a column in the database with that name — and it does not exist.
+You must say: "find all patients on *this* list" and hold the list up.
+`!!` is the equivalent of holding the list up.
+
+```r
+filter(pnr %in% !!my_pnrs)   # !! says: "my_pnrs is an R vector, not a column name"
+```
+
+You will see `!!` in front of almost all local R variables inside `filter()` calls.
+
+---
+
+### `!!column_name := value` (inside `mutate`)
+
+**What it does:** creates a column whose NAME is determined by an R variable — not written directly in the code.
+
+Normally you write a fixed column name to the left of `=` in `mutate()`:
+```r
+mutate(mi = 1L)   # always creates a column called "mi"
+```
+
+But in the NMI calculation (Nordic Multimorbidity Index) we loop over a list of chronic conditions (`"mi"`, `"stroke"`, `"diabetes"`, ...) and want to create one column per condition. The column name is therefore stored in a variable:
+```r
+condition_name <- "mi"   # the variable contains the name as a string
+
+mutate(!!condition_name := 1L)   # !! injects the variable's content: equivalent to mutate(mi = 1L)
+# Next iteration: condition_name <- "stroke" → mutate(stroke = 1L)
+```
+
+Two things differ from normal:
+- **`!!`** — as in `filter()`: injects the R variable's *contents* instead of interpreting it as a column name
+- **`:=`** — used instead of `=`, because R requires it when the left side of an assignment is dynamic. It is not possible to write `mutate(!!name = 1L)` — only `mutate(!!name := 1L)` works.
+
+`1L` is an integer (see [`as.integer()` / `1L`](#as.integer-x-1l)) — flag columns are stored as integers to save memory.
+
+---
+
+## Text operations {#text-operations}
+
+### `substr(string, start, end)`
+
+**What it does:** extracts part of a text string based on character positions.
+
+**Analogy:** You have the ICD code `"DG30"`.
+DST has prepended a "D" — it does not belong in standard ICD-10.
+`substr("DG30", 2, 4)` says: "give me characters from position 2 to 4" and returns `"G30"`.
+
+```r
+substr(c_diag, 2, 4)   # 3-digit code: "DG30" -> "G30"
+substr(c_diag, 2, 5)   # 4-digit code: "DI110" -> "I110"
+```
+
+---
+
+### `paste0(x, y)`
+
+**What it does:** concatenates text strings without spaces.
+
+```r
+paste0("C", 10:43)   # creates "C10", "C11", "C12", ..., "C43"
+```
+
+Used for compact construction of ICD code lists.
+
+---
+
+### `paste(x, y, sep = "_")`
+
+**What it does:** concatenates text strings with a chosen separator.
+
+```r
+paste(koen, birth_year, sep = "_")   # creates e.g. "1_1975" as a matching key
+```
+
+---
+
+### `toupper(x)` / `tolower(x)`
+
+**What it does:** converts text to upper or lower case respectively.
+
+```r
+toupper(c_opr)   # ensures procedure codes match regardless of capitalisation
+```
+
+---
+
+### `grepl(pattern, x)`
+
+**What it does:** returns `TRUE`/`FALSE` for each element in `x` that matches a search pattern (regular expression).
+
+**Analogy:** It is like "Ctrl+F" on a text document, but applied to entire columns at once.
+`grepl("^C34", icd4)` finds all 4-digit codes starting with `C34`.
+
+```r
+grepl("^C34", icd4)   # TRUE for "C340", "C341", "C342", etc.
+```
+
+Used e.g. to match ICD codes against diagnosis patterns in comorbidity measures such as NMI (Nordic Multimorbidity Index).
+
+---
+
+## Numbers and dates {#numbers-and-dates}
+
+### `as.Date(x)`
+
+**What it does:** converts text or datetime to a simple date object.
+
+DST stores some date-times as `"2021-03-15 14:32:00"`.
+`as.Date()` removes the time parts and gives a clean calendar date.
+
+```r
+as.Date(kont_starttidspunkt)   # "2021-03-15 14:32:00" -> 2021-03-15
+```
+
+---
+
+### `year(date)` (from `lubridate`)
+
+**What it does:** extracts the year from a date.
+
+```r
+year(surgery_date)   # 2021-03-15 -> 2021
+```
+
+---
+
+### `difftime(date1, date2, units = "days")`
+
+**What it does:** calculates the difference between two dates.
+
+```r
+as.numeric(difftime(surgery_date, foed_dag, units = "days")) / 365.25   # age at surgery in years
+```
+
+---
+
+### `min(x, na.rm = TRUE)` / `max(x, na.rm = TRUE)`
+
+**What it does:** finds the smallest/largest element in a vector and ignores `NA`.
+
+```r
+summarise(first_date = min(date_contact, na.rm = TRUE))   # earliest contact date per person
+```
+
+---
+
+### `pmin(x, y)` / `pmax(x, y)`
+
+**What it does:** compares two vectors position by position and returns the smallest/largest for each element.
+
+**Analogy:** Imagine two lists of dates — date of death and study end date.
+`pmin(death_date, study_end)` selects for each person what came first.
+
+```r
+pmin(death_date, as.Date("2024-12-31"))   # censoring date: either death date or study end date
+```
+
+---
+
+### `as.integer(x)` / `1L` {#as.integer-x-1l}
+
+**What it does:** converts to integer.
+
+The `L` suffix (e.g. `1L`, `0L`) specifies that it is an integer rather than a decimal.
+Flag columns are stored as integers (`1L`/`0L`) to save memory.
+
+---
+
+### `is.na(x)`
+
+**What it does:** returns `TRUE` for `NA` values (missing values).
+
+```r
+filter(!is.na(pnr))           # remove rows without person ID
+filter(!is.na(date_dementia)) # remove rows without dementia date
+```
+
+---
+
+### `set.seed(n)`
+
+**What it does:** fixes the starting point for random number generation.
+
+**Analogy:** Imagine shuffling a deck of cards.
+Without `set.seed()` you will shuffle differently every time.
+With `set.seed(42)` you always shuffle in the same way — and can thus reproduce your results exactly.
+Always call it before matching loops to ensure reproducibility.
+
+```r
+set.seed(42)                   # fix random seed for reproducibility
+sample(pool_pnrs, size = 5)   # always selects the same 5 random pnr's
+```
+
+---
+
+### `sample(x, size)`
+
+**What it does:** draws random elements from a vector.
+
+Used in matching logic to select random control persons from a pool.
+
+---
+
+## Lists and loops
+
+### `split(df, group_vector)`
+
+**What it does:** splits a data frame into a list of sub-data-frames, one per unique group.
+
+**Analogy:** Imagine sorting patient records into piles by year and sex.
+`split(pool, paste(koen, birth_year, sep = "_"))` gives you one pile per combination,
+so the matching code can work quickly within one pile at a time.
+
+---
+
+### `vector("list", n)`
+
+**What it does:** creates an empty list with space for `n` elements.
+
+Pre-allocation is faster than letting R expand the list one element at a time in a loop.
+
+---
+
+### `seq_len(n)`
+
+**What it does:** generates the sequence 1, 2, ..., n.
+
+Safer than `1:n` in loops, because it handles the case `n = 0` correctly.
+
+---
+
+### `unlist(list, use.names = FALSE)`
+
+**What it does:** flattens a list of vectors into one long vector.
+
+---
+
+## Diagnostics and debugging {#diagnostics-and-debugging}
+
+### `class(x)`
+
+**What it does:** tells you what type of object `x` is.
+
+```r
+class(my_object)
+# "tbl_df" "data.frame"        -> data is in R's memory
+# "tbl_duckdb_connection"      -> lazy DuckDB query, not yet fetched
+# "Table" "ArrowObject"        -> lazy Arrow connection, not yet fetched
+```
+
+Always check `class()` first if you get a strange error.
+
+---
+
+### `nrow(df)`
+
+**What it does:** returns the number of rows.
+
+Used to print cohort sizes and verify that exclusions have worked.
+
+---
+
+### `cat("text\n")`
+
+**What it does:** prints text to the console without quotation marks. `\n` is a newline.
+
+Used for progress messages: `cat("Extracting NMI score...\n")`.
+
+---
+
+### `stop("message")`
+
+**What it does:** stops the code with an error message.
+
+Used to give an understandable error if a required file is missing.
+
+---
+
+### `gc()`
+
+**What it does:** releases unused memory back to the operating system.
+
+```r
+rm(large_register)   # remove the object from R
+gc()                 # release the memory
+```
+
+Use it after you are done with large registers — you share RAM with everyone else on the DST server.
+
+---
+
+## Package overview
+
+See [Register reference](14d_register_reference.qmd) for confirmed column names on all registers these packages work against.
+
+| Package | What it provides |
+|---|---|
+| `dstDataPrep` | `load_database()` — DST-specific parquet connector *(DARTER project only)* |
+| `dplyr` | `%>%`, `filter`, `select`, `mutate`, `join`, `group_by`, `arrange`, etc. |
+| `tidyr` | `pivot_wider()` — reshaping from long to wide format |
+| `lubridate` | `year()`, `as.Date()`, date calculations |
+| `arrow` | `read_parquet()`, `write_parquet()` — parquet file handling |
