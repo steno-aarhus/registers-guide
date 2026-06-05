@@ -173,51 +173,138 @@ The example requires registers available as parquet files and uses `open_dataset
 **Practising LPR patterns without a real cohort yet?** Use a test cohort from [Phase 6 — First extraction](06_foerste-udtraek.qmd) (200 random pnr's from BEF), or walk through the code without running it. This page teaches the LPR extraction pattern — cohort construction is Phase 10.
 :::
 
+::: {.callout-note}
+**The D-prefix — two strategies**
+
+DST stores all ICD-10 codes with a `D`-prefix: `DG30` for Alzheimer's, `DE11` for type 2 diabetes. Two valid approaches:
+
+- **Strip-first** (example 1): `substr(c_diag, 2, 4)` creates a new column `icd3` without the prefix. Write code lists using standard ICD names: `filter(icd3 %in% c("G30", "E11"))`. Best when building `alle_dx` for reuse across multiple outcomes.
+- **Regex directly on the raw column** (example 2): `grepl("^DG30|^DE1[0-4]", c_diag)` in the `filter()` step *before* `collect()`. DuckDB/Arrow can pushdown-filter directly in the storage format — **more efficient** for single-outcome extractions.
+
+**Recommendation:** strip-first for the `alle_dx` pattern; D-prefix regex for direct single-outcome extraction.
+:::
+
+<details>
+<summary>Code example: fetch all diagnoses for your cohort (alle_dx)</summary>
+
+Builds one table with **all** A and B diagnoses for your cohort without filtering on specific codes. Reuse `alle_dx` for all outcomes — see Phase 2 below. Best when you have multiple outcomes from LPR.
+
 ```r
-library(arrow)         # open_dataset() — lazy connection to parquet
-library(dplyr)         # filter, select, mutate, inner_join, bind_rows
+library(arrow)
+library(dplyr)
 
-cohort_pnrs <- unique(kohort$pnr)   # vector of all unique pnr's in your cohort — see note above
+cohort_pnrs <- unique(kohort$pnr)
 
-# ── LPR2 somatic (up to March 2019) ─────────────────────────────────────
-lpr_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)   # LPR2 contact table — lazy connection
-lpr_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosis table — lazy connection
+# ── LPR2 somatic (up to March 2019) ──────────────────────────────────────
+lpr_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
+lpr_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
 
 lpr2_dx <- lpr_adm %>%
-  filter(pnr %in% !!cohort_pnrs) %>%               # only the cohort's pnr's
-  select(pnr, recnum, date_contact = d_inddto) %>%   # recnum is the join key to lpr_diag
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%
   inner_join(
     lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B")) %>%    # only action and secondary diagnoses
-      select(recnum, c_diag),                    # only join key and diagnosis code
-    by = "recnum"                                # join on contact number
+      filter(c_diagtype %in% c("A", "B")) %>%
+      select(recnum, c_diag, c_diagtype),        # c_diagtype retained — useful for downstream filtering (A vs. A+B)
+    by = "recnum"
   ) %>%
-  collect() %>%                                  # fetch into R
+  collect() %>%
   mutate(icd3 = substr(c_diag, 2, 4))           # strip D-prefix: "DG30" → "G30"
 
 # ── LPR3 (March 2019 and onwards) ────────────────────────────────────────
-lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 contact table — lazy connection
-lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosis table — lazy connection
+lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
+lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
 
 lpr3_dx <- lpr3_k %>%
-  filter(pnr %in% !!cohort_pnrs) %>%                              # only the cohort's pnr's
-  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%   # dw_ek_kontakt is the join key to lpr_a_diagnose
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
   inner_join(
     lpr3_d %>%
       filter(diag_kode_type %in% c("A", "B"),
-             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%   # exclude retracted diagnoses
-      select(dw_ek_kontakt, c_diag = diag_kode),                         # rename to c_diag for consistency with LPR2
-    by = "dw_ek_kontakt"                                                  # join on LPR3 key
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),   # c_diagtype retained
+    by = "dw_ek_kontakt"
   ) %>%
-  collect() %>%                                                  # fetch into R
+  collect() %>%
   mutate(
-    date_contact = as.Date(date_contact),  # datetime → date
-    icd3 = substr(c_diag, 2, 4)           # strip D-prefix: "DG30" → "G30"
+    date_contact = as.Date(date_contact),
+    icd3 = substr(c_diag, 2, 4)
   )
 
-# ── Combine ─────────────────────────────────────────────────────────────
-alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # one diagnosis table covering both periods
+# ── Combine ───────────────────────────────────────────────────────────────
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx)
+# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
+
+</details>
+
+<details>
+<summary>Code example: fetch specific diagnoses directly</summary>
+
+Filter on specific codes **before** `collect()` — DuckDB/Arrow pushes the filter down to the storage format and only fetches matching rows. Most efficient for single-outcome extractions. Uses D-prefix directly in the regex.
+
+The example fetches diabetes mellitus (E10–E14) — replace `CODES_REGEX` with your own codes.
+
+```r
+library(arrow)
+library(dplyr)
+
+cohort_pnrs <- unique(kohort$pnr)
+CODES_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10–E14) — with D-prefix
+
+# ── LPR2 somatic ─────────────────────────────────────────────────────────
+lpr_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
+lpr_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
+
+lpr2_dm <- lpr_adm %>%
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%
+  inner_join(
+    lpr_diag %>%
+      filter(c_diagtype %in% c("A", "B"),
+             grepl(CODES_REGEX, c_diag)) %>%   # filter on codes BEFORE collect — D-prefix in regex
+      select(recnum, c_diag, c_diagtype),
+    by = "recnum"
+  ) %>%
+  collect() %>%
+  mutate(icd3 = substr(c_diag, 2, 4))
+
+# ── LPR3 ─────────────────────────────────────────────────────────────────
+lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
+lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
+
+lpr3_dm <- lpr3_k %>%
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
+  inner_join(
+    lpr3_d %>%
+      filter(diag_kode_type %in% c("A", "B"),
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",
+             grepl(CODES_REGEX, diag_kode)) %>%   # filter on codes BEFORE collect
+      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
+    by = "dw_ek_kontakt"
+  ) %>%
+  collect() %>%
+  mutate(
+    date_contact = as.Date(date_contact),
+    icd3 = substr(c_diag, 2, 4)
+  )
+
+# ── Combine ───────────────────────────────────────────────────────────────
+dm_dx <- bind_rows(lpr2_dm, lpr3_dm)
+# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
+```
+
+::: {.callout-tip}
+**Many specific codes?** Build the regex programmatically instead of writing manually:
+```r
+codes <- c("E10", "E11", "E12", "E13", "E14")
+CODES_REGEX <- paste0("^D(", paste(codes, collapse = "|"), ")")
+# → "^D(E10|E11|E12|E13|E14)"
+```
+:::
+
+</details>
 
 ---
 
