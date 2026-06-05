@@ -18,6 +18,10 @@ To build your cohort (Phase 10) you need to know how to extract diagnosis codes 
 The code examples use the column names DST's parquet registers typically have. Your columns may be named differently — check with `names(your_data)` or look them up in [Phase 14 — Register reference](14d_register_reference.qmd).
 :::
 
+::: {.callout-note}
+The code uses `inner_join()` and `bind_rows()`. If these are new concepts, they are explained in detail in [Phase 11 — Joins and pivots](11_data-manipulation.qmd) — you can follow the code here and return to Phase 11 afterwards.
+:::
+
 ---
 
 ## LPR is split into two periods
@@ -113,105 +117,24 @@ The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns
 
 Choose **one** of two approaches depending on your study:
 
-| | Approach 1 — `alle_dx` | Approach 2 — direct extraction |
+| | Approach 2 — direct extraction | Approach 1 — `alle_dx` |
 |---|---|---|
-| **Best when** | You have **multiple outcomes** from LPR | You have **one single outcome** |
-| **Workflow** | Fetch all → Exclude → filter per outcome | Fetch specific codes → Exclude → done |
-| **Advantage** | LPR queried only once; reused for all outcomes | Simpler and faster for single-outcome studies |
-
-**Approach 1** is best when your study has multiple outcomes — e.g. date of diabetes, heart disease and death. You query LPR once and build `alle_dx`: a shared table with all A and B diagnoses. For each new outcome, filter `alle_dx` on the relevant codes — the only line you change is the code list.
+| **Best when** | You have **one single outcome** | You have **multiple outcomes** from LPR |
+| **Workflow** | Fetch specific codes → Exclude → done | Fetch all → Exclude → filter per outcome |
+| **Advantage** | Simpler and faster for single-outcome studies | LPR queried only once; reused for all outcomes |
 
 **Approach 2** is best for a single outcome. Filter on specific ICD codes directly in the `filter()` step *before* `collect()`. DuckDB/Arrow pushes the filter down to the storage layer — only matching rows are loaded into RAM.
+
+**Approach 1** is best when your study has multiple outcomes — e.g. date of diabetes, heart disease and death. You query LPR once and build `alle_dx`: a shared table with all A and B diagnoses. For each new outcome, filter `alle_dx` on the relevant codes — the only line you change is the code list.
 
 ::: {.callout-note}
 The examples require parquet files and a completed study population. `kohort` is the data.frame with `pnr` and `index_date` per person — see [Phase 10](10_byg-din-kohorte.qmd). Adjust paths to your project.
 :::
 
 <details>
-<summary>Approach 1 — fetch all diagnoses for your cohort (alle_dx)</summary>
+<summary>Approach 2 — fetch specific diagnoses directly (start here for one outcome)</summary>
 
-```r
-library(arrow)
-library(dplyr)
-
-cohort_pnrs <- unique(kohort$pnr)
-
-# ── LPR2 somatic (up to March 2019) ──────────────────────────────────────
-lpr_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
-lpr_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
-
-lpr2_dx <- lpr_adm %>%
-  filter(pnr %in% !!cohort_pnrs) %>%
-  select(pnr, recnum, date_contact = d_inddto) %>%
-  inner_join(
-    lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B")) %>%
-      select(recnum, c_diag, c_diagtype),        # c_diagtype retained — useful for downstream filtering (A vs. A+B)
-    by = "recnum"
-  ) %>%
-  collect() %>%
-  mutate(icd3 = substr(c_diag, 2, 4))           # strip D-prefix: "DG30" → "G30"
-
-# ── LPR3 (March 2019 and onwards) ────────────────────────────────────────
-lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
-lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
-
-lpr3_dx <- lpr3_k %>%
-  filter(pnr %in% !!cohort_pnrs) %>%
-  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
-  inner_join(
-    lpr3_d %>%
-      filter(diag_kode_type %in% c("A", "B"),
-             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
-      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),   # c_diagtype retained
-    by = "dw_ek_kontakt"
-  ) %>%
-  collect() %>%
-  mutate(
-    date_contact = as.Date(date_contact),
-    icd3 = substr(c_diag, 2, 4)
-  )
-
-# ── Combine ───────────────────────────────────────────────────────────────
-alle_dx <- bind_rows(lpr2_dx, lpr3_dx)
-# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
-```
-
-::: {.callout-note}
-**Do you have F-codes (e.g. dementia, depression)?** Psychiatric diagnoses recorded *before* March 2019 are in separate registers and are not included in `lpr2_dx`. Add them before `bind_rows()`:
-
-```r
-psyk_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_adm/") %>%
-  rename_with(tolower) %>%
-  rename(pnr = v_cpr, recnum = k_recnum)
-psyk_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
-  rename_with(tolower) %>%
-  rename(recnum = v_recnum)
-
-lpr2_psyk_dx <- psyk_adm %>%
-  filter(pnr %in% !!cohort_pnrs) %>%
-  select(pnr, recnum, date_contact = d_inddto) %>%
-  inner_join(
-    psyk_diag %>%
-      filter(c_diagtype %in% c("A", "B")) %>%
-      select(recnum, c_diag, c_diagtype),
-    by = "recnum"
-  ) %>%
-  collect() %>%
-  mutate(icd3 = substr(c_diag, 2, 4))
-
-alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
-```
-:::
-
-</details>
-
-<details>
-<summary>Approach 2 — fetch specific diagnoses directly (skip alle_dx)</summary>
-
-Filter on specific codes **before** `collect()` — DuckDB/Arrow pushes the filter down to the storage format and only fetches matching rows. Most efficient for single-outcome extractions. Uses D-prefix directly in the regex.
-
-The example fetches diabetes mellitus (E10–E14) — replace `CODES_REGEX` with your own codes.
+Filter on specific codes **before** `collect()`. The example fetches diabetes mellitus (E10–E14) — replace `CODES_REGEX` with your own codes.
 
 ```r
 library(arrow)
@@ -230,7 +153,7 @@ lpr2_dm <- lpr_adm %>%
   inner_join(
     lpr_diag %>%
       filter(c_diagtype %in% c("A", "B"),
-             grepl(CODES_REGEX, c_diag)) %>%   # filter on codes BEFORE collect — D-prefix in regex
+             grepl(CODES_REGEX, c_diag)) %>%   # filter BEFORE collect — D-prefix in regex
       select(recnum, c_diag, c_diagtype),
     by = "recnum"
   ) %>%
@@ -248,29 +171,152 @@ lpr3_dm <- lpr3_k %>%
     lpr3_d %>%
       filter(diag_kode_type %in% c("A", "B"),
              is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",
-             grepl(CODES_REGEX, diag_kode)) %>%   # filter on codes BEFORE collect
+             grepl(CODES_REGEX, diag_kode)) %>%
       select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
     by = "dw_ek_kontakt"
   ) %>%
   collect() %>%
-  mutate(
-    date_contact = as.Date(date_contact),
-    icd3 = substr(c_diag, 2, 4)
-  )
+  mutate(date_contact = as.Date(date_contact), icd3 = substr(c_diag, 2, 4))
 
-# ── Combine ───────────────────────────────────────────────────────────────
 dm_dx <- bind_rows(lpr2_dm, lpr3_dm)
 # Columns: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
 
 ::: {.callout-tip}
-**Many specific codes?** Build the regex programmatically instead of writing manually:
+**Many specific codes?** Build the regex programmatically:
 ```r
 codes <- c("E10", "E11", "E12", "E13", "E14")
 CODES_REGEX <- paste0("^D(", paste(codes, collapse = "|"), ")")
-# → "^D(E10|E11|E12|E13|E14)"
 ```
 :::
+
+::: {.callout-note}
+**Do you have F-codes (e.g. dementia, depression)?** Extend the regex to include them, e.g. `"^DE1[0-4]|^DF0[0-3]|^DG30"`, and add psychiatric LPR2 — see Approach 1 below for the code.
+:::
+
+<details>
+<summary>Alternative: compact extraction (single-table approach)</summary>
+
+A colleague may have shown you this shorter approach:
+
+```r
+lpr <- left_join(lpr_adm, lpr_diag, by = "RECNUM") |>
+  filter(C_DIAGTYPE == "A",
+         grepl("^S72", C_DIAG)) |>
+  group_by(PNR) |>
+  filter(D_INDDTO == min(D_INDDTO)) |>
+  slice(1) |>
+  ungroup()
+```
+
+It is shorter but has three pitfalls on DST data:
+
+1. **D-prefix error:** `"^S72"` does NOT match `"DS72..."` in DST data — returns zero rows with no error message. Use `"^DS72"` (with D) or strip the prefix first.
+2. **`left_join` instead of `inner_join`:** Keeps all admissions from `lpr_adm` — including those with no matching diagnosis. Unnecessarily heavy on national registers.
+3. **No pnr filter:** Loads the entire population's data. Correct when building a cohort (Phase 10), not when extracting from an existing one.
+
+</details>
+
+</details>
+
+<details>
+<summary>Approach 1 — fetch all diagnoses + filter outcome (for multiple outcomes)</summary>
+
+**Part 1 — build `alle_dx`**
+
+```r
+library(arrow)
+library(dplyr)
+
+cohort_pnrs <- unique(kohort$pnr)
+
+# ── LPR2 somatic (up to March 2019) ──────────────────────────────────────
+lpr_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
+lpr_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
+
+lpr2_dx <- lpr_adm %>%
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%
+  inner_join(
+    lpr_diag %>%
+      filter(c_diagtype %in% c("A", "B")) %>%
+      select(recnum, c_diag, c_diagtype),
+    by = "recnum"
+  ) %>%
+  collect() %>%
+  mutate(icd3 = substr(c_diag, 2, 4))
+
+# ── LPR3 (March 2019 and onwards) ────────────────────────────────────────
+lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
+lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
+
+lpr3_dx <- lpr3_k %>%
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
+  inner_join(
+    lpr3_d %>%
+      filter(diag_kode_type %in% c("A", "B"),
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
+    by = "dw_ek_kontakt"
+  ) %>%
+  collect() %>%
+  mutate(date_contact = as.Date(date_contact), icd3 = substr(c_diag, 2, 4))
+
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx)
+# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
+```
+
+::: {.callout-note}
+**Do you have F-codes (e.g. dementia, depression)?** Psychiatric diagnoses recorded *before* March 2019 are in separate registers. Add them before `bind_rows()`:
+
+```r
+psyk_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_adm/") %>%
+  rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
+psyk_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
+  rename_with(tolower) %>% rename(recnum = v_recnum)
+
+lpr2_psyk_dx <- psyk_adm %>%
+  filter(pnr %in% !!cohort_pnrs) %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%
+  inner_join(psyk_diag %>% filter(c_diagtype %in% c("A", "B")) %>%
+               select(recnum, c_diag, c_diagtype), by = "recnum") %>%
+  collect() %>% mutate(icd3 = substr(c_diag, 2, 4))
+
+alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
+```
+:::
+
+::: {.callout-tip}
+**Using duckplyr?** `union_all()` combines tables before `collect()` and requires identical column names and types. Rename LPR3 columns to match the LPR2 format before combining — see the onboarding document for an example.
+:::
+
+→ **Complete "Exclude prevalent cases" below, then continue with Part 2.**
+
+---
+
+**Part 2 — filter your specific outcome** *(requires `cohort_clean` from the Exclude step)*
+
+```r
+CODES <- c("G30", "F00", "F01", "F02", "F03")   # dementia — change to your outcome
+
+outcome <- alle_dx %>%
+  filter(icd3 %in% CODES) %>%
+  inner_join(cohort_clean %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact > index_date) %>%   # post-index; use < for baseline covariate
+  group_by(pnr) %>%
+  arrange(date_contact) %>%
+  slice(1) %>%
+  ungroup() %>%
+  select(pnr, event_date = date_contact)
+
+# Join to cohort — NA = no event (censored at end of study)
+result <- cohort_clean %>%
+  select(pnr) %>%
+  left_join(outcome, by = "pnr")
+
+saveRDS(result, "datasets/extract_dementia.rds")   # change filename for each new outcome
+```
 
 </details>
 
@@ -307,38 +353,6 @@ filter(date_contact >= index_date - 365*5,   # earliest boundary: 5 years before
        date_contact < index_date)             # ONLY pre-index diagnoses
 ```
 :::
-
----
-
-## Phase 2 — extract a specific outcome
-
-::: {.callout-note}
-This step only applies to **Approach 1** (alle_dx). If you used Approach 2 (direct extraction), you already fetched the specific codes and are done after the exclusion step.
-:::
-
-Now that the cohort is cleaned of prevalent cases, you can extract new events.
-Change `CODES` to the ICD codes you want — use `cohort_clean` instead of `kohort`.
-
-```r
-CODES <- c("G30", "F00", "F01", "F02", "F03")   # dementia — change to your outcome
-
-outcome <- alle_dx %>%
-  filter(icd3 %in% CODES) %>%                                                # keep only the desired codes
-  inner_join(cohort_clean %>% select(pnr, index_date), by = "pnr") %>%       # use the cleaned cohort
-  filter(date_contact > index_date) %>%   # post-index; use < for baseline covariate
-  group_by(pnr) %>%                                                           # group to find first event
-  arrange(date_contact) %>%                                                   # oldest date first
-  slice(1) %>%                            # first occurrence per person
-  ungroup() %>%                                                               # release grouping
-  select(pnr, event_date = date_contact)                                      # rename to event_date
-
-# Join to cohort — NA = no event (still at risk, censored at end of study)
-result <- cohort_clean %>%
-  select(pnr) %>%                         # keep only pnr from cleaned cohort
-  left_join(outcome, by = "pnr")           # attach event_date — NA = censored
-
-saveRDS(result, "datasets/extract_dementia.rds")   # change filename for each new outcome
-```
 
 ---
 
