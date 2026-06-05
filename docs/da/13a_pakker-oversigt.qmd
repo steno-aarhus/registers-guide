@@ -189,70 +189,258 @@ Struktureret pipeline til at konvertere et helt SAS-workspace til parquet. Kun r
 
 ---
 
-## Analyse: regression, overlevelse og competing risks
+## 3. Analyseværktøjer
 
-Dette er kun pointers — guiden underviser ikke i metoderne. Alle nedenstående er **bekræftet på DST** (juni 2026).
+Alle pakker i dette afsnit er **bekræftet på DST** (juni 2026). Guiden underviser ikke i de statistiske metoder — se pakkernes dokumentation for metodevalgene.
 
-::: {.wide-first-col}
+---
 
-| Pakke | Brug den til | Relevans |
-|---|---|---|
-| **[`prodlim`](https://cran.r-project.org/package=prodlim)** — Product-Limit Estimation | Kaplan-Meier og **Aalen-Johansen** kumulativ incidens | Kerne — korrekt deskriptiv kurve når død er konkurrerende risiko (KM alene overestimerer) |
-| **[`riskRegression`](https://cran.r-project.org/package=riskRegression)** | Cause-Specific Cox (`CSC`), Fine-Gray regression (`FGR`), absolut risiko (`predictRisk`), modelvalidering (`Score`: Brier, tidsafhængig AUC) | Kerne — hovedanalysen: demens med død som competing risk |
-| **[`Publish`](https://cran.r-project.org/package=Publish)** | `regressionTable()` → HR-tabeller med konfidensintervaller, `plotConfidence()` forest plots | Kerne — Table 2 hurtigt |
-| **[`gtsummary`](https://cran.r-project.org/package=gtsummary)** | `tbl_summary()` Table 1, `tbl_regression()` Cox/logistisk, `tbl_survfit()` overlevelsesopsummering | Bredt brugt standard til manuskripttabeller (R Journal 2021) |
-| **[`MatchIt`](https://cran.r-project.org/package=MatchIt)** | Propensity score + eksakt + optimal matching, balance-diagnostik (Love plots) | Alternativ til `heaven::riskSetMatch()` — bedre til PS-matching med balance-check |
-| **[`pec`](https://cran.r-project.org/package=pec)** — Prediction Error Curves | Prediction error curves (Brier over tid) | Situationsbestemt — kun ved prædiktionsmodeller; `riskRegression::Score()` dækker ofte behovet |
-| **[`BuyseTest`](https://cran.r-project.org/package=BuyseTest)** | Generalized Pairwise Comparisons: win ratio, net benefit, prioriterede endpoints | Niche — til studier med **prioriterede sammensatte endpoints** hvor klassisk event-time-analyse ikke er velegnet |
+### `gtsummary` — Table 1 og manuskripttabeller
+*(CRAN — [cran.r-project.org/package=gtsummary](https://cran.r-project.org/package=gtsummary))*
 
-:::
-
-Alle pakker er dokumenteret hos [tagteam (Thomas Gerds, KU)](https://github.com/tagteam) og [bozenne (Brice Ozenne, KU)](https://github.com/bozenne/BuyseTest).
+Standard til manuskripttabeller: `tbl_summary()` laver Table 1 stratificeret på eksponering, `tbl_regression()` formaterer Cox- og logistisk regression, `tbl_survfit()` opsummerer overlevelsesmodeller. Publiceret i R Journal 2021.
 
 <details>
-<summary>Eksempel: Table 1 med <code>gtsummary</code></summary>
+<summary>Eksempel: Table 1</summary>
 
 ```r
 library(gtsummary)
 
 tabel1 <- kohort %>%
-  select(gruppe, alder, koen, nmi_score, occupation_cat) %>%   # vælg variable til tabellen
+  select(gruppe, alder, koen, nmi_score, occupation_cat) %>%
   tbl_summary(
-    by = gruppe,                                               # opdel på eksponeret vs sammenligningskohorte
+    by = gruppe,                                               # stratifier på eksponering
     statistic = list(
       all_continuous()  ~ "{mean} ({sd})",                    # kontinuerte: middelværdi (SD)
       all_categorical() ~ "{n} ({p}%)"                        # kategoriske: n (%)
     ),
-    missing = "no"                                             # vis ikke NA-rækker separat
+    missing = "no"
   ) %>%
-  add_overall() %>%                                            # tilføj en samlet kolonne
-  add_p()                                                      # p-værdier for gruppe-forskelle
+  add_overall() %>%
+  add_p()
 ```
 
 ::: {.callout-warning}
-**Outputkontrol:** Tælleværdier på 0–4 må ikke hjemsende. Afrund til nærmeste 5 med `round_5_gtsummary()` fra [`Z.gtsummary.addons`](https://github.com/zheer-kejlberg/Z.gtsummary.addons) — pakken er ikke på DST og skal importeres via din datamanager.
-Manuel afrunding: `round(x / 5) * 5` giver nærmeste 5.
+**Outputkontrol:** Tælleværdier på 0–4 må ikke hjemsende. Manuel afrunding: `round(x / 5) * 5`. [`Z.gtsummary.addons::round_5_gtsummary()`](https://github.com/zheer-kejlberg/Z.gtsummary.addons) automatiserer det — ikke på DST, importér via datamanager.
 :::
 
 </details>
 
-### Mulig inspiration
+---
+
+### `carpenter` — pipe-baseret tabelstruktur
+*(CRAN — [github.com/lwjohnst86/carpenter](https://github.com/lwjohnst86/carpenter))*
+
+Ældre alternativ til `gtsummary` med en simplere pipe-baseret API: start med `outline_table()`, tilføj rækker med `add_rows()` og afslut med `build_table()`. Lavet af Luke Johnston.
+
+```r
+library(carpenter)
+
+outline_table(kohort, "gruppe") %>%
+  add_rows("alder",     stat_meanSD) %>%     # kontinuert: middelværdi (SD)
+  add_rows("koen",      stat_nPct) %>%       # kategorisk: n (%)
+  add_rows("nmi_score", stat_medianIQR) %>%  # kontinuert: median (IKR)
+  build_table()
+```
+
+---
+
+### `prodlim` — Kaplan-Meier og Aalen-Johansen kumulativ incidens
+*(CRAN — [github.com/tagteam/prodlim](https://github.com/tagteam/prodlim))*
+
+Estimerer og plotter overlevelseskurver og kumulativ incidens. `Hist()` håndterer competing risks med én statusvariabel: 0 = censureret, 1 = primær hændelse, 2 = konkurrerende hændelse (fx død). Brug `prodlim` til deskriptive kurver — `riskRegression` til regression.
+
+<details>
+<summary>Eksempel: KM-kurve og Aalen-Johansen</summary>
+
+```r
+library(prodlim)
+
+# Kaplan-Meier:
+fit_km <- prodlim(Hist(tid, event) ~ gruppe, data = kohort)
+plot(fit_km)
+
+# Aalen-Johansen kumulativ incidens (competing risks):
+# status: 0 = censureret, 1 = primær hændelse, 2 = konkurrerende (fx død)
+fit_aj <- prodlim(Hist(tid, status) ~ gruppe, data = kohort)
+plot(fit_aj, cause = 1)   # kumulativ incidens for primær hændelse
+```
 
 ::: {.callout-note}
-Pakkerne nedenfor er ikke en del af den anbefalede workflow, men nævnes som inspiration. DST-tilgængelighed varierer — se noter ved hver pakke.
+KM alene **overestimerer** kumulativ incidens ved competing risks. Brug Aalen-Johansen (`cause = 1`) når competing events er til stede.
 :::
 
-**[`carpenter`](https://github.com/lwjohnst86/carpenter)** *(CRAN, bekræftet på DST)* — pipe-baseret tilgang til deskriptive statistiktabeller: `outline_table() %>% add_rows(stat_meanSD) %>% build_table()`. Ældre alternativ til `gtsummary` med en enklere API. Lavet af Luke Johnston.
+</details>
 
-**[`kinship2`](https://github.com/cran/kinship2)** *(CRAN, bekræftet på DST)* — opretter pedigree-objekter fra forældre-barn-relationer og beregner kinship-matricer. Nyttigt til multigenerationelle familiestudier — identificér søskende, halvsøskende og fætre/kusiner på tværs af generationer. Lavet af Terry Therneau (Mayo Clinic).
+---
+
+### `riskRegression` — Cause-Specific Cox, Fine-Gray og absolut risiko
+*(CRAN — [github.com/tagteam/riskRegression](https://github.com/tagteam/riskRegression))*
+
+Til regression med competing risks. `CSC()` fitter Cause-Specific Cox (én model per årsag), `FGR()` fitter Fine-Gray subdistribution hazard. `predictRisk()` beregner absolut risiko ved specifikke tidspunkter. `Score()` validerer og sammenligner modeller (Brier-score, tidsafhængig AUC).
+
+<details>
+<summary>Eksempel: CSC-model og absolut risiko</summary>
+
+```r
+library(riskRegression)
+library(survival)
+
+# Cause-Specific Cox:
+csc_model <- CSC(Hist(tid, status) ~ alder + koen + nmi_score, data = kohort)
+summary(csc_model)
+
+# Absolut risiko ved 1, 3 og 5 år for primær hændelse:
+ar <- predictRisk(csc_model, newdata = kohort,
+                  times = c(1, 3, 5), cause = 1)
+# ar: matrix — én kolonne per tidspunkt, én række per person
+```
+
+</details>
+
+---
+
+### `Publish` — regressionsresultater klar til manuskript
+*(CRAN — [github.com/tagteam/Publish](https://github.com/tagteam/Publish))*
+
+`regressionTable()` tager en fittet model (Cox, logistisk, lineær) og returnerer en tabel med estimater, 95 % KI og p-værdier. `plotConfidence()` laver forest plots fra samme output.
+
+```r
+library(Publish)
+library(survival)
+
+cox_model <- coxph(Surv(tid, event) ~ alder + koen + nmi_score, data = kohort)
+
+regressionTable(cox_model)               # HR, 95% KI, p-værdier
+plotConfidence(regressionTable(cox_model))   # forest plot
+```
+
+---
+
+### `MatchIt` — propensity score og eksakt matching
+*(CRAN — [cran.r-project.org/package=MatchIt](https://cran.r-project.org/package=MatchIt))*
+
+Matcher eksponerede til ueksponerede på observerede kovariater. Understøtter nearest-neighbor, eksakt og optimal matching. `summary()` giver balance-statistik (SMD), `match.data()` returnerer det matchede datasæt. Alternativ til `heaven::riskSetMatch()` med bedre balance-diagnostik.
+
+<details>
+<summary>Eksempel: 1:1 nearest-neighbor matching</summary>
+
+```r
+library(MatchIt)
+
+m <- matchit(eksponeret ~ alder + koen + nmi_score,
+             data   = kohort,
+             method = "nearest",   # nearest-neighbor matching
+             ratio  = 1)           # 1:1
+
+# Balance-tjek — SMD < 0.1 er tommelfingerregel:
+summary(m, standardize = TRUE)
+
+# Matchet datasæt:
+matched <- match.data(m)
+```
+
+</details>
+
+---
+
+### `pec` — prædiktionsfejlkurver
+*(CRAN — [cran.r-project.org/package=pec](https://cran.r-project.org/package=pec))*
+
+Beregner og plotter Brier-score over tid til sammenligning og validering af prædiktionsmodeller. Niche — kun relevant ved prædiktionsmodeller; `riskRegression::Score()` dækker oftest behovet.
+
+---
+
+### `BuyseTest` — Generalized Pairwise Comparisons
+*(CRAN — [github.com/bozenne/BuyseTest](https://github.com/bozenne/BuyseTest))*
+
+Implementerer Generalized Pairwise Comparisons (GPC): sammenligner to grupper via win ratio, net benefit og win probability på **prioriterede endpoints**. Niche — relevant når du har et hierarki af endpoints og vil undgå klassiske event-time-antagelser.
+
+::: {.callout-note}
+Bekræft argumentnavne med `?BuyseTest` på DST inden brug:
+
+```r
+library(BuyseTest)
+
+# Ét time-to-event endpoint:
+result <- BuyseTest(gruppe ~ tte(tid, event, threshold = 0),
+                    data = kohort,
+                    method.inference = "u-statistic")
+summary(result)   # win ratio, net benefit, win probability
+```
+:::
+
+---
+
+### `kinship2` — pedigrees og kinship-matricer
+*(CRAN — [cran.r-project.org/web/packages/kinship2](https://cran.r-project.org/web/packages/kinship2/index.html))*
+
+Opretter pedigree-objekter fra forældre-barn-relationer og beregner kinship-koefficienter (sandsynlighed for delt allel: 0,5 = forældre/barn, 0,25 = søskende). Nyttigt til multigenerationelle familiestudier. Lavet af Terry Therneau (Mayo Clinic).
+
+<details>
+<summary>Eksempel: opret pedigree og beregn kinship</summary>
+
+```r
+library(kinship2)
+
+# Opret pedigree:
+# DST's koen-variabel (1 = mand, 2 = kvinde) matcher kinship2's forventning direkte
+ped <- pedigree(
+  id    = familie$pnr,
+  dadid = familie$pnr_far,   # 0 eller NA hvis far ukendt
+  momid = familie$pnr_mor,   # 0 eller NA hvis mor ukendt
+  sex   = familie$koen        # 1 = mand, 2 = kvinde
+)
+
+# Kinship-koefficienter:
+km <- kinship(ped)
+
+# Visualisér stamtræ:
+plot(ped)
+```
+
+</details>
+
+---
+
+### `tame` — klustrer medicineksponering fra LMDB
+*(CRAN — [github.com/Laksafoss/tame](https://github.com/Laksafoss/tame))*
+
+Agglomerativ hierarkisk klustring af medicindata. Kombinerer ATC-klassifikation, timing og dosis i én custom distance-measure. `medic()` er den primære funktion. Relevant ved karakterisering af polyfarmacimønstre. Lavet af Anders Laksafoss (SSI).
+
+<details>
+<summary>Eksempel: klustrer medicinmønstre</summary>
+
+```r
+library(tame)
+
+# Klustrer på ATC-kode alene:
+clust <- medic(lmdb_data, id = pnr, atc = atc, k = 5)
+# k = ønsket antal kluster — vælg med scree-plot eller domæneviden
+
+# Med timing-information (angiv som kolonneinterval):
+clust <- medic(lmdb_data, id = pnr, atc = atc,
+               timing = trimester_1:trimester_3,   # kolonner der angiver tidsvinduer
+               k = 5)
+
+summary(clust)   # opsummér klustrer
+```
+
+::: {.callout-note}
+`id`, `atc` og `timing`-argumenterne bruger bare kolonnenavne (NSE — ingen anførselstegn). `lmdb_data` skal have én række per receptekspedition.
+:::
+
+</details>
+
+---
+
+### Mulig inspiration — ikke bekræftet på DST
 
 **[`famnet`](https://github.com/lwjohnst86/famnet)** *(GitHub, eksperimentel)* — identificerer familierelationer fra person-ID'er: givet et datasæt med PersonID, FaderID og ModerID finder `fmn_siblings()` alle søskendepar med relationstype. Relevant til familikobling på tværs af generationer i dansk registerdata. Lavet af Luke Johnston.
 
 **[`plotsurv`](https://github.com/zheer-kejlberg/plotsurv)** *(GitHub, ikke på DST)* — publikationsklar Kaplan-Meier og Aalen-Johansen competing-risks-plots med at-risk-tabel, KI-bånd og censureringsprikker. `plotsurv(survfit_objekt)`.
 
 **[`Z.gtsummary.addons`](https://github.com/zheer-kejlberg/Z.gtsummary.addons)** *(GitHub, ikke på DST)* — udvider `gtsummary` med `add_SMD()` (standardiserede middeldifferencer til Table 1) og `round_5_gtsummary()` (afrunder tælleværdier til nærmeste 5 — relevant for DST's outputkontrol).
-
-**[`tame`](https://github.com/Laksafoss/tame)** *(CRAN, ikke bekræftet på DST)* — klustrer longitudinelle medicinmønstre fra LMDB på ATC, timing og dosis. Relevant ved karakterisering af polyfarmacimønstre.
 
 ---
 
@@ -267,7 +455,7 @@ Pakkerne nedenfor er ikke en del af den anbefalede workflow, men nævnes som ins
 | [ctpteam/RDST](https://github.com/ctpteam/RDST) | "R on DST"-manual: projektopsætning, dataadgang, god kodepraksis på DST-serveren |
 | [ctpteam/DST](https://github.com/ctpteam/DST) | Guide til LPR3, DST-manualer, slides og en heaven-PDF |
 | [steno-aarhus/registers-project-database](https://steno-aarhus.github.io/registers-project-database/) | SDCA's egen database: variabellister, registerbeskrivelser og ansøgningsskabeloner til Sundhedsdatastyrelsen |
-| [github.com/tagteam](https://github.com/tagteam) | Dokumentation for `riskRegression`, `prodlim`, `Publish`, `pec`, `heaven` |
+| [github.com/tagteam](https://github.com/tagteam) | `riskRegression`, `prodlim`, `Publish`, `pec`, `heaven` — Thomas Gerds og Brice Ozenne, KU Biostatistik |
 
 ---
 

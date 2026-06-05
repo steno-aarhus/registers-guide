@@ -189,70 +189,258 @@ Structured pipeline for converting an entire SAS workspace to parquet. Only rele
 
 ---
 
-## Analysis: regression, survival and competing risks
+## 3. Analysis tools
 
-These are pointers only — the guide does not teach the methods. All of the following are **confirmed on DST** (June 2026).
+All packages in this section are **confirmed on DST** (June 2026). The guide does not teach the statistical methods — see package documentation for methodological choices.
 
-::: {.wide-first-col}
+---
 
-| Package | Use it for | Relevance |
-|---|---|---|
-| **[`prodlim`](https://cran.r-project.org/package=prodlim)** — Product-Limit Estimation | Kaplan–Meier and **Aalen–Johansen** cumulative incidence | Core — correct descriptive curve when death is a competing risk (KM alone overestimates) |
-| **[`riskRegression`](https://cran.r-project.org/package=riskRegression)** | Cause-Specific Cox (`CSC`), Fine-Gray regression (`FGR`), absolute risk (`predictRisk`), model validation (`Score`: Brier, time-dependent AUC) | Core — main analysis: dementia with death as competing risk |
-| **[`Publish`](https://cran.r-project.org/package=Publish)** | `regressionTable()` → HR tables with confidence intervals, `plotConfidence()` forest plots | Core — Table 2 quickly |
-| **[`gtsummary`](https://cran.r-project.org/package=gtsummary)** | `tbl_summary()` Table 1, `tbl_regression()` Cox/logistic, `tbl_survfit()` survival summary | Widely used standard for manuscript tables (R Journal 2021) |
-| **[`MatchIt`](https://cran.r-project.org/package=MatchIt)** | Propensity score + exact + optimal matching, balance diagnostics (Love plots) | Alternative to `heaven::riskSetMatch()` — better for PS-matching with balance check |
-| **[`pec`](https://cran.r-project.org/package=pec)** — Prediction Error Curves | Prediction error curves (Brier over time) | Situational — only for prediction models; `riskRegression::Score()` often covers the need |
-| **[`BuyseTest`](https://cran.r-project.org/package=BuyseTest)** | Generalised Pairwise Comparisons: win ratio, net benefit, prioritised endpoints | Niche — for studies with **prioritised composite endpoints** where classical event-time analysis is not appropriate |
+### `gtsummary` — Table 1 and manuscript tables
+*(CRAN — [cran.r-project.org/package=gtsummary](https://cran.r-project.org/package=gtsummary))*
 
-:::
-
-All packages are documented at [tagteam (Thomas Gerds, KU)](https://github.com/tagteam) and [bozenne (Brice Ozenne, KU)](https://github.com/bozenne/BuyseTest).
+Standard for manuscript tables: `tbl_summary()` for Table 1 stratified by exposure, `tbl_regression()` for Cox and logistic regression, `tbl_survfit()` for survival summaries. Published in R Journal 2021.
 
 <details>
-<summary>Example: Table 1 with <code>gtsummary</code></summary>
+<summary>Example: Table 1</summary>
 
 ```r
 library(gtsummary)
 
-table1 <- kohort %>%
-  select(group, age, sex, nmi_score, occupation_cat) %>%       # select variables for the table
+table1 <- cohort %>%
+  select(group, age, sex, nmi_score, occupation_cat) %>%
   tbl_summary(
-    by = group,                                                # split by exposed vs comparator cohort
+    by = group,                                                # stratify by exposure
     statistic = list(
       all_continuous()  ~ "{mean} ({sd})",                    # continuous: mean (SD)
       all_categorical() ~ "{n} ({p}%)"                        # categorical: n (%)
     ),
-    missing = "no"                                             # do not show NA rows separately
+    missing = "no"
   ) %>%
-  add_overall() %>%                                            # add an overall column
-  add_p()                                                      # p-values for group differences
+  add_overall() %>%
+  add_p()
 ```
 
 ::: {.callout-warning}
-**Output control:** Counts of 0–4 may not be repatriated. Round to the nearest 5 with `round_5_gtsummary()` from [`Z.gtsummary.addons`](https://github.com/zheer-kejlberg/Z.gtsummary.addons) — the package is not on DST and must be imported via your data manager.
-Manual rounding: `round(x / 5) * 5` gives the nearest 5.
+**Output control:** Counts of 0–4 may not be repatriated. Manual rounding: `round(x / 5) * 5`. [`Z.gtsummary.addons::round_5_gtsummary()`](https://github.com/zheer-kejlberg/Z.gtsummary.addons) automates this — not on DST, import via data manager.
 :::
 
 </details>
 
-### Possible inspiration
+---
+
+### `carpenter` — pipe-based table structure
+*(CRAN — [github.com/lwjohnst86/carpenter](https://github.com/lwjohnst86/carpenter))*
+
+Older alternative to `gtsummary` with a simpler pipe-based API: start with `outline_table()`, add rows with `add_rows()`, finish with `build_table()`. By Luke Johnston.
+
+```r
+library(carpenter)
+
+outline_table(cohort, "group") %>%
+  add_rows("age",       stat_meanSD) %>%     # continuous: mean (SD)
+  add_rows("sex",       stat_nPct) %>%       # categorical: n (%)
+  add_rows("nmi_score", stat_medianIQR) %>%  # continuous: median (IQR)
+  build_table()
+```
+
+---
+
+### `prodlim` — Kaplan–Meier and Aalen–Johansen cumulative incidence
+*(CRAN — [github.com/tagteam/prodlim](https://github.com/tagteam/prodlim))*
+
+Estimates and plots survival curves and cumulative incidence. `Hist()` handles competing risks with a single status variable: 0 = censored, 1 = primary event, 2 = competing event (e.g. death). Use `prodlim` for descriptive curves — `riskRegression` for regression.
+
+<details>
+<summary>Example: KM curve and Aalen–Johansen</summary>
+
+```r
+library(prodlim)
+
+# Kaplan–Meier:
+fit_km <- prodlim(Hist(time, event) ~ group, data = cohort)
+plot(fit_km)
+
+# Aalen–Johansen cumulative incidence (competing risks):
+# status: 0 = censored, 1 = primary event, 2 = competing event (e.g. death)
+fit_aj <- prodlim(Hist(time, status) ~ group, data = cohort)
+plot(fit_aj, cause = 1)   # cumulative incidence for primary event
+```
 
 ::: {.callout-note}
-The packages below are not part of the recommended workflow but are mentioned as inspiration. DST availability varies — see notes per package.
+KM alone **overestimates** cumulative incidence in the presence of competing risks. Use Aalen–Johansen (`cause = 1`) instead.
 :::
 
-**[`carpenter`](https://github.com/lwjohnst86/carpenter)** *(CRAN, confirmed on DST)* — pipe-based approach to descriptive statistics tables: `outline_table() %>% add_rows(stat_meanSD) %>% build_table()`. An older alternative to `gtsummary` with a simpler API. By Luke Johnston.
+</details>
 
-**[`kinship2`](https://github.com/cran/kinship2)** *(CRAN, confirmed on DST)* — creates pedigree objects from parent–child relationships and computes kinship matrices. Useful for multi-generational family studies — identify siblings, half-siblings and cousins across generations. By Terry Therneau (Mayo Clinic).
+---
 
-**[`famnet`](https://github.com/lwjohnst86/famnet)** *(GitHub, experimental)* — identifies family relationships from person IDs: given a dataset with PersonID, FatherID, and MotherID, `fmn_siblings()` finds all sibling pairs with relationship type. Relevant for family linkage across generations in Danish register data. By Luke Johnston.
+### `riskRegression` — Cause-Specific Cox, Fine-Gray and absolute risk
+*(CRAN — [github.com/tagteam/riskRegression](https://github.com/tagteam/riskRegression))*
+
+For regression with competing risks. `CSC()` fits Cause-Specific Cox (one model per cause), `FGR()` fits Fine-Gray subdistribution hazard. `predictRisk()` computes absolute risk at specific time points. `Score()` validates and compares models (Brier score, time-dependent AUC).
+
+<details>
+<summary>Example: CSC model and absolute risk</summary>
+
+```r
+library(riskRegression)
+library(survival)
+
+# Cause-Specific Cox:
+csc_model <- CSC(Hist(time, status) ~ age + sex + nmi_score, data = cohort)
+summary(csc_model)
+
+# Absolute risk at 1, 3 and 5 years for primary event:
+ar <- predictRisk(csc_model, newdata = cohort,
+                  times = c(1, 3, 5), cause = 1)
+# ar: matrix — one column per time point, one row per person
+```
+
+</details>
+
+---
+
+### `Publish` — regression results ready for manuscript
+*(CRAN — [github.com/tagteam/Publish](https://github.com/tagteam/Publish))*
+
+`regressionTable()` takes a fitted model (Cox, logistic, linear) and returns a table with estimates, 95% CI and p-values. `plotConfidence()` produces forest plots from the same output.
+
+```r
+library(Publish)
+library(survival)
+
+cox_model <- coxph(Surv(time, event) ~ age + sex + nmi_score, data = cohort)
+
+regressionTable(cox_model)                    # HR, 95% CI, p-values
+plotConfidence(regressionTable(cox_model))    # forest plot
+```
+
+---
+
+### `MatchIt` — propensity score and exact matching
+*(CRAN — [cran.r-project.org/package=MatchIt](https://cran.r-project.org/package=MatchIt))*
+
+Matches exposed to unexposed on observed covariates. Supports nearest-neighbour, exact and optimal matching. `summary()` gives balance statistics (SMD), `match.data()` returns the matched dataset. Alternative to `heaven::riskSetMatch()` with better balance diagnostics.
+
+<details>
+<summary>Example: 1:1 nearest-neighbour matching</summary>
+
+```r
+library(MatchIt)
+
+m <- matchit(exposed ~ age + sex + nmi_score,
+             data   = cohort,
+             method = "nearest",   # nearest-neighbour matching
+             ratio  = 1)           # 1:1
+
+# Balance check — SMD < 0.1 is a common rule of thumb:
+summary(m, standardize = TRUE)
+
+# Matched dataset:
+matched <- match.data(m)
+```
+
+</details>
+
+---
+
+### `pec` — prediction error curves
+*(CRAN — [cran.r-project.org/package=pec](https://cran.r-project.org/package=pec))*
+
+Computes and plots Brier score over time for comparing and validating prediction models. Niche — only relevant for prediction models; `riskRegression::Score()` usually covers the need.
+
+---
+
+### `BuyseTest` — Generalised Pairwise Comparisons
+*(CRAN — [github.com/bozenne/BuyseTest](https://github.com/bozenne/BuyseTest))*
+
+Implements Generalised Pairwise Comparisons (GPC): compares two groups via win ratio, net benefit and win probability on **prioritised endpoints**. Niche — relevant when you have a hierarchy of endpoints and want to avoid classical event-time assumptions.
+
+::: {.callout-note}
+Confirm argument names with `?BuyseTest` on DST before use:
+
+```r
+library(BuyseTest)
+
+# One time-to-event endpoint:
+result <- BuyseTest(group ~ tte(time, event, threshold = 0),
+                    data = cohort,
+                    method.inference = "u-statistic")
+summary(result)   # win ratio, net benefit, win probability
+```
+:::
+
+---
+
+### `kinship2` — pedigrees and kinship matrices
+*(CRAN — [cran.r-project.org/web/packages/kinship2](https://cran.r-project.org/web/packages/kinship2/index.html))*
+
+Creates pedigree objects from parent–child relationships and computes kinship coefficients (probability of shared allele: 0.5 = parent/child, 0.25 = siblings). Useful for multi-generational family studies. By Terry Therneau (Mayo Clinic).
+
+<details>
+<summary>Example: create pedigree and compute kinship</summary>
+
+```r
+library(kinship2)
+
+# Create pedigree:
+# DST's koen variable (1 = male, 2 = female) matches kinship2's expectation directly
+ped <- pedigree(
+  id    = family$pnr,
+  dadid = family$pnr_father,   # 0 or NA if father unknown
+  momid = family$pnr_mother,   # 0 or NA if mother unknown
+  sex   = family$koen           # 1 = male, 2 = female
+)
+
+# Kinship coefficients:
+km <- kinship(ped)
+
+# Visualise family tree:
+plot(ped)
+```
+
+</details>
+
+---
+
+### `tame` — cluster medication exposure from LMDB
+*(CRAN — [github.com/Laksafoss/tame](https://github.com/Laksafoss/tame))*
+
+Agglomerative hierarchical clustering of medication data using a custom distance measure combining ATC classification, timing and dose. `medic()` is the primary function. Relevant for characterising polypharmacy patterns in cohorts. By Anders Laksafoss (SSI).
+
+<details>
+<summary>Example: cluster medication patterns</summary>
+
+```r
+library(tame)
+
+# Cluster on ATC code alone:
+clust <- medic(lmdb_data, id = pnr, atc = atc, k = 5)
+# k = desired number of clusters — choose with scree plot or domain knowledge
+
+# With timing information (column range):
+clust <- medic(lmdb_data, id = pnr, atc = atc,
+               timing = trimester_1:trimester_3,   # columns defining time windows
+               k = 5)
+
+summary(clust)   # summarise clusters
+```
+
+::: {.callout-note}
+`id`, `atc` and `timing` use bare column names (NSE — no quotes). `lmdb_data` must have one row per prescription dispensing.
+:::
+
+</details>
+
+---
+
+### Possible inspiration — not confirmed on DST
+
+**[`famnet`](https://github.com/lwjohnst86/famnet)** *(GitHub, experimental)* — identifies family relationships from person IDs: given a dataset with PersonID, FatherID and MotherID, `fmn_siblings()` finds all sibling pairs with relationship type. Relevant for family linkage across generations in Danish register data. By Luke Johnston.
 
 **[`plotsurv`](https://github.com/zheer-kejlberg/plotsurv)** *(GitHub, not on DST)* — publication-ready Kaplan–Meier and Aalen–Johansen competing-risks plots with at-risk table, CI bands and censoring ticks. `plotsurv(survfit_object)`.
 
 **[`Z.gtsummary.addons`](https://github.com/zheer-kejlberg/Z.gtsummary.addons)** *(GitHub, not on DST)* — extends `gtsummary` with `add_SMD()` (standardised mean differences for Table 1) and `round_5_gtsummary()` (rounds counts to the nearest 5 — relevant for DST output control).
-
-**[`tame`](https://github.com/Laksafoss/tame)** *(CRAN, not confirmed on DST)* — clusters longitudinal medication patterns from LMDB on ATC, timing and dose. Relevant for characterising polypharmacy patterns.
 
 ---
 
@@ -267,7 +455,7 @@ The packages below are not part of the recommended workflow but are mentioned as
 | [ctpteam/RDST](https://github.com/ctpteam/RDST) | "R on DST" manual: project setup, data access, good coding practice on the DST server |
 | [ctpteam/DST](https://github.com/ctpteam/DST) | Guide to LPR3, DST manuals, slides and a heaven PDF |
 | [steno-aarhus/registers-project-database](https://steno-aarhus.github.io/registers-project-database/) | SDCA's own database: variable lists, register descriptions and application templates for the Danish Health Data Authority |
-| [github.com/tagteam](https://github.com/tagteam) | Documentation for `riskRegression`, `prodlim`, `Publish`, `pec`, `heaven` |
+| [github.com/tagteam](https://github.com/tagteam) | `riskRegression`, `prodlim`, `Publish`, `pec`, `heaven` — Thomas Gerds and Brice Ozenne, KU Biostatistics |
 
 ---
 
