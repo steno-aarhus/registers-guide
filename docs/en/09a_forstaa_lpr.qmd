@@ -1,0 +1,121 @@
+---
+title: "Understand LPR"
+subtitle: "Structure, history and nuances — before you write code"
+date: last-modified
+---
+
+The National Patient Register (LPR) is the source of diagnoses and hospital contacts.
+It covers all public hospital admissions and outpatient contacts in Denmark.
+
+LPR is more complex than most registers, because it changed format in 2019 and is split into somatic and psychiatric tables. This page explains the **structure** — the periods, the ICD codes, the diagnosis types and the pitfalls you need to know before you extract data. The concrete extraction recipes are in [Phase 9b — Extract from LPR](09b_udtraek_fra_lpr.qmd).
+
+::: {.callout-tip}
+**Reading order:** Read this page first to understand the data. Then go to [Phase 9b](09b_udtraek_fra_lpr.qmd) for the runnable code examples. You build the cohort itself in [Phase 10](10_byg-din-kohorte.qmd).
+:::
+
+---
+
+## LPR is split into two periods
+
+In March 2019 LPR changed format. Studies covering the period across 2019 must query **both systems** and combine them.
+
+| | LPR2 somatic | LPR2 psychiatric | LPR3 |
+|---|---|---|---|
+| **Period** | up to March 2019 | up to March 2019 | March 2019 and onwards |
+| **Contact register** | `lpr_adm` | `t_psyk_adm` | `lpr_a_kontakt` |
+| **Diagnosis register** | `lpr_diag` | `t_psyk_diag` | `lpr_a_diagnose` |
+| **Covers psychiatry** | No | Yes | Yes (both combined) |
+| **Join key** | `recnum` | `k_recnum` / `v_recnum`¹ | `dw_ek_kontakt` |
+| **Date column** | `d_inddto` (Date) | `d_inddto` (Date) | `kont_starttidspunkt` (datetime)² |
+| **pnr column** | `pnr` | `v_cpr`³ | `pnr` |
+| **Diagnosis code** | `c_diag` | `c_diag` | `diag_kode` |
+| **Diagnosis type** | `c_diagtype` | `c_diagtype` | `diag_kode_type` |
+| **Contact type** | `c_pattype` (`"0"` = inpatient) | `c_pattype` | `kont_type` (`"ALCA00"` = inpatient) |
+
+¹ `t_psyk_adm` has `k_recnum`; `t_psyk_diag` has `v_recnum` — rename both to `recnum` before joining.
+² datetime format — convert with `as.Date()`.
+³ Rename: `rename(pnr = v_cpr)`.
+
+::: {.callout-note}
+**Psychiatry: separate in LPR2, combined in LPR3**
+Before 2019, psychiatric diagnoses (F-codes: dementia, depression etc.) were stored in separate registers (`t_psyk_adm`, `t_psyk_diag`). The structure resembles somatic LPR2, but column names differ — see the table footnotes above. From March 2019, LPR3 combines both: somatic and psychiatric contacts and diagnoses are in the same tables, and no separate psychiatric query is needed.
+:::
+
+```{mermaid}
+gantt
+    title LPR registers
+    dateFormat  YYYY
+    axisFormat  %Y
+    section LPR2 somatic
+    lpr_adm + lpr_diag               :done,   1977, 2019
+    section LPR2 psychiatric
+    t_psyk_adm + t_psyk_diag         :done,   1995, 2019
+    section LPR3 combined
+    lpr_a_kontakt + lpr_a_diagnose   :active, 2019, 2027
+```
+
+---
+
+## ICD codes and the D-prefix
+
+**ICD-10** (International Classification of Diseases, 10th revision) is the WHO's international system for classifying diseases and conditions. All hospital diagnoses in Denmark are coded with ICD-10, e.g. `G30` for Alzheimer's disease and `F00` for dementia in Alzheimer's.
+
+All ICD-10 codes in DST have a prepended `"D"`:
+`"DG30"` (Alzheimer's), `"DF00"` (dementia), `"DI21"` (acute myocardial infarction).
+
+**Strip the D-prefix before comparison** — it makes code more readable and easier to reuse:
+
+```r
+mutate(icd3 = substr(c_diag, 2, 4))   # "DG30" → "G30" (3-digit code)
+mutate(icd4 = substr(c_diag, 2, 5))   # "DI219" → "I219" (4-digit code)
+```
+
+`substr(x, start, stop)` keeps characters from position `start` up to and including `stop` (counted from 1). `substr(c_diag, 2, 4)` skips position 1 (the D-prefix) and keeps characters 2, 3 and 4: `"DG30"` → `"G30"`. Use 2–5 for 4-digit codes: `"DI219"` → `"I219"`.
+
+---
+
+## Diagnosis types: A, B and G
+
+| Code | Meaning | When to include |
+|---|---|---|
+| A | Action diagnosis — primary reason for the contact | Always for outcomes |
+| B | Secondary diagnosis — additional condition present | Always for outcomes |
+| G | Underlying condition — background comorbidity | Only for baseline comorbidity |
+
+```r
+# For outcomes and exclusion diagnoses:
+filter(c_diagtype %in% c("A", "B"))
+
+# For baseline comorbidity (NMI, Charlson):
+filter(c_diagtype %in% c("A", "B", "G"))
+```
+
+---
+
+## Retracted diagnoses in LPR3 (`senere_afkraeftet`)
+
+LPR3 flags diagnoses that have been retracted. The standard filter:
+
+```r
+filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
+```
+
+The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns `NA` — not `TRUE`. A filter treats `NA` as `FALSE` and *drops* the row. `filter(senere_afkraeftet != "Ja")` *alone* would therefore remove all diagnoses that have no retraction marker at all (i.e. `NA` fields) — even though they are definitely not retracted. `is.na(...)` fixes this: "keep the row if the field is `NA` OR if it is not `"Ja"`". The filter thus retains uncategorised diagnoses, which is the safest assumption.
+
+---
+
+## Next steps
+
+You now know LPR's structure and the most important pitfalls. The next step is to extract the diagnoses with code:
+
+→ [Phase 9b — Extract from LPR](09b_udtraek_fra_lpr.qmd)
+
+## See also
+
+- [Phase 15 — Register reference](15d_register_reference.qmd) — confirmed column names for all LPR registers
+- [Phase 15 — Pitfalls](15c_dst_faldgruber.qmd) — known issues with LPR on DST
+
+### External resources on LPR3 and the 2019 transition
+
+- [ctpteam/DST — "Guide to LPR3"](https://github.com/ctpteam/DST) — institutional guide to the LPR3 structure
+- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) — peer-reviewed, thorough example of diagnostic stability across the LPR2→LPR3 transition (methodological inspiration, not code for reuse)

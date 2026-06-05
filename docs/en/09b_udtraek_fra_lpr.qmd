@@ -1,17 +1,16 @@
 ---
-title: "Hospital contacts (LPR)"
-subtitle: "LPR2 and LPR3 combined — diagnoses and ICD codes"
+title: "Extract from LPR"
+subtitle: "Practical recipes — the two approaches, helper functions and integration with the cohort"
 date: last-modified
 ---
 
-The National Patient Register (LPR) is the source of diagnoses and hospital contacts.
-It covers all public hospital admissions and outpatient contacts in Denmark.
+This page shows how to extract diagnoses from LPR with code. It builds on the structure from [Phase 9a — Understand LPR](09a_forstaa_lpr.qmd): the periods (LPR2/LPR3), the D-prefix, the diagnosis types (A/B/G) and the filter for retracted diagnoses. Read that page first if you haven't already.
 
-You use the same extraction pattern as in [Phase 5](05_universelle-moenster.qmd) and [Phase 6](06_foerste-udtraek.qmd) — but LPR is more complex than most registers, because it changed format in 2019 and is split into somatic and psychiatric tables. This page shows how to handle that. It is the most important and probably the most complex part of the guide.
+You use the same extraction pattern as in [Phase 5](05_universelle-moenster.qmd) and [Phase 6](06_foerste-udtraek.qmd) — just applied to LPR's two generations. It is the most important and probably the most complex part of the guide.
 
 ::: {.callout-note}
 **This page and Phase 10 are circularly dependent — this is deliberate.**
-To build your cohort (Phase 10) you need to know how to extract diagnosis codes and procedures from LPR. To extract diagnosis codes from LPR (this page) you need a cohort. We resolve it as follows: **Phase 9 teaches you the extraction pattern** — we assume you already have a cohort. **[Phase 10](10_byg-din-kohorte.qmd) shows you how to build that cohort** using exactly the pattern you just learned. Read the phases in order, and come back to the Phase 9 code when your cohort is ready.
+To build your cohort (Phase 10) you need to know how to extract diagnosis codes and procedures from LPR. To extract diagnosis codes from LPR (this page) you need a cohort. We resolve it as follows: **this page teaches you the extraction pattern** — we assume you already have a cohort. **[Phase 10](10_byg-din-kohorte.qmd) shows you how to build that cohort** using exactly the pattern you just learned. Read the phases in order, and come back to the code here when your cohort is ready.
 :::
 
 ::: {.callout-note}
@@ -21,95 +20,6 @@ The code examples use the column names DST's parquet registers typically have. Y
 ::: {.callout-note}
 The code uses `inner_join()` and `bind_rows()`. If these are new concepts, they are explained in detail in [Phase 11 — Joins and pivots](11_data-manipulation.qmd) — you can follow the code here and return to Phase 11 afterwards.
 :::
-
----
-
-## LPR is split into two periods
-
-In March 2019 LPR changed format. Studies covering the period across 2019 must query **both systems** and combine them.
-
-| | LPR2 somatic | LPR2 psychiatric | LPR3 |
-|---|---|---|---|
-| **Period** | up to March 2019 | up to March 2019 | March 2019 and onwards |
-| **Contact register** | `lpr_adm` | `t_psyk_adm` | `lpr_a_kontakt` |
-| **Diagnosis register** | `lpr_diag` | `t_psyk_diag` | `lpr_a_diagnose` |
-| **Covers psychiatry** | No | Yes | Yes (both combined) |
-| **Join key** | `recnum` | `k_recnum` / `v_recnum`¹ | `dw_ek_kontakt` |
-| **Date column** | `d_inddto` (Date) | `d_inddto` (Date) | `kont_starttidspunkt` (datetime)² |
-| **pnr column** | `pnr` | `v_cpr`³ | `pnr` |
-| **Diagnosis code** | `c_diag` | `c_diag` | `diag_kode` |
-| **Diagnosis type** | `c_diagtype` | `c_diagtype` | `diag_kode_type` |
-| **Contact type** | `c_pattype` (`"0"` = inpatient) | `c_pattype` | `kont_type` (`"ALCA00"` = inpatient) |
-
-¹ `t_psyk_adm` has `k_recnum`; `t_psyk_diag` has `v_recnum` — rename both to `recnum` before joining.
-² datetime format — convert with `as.Date()`.
-³ Rename: `rename(pnr = v_cpr)`.
-
-::: {.callout-note}
-**Psychiatry: separate in LPR2, combined in LPR3**
-Before 2019, psychiatric diagnoses (F-codes: dementia, depression etc.) were stored in separate registers (`t_psyk_adm`, `t_psyk_diag`). The structure resembles somatic LPR2, but column names differ — see the table footnotes above. From March 2019, LPR3 combines both: somatic and psychiatric contacts and diagnoses are in the same tables, and no separate psychiatric query is needed.
-:::
-
-```{mermaid}
-gantt
-    title LPR registers
-    dateFormat  YYYY
-    axisFormat  %Y
-    section LPR2 somatic
-    lpr_adm + lpr_diag               :done,   1977, 2019
-    section LPR2 psychiatric
-    t_psyk_adm + t_psyk_diag         :done,   1995, 2019
-    section LPR3 combined
-    lpr_a_kontakt + lpr_a_diagnose   :active, 2019, 2027
-```
-
----
-
-## ICD codes and the D-prefix
-
-**ICD-10** (International Classification of Diseases, 10th revision) is the WHO's international system for classifying diseases and conditions. All hospital diagnoses in Denmark are coded with ICD-10, e.g. `G30` for Alzheimer's disease and `F00` for dementia in Alzheimer's.
-
-All ICD-10 codes in DST have a prepended `"D"`:
-`"DG30"` (Alzheimer's), `"DF00"` (dementia), `"DI21"` (acute myocardial infarction).
-
-**Strip the D-prefix before comparison** — it makes code more readable and easier to reuse:
-
-```r
-mutate(icd3 = substr(c_diag, 2, 4))   # "DG30" → "G30" (3-digit code)
-mutate(icd4 = substr(c_diag, 2, 5))   # "DI219" → "I219" (4-digit code)
-```
-
-`substr(x, start, stop)` keeps characters from position `start` up to and including `stop` (counted from 1). `substr(c_diag, 2, 4)` skips position 1 (the D-prefix) and keeps characters 2, 3 and 4: `"DG30"` → `"G30"`. Use 2–5 for 4-digit codes: `"DI219"` → `"I219"`.
-
----
-
-## Diagnosis types: A, B and G
-
-| Code | Meaning | When to include |
-|---|---|---|
-| A | Action diagnosis — primary reason for the contact | Always for outcomes |
-| B | Secondary diagnosis — additional condition present | Always for outcomes |
-| G | Underlying condition — background comorbidity | Only for baseline comorbidity |
-
-```r
-# For outcomes and exclusion diagnoses:
-filter(c_diagtype %in% c("A", "B"))
-
-# For baseline comorbidity (NMI, Charlson):
-filter(c_diagtype %in% c("A", "B", "G"))
-```
-
----
-
-## Retracted diagnoses in LPR3 (`senere_afkraeftet`)
-
-LPR3 flags diagnoses that have been retracted. The standard filter:
-
-```r
-filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
-```
-
-The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns `NA` — not `TRUE`. A filter treats `NA` as `FALSE` and *drops* the row. `filter(senere_afkraeftet != "Ja")` *alone* would therefore remove all diagnoses that have no retraction marker at all (i.e. `NA` fields) — even though they are definitely not retracted. `is.na(...)` fixes this: "keep the row if the field is `NA` OR if it is not `"Ja"`". The filter thus retains uncategorised diagnoses, which is the safest assumption.
 
 ---
 
@@ -319,7 +229,6 @@ Exclusion of prevalent cases — persons who already had the diagnosis before in
 :::
 
 </details>
-:::
 
 ---
 
@@ -433,11 +342,7 @@ You have now extracted diagnoses from two LPR generations. Next steps are to sha
 
 ## See also
 
+- [Phase 9a — Understand LPR](09a_forstaa_lpr.qmd) — structure, periods, D-prefix and diagnosis types
+- [Phase 6 — First extraction](06_foerste-udtraek.qmd) — step-by-step introduction to open_dataset, collect and saveRDS
 - [Phase 15 — Register reference](15d_register_reference.qmd) — confirmed column names for all LPR registers
 - [Phase 15 — Pitfalls](15c_dst_faldgruber.qmd) — known issues with LPR on DST
-- [Phase 6 — First extraction](06_foerste-udtraek.qmd) — step-by-step introduction to open_dataset, collect and saveRDS
-
-### External resources on LPR3 and the 2019 transition
-
-- [ctpteam/DST — "Guide to LPR3"](https://github.com/ctpteam/DST) — institutional guide to the LPR3 structure
-- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) — peer-reviewed, thorough example of diagnostic stability across the LPR2→LPR3 transition (methodological inspiration, not code for reuse)

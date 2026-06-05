@@ -1,17 +1,16 @@
 ---
-title: "Hospitalskontakter (LPR)"
-subtitle: "LPR2 og LPR3 kombineret — diagnoser og ICD-koder"
+title: "Udtræk fra LPR"
+subtitle: "Praktiske opskrifter — de to tilgange, helper-funktioner og integration med kohorten"
 date: last-modified
 ---
 
-Det Nationale Patientregister (LPR) er kilden til diagnoser og hospitalskontakter.
-Det dækker alle offentlige hospitalsindlæggelser og ambulante kontakter i Danmark.
+Denne side viser, hvordan du trækker diagnoser ud af LPR med kode. Den bygger på strukturen fra [Fase 9a — Forstå LPR](09a_forstaa_lpr.qmd): perioderne (LPR2/LPR3), D-præfikset, diagnosetyperne (A/B/G) og filtret for tilbagekaldte diagnoser. Læs den side først, hvis du ikke allerede har.
 
-Du bruger det samme udtræksmønster som i [Fase 5](05_universelle-moenster.qmd) og [Fase 6](06_foerste-udtraek.qmd) — men LPR er mere komplekst end de fleste registre, fordi det skiftede format i 2019 og er splittet i somatiske og psykiatriske tabeller. Denne side viser, hvordan du håndterer det. Det er den vigtigste og nok den mest komplekse del af guiden.
+Du bruger det samme udtræksmønster som i [Fase 5](05_universelle-moenster.qmd) og [Fase 6](06_foerste-udtraek.qmd) — bare anvendt på LPR's to generationer. Det er den vigtigste og nok den mest komplekse del af guiden.
 
 ::: {.callout-note}
 **Denne side og Fase 10 hænger cirkulært sammen — det er bevidst.**
-For at bygge din kohorte (Fase 10) skal du vide, hvordan man udtrækker diagnosekoder og procedurer fra LPR. For at udtrække diagnosekoder fra LPR (denne side) har du brug for en kohorte. Vi løser det sådan: **Fase 9 lærer dig udtræksmønstret** — vi antager at du allerede har en kohorte. **[Fase 10](10_byg-din-kohorte.qmd) viser dig, hvordan du bygger den kohorte** ved at bruge præcis det mønster du lige har lært. Læs faserne i rækkefølge, og kom tilbage til Fase 9-koden, når du har din kohorte klar.
+For at bygge din kohorte (Fase 10) skal du vide, hvordan man udtrækker diagnosekoder og procedurer fra LPR. For at udtrække diagnosekoder fra LPR (denne side) har du brug for en kohorte. Vi løser det sådan: **denne side lærer dig udtræksmønstret** — vi antager at du allerede har en kohorte. **[Fase 10](10_byg-din-kohorte.qmd) viser dig, hvordan du bygger den kohorte** ved at bruge præcis det mønster du lige har lært. Læs faserne i rækkefølge, og kom tilbage til koden her, når du har din kohorte klar.
 :::
 
 ::: {.callout-note}
@@ -21,95 +20,6 @@ Kodeeksemplerne bruger de kolonnenavne DST's parquet-registre typisk har. Dine k
 ::: {.callout-note}
 Koden bruger `inner_join()` og `bind_rows()`. Er det nye begreber, er de forklaret grundigt i [Fase 11 — Joins og pivots](11_data-manipulation.qmd) — du kan sagtens følge koden her og vende tilbage til Fase 11 bagefter.
 :::
-
----
-
-## LPR er opdelt i to perioder
-
-I marts 2019 skiftede LPR format. Studier der dækker perioden på tværs af 2019 skal forespørge **begge systemer** og kombinere dem.
-
-| | LPR2 somatisk | LPR2 psykiatrisk | LPR3 |
-|---|---|---|---|
-| **Periode** | frem til marts 2019 | frem til marts 2019 | marts 2019 og frem |
-| **Kontaktregister** | `lpr_adm` | `t_psyk_adm` | `lpr_a_kontakt` |
-| **Diagnoseregister** | `lpr_diag` | `t_psyk_diag` | `lpr_a_diagnose` |
-| **Dækker psykiatri** | Nej | Ja | Ja (begge samlet) |
-| **Join-nøgle** | `recnum` | `k_recnum` / `v_recnum`¹ | `dw_ek_kontakt` |
-| **Datokolonne** | `d_inddto` (Date) | `d_inddto` (Date) | `kont_starttidspunkt` (datetime)² |
-| **pnr-kolonne** | `pnr` | `v_cpr`³ | `pnr` |
-| **Diagnosekode** | `c_diag` | `c_diag` | `diag_kode` |
-| **Diagnosetype** | `c_diagtype` | `c_diagtype` | `diag_kode_type` |
-| **Kontakttype** | `c_pattype` (`"0"` = indlagt) | `c_pattype` | `kont_type` (`"ALCA00"` = indlagt) |
-
-¹ `t_psyk_adm` har `k_recnum`; `t_psyk_diag` har `v_recnum` — omdøb begge til `recnum` inden join.
-² datetime-format — konverter med `as.Date()`.
-³ Omdøb: `rename(pnr = v_cpr)`.
-
-::: {.callout-note}
-**Psykiatri: separat i LPR2, samlet i LPR3**
-Inden 2019 var psykiatriske diagnoser (F-koder: demens, depression mv.) gemt i separate registre (`t_psyk_adm`, `t_psyk_diag`). Strukturen ligner somatisk LPR2, men kolonnenavnene afviger — se tabelnoterne ovenfor. Fra marts 2019 samler LPR3 begge: somatiske og psykiatriske kontakter og diagnoser indgår i de samme tabeller, og du behøver ikke en særskilt psykiatrisk forespørgsel.
-:::
-
-```{mermaid}
-gantt
-    title LPR-registre
-    dateFormat  YYYY
-    axisFormat  %Y
-    section LPR2 somatisk
-    lpr_adm + lpr_diag               :done,   1977, 2019
-    section LPR2 psykiatrisk
-    t_psyk_adm + t_psyk_diag         :done,   1995, 2019
-    section LPR3 samlet
-    lpr_a_kontakt + lpr_a_diagnose   :active, 2019, 2027
-```
-
----
-
-## ICD-koder og D-præfikset
-
-**ICD-10** (International Classification of Diseases, 10. revision) er WHO's internationale system til klassifikation af sygdomme og tilstande. Alle hospitaldiagnoser i Danmark kodes med ICD-10, fx `G30` for Alzheimers sygdom og `F00` for demens ved Alzheimers.
-
-Alle ICD-10-koder i DST har et foranstillet `"D"`:
-`"DG30"` (Alzheimers), `"DF00"` (demens), `"DI21"` (akut myokardieinfarkt).
-
-**Strip typisk D-præfikset inden sammenligning** — det giver mere læsbar kode og genbrug til mange udfald:
-
-```r
-mutate(icd3 = substr(c_diag, 2, 4))   # "DG30" → "G30" (3-tegns kode)
-mutate(icd4 = substr(c_diag, 2, 5))   # "DI219" → "I219" (4-tegns kode)
-```
-
-`substr(x, start, stop)` beholder tegnene fra position `start` til og med `stop` (talt fra 1). `substr(c_diag, 2, 4)` springer position 1 (D-præfikset) over og beholder tegn 2, 3 og 4: `"DG30"` → `"G30"`. Brug 2–5 til 4-tegns koder: `"DI219"` → `"I219"`.
-
----
-
-## Diagnosetyper: A, B og G
-
-| Kode | Betydning | Hvornår inkluderes den |
-|---|---|---|
-| A | Aktionsdiagnose — primær årsag til kontakten | Altid til udfald |
-| B | Bidiagnose — yderligere tilstand til stede | Altid til udfald |
-| G | Grundmorbus — underliggende baggrundstilstand | Kun til baseline-komorbiditet |
-
-```r
-# Til udfald og eksklusionsdiagnoser:
-filter(c_diagtype %in% c("A", "B"))
-
-# Til baseline-komorbiditet (NMI, Charlson):
-filter(c_diagtype %in% c("A", "B", "G"))
-```
-
----
-
-## Tilbagekaldte diagnoser i LPR3 (`senere_afkraeftet`)
-
-LPR3 markerer diagnoser der er tilbagekaldt. Standardfiltret:
-
-```r
-filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
-```
-
-`is.na()`-delen er bevidst. R's standardadfærd er: `NA != "Ja"` returnerer `NA` — ikke `TRUE`. Et filter betragter `NA` som `FALSE` og *dropper* rækken. `filter(senere_afkraeftet != "Ja")` *alene* ville derfor fjerne alle diagnoser der slet ikke har en tilbagekaldelsesmarkering (dvs. `NA`-felter) — selvom de bestemt ikke er tilbagekaldt. `is.na(...)` retter det: "behold rækken hvis feltet er `NA` ELLER hvis det ikke er `"Ja"`". Filtret beholder dermed ukategoriserede diagnoser, hvilket er den sikreste antagelse.
 
 ---
 
@@ -432,11 +342,7 @@ Du har nu trukket diagnoser fra to LPR-generationer. Næste skridt er at forme o
 
 ## Se også
 
+- [Fase 9a — Forstå LPR](09a_forstaa_lpr.qmd) — struktur, perioder, D-præfiks og diagnosetyper
+- [Fase 6 — Første udtræk](06_foerste-udtraek.qmd) — trin-for-trin introduktion til open_dataset, collect og saveRDS
 - [Fase 15 — Registerreference](15d_register_reference.qmd) — bekræftede kolonnenavne for alle LPR-registre
 - [Fase 15 — Faldgruber](15c_dst_faldgruber.qmd) — kendte problemer med LPR på DST
-- [Fase 6 — Første udtræk](06_foerste-udtraek.qmd) — trin-for-trin introduktion til open_dataset, collect og saveRDS
-
-### Eksternt om LPR3 og 2019-overgangen
-
-- [ctpteam/DST — "Guide to LPR3"](https://github.com/ctpteam/DST) — institutionel guide til LPR3-strukturen
-- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) — peer-reviewed, gennemarbejdet eksempel på diagnostisk stabilitet hen over LPR2→LPR3-overgangen (metodisk inspiration, ikke kode til genbrug)

@@ -30,7 +30,7 @@ der nu er erstattet af sidebar-navigationens fase-struktur.
 - [Funktioner — oversigt](14a_guide_til_funktioner.qmd) — filter, select, mutate, joins
 - [Joins og pivots](10b_joins-og-pivots.qmd) — kobl datasæt sammen
 - [Formateringstabeller](14b_formateringstabeller.qmd) — oversæt koder til tekst
-- [Hospitalskontakter (LPR)](09_hospitalskontakter-lpr.qmd) — LPR2 + LPR3, ICD-koder
+- [Hospitalskontakter (LPR)](09a_forstaa_lpr.qmd) — LPR2 + LPR3, ICD-koder
 - [Socioøkonomiske variable](11a_socioekonomiske-variable.qmd) — uddannelse, indkomst, beskæftigelse
 
 **Pakker og algoritmer**
