@@ -117,22 +117,22 @@ filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
 
 Vælg **én** af to tilgange afhængigt af dit studie:
 
-| | Tilgang 2 — direkte udtræk | Tilgang 1 — `alle_dx` |
+| | Tilgang 1 — direkte udtræk | Tilgang 2 — `alle_dx` |
 |---|---|---|
-| **Bedst når** | Du har **ét enkelt udfald** | Du har **flere udfald** fra LPR |
+| **Bedst når** | Du har **et mindre antal udfald** | Du har **flere udfald** fra LPR |
 | **Workflow** | Hent specifikke koder → Ekskluder → færdig | Hent alle → Ekskluder → filtrer per udfald |
 | **Fordel** | Simplere og hurtigere ved enkeltudtræk | LPR forespørges kun én gang; genbrug til alle udfald |
 
-**Tilgang 2** er bedst ved ét enkelt udfald. Du filtrerer på specifikke ICD-koder direkte i `filter()`-steget *inden* `collect()`. DuckDB/Arrow sender filteret ned til lagringsformatet — kun relevante rækker hentes i RAM.
+**Tilgang 1** er bedst ved et mindre antal diagnoser du vil trække ud. Du filtrerer på specifikke ICD-koder direkte i `filter()`-steget *inden* `collect()`. DuckDB/Arrow sender filteret ned til lagringsformatet — kun relevante rækker hentes i RAM.
 
-**Tilgang 1** er bedst når dit studie har flere udfald — fx hændelsesdato for diabetes, hjertesygdom og død. Du forespørger LPR én enkelt gang og bygger `alle_dx`: en fælles tabel med alle A- og B-diagnoser. For hvert nyt udfald filtrerer du blot `alle_dx` på koderne — den eneste linje du ændrer er kode-listen.
+**Tilgang 2** er bedst når du har mange udfald du vil trække ud. Du forespørger LPR én enkelt gang og bygger `alle_dx`: en fælles tabel med alle A- og B-diagnoser. For hvert nyt udfald filtrerer du blot `alle_dx` på koderne — den eneste linje du ændrer er kode-listen.
 
 ::: {.callout-note}
 Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. `kohort` er data.frame med `pnr` og `index_date` per person — se [Fase 10](10_byg-din-kohorte.qmd). Er registrene i SAS, konverter dem først: [Fase 4 — SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
 :::
 
 <details>
-<summary>Tilgang 2 — hent bestemte diagnoser direkte (start her ved ét udfald)</summary>
+<summary>Tilgang 1 — hent bestemte diagnoser direkte (start her ved ét udfald)</summary>
 
 Filtrer på specifikke koder **inden** `collect()`. Eksemplet henter diabetes mellitus (E10–E14) — erstat `KODER_REGEX` med dine egne koder.
 
@@ -191,7 +191,7 @@ KODER_REGEX <- paste0("^D(", paste(koder, collapse = "|"), ")")
 :::
 
 ::: {.callout-note}
-**Har du F-koder (fx demens, depression)?** Tilpas regex til at inkludere dem, fx `"^DE1[0-4]|^DF0[0-3]|^DG30"`, og tilføj psykiatrisk LPR2 — se Tilgang 1 nedenfor for kode.
+**Har du F-koder (fx demens, depression)?** Tilpas regex til at inkludere dem, fx `"^DE1[0-4]|^DF0[0-3]|^DG30"`, og tilføj psykiatrisk LPR2 — se Tilgang 2 nedenfor for kode.
 :::
 
 <details>
@@ -220,7 +220,7 @@ Den er kortere, men har tre faldgruber på DST:
 </details>
 
 <details>
-<summary>Tilgang 1 — hent alle diagnoser + filtrer udfald (ved flere udfald)</summary>
+<summary>Tilgang 2 — hent alle diagnoser + filtrer udfald (ved flere udfald)</summary>
 
 **Del 1 — byg `alle_dx`**
 
@@ -329,7 +329,7 @@ Inden du udtrækker nye hændelser, skal du ekskludere personer der allerede hav
 ```r
 EKSKL_KODER <- c("G30", "F00", "F01", "F02", "F03")   # skift til dine egne eksklusionskoder
 
-# diagnoser = alle_dx (Tilgang 1) eller dit direkte udtræk (Tilgang 2)
+# diagnoser = alle_dx (Tilgang 2) eller dit direkte udtræk (Tilgang 1)
 praevalente <- diagnoser %>%
   filter(icd3 %in% EKSKL_KODER) %>%
   inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%

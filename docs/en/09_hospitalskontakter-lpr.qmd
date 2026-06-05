@@ -117,22 +117,22 @@ The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns
 
 Choose **one** of two approaches depending on your study:
 
-| | Approach 2 — direct extraction | Approach 1 — `alle_dx` |
+| | Approach 1 — direct extraction | Approach 2 — `alle_dx` |
 |---|---|---|
-| **Best when** | You have **one single outcome** | You have **multiple outcomes** from LPR |
+| **Best when** | You have **fewer outcomes** | You have **multiple outcomes** from LPR |
 | **Workflow** | Fetch specific codes → Exclude → done | Fetch all → Exclude → filter per outcome |
 | **Advantage** | Simpler and faster for single-outcome studies | LPR queried only once; reused for all outcomes |
 
-**Approach 2** is best for a single outcome. Filter on specific ICD codes directly in the `filter()` step *before* `collect()`. DuckDB/Arrow pushes the filter down to the storage layer — only matching rows are loaded into RAM.
+**Approach 1** is best for a smaller number of outcomes. Filter on specific ICD codes directly in the `filter()` step *before* `collect()`. DuckDB/Arrow pushes the filter down to the storage layer — only matching rows are loaded into RAM.
 
-**Approach 1** is best when your study has multiple outcomes — e.g. date of diabetes, heart disease and death. You query LPR once and build `alle_dx`: a shared table with all A and B diagnoses. For each new outcome, filter `alle_dx` on the relevant codes — the only line you change is the code list.
+**Approach 2** is best when your study has multiple outcomes. You query LPR once and build `alle_dx`: a shared table with all A and B diagnoses. For each new outcome, filter `alle_dx` on the relevant codes — the only line you change is the code list.
 
 ::: {.callout-note}
 The examples require parquet files and a completed study population. `kohort` is the data.frame with `pnr` and `index_date` per person — see [Phase 10](10_byg-din-kohorte.qmd). Adjust paths to your project.
 :::
 
 <details>
-<summary>Approach 2 — fetch specific diagnoses directly (start here for one outcome)</summary>
+<summary>Approach 1 — fetch specific diagnoses directly (start here for one outcome)</summary>
 
 Filter on specific codes **before** `collect()`. The example fetches diabetes mellitus (E10–E14) — replace `CODES_REGEX` with your own codes.
 
@@ -191,7 +191,7 @@ CODES_REGEX <- paste0("^D(", paste(codes, collapse = "|"), ")")
 :::
 
 ::: {.callout-note}
-**Do you have F-codes (e.g. dementia, depression)?** Extend the regex to include them, e.g. `"^DE1[0-4]|^DF0[0-3]|^DG30"`, and add psychiatric LPR2 — see Approach 1 below for the code.
+**Do you have F-codes (e.g. dementia, depression)?** Extend the regex to include them, e.g. `"^DE1[0-4]|^DF0[0-3]|^DG30"`, and add psychiatric LPR2 — see Approach 2 below for the code.
 :::
 
 <details>
@@ -220,7 +220,7 @@ It is shorter but has three pitfalls on DST data:
 </details>
 
 <details>
-<summary>Approach 1 — fetch all diagnoses + filter outcome (for multiple outcomes)</summary>
+<summary>Approach 2 — fetch all diagnoses + filter outcome (for multiple outcomes)</summary>
 
 **Part 1 — build `alle_dx`**
 
@@ -329,7 +329,7 @@ Before extracting new events, you must exclude persons who already had the diagn
 ```r
 EXCL_CODES <- c("G30", "F00", "F01", "F02", "F03")   # change to your own exclusion codes
 
-# diagnoses = alle_dx (Approach 1) or your direct extraction (Approach 2)
+# diagnoses = alle_dx (Approach 2) or your direct extraction (Approach 1)
 prevalent <- diagnoses %>%
   filter(icd3 %in% EXCL_CODES) %>%
   inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%
