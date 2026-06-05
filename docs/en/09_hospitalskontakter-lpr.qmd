@@ -158,9 +158,15 @@ If you want to extract **baseline comorbidity** instead (diagnoses *before* stud
 
 ---
 
-## Phase 1 — fetch all diagnoses for your cohort
+## Fetch diagnoses from LPR — choose your approach
 
-The code to build `alle_dx`.
+Choose **one** of two approaches depending on your study:
+
+| | Approach 1 — `alle_dx` | Approach 2 — direct extraction |
+|---|---|---|
+| **Best when** | You have **multiple outcomes** from LPR | You have **one single outcome** |
+| **Workflow** | Phase 1 → Exclude → Phase 2 (see below) | One code block — done |
+| **Advantage** | LPR queried only once; reused for all outcomes | Simpler; filters directly at the storage layer |
 
 ::: {.callout-note}
 The example requires registers available as parquet files and uses `open_dataset()` with generic paths — adjust paths to your project. If your registers are still only in SAS format, convert them first: [Phase 4 — SAS to parquet](04_filformater.qmd#convert-sas-to-parquet). To practise the code locally with synthetic data, see the **Try it yourself** fold-out below.
@@ -185,7 +191,7 @@ DST stores all ICD-10 codes with a `D`-prefix: `DG30` for Alzheimer's, `DE11` fo
 :::
 
 <details>
-<summary>Code example: fetch all diagnoses for your cohort (alle_dx)</summary>
+<summary>Approach 1 — fetch all diagnoses for your cohort (alle_dx)</summary>
 
 Builds one table with **all** A and B diagnoses for your cohort without filtering on specific codes. Reuse `alle_dx` for all outcomes — see Phase 2 below. Best when you have multiple outcomes from LPR.
 
@@ -239,7 +245,7 @@ alle_dx <- bind_rows(lpr2_dx, lpr3_dx)
 </details>
 
 <details>
-<summary>Code example: fetch specific diagnoses directly</summary>
+<summary>Approach 2 — fetch specific diagnoses directly (skip alle_dx)</summary>
 
 Filter on specific codes **before** `collect()` — DuckDB/Arrow pushes the filter down to the storage format and only fetches matching rows. Most efficient for single-outcome extractions. Uses D-prefix directly in the regex.
 
@@ -309,6 +315,10 @@ CODES_REGEX <- paste0("^D(", paste(codes, collapse = "|"), ")")
 ---
 
 ## Exclude prevalent cases
+
+::: {.callout-note}
+This step is part of **Approach 1** (two-phase strategy). If you are using Approach 2 (direct extraction), you can skip this section and Phase 2 below.
+:::
 
 Before extracting new events, you must exclude persons who already had the diagnosis *before* index date — otherwise they count as new cases even though they are not.
 
