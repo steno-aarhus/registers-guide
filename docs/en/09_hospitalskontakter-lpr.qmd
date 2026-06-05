@@ -291,18 +291,14 @@ alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
 **Using duckplyr?** `union_all()` combines tables before `collect()` and requires identical column names and types. Rename LPR3 columns to match the LPR2 format before combining — see the onboarding document for an example.
 :::
 
-→ **Complete "Exclude prevalent cases" below, then continue with Part 2.**
-
----
-
-**Part 2 — filter your specific outcome** *(requires `cohort_clean` from the Exclude step)*
+**Filter your extracted table for specific outcomes**
 
 ```r
 CODES <- c("G30", "F00", "F01", "F02", "F03")   # dementia — change to your outcome
 
 outcome <- alle_dx %>%
   filter(icd3 %in% CODES) %>%
-  inner_join(cohort_clean %>% select(pnr, index_date), by = "pnr") %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%   # use cohort_clean after exclusion (Phase 10 Step 2)
   filter(date_contact > index_date) %>%   # post-index; use < for baseline covariate
   group_by(pnr) %>%
   arrange(date_contact) %>%
@@ -311,47 +307,18 @@ outcome <- alle_dx %>%
   select(pnr, event_date = date_contact)
 
 # Join to cohort — NA = no event (censored at end of study)
-result <- cohort_clean %>%
+result <- cohort %>%
   select(pnr) %>%
   left_join(outcome, by = "pnr")
 
 saveRDS(result, "datasets/extract_dementia.rds")   # change filename for each new outcome
 ```
 
+::: {.callout-note}
+Exclusion of prevalent cases — persons who already had the diagnosis before index date — happens in [Phase 10, Step 2](10_byg-din-kohorte.qmd). Use `cohort_clean` instead of `cohort` in the code above after completing that step.
+:::
+
 </details>
-
----
-
-## Exclude prevalent cases
-
-Before extracting new events, you must exclude persons who already had the diagnosis *before* index date — otherwise they count as new cases even though they are not.
-
-```r
-EXCL_CODES <- c("G30", "F00", "F01", "F02", "F03")   # change to your own exclusion codes
-
-# diagnoses = alle_dx (Approach 2) or your direct extraction (Approach 1)
-prevalent <- diagnoses %>%
-  filter(icd3 %in% EXCL_CODES) %>%
-  inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact < index_date) %>%
-  distinct(pnr)
-
-cat("Cohort before exclusion:  ", nrow(kohort),                       "\n")
-cohort_clean <- kohort %>%
-  anti_join(prevalent, by = "pnr")
-cat("Cohort after exclusion:   ", nrow(cohort_clean),                 "\n")
-cat("Excluded:                 ", nrow(kohort) - nrow(cohort_clean),  "\n")
-```
-
-::: {.callout-tip}
-**Lookback period:** Consider restricting `date_contact < index_date` further — e.g. to only the 5 years before index — to avoid false exclusions based on very old diagnoses. This depends on your definition of "prevalent".
-
-With a 5-year lookback (replace `365*5` with your desired period):
-
-```r
-filter(date_contact >= index_date - 365*5,   # earliest boundary: 5 years before index
-       date_contact < index_date)             # ONLY pre-index diagnoses
-```
 :::
 
 ---

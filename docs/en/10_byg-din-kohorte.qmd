@@ -108,7 +108,7 @@ nrow(exposed)                                              # number of unique op
 ```
 
 ::: {.callout-tip}
-`exposed` contains only the operated individuals. The full cohort (exposed + comparator cohort) is built in step 4 and saved as `cohort`. It is `cohort` — not `exposed` — that you use as `cohort_pnrs` in the other phases.
+`exposed` contains only the operated individuals. The full cohort (exposed + comparator cohort) is built in step 5 and saved as `cohort`. It is `cohort` — not `exposed` — that you use as `cohort_pnrs` in the other phases.
 :::
 
 </details>
@@ -148,13 +148,51 @@ exposed <- lpr_adm %>%
 ::: {.callout-tip}
 **What should you do after step 1?**
 
-- **Prevalence study** — you now have your study population with an index date. Skip steps 2–4 and go directly to [Phase 6 — Extract covariates](06_foerste-udtraek.qmd) and [Phase 11 — Assemble the dataset](11_data-manipulation.qmd).
-- **Cohort study or nested case-control** — continue with steps 2–4 below.
+- **Prevalence study** — you now have your study population with an index date. Skip steps 2–6 and go directly to [Phase 6 — Extract covariates](06_foerste-udtraek.qmd) and [Phase 11 — Assemble the dataset](11_data-manipulation.qmd).
+- **Cohort study or nested case-control** — continue with steps 2–6 below.
 
-*Note for case-control:* your "exposed" group in step 1 is your **cases** (those who experienced the outcome, identified from LPR), not an exposure. Steps 2–4 then sample **controls** — people without the outcome who were at risk at the time each case received their diagnosis.
+*Note for case-control:* your "exposed" group in step 1 is your **cases** (those who experienced the outcome, identified from LPR), not an exposure. Steps 3–6 then sample **controls** — people without the outcome who were at risk at the time each case received their diagnosis.
 :::
 
-## Step 2 — Build matchpool from BEF
+## Step 2 — Exclude prevalent cases {.step-heading}
+
+Exclude persons who already had the diagnosis *before* index date — otherwise they count as new cases even though they are not. This step must happen **before** matching, so the comparator pool is not sampled from a contaminated source.
+
+You need your extracted LPR diagnosis table from [Phase 9](09_hospitalskontakter-lpr.qmd) — either `alle_dx` or your direct extraction.
+
+```r
+EXCL_CODES <- c("G30", "F00", "F01", "F02", "F03")   # change to your own exclusion codes
+
+# diagnoses = alle_dx (Approach 2) or your direct extraction (Approach 1) from Phase 9
+prevalent <- diagnoses %>%
+  filter(icd3 %in% EXCL_CODES) %>%
+  inner_join(exposed %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact < index_date) %>%
+  distinct(pnr)
+
+cat("Exposed before exclusion: ", nrow(exposed),                        "\n")
+exposed_excl <- exposed %>%
+  anti_join(prevalent, by = "pnr")
+cat("Exposed after exclusion:  ", nrow(exposed_excl),                   "\n")
+cat("Excluded:                 ", nrow(exposed) - nrow(exposed_excl),   "\n")
+```
+
+::: {.callout-tip}
+**Lookback period:** Consider restricting `date_contact < index_date` further — e.g. only the 5 years before index — to avoid false exclusions based on very old diagnoses.
+
+```r
+filter(date_contact >= index_date - 365*5,
+       date_contact < index_date)
+```
+:::
+
+::: {.callout-note}
+Prevalence exclusion also applies to the **matchpool** (step 3) — exclude people with prevalent outcome from the pool too, otherwise your exposed are matched to persons who were not actually at risk.
+:::
+
+---
+
+## Step 3 — Build matchpool from BEF
 
 Comparator candidates are drawn from BEF — everyone in the population not yet exposed. Add the variables you want to match on (birth year, sex, calendar year etc.).
 
@@ -179,11 +217,11 @@ nrow(matchpool)                                             # number of potentia
 
 ---
 
-## Step 3 — Apply inclusion criteria BEFORE sampling
+## Step 4 — Apply inclusion criteria BEFORE sampling
 
 ::: {.callout-important}
 **Inclusion criteria must be applied BEFORE matching — not after.**
-Exclusion of e.g. persons under 18, not residing in Denmark, or with prevalent outcome must happen on the **matchpool** before comparators are sampled. Excluding after matching introduces systematic bias, because you change the population that the exposed are matched to.
+Exclusion of e.g. persons under 18 or not residing in Denmark must happen on the **matchpool** before comparators are sampled. Excluding after matching introduces systematic bias, because you change the population that the exposed are matched to.
 
 See: [Lund et al., *Clinical Epidemiology* 2015](https://doi.org/10.2147/CLEP.S164456) for a review of bias from incorrect exclusion order.
 :::
@@ -202,17 +240,15 @@ matchpool_clean <- matchpool %>%
     opr_land == 5100                                        # Danish residence
   )
 
-# Apply the same criteria to the exposed:
-exposed_clean <- exposed %>%
+# Apply the same criteria to exposed (prevalence exclusion already done in Step 2):
+exposed_clean <- exposed_excl %>%
   inner_join(bef_baseline, by = "pnr") %>%
   filter(alder >= 18, opr_land == 5100)
 ```
 
-For exclusion of prevalent diagnoses (e.g. existing dementia before index date) — see [Phase 9 — Exclude prevalent cases](09_hospitalskontakter-lpr.qmd#exclude-prevalent-cases). Prevalence exclusion must likewise happen **before** sampling.
-
 ---
 
-## Step 4 — Match comparators
+## Step 5 — Match comparators
 
 `heaven::riskSetMatch()` implements risk-set sampling / incidence-density sampling — the standard in register-based cohorts.
 
@@ -247,7 +283,7 @@ Matched comparators are automatically assigned the matched exposed person's inde
 
 ---
 
-## Step 5 — Save your cohort
+## Step 6 — Save your cohort
 
 ```r
 # "matched" from riskSetMatch() is now your full cohort:

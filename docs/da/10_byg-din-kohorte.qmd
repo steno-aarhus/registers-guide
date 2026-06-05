@@ -108,7 +108,7 @@ nrow(eksponerede)                                           # antal unikke opere
 ```
 
 ::: {.callout-tip}
-`eksponerede` indeholder kun de opererede. Den fulde kohorte (eksponerede + sammenligningskohorte) bygges i trin 4 og gemmes som `kohort`. Det er `kohort` — ikke `eksponerede` — du bruger som `kohort_pnrs` i de øvrige faser.
+`eksponerede` indeholder kun de opererede. Den fulde kohorte (eksponerede + sammenligningskohorte) bygges i trin 5 og gemmes som `kohort`. Det er `kohort` — ikke `eksponerede` — du bruger som `kohort_pnrs` i de øvrige faser.
 :::
 
 </details>
@@ -148,13 +148,51 @@ eksponerede <- lpr_adm %>%
 ::: {.callout-tip}
 **Hvad skal du efter trin 1?**
 
-- **Prævalensstudie** — du har nu din studiepopulation med en index-dato. Spring trin 2–4 over og gå direkte til [Fase 6 — Udtræk kovariater](06_foerste-udtraek.qmd) og [Fase 11 — Saml datasættet](11_data-manipulation.qmd).
-- **Kohortestudie eller nested case-control** — fortsæt med trin 2–4 nedenfor.
+- **Prævalensstudie** — du har nu din studiepopulation med en index-dato. Spring trin 2–6 over og gå direkte til [Fase 6 — Udtræk kovariater](06_foerste-udtraek.qmd) og [Fase 11 — Saml datasættet](11_data-manipulation.qmd).
+- **Kohortestudie eller nested case-control** — fortsæt med trin 2–6 nedenfor.
 
-*Bemærk til case-control:* din "eksponerede" gruppe i trin 1 er dine **cases** (dem der fik udfaldet, identificeret fra LPR), ikke en eksponering. Trin 2–4 sampler herefter **kontroller** — folk uden udfaldet der var i risiko på det tidspunkt casen fik sin diagnose.
+*Bemærk til case-control:* din "eksponerede" gruppe i trin 1 er dine **cases** (dem der fik udfaldet, identificeret fra LPR), ikke en eksponering. Trin 3–6 sampler herefter **kontroller** — folk uden udfaldet der var i risiko på det tidspunkt casen fik sin diagnose.
 :::
 
-## Trin 2 — Byg matchpool fra BEF {.step-heading}
+## Trin 2 — Ekskluder prævalente tilfælde {.step-heading}
+
+Ekskluder personer der allerede havde diagnosen *inden* index-dato — ellers tæller de som nye tilfælde, selvom de ikke er det. Dette trin skal ske **inden** matching, så sammenligningskohorte ikke samples fra en forurenet pool.
+
+Du skal bruge din udtrukne LPR-diagnosetabel fra [Fase 9](09_hospitalskontakter-lpr.qmd) — enten `alle_dx` eller dit direkte udtræk.
+
+```r
+EKSKL_KODER <- c("G30", "F00", "F01", "F02", "F03")   # skift til dine egne eksklusionskoder
+
+# diagnoser = alle_dx (Tilgang 2) eller dit direkte udtræk (Tilgang 1) fra Fase 9
+praevalente <- diagnoser %>%
+  filter(icd3 %in% EKSKL_KODER) %>%
+  inner_join(eksponerede %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact < index_date) %>%
+  distinct(pnr)
+
+cat("Eksponerede inden ekskludering: ", nrow(eksponerede),                          "\n")
+eksponerede_renset <- eksponerede %>%
+  anti_join(praevalente, by = "pnr")
+cat("Eksponerede efter ekskludering: ", nrow(eksponerede_renset),                   "\n")
+cat("Ekskluderede:                   ", nrow(eksponerede) - nrow(eksponerede_renset), "\n")
+```
+
+::: {.callout-tip}
+**Lookback-periode:** Overvej at begrænse `date_contact < index_date` yderligere — fx kun de 5 år inden index — for at undgå falske eksklusioner baseret på meget gamle diagnoser.
+
+```r
+filter(date_contact >= index_date - 365*5,
+       date_contact < index_date)
+```
+:::
+
+::: {.callout-note}
+Prævalensekskludering gælder også **matchpoolen** (trin 3) — ekskluder tilsvarende folk med prævalent udfald inden sampling, ellers matches dine eksponerede til folk der ikke var i risiko.
+:::
+
+---
+
+## Trin 3 — Byg matchpool fra BEF {.step-heading}
 
 Deltagere til sammenligningskohorten hentes fra BEF — alle i befolkningen der endnu ikke er eksponerede. Tilføj de variable du vil matche på (fødselsår, køn, kalenderår mv.).
 
@@ -179,11 +217,11 @@ nrow(matchpool)                                             # antal potentielle 
 
 ---
 
-## Trin 3 — Anvend inklusionskriterier FØR sampling {.step-heading}
+## Trin 4 — Anvend inklusionskriterier FØR sampling {.step-heading}
 
 ::: {.callout-important}
 **Inklusionskriterier skal anvendes FØR matching — ikke efter.**
-Eksklusion af fx personer under 18 år, ikke-bosiddende i Danmark eller med prævalent udfald skal ske på **matchpoolen**, inden sammenligningskohorte samples. At ekskludere efter matching introducerer systematisk bias, fordi du ændrer den population som de eksponerede er matchet til.
+Eksklusion af fx personer under 18 år eller ikke-bosiddende i Danmark skal ske på **matchpoolen**, inden sammenligningskohorte samples. At ekskludere efter matching introducerer systematisk bias, fordi du ændrer den population som de eksponerede er matchet til.
 
 Se: [Lund et al., *Clinical Epidemiology* 2015](https://doi.org/10.2147/CLEP.S164456) for en gennemgang af bias ved forkert eksklusionsrækkefølge.
 :::
@@ -202,17 +240,15 @@ matchpool_renset <- matchpool %>%
     opr_land == 5100                                        # dansk bopæl
   )
 
-# Anvend de samme kriterier på eksponerede:
-eksponerede_renset <- eksponerede %>%
+# Anvend de samme kriterier på eksponerede (prævalensekskludering er allerede gjort i Trin 2):
+eksponerede_renset <- eksponerede_renset %>%
   inner_join(bef_baseline, by = "pnr") %>%
   filter(alder >= 18, opr_land == 5100)
 ```
 
-For ekskludering af prævalente diagnoser (fx eksisterende demens inden index-dato) — se [Fase 9 — Ekskluder prævalente tilfælde](09_hospitalskontakter-lpr.qmd#ekskluder-prævalente-tilfælde). Prævalensekskludering skal ligeledes ske **inden** sampling.
-
 ---
 
-## Trin 4 — Match sammenligningskohorte {.step-heading}
+## Trin 5 — Match sammenligningskohorte {.step-heading}
 
 `heaven::riskSetMatch()` implementerer risk-set sampling / incidence-density sampling — standarden i registerbaserede kohorter.
 
@@ -247,7 +283,7 @@ Matchede sammenligningspersoner får automatisk tildelt den matchede eksponerede
 
 ---
 
-## Trin 5 — Gem din kohorte {.step-heading}
+## Trin 6 — Gem din kohorte {.step-heading}
 
 ```r
 # "matched" fra riskSetMatch() er nu din fulde kohorte:

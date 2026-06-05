@@ -291,18 +291,14 @@ alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
 **Bruger du duckplyr?** `union_all()` kombinerer tabellerne inden `collect()` og kræver identiske kolonnenavne og -typer. Omdøb LPR3-kolonnerne til LPR2-format inden kombination — se onboarding-dokumentet for eksempel.
 :::
 
-→ **Udfør "Ekskluder prævalente tilfælde" nedenfor, og fortsæt derefter med Del 2.**
-
----
-
-**Del 2 — filtrer dit specifikke udfald** *(kræver `kohort_renset` fra Ekskluder-steget)*
+**Filtrer din udtrukne tabel for specifikke udfald**
 
 ```r
 KODER <- c("G30", "F00", "F01", "F02", "F03")   # demens — skift til dit udfald
 
 udfald <- alle_dx %>%
   filter(icd3 %in% KODER) %>%
-  inner_join(kohort_renset %>% select(pnr, index_date), by = "pnr") %>%
+  inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%   # brug kohort_renset efter ekskludering (Fase 10 Trin 2)
   filter(date_contact > index_date) %>%   # post-index; brug < for baseline-kovariat
   group_by(pnr) %>%
   arrange(date_contact) %>%
@@ -311,48 +307,18 @@ udfald <- alle_dx %>%
   select(pnr, event_date = date_contact)
 
 # Join til kohort — NA = ingen hændelse (censureres ved studieafslutning)
-resultat <- kohort_renset %>%
+resultat <- kohort %>%
   select(pnr) %>%
   left_join(udfald, by = "pnr")
 
 saveRDS(resultat, "datasets/extract_demens.rds")   # skift filnavn for hvert nyt udfald
 ```
 
-</details>
-
----
-
-## Ekskluder prævalente tilfælde
-
-Inden du udtrækker nye hændelser, skal du ekskludere personer der allerede havde diagnosen *inden* index-dato — ellers tæller de som nye tilfælde, selvom de ikke er det.
-
-```r
-EKSKL_KODER <- c("G30", "F00", "F01", "F02", "F03")   # skift til dine egne eksklusionskoder
-
-# diagnoser = alle_dx (Tilgang 2) eller dit direkte udtræk (Tilgang 1)
-praevalente <- diagnoser %>%
-  filter(icd3 %in% EKSKL_KODER) %>%
-  inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact < index_date) %>%
-  distinct(pnr)
-
-cat("Kohort inden ekskludering:  ", nrow(kohort),                       "\n")
-kohort_renset <- kohort %>%
-  anti_join(praevalente, by = "pnr")
-cat("Kohort efter ekskludering:  ", nrow(kohort_renset),                "\n")
-cat("Ekskluderede:               ", nrow(kohort) - nrow(kohort_renset), "\n")
-```
-
-::: {.callout-tip}
-**Lookback-periode:** Overvej at begrænse `date_contact < index_date` yderligere — fx kun de 5 år inden index — for at undgå falske eksklusioner baseret på meget gamle diagnoser. Det afhænger af din definition af "prævalent".
-
-Med 5-års lookback (erstat `365*5` med din ønskede periode):
-
-```r
-filter(date_contact >= index_date - 365*5,   # tidligste grænse: 5 år inden index
-       date_contact < index_date)             # kun pre-index diagnoser
-```
+::: {.callout-note}
+Ekskludering af prævalente tilfælde — personer der allerede havde diagnosen inden index-dato — sker i [Fase 10, Trin 2](10_byg-din-kohorte.qmd). Brug `kohort_renset` i stedet for `kohort` i koden ovenfor, efter at du har gennemført det trin.
 :::
+
+</details>
 
 ---
 
