@@ -1,0 +1,307 @@
+---
+title: "Write good analysis code"
+subtitle: "Now you write your own code — how to write it so you can trust it yourself in six months"
+date: last-modified
+---
+
+You have built your cohort (Phase 10), assembled your extracts (Phase 11), and are now about to write the code that actually produces your results: descriptive tables, models, sensitivity analyses.
+
+The most important thing in register-based research is that your results can be **reproduced** — by a reviewer, a colleague or yourself in six months. That places demands on how you organise and write your code. The habits you adopt now will save you hours later.
+
+::: {.callout-tip}
+**You do not have to do everything at once.** Take a couple of these tips at a time and let them become habits. The most important thing is consistency — pick one style and stick to it.
+:::
+
+---
+
+## 1. Structure your scripts logically
+
+**One script per step.** Put each step of the analysis in its own `.R` file, named with a number that tells you the order to run them in:
+
+```
+01_build_cohort.R       # build the cohort (pnr + index date)
+02_extract_outcomes.R   # extract outcomes
+03_extract_covariates.R # extract covariates
+04_data_management.R    # assemble, clean, derive variables
+05_descriptive.R        # descriptive analyses (Table 1)
+06_analysis.R           # main models
+07_sensitivity.R        # sensitivity analyses
+```
+
+The script numbers tell anyone who sees the folder the order to run them in. Use subfolders as the project grows — e.g. `R/`, `output/`, `datasets/`.
+
+**A predictable order *within* each script.** An analysis script should follow the same structure every time:
+
+```r
+# ==================================================
+# Project:  Dementia and surgery (DARTER 708421)
+# Author:   Your Name
+# Date:     2026-06-05
+# Purpose:  Main analysis — Cox model for dementia
+# ==================================================
+
+# 1. Load packages
+library(tidyverse)
+library(survival)
+
+# 2. Import data
+analysis_data <- readRDS("datasets/analysis_data.rds")
+
+# 3. Descriptive analyses
+# ... Table 1, distributions ...
+
+# 4. Main models
+# ... cox model ...
+
+# 5. Sensitivity analyses
+# ...
+```
+
+The header at the top tells you in five seconds what the script does, who wrote it and what it needs. Section headings made with **CTRL+SHIFT+R** (they look like `# Load packages ----`) appear in the **outline panel** in the top right of the editor — click to jump straight to a section.
+
+::: {.callout-warning}
+**Avoid jumping back and forth** between cleaning, modelling and plotting. A script should read and run from top to bottom. If your code jumps around, it becomes impossible to follow — even for yourself.
+:::
+
+---
+
+## 2. Run scripts top to bottom — never across
+
+A script should run from line 1 to the end without interruption and give the same result every time. Avoid running two lines from one file, jumping to another and back.
+
+::: {.callout-important}
+**Never run code manually across scripts.** If your result depends on you having run line 14 in script 02 before line 7 in script 03, it is not reproducible. Instead, do a `saveRDS()` at the end of script 02 and a `readRDS()` at the start of script 03.
+:::
+
+```r
+# End of 03_extract_covariates.R — save the result
+saveRDS(covariates, "datasets/covariates.rds")
+```
+
+```r
+# Start of 04_data_management.R — load it again
+covariates <- readRDS("datasets/covariates.rds")
+```
+
+When you think you are done: restart R (**Session → Restart R**) and run the whole script from line 1 again. Does it run clean? Then it is reproducible.
+
+---
+
+## 3. Use meaningful object names
+
+The name should describe what the object *contains*.
+
+```r
+# Bad — what are a and b?
+a <- read_csv("data.csv")
+b <- lm(bmi ~ age, data = a)
+```
+
+```r
+# Good — the name speaks for itself
+participant_data <- read_csv("data.csv")
+bmi_model        <- lm(bmi ~ age, data = participant_data)
+```
+
+In six months you will not remember what `a` and `b` were. `participant_data` and `bmi_model` explain themselves.
+
+---
+
+## 4. Use snake_case consistently
+
+Consistent naming makes code far easier to read. Pick **snake_case** (lowercase with underscores) and stick to it:
+
+```r
+# Good — snake_case
+body_mass_index
+participant_age
+sweetener_intake
+```
+
+```r
+# Avoid mixing styles
+BodyMassIndex     # PascalCase
+bodyMassIndex     # camelCase
+BMI_Data          # mixed
+```
+
+What matters is not *which* style, but that you are consistent.
+
+---
+
+## 5. Comment the "why", not the "what"
+
+The code already shows *what* happens. A good comment explains *why* — the decision behind it.
+
+```r
+# Bad — the comment just repeats the code
+# Calculate BMI
+data$bmi <- data$weight / data$height^2
+```
+
+```r
+# Better — the comment explains the decision
+# BMI used as an adjustment variable in the primary models
+data$bmi <- data$weight / data$height^2
+```
+
+Explain choices, assumptions and sources — not the obvious. It takes five minutes to write a good comment now and an hour to understand the code again in three months.
+
+---
+
+## 6. Avoid hard-coded "magic numbers"
+
+A "magic number" is a value in the middle of your code whose meaning is unclear. Give it a name instead:
+
+```r
+# Bad — why 18? what if the cutoff changes?
+data <- data %>%
+  filter(age >= 18)
+```
+
+```r
+# Better — the cutoff has a name and is defined in one place
+adult_age_cutoff <- 18
+
+data <- data %>%
+  filter(age >= adult_age_cutoff)
+```
+
+This is especially important when a cutoff is used in several places or may change: then you only fix it once.
+
+---
+
+## 7. Keep lines reasonably short
+
+Long lines are hard to read and to see changes in. Break long calls up so each argument stands out clearly:
+
+```r
+# Bad — one long line, hard to take in
+model <- glm(outcome ~ age + sex + bmi + smoking + education + income + physical_activity + energy_intake + alcohol, data = data, family = binomial())
+```
+
+```r
+# Better — one argument/block per line
+model <- glm(
+  outcome ~ age + sex + bmi +
+    smoking + education +
+    income + physical_activity +
+    energy_intake + alcohol,
+  data = data,
+  family = binomial()
+)
+```
+
+---
+
+## 8. Write functions for repeated tasks
+
+If you copy the same code more than a few times — e.g. a Table 1 for each exposure group — write a function. Functions reduce errors: fix something once, and it is fixed everywhere.
+
+```r
+# Bad — the same call repeated, easy to make a mistake in one of them
+table1_a <- CreateTableOne(vars = baseline_vars, strata = "operated", data = data_a)
+table1_b <- CreateTableOne(vars = baseline_vars, strata = "operated", data = data_b)
+# ... repeated 10 times ...
+```
+
+```r
+# Better — write the function once
+create_table1 <- function(data, exposure) {
+  CreateTableOne(
+    vars   = baseline_vars,
+    strata = exposure,
+    data   = data
+  )
+}
+
+table1_a <- create_table1(data_a, "operated")
+table1_b <- create_table1(data_b, "operated")
+```
+
+### How to write your own function
+
+A function has three parts: a **name**, some **arguments** (the input in the parentheses), and a **body** (the code between `{ }`). Whatever the last line produces is what the function returns.
+
+```r
+name <- function(argument1, argument2) {
+  # body: do something with the arguments
+  result <- argument1 + argument2
+  result        # last line = what is returned
+}
+```
+
+A concrete example — a function that computes age at a given date:
+
+```r
+# Function: age in whole years at a given date
+compute_age <- function(birth_date, index_date) {
+  as.numeric(difftime(index_date, birth_date, units = "days")) %/% 365.25
+}
+
+# Use it
+compute_age(as.Date("1950-03-01"), as.Date("2020-01-01"))   # 69
+```
+
+You can read more about functions — arguments, default values and when they pay off — in [Phase 15 — Guide to functions](15a_guide_til_funktioner.qmd).
+
+---
+
+## 9. Fail early — check your data before the analysis
+
+It is cheaper to catch an error straight away than to discover it in a finished result. Insert explicit checks of your assumptions:
+
+```r
+# Stop immediately if an assumption is broken
+stopifnot(
+  all(data$age >= 0),
+  all(data$age <= 120)
+)
+```
+
+```r
+# Alternative with clearer error messages (the assertthat package)
+assertthat::assert_that(
+  nrow(data) > 0,
+  msg = "data is empty — check your extract"
+)
+```
+
+If the check fails, the script stops immediately — instead of carrying a hidden error forward into your models.
+
+---
+
+## 10. One object = one purpose
+
+Avoid overwriting the same object again and again. It makes debugging hard, because `data` means something different depending on how far you have got:
+
+```r
+# Bad — the same name overwritten all the way down
+data <- read_csv("data.csv")
+data <- filter(data, age >= 18)
+data <- mutate(data, bmi = weight / height^2)
+data <- left_join(data, covariates, by = "pnr")
+```
+
+```r
+# Better — each step has its own name
+raw_data       <- read_csv("data.csv")
+
+clean_data     <- raw_data %>%
+  filter(age >= 18)
+
+analysis_data  <- clean_data %>%
+  mutate(bmi = weight / height^2) %>%
+  left_join(covariates, by = "pnr")
+```
+
+Now you can inspect each intermediate step (`raw_data`, `clean_data`, `analysis_data`) separately — invaluable when something looks wrong.
+
+---
+
+## See also
+
+- [Phase 11 — Assemble your extracts](11_data-manipulation.qmd) — joins and pivots
+- [Phase 15 — Guide to functions](15a_guide_til_funktioner.qmd) — functions in depth
+- [Phase 5 — Extracting data step by step](05_universelle-moenster.qmd) — the fundamental pattern
+- Inspiration for formatting code: Stack Overflow's [formatting guide](https://stackoverflow.com/editing-help#code)

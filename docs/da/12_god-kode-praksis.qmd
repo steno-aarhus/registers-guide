@@ -1,0 +1,307 @@
+---
+title: "Skriv god analysekode"
+subtitle: "Nu skal du skrive din egen kode — sådan skriver du den, så du selv kan stole på den om seks måneder"
+date: last-modified
+---
+
+Du har bygget din kohorte (Fase 10), samlet dine udtræk (Fase 11) og er nu på vej til at skrive den kode der faktisk producerer dine resultater: deskriptive tabeller, modeller, følsomhedsanalyser.
+
+Det vigtigste ved registerbaseret forskning er, at dine resultater kan **genskabes** — af en reviewer, en kollega eller dig selv om seks måneder. Det stiller krav til, hvordan du organiserer og skriver din kode. De vaner du lægger dig til nu, sparer dig timer senere.
+
+::: {.callout-tip}
+**Du behøver ikke gøre alt på én gang.** Tag et par af rådene ad gangen og lad dem blive til vaner. Det vigtigste er konsistens — vælg én stil og hold dig til den.
+:::
+
+---
+
+## 1. Strukturér dine scripts logisk
+
+**Ét script per trin.** Læg hvert trin i analysen i sin egen `.R`-fil, navngivet med et nummer der fortæller, i hvilken rækkefølge de skal køres:
+
+```
+01_build_cohort.R       # byg kohorten (pnr + index-dato)
+02_extract_outcomes.R   # udtræk udfald
+03_extract_covariates.R # udtræk kovariater
+04_data_management.R    # saml, rens, beregn variable
+05_descriptive.R        # deskriptive analyser (Tabel 1)
+06_analysis.R           # hovedmodeller
+07_sensitivity.R        # følsomhedsanalyser
+```
+
+Scriptnumrene fortæller enhver der ser mappen, i hvilken rækkefølge de skal køres. Brug undermapper når projektet vokser — fx `R/`, `output/`, `datasets/`.
+
+**Forudsigelig rækkefølge *inde* i hvert script.** Et analysescript bør følge den samme struktur hver gang:
+
+```r
+# ==================================================
+# Projekt:  Demens og kirurgi (DARTER 708421)
+# Forfatter: Dit Navn
+# Dato:     2026-06-05
+# Formål:   Hovedanalyse — Cox-model for demens
+# ==================================================
+
+# 1. Indlæs pakker
+library(tidyverse)
+library(survival)
+
+# 2. Indlæs data
+analyse_data <- readRDS("datasets/analyse_data.rds")
+
+# 3. Deskriptive analyser
+# ... Tabel 1, fordelinger ...
+
+# 4. Hovedmodeller
+# ... cox-model ...
+
+# 5. Følsomhedsanalyser
+# ...
+```
+
+Headeren øverst fortæller på fem sekunder, hvad scriptet gør, hvem der skrev det, og hvad det kræver. Sektionsoverskrifter med **CTRL+SHIFT+R** (de ser ud som `# Indlæs pakker ----`) vises i **outline-panelet** øverst til højre i editoren — klik for at hoppe direkte til en sektion.
+
+::: {.callout-warning}
+**Undgå at springe frem og tilbage** mellem rensning, modellering og plotting. Et script skal kunne læses og køres oppefra og ned. Hvis din kode hopper rundt, bliver den umulig at følge — også for dig selv.
+:::
+
+---
+
+## 2. Kør scripts fra top til bund — aldrig på tværs
+
+Et script skal kunne køres fra linje 1 til slut uden afbrydelse og give det samme resultat hver gang. Undgå at køre to linjer fra én fil, springe til en anden og tilbage.
+
+::: {.callout-important}
+**Kør aldrig kode manuelt på tværs af scripts.** Hvis dit resultat afhænger af, at du har kørt linje 14 i script 02 inden linje 7 i script 03, er det ikke reproducerbart. Lav i stedet et `saveRDS()` i slutningen af script 02 og et `readRDS()` i starten af script 03.
+:::
+
+```r
+# Slutningen af 03_extract_covariates.R — gem resultatet
+saveRDS(kovariater, "datasets/kovariater.rds")
+```
+
+```r
+# Starten af 04_data_management.R — indlæs det igen
+kovariater <- readRDS("datasets/kovariater.rds")
+```
+
+Når du tror du er færdig: genstart R (**Session → Restart R**) og kør hele scriptet fra linje 1 igen. Virker det rent? Så er det reproducerbart.
+
+---
+
+## 3. Brug meningsfulde objektnavne
+
+Navnet skal beskrive, hvad objektet *indeholder*.
+
+```r
+# Dårligt — hvad er a og b?
+a <- read_csv("data.csv")
+b <- lm(bmi ~ alder, data = a)
+```
+
+```r
+# Godt — navnet fortæller det selv
+deltager_data  <- read_csv("data.csv")
+bmi_model      <- lm(bmi ~ alder, data = deltager_data)
+```
+
+Om seks måneder husker du ikke hvad `a` og `b` var. `deltager_data` og `bmi_model` forklarer sig selv.
+
+---
+
+## 4. Brug snake_case konsekvent
+
+Konsistent navngivning gør koden langt nemmere at læse. Vælg **snake_case** (små bogstaver med understreg) og hold dig til det:
+
+```r
+# Godt — snake_case
+body_mass_index
+deltager_alder
+soedemiddel_indtag
+```
+
+```r
+# Undgå at blande stilarter
+BodyMassIndex     # PascalCase
+bodyMassIndex     # camelCase
+BMI_Data          # blandet
+```
+
+Det vigtigste er ikke *hvilken* stil, men at du er konsekvent.
+
+---
+
+## 5. Kommentér "hvorfor", ikke "hvad"
+
+Koden viser allerede *hvad* der sker. En god kommentar forklarer *hvorfor* — beslutningen bag.
+
+```r
+# Dårligt — kommentaren gentager bare koden
+# Beregn BMI
+data$bmi <- data$vaegt / data$hoejde^2
+```
+
+```r
+# Bedre — kommentaren forklarer beslutningen
+# BMI bruges som justeringsvariabel i de primære modeller
+data$bmi <- data$vaegt / data$hoejde^2
+```
+
+Forklar valg, antagelser og kilder — ikke det indlysende. Det tager fem minutter at skrive en god kommentar nu og en time at forstå koden igen om tre måneder.
+
+---
+
+## 6. Undgå hard-kodede "magiske tal"
+
+Et "magisk tal" er en talværdi midt i koden, hvis betydning ikke fremgår. Giv den et navn i stedet:
+
+```r
+# Dårligt — hvorfor 18? hvad hvis grænsen ændres?
+data <- data %>%
+  filter(alder >= 18)
+```
+
+```r
+# Bedre — grænsen har et navn og defineres ét sted
+voksen_alder_graense <- 18
+
+data <- data %>%
+  filter(alder >= voksen_alder_graense)
+```
+
+Det er især vigtigt, når en grænse bruges flere steder eller kan ændre sig: så retter du kun ét sted.
+
+---
+
+## 7. Hold linjerne rimeligt korte
+
+Lange linjer er svære at læse og at se ændringer i. Bryd lange kald op, så hvert argument står tydeligt:
+
+```r
+# Dårligt — én lang linje, svær at overskue
+model <- glm(outcome ~ alder + koen + bmi + rygning + uddannelse + indkomst + fysisk_aktivitet + energiindtag + alkohol, data = data, family = binomial())
+```
+
+```r
+# Bedre — ét argument/blok per linje
+model <- glm(
+  outcome ~ alder + koen + bmi +
+    rygning + uddannelse +
+    indkomst + fysisk_aktivitet +
+    energiindtag + alkohol,
+  data = data,
+  family = binomial()
+)
+```
+
+---
+
+## 8. Skriv funktioner til gentagne opgaver
+
+Hvis du kopierer den samme kode mere end et par gange — fx en Tabel 1 for hver eksponeringsgruppe — så lav en funktion. Funktioner reducerer fejl: retter du noget, retter du det ét sted.
+
+```r
+# Dårligt — samme kald gentaget, let at lave en fejl i én af dem
+tabel1_a <- CreateTableOne(vars = baseline_vars, strata = "opereret", data = data_a)
+tabel1_b <- CreateTableOne(vars = baseline_vars, strata = "opereret", data = data_b)
+# ... gentaget 10 gange ...
+```
+
+```r
+# Bedre — skriv funktionen én gang
+lav_tabel1 <- function(data, eksponering) {
+  CreateTableOne(
+    vars   = baseline_vars,
+    strata = eksponering,
+    data   = data
+  )
+}
+
+tabel1_a <- lav_tabel1(data_a, "opereret")
+tabel1_b <- lav_tabel1(data_b, "opereret")
+```
+
+### Sådan skriver du din egen funktion
+
+En funktion har tre dele: et **navn**, nogle **argumenter** (input i parentesen), og en **krop** (koden mellem `{ }`). Det den sidste linje producerer, er det funktionen giver tilbage.
+
+```r
+navn <- function(argument1, argument2) {
+  # krop: gør noget med argumenterne
+  resultat <- argument1 + argument2
+  resultat        # sidste linje = det der returneres
+}
+```
+
+Et konkret eksempel — en funktion der regner alder ved en given dato:
+
+```r
+# Funktion: alder i hele år ved en bestemt dato
+beregn_alder <- function(foedselsdato, index_dato) {
+  as.numeric(difftime(index_dato, foedselsdato, units = "days")) %/% 365.25
+}
+
+# Brug den
+beregn_alder(as.Date("1950-03-01"), as.Date("2020-01-01"))   # 69
+```
+
+Du kan læse mere om funktioner — argumenter, defaultværdier og hvornår de betaler sig — i [Fase 15 — Guide til funktioner](15a_guide_til_funktioner.qmd).
+
+---
+
+## 9. Fejl tidligt — tjek dine data før analysen
+
+Det er billigere at fange en fejl med det samme end at opdage den i et færdigt resultat. Indsæt eksplicitte tjek af dine antagelser:
+
+```r
+# Stop straks hvis en antagelse brydes
+stopifnot(
+  all(data$alder >= 0),
+  all(data$alder <= 120)
+)
+```
+
+```r
+# Alternativ med tydeligere fejlbeskeder (pakken assertthat)
+assertthat::assert_that(
+  nrow(data) > 0,
+  msg = "data er tomt — tjek dit udtræk"
+)
+```
+
+Hvis tjekket fejler, stopper scriptet med det samme — i stedet for at føre en skjult fejl videre ind i dine modeller.
+
+---
+
+## 10. Ét objekt = ét formål
+
+Undgå at overskrive det samme objekt igen og igen. Det gør fejlfinding svær, fordi `data` betyder noget forskelligt afhængigt af, hvor langt du er nået:
+
+```r
+# Dårligt — samme navn overskrives hele vejen ned
+data <- read_csv("data.csv")
+data <- filter(data, alder >= 18)
+data <- mutate(data, bmi = vaegt / hoejde^2)
+data <- left_join(data, kovariater, by = "pnr")
+```
+
+```r
+# Bedre — hvert trin har sit eget navn
+raa_data      <- read_csv("data.csv")
+
+renset_data   <- raa_data %>%
+  filter(alder >= 18)
+
+analyse_data  <- renset_data %>%
+  mutate(bmi = vaegt / hoejde^2) %>%
+  left_join(kovariater, by = "pnr")
+```
+
+Nu kan du inspicere hvert mellemtrin (`raa_data`, `renset_data`, `analyse_data`) hver for sig — uvurderligt når noget ser forkert ud.
+
+---
+
+## Se også
+
+- [Fase 11 — Saml dine udtræk](11_data-manipulation.qmd) — joins og pivots
+- [Fase 15 — Guide til funktioner](15a_guide_til_funktioner.qmd) — funktioner i dybden
+- [Fase 5 — Udtræk trin for trin](05_universelle-moenster.qmd) — det grundlæggende mønster
+- Inspiration til formatering af kode: Stack Overflows [formateringsvejledning](https://stackoverflow.com/editing-help#code)
