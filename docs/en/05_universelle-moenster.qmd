@@ -145,17 +145,28 @@ Always clean up after large extractions before continuing.
 
 ```{mermaid}
 flowchart TD
-    P[("Parquet files on DST")]
-    L["open_dataset()"]
-    F["filter() + select()"]
-    C["collect()"]
-    R[("R memory · data.frame")]
+    P[("Parquet register<br>on the DST server")]:::store
+    L["open_dataset()"]:::lazy
+    F["filter() — choose rows"]:::lazy
+    S["select() — choose columns"]:::lazy
+    J["inner_join() — link (optional)"]:::lazy
+    C(["collect()"]):::collect
+    R[("data.frame in R")]:::store
+    V["saveRDS() → datasets/"]:::save
 
-    P -->|"lazy connection — nothing moved to R"| L
-    L -->|"instructions stacked up"| F
-    F -->|"send now!"| C
-    C -->|"only necessary rows + columns"| R
+    P -->|"lazy — nothing moves yet"| L
+    L --> F --> S --> J
+    J -->|"send the query"| C
+    C -->|"only chosen rows + columns"| R
+    R --> V
+
+    classDef store fill:#eef0f2,stroke:#8a94a6,color:#1f2733;
+    classDef lazy fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
+    classDef collect fill:#fff3e0,stroke:#e69500,color:#7a4f00;
+    classDef save fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
 ```
+
+The blue steps are **lazy** — they only build up a query. Data moves into R only at `collect()` (orange). That is why `filter()` and `select()` must come *before* `collect()`.
 
 ---
 

@@ -49,6 +49,30 @@ Hvert udtræk fra Fase 6, 9 og 12 m.fl. bør gemmes som sin egen RDS-fil — ét
 
 Målet med denne fase er at samle dem til ét datasæt med `left_join()` — én ny kolonne per fil.
 
+```{mermaid}
+flowchart LR
+    E1["extract_demens.rds"]:::ext
+    E2["extract_emigration.rds"]:::ext
+    E3["extract_bef.rds"]:::ext
+    E4["extract_nmi.rds"]:::ext
+    E5["extract_ses.rds"]:::ext
+    K[("full_cohort.rds<br>pnr · index_date · exposed")]:::cohort
+    A[("analyse_data<br>én række per person")]:::out
+
+    E1 -->|"left_join(by = pnr)"| K
+    E2 --> K
+    E3 --> K
+    E4 --> K
+    E5 --> K
+    K --> A
+
+    classDef cohort fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
+    classDef ext fill:#f6f6f6,stroke:#aaaaaa,color:#444444;
+    classDef out fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
+```
+
+Kohorten er rygraden. Hvert udtræk kobles på med `left_join()` via `pnr` og tilføjer sine kolonner — alle kohortemedlemmer bevares, og personer uden match får `NA`.
+
 ::: {.callout-important}
 **Saml kun det du skal bruge.**
 Det er fristende at beholde alle kolonner "for en sikkerheds skyld". Gør det ikke. Afslut altid med `select()` og vælg eksplicit de kolonner analysen kræver. Et datasæt med kun de nødvendige kolonner er langt lettere at debugge og forstå.
@@ -242,6 +266,35 @@ I registerbaseret forskning er `group_by() + slice()` langt det hyppigste valg.
 
 I registerbaseret forskning arbejder du næsten altid med data fra **to eller flere tabeller**, der skal kobles sammen.
 Alle joins i `dplyr` tager to tabeller og én nøgle-kolonne, de deler (fx `pnr`).
+
+Dine udtræk deler typisk alle `pnr` som nøgle — det er den, du kobler på. Et simpelt ER-diagram over nøglerne:
+
+```{mermaid}
+erDiagram
+    full_cohort ||--o| extract_demens : pnr
+    full_cohort ||--o| extract_bef : pnr
+    full_cohort ||--o| extract_nmi : pnr
+    full_cohort {
+        string pnr PK
+        date index_date
+        int exposed
+    }
+    extract_demens {
+        string pnr FK
+        date event_date
+    }
+    extract_bef {
+        string pnr FK
+        int alder
+        int koen
+    }
+    extract_nmi {
+        string pnr FK
+        int nmi_score
+    }
+```
+
+`pnr` er primærnøgle (PK) i kohorten og fremmednøgle (FK) i hvert udtræk. `||--o|` betyder: hver person i kohorten har nul eller én matchende række i udtrækket.
 
 ### De joins du vil bruge
 

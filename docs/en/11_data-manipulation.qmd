@@ -50,6 +50,30 @@ Each extraction from Phases 6, 9 and 12 etc. should be saved as its own RDS file
 
 The goal of this phase is to assemble them into one dataset with `left_join()` — one new column per file.
 
+```{mermaid}
+flowchart LR
+    E1["extract_dementia.rds"]:::ext
+    E2["extract_emigration.rds"]:::ext
+    E3["extract_bef.rds"]:::ext
+    E4["extract_nmi.rds"]:::ext
+    E5["extract_ses.rds"]:::ext
+    K[("full_cohort.rds<br>pnr · index_date · exposed")]:::cohort
+    A[("analysis_data<br>one row per person")]:::out
+
+    E1 -->|"left_join(by = pnr)"| K
+    E2 --> K
+    E3 --> K
+    E4 --> K
+    E5 --> K
+    K --> A
+
+    classDef cohort fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
+    classDef ext fill:#f6f6f6,stroke:#aaaaaa,color:#444444;
+    classDef out fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
+```
+
+The cohort is the backbone. Each extract is joined on with `left_join()` via `pnr` and adds its columns — all cohort members are kept, and people with no match get `NA`.
+
 ::: {.callout-important}
 **Assemble only what you need.**
 It is tempting to keep all columns "just in case". Do not. Always end with `select()` and explicitly choose the columns the analysis requires. A dataset with only the necessary columns is far easier to debug and understand.
@@ -243,6 +267,35 @@ In register-based research, `group_by() + slice()` is by far the most common cho
 
 In register-based research you almost always work with data from **two or more tables** that need to be linked.
 All joins in `dplyr` take two tables and one key column they share (e.g. `pnr`).
+
+Your extracts typically all share `pnr` as the key — that is what you join on. A simple ER diagram of the keys:
+
+```{mermaid}
+erDiagram
+    full_cohort ||--o| extract_dementia : pnr
+    full_cohort ||--o| extract_bef : pnr
+    full_cohort ||--o| extract_nmi : pnr
+    full_cohort {
+        string pnr PK
+        date index_date
+        int exposed
+    }
+    extract_dementia {
+        string pnr FK
+        date event_date
+    }
+    extract_bef {
+        string pnr FK
+        int age
+        int sex
+    }
+    extract_nmi {
+        string pnr FK
+        int nmi_score
+    }
+```
+
+`pnr` is the primary key (PK) in the cohort and a foreign key (FK) in each extract. `||--o|` means: each person in the cohort has zero or one matching row in the extract.
 
 ### The joins you will use
 
