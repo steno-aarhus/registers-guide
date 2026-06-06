@@ -232,6 +232,108 @@ Ekskludering af prævalente tilfælde — personer der allerede havde diagnosen 
 
 ---
 
+<details>
+<summary>Prøv det selv — kørbart eksempel med syntetiske data (Tilgang 1)</summary>
+
+::: {.callout-important}
+Dette eksempel kræver **RStudio installeret lokalt på din computer** — ikke DST-serveren.
+Det syntetiske datasæt (`fakeregs`) er ikke tilgængeligt på DST.
+Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
+:::
+
+Eksemplet trækker CVD-diagnoser (iskæmisk hjertesygdom, ICD-10 I20–I25) fra LPR2 og LPR3 kombineret — det komplette mønster fra teoriafsnittet ovenfor, men kørbart lokalt med syntetiske data. Det følger **Tilgang 1**: specifikke koder filtreres fra *inden* `collect()`.
+
+De syntetiske LPR-data genereres med `fakeregs`-pakken, som du allerede kender fra [Fase 6 — Første udtræk](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data). Har du allerede genereret og gemt data der, er `synth_data/lpr_adm/` klar og du kan springe forberedelsesblokken over.
+
+Tilpasset fra Anders Aasted Isaksens
+[`dev/common_tasks_datatable.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/dev/common_tasks_datatable.qmd)
+i [`fakeregs`](https://github.com/steno-aarhus/fakeregs) (MIT-licens, Steno Diabetes Center Aarhus).
+Omskrevet til dplyr + arrow og tilpasset denne vejlednings mønster.
+
+```r
+# Installer fakeregs første gang:
+# install.packages("pak"); pak::pak("steno-aarhus/fakeregs")
+
+library(fakeregs)   # syntetiske DST-registerdata
+library(dplyr)      # filter, select, mutate, inner_join, bind_rows
+library(arrow)      # open_dataset, write_parquet
+
+# ── Forberedelse: generer syntetiske data og gem som parquet (gøres kun én gang) ────
+bp             <- generate_background_pop()
+lpr_adm_synth  <- generate_lpr_adm(background_df = bp)
+lpr_diag_synth <- generate_lpr_diag(background_df = lpr_adm_synth)
+lpr_a_k_synth  <- generate_lpr_a_kontakt(background_df = bp)
+lpr_a_d_synth  <- generate_lpr_a_diagnose(background_df = lpr_a_k_synth)
+
+dir.create("synth_data/lpr_adm",        recursive = TRUE, showWarnings = FALSE)
+dir.create("synth_data/lpr_diag",       recursive = TRUE, showWarnings = FALSE)
+dir.create("synth_data/lpr_a_kontakt",  recursive = TRUE, showWarnings = FALSE)
+dir.create("synth_data/lpr_a_diagnose", recursive = TRUE, showWarnings = FALSE)
+write_parquet(lpr_adm_synth,  "synth_data/lpr_adm/lpr_adm.parquet")
+write_parquet(lpr_diag_synth, "synth_data/lpr_diag/lpr_diag.parquet")
+write_parquet(lpr_a_k_synth,  "synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet")
+write_parquet(lpr_a_d_synth,  "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet")
+```
+
+::: {.callout-tip}
+**Stien er relativ til dit working directory** — tjek med `getwd()`.
+Har du allerede kørt forberedelsesblokken i [Fase 6](06_foerste-udtraek.qmd), er `synth_data/lpr_adm/` allerede gemt.
+:::
+
+```r
+# De ICD-koder vi søger — skift disse til dit eget udfald
+CVD_KODER <- c("I20", "I21", "I22", "I23", "I24", "I25")   # iskæmisk hjertesygdom
+
+# ── LPR2 somatisk (frem til marts 2019) ──────────────────────────────────
+lpr_adm  <- open_dataset("synth_data/lpr_adm/")  %>% rename_with(tolower)   # LPR2 kontakttabel — syntetisk
+lpr_diag <- open_dataset("synth_data/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosetabel — syntetisk
+
+lpr2_cvd <- lpr_adm %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%           # vælg kun nødvendige kolonner
+  inner_join(
+    lpr_diag %>%
+      filter(c_diagtype %in% c("A", "B"),                    # kun aktions- og bidiagnoser
+             substr(c_diag, 2, 4) %in% !!CVD_KODER) %>%       # !! sender den lokale R-vektor til DuckDB
+      select(recnum, c_diag),                    # kun join-nøgle og diagnosekode
+    by = "recnum"                                             # join-nøgle i LPR2
+  ) %>%
+  collect() %>%                                              # HER hentes data ind i R
+  mutate(icd3 = substr(c_diag, 2, 4))                        # gem renset kode som ny kolonne
+
+# ── LPR3 (marts 2019 og frem) ─────────────────────────────────────────────
+lpr3_k <- open_dataset("synth_data/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 kontakttabel — syntetisk
+lpr3_d <- open_dataset("synth_data/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosetabel — syntetisk
+
+lpr3_cvd <- lpr3_k %>%
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%   # dw_ek_kontakt er join-nøgle til lpr_a_diagnose
+  inner_join(
+    lpr3_d %>%
+      filter(diag_kode_type %in% c("A", "B"),
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # ekskluder tilbagekaldte
+             substr(diag_kode, 2, 4) %in% !!CVD_KODER) %>%   # !! sender den lokale R-vektor til DuckDB
+      select(dw_ek_kontakt, c_diag = diag_kode),             # omdøb til c_diag for konsistens med LPR2
+    by = "dw_ek_kontakt"                                     # join-nøgle i LPR3
+  ) %>%
+  collect() %>%                                              # hent ind i R
+  mutate(
+    date_contact = as.Date(date_contact),                    # datetime → dato
+    icd3         = substr(c_diag, 2, 4)                      # strip D-præfiks: "DI21" → "I21"
+  )
+
+# ── Kombiner og gem ────────────────────────────────────────────────────────
+alle_cvd <- bind_rows(lpr2_cvd, lpr3_cvd)                   # sæt LPR2 og LPR3 sammen
+
+nrow(alle_cvd)                                               # tjek: antal diagnoserækker
+length(unique(alle_cvd$pnr))                                 # tjek: antal unikke personer
+table(alle_cvd$icd3)                                         # fordeling på koder
+
+saveRDS(alle_cvd, "datasets/extract_cvd.rds")                # gem — skift sti til din egen mappe
+```
+
+</details>
+
+---
+
 ## Pak mønstret i en genanvendelig funktion (ved mange udfald)
 
 Henter du diagnoser for flere udfald, betaler det sig at samle Tilgang 2-mønstret i én genanvendelig funktion fremfor at kopiere ~40 linjer for hvert nyt udfald. Definer den øverst i dit script eller i en separat `functions.R`-fil.
@@ -339,108 +441,6 @@ demens <- alle_dx %>%
 
 resultat <- kohort %>% select(pnr) %>% left_join(demens, by = "pnr")
 saveRDS(resultat, "datasets/extract_dementia.rds")
-```
-
-</details>
-
----
-
-<details>
-<summary>Prøv det selv — kørbart eksempel med syntetiske data</summary>
-
-::: {.callout-important}
-Dette eksempel kræver **RStudio installeret lokalt på din computer** — ikke DST-serveren.
-Det syntetiske datasæt (`fakeregs`) er ikke tilgængeligt på DST.
-Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
-:::
-
-Eksemplet trækker CVD-diagnoser (iskæmisk hjertesygdom, ICD-10 I20–I25) fra LPR2 og LPR3 kombineret — det komplette mønster fra teoriafsnittet ovenfor, men kørbart lokalt med syntetiske data.
-
-De syntetiske LPR-data genereres med `fakeregs`-pakken, som du allerede kender fra [Fase 6 — Første udtræk](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data). Har du allerede genereret og gemt data der, er `synth_data/lpr_adm/` klar og du kan springe forberedelsesblokken over.
-
-Tilpasset fra Anders Aasted Isaksens
-[`dev/common_tasks_datatable.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/dev/common_tasks_datatable.qmd)
-i [`fakeregs`](https://github.com/steno-aarhus/fakeregs) (MIT-licens, Steno Diabetes Center Aarhus).
-Omskrevet til dplyr + arrow og tilpasset denne vejlednings mønster.
-
-```r
-# Installer fakeregs første gang:
-# install.packages("pak"); pak::pak("steno-aarhus/fakeregs")
-
-library(fakeregs)   # syntetiske DST-registerdata
-library(dplyr)      # filter, select, mutate, inner_join, bind_rows
-library(arrow)      # open_dataset, write_parquet
-
-# ── Forberedelse: generer syntetiske data og gem som parquet (gøres kun én gang) ────
-bp             <- generate_background_pop()
-lpr_adm_synth  <- generate_lpr_adm(background_df = bp)
-lpr_diag_synth <- generate_lpr_diag(background_df = lpr_adm_synth)
-lpr_a_k_synth  <- generate_lpr_a_kontakt(background_df = bp)
-lpr_a_d_synth  <- generate_lpr_a_diagnose(background_df = lpr_a_k_synth)
-
-dir.create("synth_data/lpr_adm",        recursive = TRUE, showWarnings = FALSE)
-dir.create("synth_data/lpr_diag",       recursive = TRUE, showWarnings = FALSE)
-dir.create("synth_data/lpr_a_kontakt",  recursive = TRUE, showWarnings = FALSE)
-dir.create("synth_data/lpr_a_diagnose", recursive = TRUE, showWarnings = FALSE)
-write_parquet(lpr_adm_synth,  "synth_data/lpr_adm/lpr_adm.parquet")
-write_parquet(lpr_diag_synth, "synth_data/lpr_diag/lpr_diag.parquet")
-write_parquet(lpr_a_k_synth,  "synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet")
-write_parquet(lpr_a_d_synth,  "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet")
-```
-
-::: {.callout-tip}
-**Stien er relativ til dit working directory** — tjek med `getwd()`.
-Har du allerede kørt forberedelsesblokken i [Fase 6](06_foerste-udtraek.qmd), er `synth_data/lpr_adm/` allerede gemt.
-:::
-
-```r
-# De ICD-koder vi søger — skift disse til dit eget udfald
-CVD_KODER <- c("I20", "I21", "I22", "I23", "I24", "I25")   # iskæmisk hjertesygdom
-
-# ── LPR2 somatisk (frem til marts 2019) ──────────────────────────────────
-lpr_adm  <- open_dataset("synth_data/lpr_adm/")  %>% rename_with(tolower)   # LPR2 kontakttabel — syntetisk
-lpr_diag <- open_dataset("synth_data/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosetabel — syntetisk
-
-lpr2_cvd <- lpr_adm %>%
-  select(pnr, recnum, date_contact = d_inddto) %>%           # vælg kun nødvendige kolonner
-  inner_join(
-    lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B"),                    # kun aktions- og bidiagnoser
-             substr(c_diag, 2, 4) %in% !!CVD_KODER) %>%       # !! sender den lokale R-vektor til DuckDB
-      select(recnum, c_diag),                    # kun join-nøgle og diagnosekode
-    by = "recnum"                                             # join-nøgle i LPR2
-  ) %>%
-  collect() %>%                                              # HER hentes data ind i R
-  mutate(icd3 = substr(c_diag, 2, 4))                        # gem renset kode som ny kolonne
-
-# ── LPR3 (marts 2019 og frem) ─────────────────────────────────────────────
-lpr3_k <- open_dataset("synth_data/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 kontakttabel — syntetisk
-lpr3_d <- open_dataset("synth_data/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosetabel — syntetisk
-
-lpr3_cvd <- lpr3_k %>%
-  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%   # dw_ek_kontakt er join-nøgle til lpr_a_diagnose
-  inner_join(
-    lpr3_d %>%
-      filter(diag_kode_type %in% c("A", "B"),
-             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # ekskluder tilbagekaldte
-             substr(diag_kode, 2, 4) %in% !!CVD_KODER) %>%   # !! sender den lokale R-vektor til DuckDB
-      select(dw_ek_kontakt, c_diag = diag_kode),             # omdøb til c_diag for konsistens med LPR2
-    by = "dw_ek_kontakt"                                     # join-nøgle i LPR3
-  ) %>%
-  collect() %>%                                              # hent ind i R
-  mutate(
-    date_contact = as.Date(date_contact),                    # datetime → dato
-    icd3         = substr(c_diag, 2, 4)                      # strip D-præfiks: "DI21" → "I21"
-  )
-
-# ── Kombiner og gem ────────────────────────────────────────────────────────
-alle_cvd <- bind_rows(lpr2_cvd, lpr3_cvd)                   # sæt LPR2 og LPR3 sammen
-
-nrow(alle_cvd)                                               # tjek: antal diagnoserækker
-length(unique(alle_cvd$pnr))                                 # tjek: antal unikke personer
-table(alle_cvd$icd3)                                         # fordeling på koder
-
-saveRDS(alle_cvd, "datasets/extract_cvd.rds")                # gem — skift sti til din egen mappe
 ```
 
 </details>
