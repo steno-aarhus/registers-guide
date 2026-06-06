@@ -232,6 +232,119 @@ Exclusion of prevalent cases — persons who already had the diagnosis before in
 
 ---
 
+## Wrap the pattern in a reusable function (for multiple outcomes)
+
+If you extract diagnoses for several outcomes, it pays off to encapsulate the Approach 2 pattern in one reusable function rather than copying ~40 lines for each new outcome. Define it at the top of your script or in a separate `functions.R` file.
+
+**Advantages:**
+- One place to fix if something changes (e.g. a new register or a new column)
+- The code block for each outcome is reduced from ~40 lines to one function call
+- Errors are introduced in one place instead of in each copy
+
+::: {.callout-tip}
+**Working on DARTER (or another project with `dstDataPrep`)?** Swap `open_dataset("E:/workdata/.../<register>/")` for `load_database("<register>")` — it resolves the path automatically. See [DARTER — overview and pipeline](darter/00_index.qmd) for the fully adapted variant — it is kept up to date with the current, confirmed register names (as of June 2026).
+:::
+
+<details>
+<summary>See the full <code>get_lpr_diagnoses()</code> function and usage</summary>
+
+```r
+library(arrow)
+library(dplyr)
+
+get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_only = FALSE) {
+  base <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"
+
+  # Open registers
+  lpr_adm   <- open_dataset(paste0(base, "lpr_adm/"))   %>% rename_with(tolower)   # LPR2 somatic contacts
+  lpr_diag  <- open_dataset(paste0(base, "lpr_diag/"))  %>% rename_with(tolower)   # LPR2 somatic diagnoses
+  psyk_adm  <- open_dataset(paste0(base, "t_psyk_adm/"))  %>% rename_with(tolower) %>%
+    rename(pnr = v_cpr, recnum = k_recnum)                            # LPR2 psychiatric contacts
+  psyk_diag <- open_dataset(paste0(base, "t_psyk_diag/")) %>% rename_with(tolower) %>%
+    rename(recnum = v_recnum)                                          # LPR2 psychiatric diagnoses
+  lpr3_k    <- open_dataset(paste0(base, "lpr_a_kontakt/"))  %>% rename_with(tolower) %>%
+    filter(lprindberetningssystem == "LPR3")                               # CRITICAL: avoid duplicated rows from LPR_F format
+  lpr3_d    <- open_dataset(paste0(base, "lpr_a_diagnose/")) %>% rename_with(tolower)  # LPR3 diagnoses
+
+  # Filter on admission type if desired
+  if (inpatient_only) {
+    lpr_adm <- lpr_adm %>% filter(c_pattype == "0")          # "0" = inpatient in LPR2
+    lpr3_k  <- lpr3_k  %>% filter(kont_type == "ALCA00")     # "ALCA00" = inpatient in LPR3
+  }
+
+  # LPR2 somatic
+  lpr2_dx <- lpr_adm %>%
+    filter(pnr %in% !!pnr_vector) %>%
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      by = "recnum"
+    ) %>%
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))                       # strip D-prefix
+
+  # LPR2 psychiatric
+  lpr2_psyk_dx <- psyk_adm %>%
+    filter(pnr %in% !!pnr_vector) %>%
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      by = "recnum"
+    ) %>%
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))
+
+  # LPR3
+  lpr3_dx <- lpr3_k %>%
+    filter(pnr %in% !!pnr_vector) %>%
+    select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
+    inner_join(
+      lpr3_d %>%
+        filter(diag_kode_type %in% !!diagtypes,
+               is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+        select(dw_ek_kontakt, c_diag = diag_kode),
+      by = "dw_ek_kontakt"
+    ) %>%
+    collect() %>%
+    mutate(date_contact = as.Date(date_contact),               # datetime → date
+           icd3 = substr(c_diag, 2, 4))
+
+  bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)                   # return combined table
+}
+```
+
+**Use the function** — one call per extraction, only change `CODES`:
+
+```r
+cohort    <- readRDS("datasets/full_cohort.rds")
+pnr_list  <- unique(cohort$pnr)
+
+# Fetch all diagnoses for the cohort (Phase 1 — see hospital contacts page)
+alle_dx <- get_lpr_diagnoses(
+  pnr_vector    = pnr_list,
+  diagtypes     = c("A", "B"),
+  inpatient_only = FALSE
+)
+# Returns: pnr | date_contact | c_diag | icd3
+
+# Extract one outcome — only change CODES (Phase 2)
+CODES <- c("F00", "F01", "F02", "F03", "G30", "G31")   # dementia
+
+dementia <- alle_dx %>%
+  filter(icd3 %in% CODES) %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact > index_date) %>%
+  group_by(pnr) %>% arrange(date_contact) %>% slice(1) %>% ungroup() %>%
+  select(pnr, dementia_date = date_contact)
+
+result <- cohort %>% select(pnr) %>% left_join(dementia, by = "pnr")
+saveRDS(result, "datasets/extract_dementia.rds")
+```
+
+</details>
+
+---
+
 <details>
 <summary>Try it yourself — runnable example with synthetic data</summary>
 
