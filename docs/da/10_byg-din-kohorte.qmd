@@ -166,6 +166,9 @@ Ekskluder personer der allerede havde diagnosen *inden* index-dato — ellers t�
 
 Du skal bruge din udtrukne LPR-diagnosetabel fra [Fase 9](09b_udtraek_fra_lpr.qmd) — enten `alle_dx` eller dit direkte udtræk.
 
+<details>
+<summary>Vis kode</summary>
+
 ```r
 EKSKL_KODER <- c("G30", "F00", "F01", "F02", "F03")   # skift til dine egne eksklusionskoder
 
@@ -182,6 +185,8 @@ eksponerede_renset <- eksponerede %>%
 cat("Eksponerede efter ekskludering: ", nrow(eksponerede_renset),                   "\n")
 cat("Ekskluderede:                   ", nrow(eksponerede) - nrow(eksponerede_renset), "\n")
 ```
+
+</details>
 
 ::: {.callout-tip}
 **Lookback-periode:** Overvej at begrænse `date_contact < index_date` yderligere — fx kun de 5 år inden index — for at undgå falske eksklusioner baseret på meget gamle diagnoser.
@@ -202,6 +207,9 @@ Prævalensekskludering gælder også **matchpoolen** (trin 3) — ekskluder tils
 
 Deltagere til sammenligningskohorten hentes fra BEF — alle i befolkningen der endnu ikke er eksponerede. Tilføj de variable du vil matche på (fødselsår, køn, kalenderår mv.).
 
+<details>
+<summary>Vis kode</summary>
+
 ```r
 bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
   rename_with(tolower)
@@ -221,6 +229,8 @@ matchpool <- bef %>%
 nrow(matchpool)                                             # antal potentielle sammenligningspersoner
 ```
 
+</details>
+
 ---
 
 ## Trin 4 — Anvend inklusionskriterier FØR sampling {.step-heading}
@@ -231,6 +241,9 @@ Eksklusion af fx personer under 18 år eller ikke-bosiddende i Danmark skal ske 
 
 Se: [Lund et al., *Clinical Epidemiology* 2015](https://doi.org/10.2147/CLEP.S164456) for en gennemgang af bias ved forkert eksklusionsrækkefølge.
 :::
+
+<details>
+<summary>Vis kode</summary>
 
 ```r
 # Tilknyt BEF-variabler til matchpoolen og anvend inklusionskriterier
@@ -252,11 +265,16 @@ eksponerede_renset <- eksponerede_renset %>%
   filter(alder >= 18, opr_land == 5100)
 ```
 
+</details>
+
 ---
 
 ## Trin 5 — Match sammenligningskohorte {.step-heading}
 
 `heaven::riskSetMatch()` implementerer risk-set sampling / incidence-density sampling — standarden i registerbaserede kohorter.
+
+<details>
+<summary>Vis kode</summary>
 
 ```r
 library(heaven)   # riskSetMatch
@@ -278,6 +296,8 @@ matched <- riskSetMatch(
 )
 ```
 
+</details>
+
 ::: {.callout-note}
 **Kronologisk sampling og replacement.**
 `riskSetMatch()` sampler kronologisk — personer kan bidrage til sammenligningskohorte frem til det tidspunkt de selv eksponeres. Tag eksplicit stilling til om der skal være **replacement** (en person kan matches til flere eksponerede) eller ej. Replacement øger effektiv stikprøvestørrelse men giver korrelerede observationer — det skal håndteres i analysen. Se [Lund et al. 2015](https://doi.org/10.2147/CLEP.S164456) og `?riskSetMatch` for detaljer.
@@ -286,6 +306,16 @@ matched <- riskSetMatch(
 :::
 
 Matchede sammenligningspersoner får automatisk tildelt den matchede eksponeredes index-dato.
+
+<details>
+<summary>Mere i dybden — faldgruber ved sammenligningskohorten</summary>
+
+- **Immortal time bias:** en person i sammenligningskohorten skal være i live, bosat i Danmark og opfylde inklusionskriterierne **på sin tildelte index-dato** — ikke kun ved studiestart.
+- **Risk-set / incidence-density sampling:** en person kan optræde i sammenligningskohorten og *senere* selv blive eksponeret og blive case. Beslut hvordan du håndterer det (`riskSetMatch()` understøtter risk-set-matching).
+- **Matching-ratio:** fx 1:5 eksponeret:sammenligningskohorte — flere kontroller giver mere præcision, men aftagende udbytte.
+- **Samme eksklusioner** anvendes på begge grupper, ellers introducerer du selektionsbias.
+
+</details>
 
 ---
 

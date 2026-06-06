@@ -6,6 +6,10 @@ date: last-modified
 
 Du ankommer til denne fase med separate RDS-filer: din kohort fra [Fase 10](10_byg-din-kohorte.qmd), event-datoer fra [Fase 9](09b_udtraek_fra_lpr.qmd), kovariater fra [Fase 6](06_foerste-udtraek.qmd) og socioøkonomiske variable fra [Fase 13](13_socioekonomiske-variable.qmd). Du forlader med ét analyseklart datasæt klar til [Fase 14](14a_pakker-oversigt.qmd).
 
+::: {.callout-tip}
+**Kort fortalt:** Form hvert udtræk til **én række per person** (med `pivot_wider()` eller `group_by() + slice()`), og kobl dem så sammen på `pnr` med `left_join()` til ét analyseklart datasæt.
+:::
+
 Inden du kan analysere, skal du:
 
 1. Forme hvert udtræk til **én række per person** (de fleste registre er i langt format med mange rækker per person)
@@ -47,31 +51,7 @@ Hvert udtræk fra Fase 6, 9 og 12 m.fl. bør gemmes som sin egen RDS-fil — ét
 | `extract_nmi.rds` | Komorbiditet ved baseline | `pnr`, `nmi_score` |
 | `extract_ses.rds` | Socioøkonomiske variable | `pnr`, `udda`, `indkomst`, `socio` |
 
-Målet med denne fase er at samle dem til ét datasæt med `left_join()` — én ny kolonne per fil.
-
-```{mermaid}
-flowchart LR
-    E1["extract_demens.rds"]:::ext
-    E2["extract_emigration.rds"]:::ext
-    E3["extract_bef.rds"]:::ext
-    E4["extract_nmi.rds"]:::ext
-    E5["extract_ses.rds"]:::ext
-    K[("full_cohort.rds<br>pnr · index_date · exposed")]:::cohort
-    A[("analyse_data<br>én række per person")]:::out
-
-    E1 -->|"left_join(by = pnr)"| K
-    E2 --> K
-    E3 --> K
-    E4 --> K
-    E5 --> K
-    K --> A
-
-    classDef cohort fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
-    classDef ext fill:#f6f6f6,stroke:#aaaaaa,color:#444444;
-    classDef out fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
-```
-
-Kohorten er rygraden. Hvert udtræk kobles på med `left_join()` via `pnr` og tilføjer sine kolonner — alle kohortemedlemmer bevares, og personer uden match får `NA`.
+Målet med denne fase er at samle dem til ét datasæt med `left_join()` — én ny kolonne per fil. Kohorten er rygraden: hvert udtræk kobles på via `pnr` og tilføjer sine kolonner — alle kohortemedlemmer bevares, og personer uden match får `NA`.
 
 ::: {.callout-important}
 **Saml kun det du skal bruge.**
@@ -418,7 +398,10 @@ Kolonner der mangler i den ene tabel (fx en kolonne der kun findes i LPR3) fylde
 
 ---
 
-## Praktisk eksempel: kohorte + dødsdato
+<details>
+<summary>Praktiske eksempler: kobl dødsdato og emigration til kohorten</summary>
+
+**Dødsdato (DODSAARS)**
 
 ```r
 # Kohort-data (én række per person):
@@ -436,9 +419,7 @@ kohort_med_dod <- kohort %>%
   left_join(dodsaars, by = "pnr")       # tilknyt dødsdato — NA = fortsat i live
 ```
 
----
-
-## Praktisk eksempel: kohorte + emigrationsdato
+**Emigrationsdato (VNDS)**
 
 Emigration censurerer ligesom død — personen forlader studiet den dag de udvandrer.
 VNDS indeholder én række per migrationsbegivenhed; brug kun `"U"` (udvandring) og tag den første dato per person.
@@ -460,6 +441,8 @@ vnds <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers
 kohort_med_emigration <- kohort %>%
   left_join(vnds, by = "pnr")                    # NA = aldrig emigreret i studieperioden
 ```
+
+</details>
 
 ---
 
@@ -516,7 +499,7 @@ saveRDS(kohort_final, "datasets/analysis_dataset.rds")   # gem det endelige data
 
 ::: {.callout-tip}
 **Designvalgene** (hvem er sammenligningskohorten, immortal time, matching-ratio) hører til planlægningen — se [Fase 1 — Sammenligningskohorten](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
-Selve **matchingen** med `heaven::riskSetMatch()` er vist i kodeskelettet nedenfor.
+Selve **kohorteopbygningen og matchingen** med `heaven::riskSetMatch()` — inkl. faldgruber som immortal time — er i [Fase 10 — Byg din studiepopulation](10_byg-din-kohorte.qmd).
 :::
 
 <details>
@@ -579,45 +562,6 @@ saveRDS(kohort_final, "datasets/analysis_dataset.rds")   # gem det endelige data
 nrow(kohort_final)                                        # verificér antal personer
 names(kohort_final)                                       # verificér kolonnenavne
 ```
-
-</details>
-
-<details>
-<summary>Mere i dybden — matching, immortal time og et kodeskelet</summary>
-
-**Vigtige faldgruber, når du bygger sammenligningskohorten:**
-
-- **Immortal time bias:** en person i sammenligningskohorten skal være i live, bosat i Danmark og opfylde inklusionskriterierne **på sin tildelte index-dato** — ikke kun ved studiestart.
-- **Risk-set / incidence-density sampling:** en person kan optræde i sammenligningskohorten og *senere* selv blive opereret og blive case. Beslut hvordan du håndterer det (heaven understøtter risk-set-matching).
-- **Matching-ratio:** fx 1:5 eksponeret:sammenligningskohorte — flere kontroller giver mere præcision, men aftagende udbytte.
-- **Samme eksklusioner** anvendes på begge grupper, ellers introducerer du selektionsbias.
-
-**Kodeskelet** (mønster — ikke en færdig pipeline):
-
-```r
-library(dstDataPrep); library(dplyr); library(heaven)
-
-# 1. Eksponeret kohorte: operationsdato som index (SKS-koder — se Fase 9)
-eksponeret <- opr_alle %>%                       # fra SKS-udtrækket (Fase 9 / 14d)
-  group_by(pnr) %>% arrange(opr_dato) %>% slice(1) %>% ungroup() %>%
-  transmute(pnr, index_date = opr_dato, exposed = 1L)
-
-# 2. Matchpool fra BEF (alle der IKKE er opereret) — tilføj matchingvariable
-#    (alder ved index, koen, kalenderår) ...
-
-# 3. Risk-set matching, fx 1:5 på koen + foedselsaar
-matched <- riskSetMatch(
-  ptid  = "pnr", event = "exposed",
-  terms = c("koen", "foedselsaar"),
-  dat   = pool, ratio = 5
-)
-```
-
-::: {.callout-warning}
-**Skelettets er et udgangspunkt — brug det som inspiration.** Trin 1–3 ovenfor kan bruges nu: erstat variabelnavne og koder med dine egne. Den fulde, projektspecifikke og testede pipeline til dette studie er endnu ikke færdig.
-:::
-
-Funktionerne brugt her er forklaret i [Fase 15 — Funktioner: oversigt](15a_guide_til_funktioner.qmd) (`group_by`, `slice`, `transmute`, `left_join`) og [Fase 14](14a_pakker-oversigt.qmd) (`riskSetMatch`).
 
 </details>
 

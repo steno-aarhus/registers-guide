@@ -166,6 +166,9 @@ Exclude persons who already had the diagnosis *before* index date — otherwise 
 
 You need your extracted LPR diagnosis table from [Phase 9](09b_udtraek_fra_lpr.qmd) — either `alle_dx` or your direct extraction.
 
+<details>
+<summary>Show code</summary>
+
 ```r
 EXCL_CODES <- c("G30", "F00", "F01", "F02", "F03")   # change to your own exclusion codes
 
@@ -182,6 +185,8 @@ exposed_excl <- exposed %>%
 cat("Exposed after exclusion:  ", nrow(exposed_excl),                   "\n")
 cat("Excluded:                 ", nrow(exposed) - nrow(exposed_excl),   "\n")
 ```
+
+</details>
 
 ::: {.callout-tip}
 **Lookback period:** Consider restricting `date_contact < index_date` further — e.g. only the 5 years before index — to avoid false exclusions based on very old diagnoses.
@@ -202,6 +207,9 @@ Prevalence exclusion also applies to the **matchpool** (step 3) — exclude peop
 
 Comparator candidates are drawn from BEF — everyone in the population not yet exposed. Add the variables you want to match on (birth year, sex, calendar year etc.).
 
+<details>
+<summary>Show code</summary>
+
 ```r
 bef <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>%
   rename_with(tolower)
@@ -221,6 +229,8 @@ matchpool <- bef %>%
 nrow(matchpool)                                             # number of potential comparators
 ```
 
+</details>
+
 ---
 
 ## Step 4 — Apply inclusion criteria BEFORE sampling
@@ -231,6 +241,9 @@ Exclusion of e.g. persons under 18 or not residing in Denmark must happen on the
 
 See: [Lund et al., *Clinical Epidemiology* 2015](https://doi.org/10.2147/CLEP.S164456) for a review of bias from incorrect exclusion order.
 :::
+
+<details>
+<summary>Show code</summary>
 
 ```r
 # Attach BEF variables to matchpool and apply inclusion criteria
@@ -252,11 +265,16 @@ exposed_clean <- exposed_excl %>%
   filter(alder >= 18, opr_land == 5100)
 ```
 
+</details>
+
 ---
 
 ## Step 5 — Match comparators
 
 `heaven::riskSetMatch()` implements risk-set sampling / incidence-density sampling — the standard in register-based cohorts.
+
+<details>
+<summary>Show code</summary>
 
 ```r
 library(heaven)   # riskSetMatch
@@ -278,6 +296,8 @@ matched <- riskSetMatch(
 )
 ```
 
+</details>
+
 ::: {.callout-note}
 **Chronological sampling and replacement.**
 `riskSetMatch()` samples chronologically — persons can contribute to the comparator cohort up until the point they themselves become exposed. Take an explicit position on whether there should be **replacement** (a person can be matched to multiple exposed individuals) or not. Replacement increases effective sample size but gives correlated observations — this must be handled in the analysis. See [Lund et al. 2015](https://doi.org/10.2147/CLEP.S164456) and `?riskSetMatch` for details.
@@ -286,6 +306,16 @@ matched <- riskSetMatch(
 :::
 
 Matched comparators are automatically assigned the matched exposed person's index date.
+
+<details>
+<summary>More in depth — pitfalls when building the comparison cohort</summary>
+
+- **Immortal time bias:** a person in the comparison cohort must be alive, resident in Denmark and meet the eligibility criteria **on their assigned index date** — not only at the start of the study.
+- **Risk-set / incidence-density sampling:** a person can appear in the comparison cohort and *later* become exposed themselves and become a case. Decide how you handle that (`riskSetMatch()` supports risk-set matching).
+- **Matching ratio:** e.g. 1:5 exposed:comparison — more controls give more precision, but with diminishing returns.
+- **The same exclusions** are applied to both groups, otherwise you introduce selection bias.
+
+</details>
 
 ---
 

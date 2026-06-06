@@ -6,6 +6,10 @@ date: last-modified
 
 You arrive at this phase with separate RDS files: your cohort from [Phase 10](10_byg-din-kohorte.qmd), event dates from [Phase 9](09b_udtraek_fra_lpr.qmd), covariates from [Phase 6](06_foerste-udtraek.qmd) and socioeconomic variables from [Phase 13](13_socioekonomiske-variable.qmd). You leave with one analysis-ready dataset ready for [Phase 14](14a_pakker-oversigt.qmd).
 
+::: {.callout-tip}
+**In short:** Reshape each extract to **one row per person** (with `pivot_wider()` or `group_by() + slice()`), then join them on `pnr` with `left_join()` into one analysis-ready dataset.
+:::
+
 Before you can analyse, you need to:
 
 1. Shape each extract into **one row per person** (most registers are in long format with many rows per person)
@@ -48,31 +52,7 @@ Each extraction from Phases 6, 9 and 12 etc. should be saved as its own RDS file
 | `extract_nmi.rds` | Comorbidity at baseline | `pnr`, `nmi_score` |
 | `extract_ses.rds` | Socioeconomic variables | `pnr`, `education`, `income`, `occupation` |
 
-The goal of this phase is to assemble them into one dataset with `left_join()` — one new column per file.
-
-```{mermaid}
-flowchart LR
-    E1["extract_dementia.rds"]:::ext
-    E2["extract_emigration.rds"]:::ext
-    E3["extract_bef.rds"]:::ext
-    E4["extract_nmi.rds"]:::ext
-    E5["extract_ses.rds"]:::ext
-    K[("full_cohort.rds<br>pnr · index_date · exposed")]:::cohort
-    A[("analysis_data<br>one row per person")]:::out
-
-    E1 -->|"left_join(by = pnr)"| K
-    E2 --> K
-    E3 --> K
-    E4 --> K
-    E5 --> K
-    K --> A
-
-    classDef cohort fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
-    classDef ext fill:#f6f6f6,stroke:#aaaaaa,color:#444444;
-    classDef out fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
-```
-
-The cohort is the backbone. Each extract is joined on with `left_join()` via `pnr` and adds its columns — all cohort members are kept, and people with no match get `NA`.
+The goal of this phase is to assemble them into one dataset with `left_join()` — one new column per file. The cohort is the backbone: each extract is joined on via `pnr` and adds its columns — all cohort members are kept, and people with no match get `NA`.
 
 ::: {.callout-important}
 **Assemble only what you need.**
@@ -419,7 +399,10 @@ Columns missing in one table (e.g. a column that only exists in LPR3) are automa
 
 ---
 
-## Practical example: cohort + date of death
+<details>
+<summary>Practical examples: join date of death and emigration to the cohort</summary>
+
+**Date of death (DODSAARS)**
 
 ```r
 # Cohort data (one row per person):
@@ -437,9 +420,7 @@ cohort_with_death <- kohort %>%
   left_join(dodsaars, by = "pnr")       # attach death date — NA = still alive
 ```
 
----
-
-## Practical example: cohort + emigration date
+**Emigration date (VNDS)**
 
 Emigration censors just like death — the person leaves the study on the day they emigrate.
 VNDS contains one row per migration event; use only `"U"` (emigration) and take the first date per person.
@@ -461,6 +442,8 @@ vnds <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers
 cohort_with_emigration <- kohort %>%
   left_join(vnds, by = "pnr")                    # NA = never emigrated during the study period
 ```
+
+</details>
 
 ---
 
@@ -517,7 +500,7 @@ saveRDS(cohort_final, "datasets/analysis_dataset.rds")   # save the final datase
 
 ::: {.callout-tip}
 **Design choices** (who is the comparator cohort, immortal time, matching ratio) belong to the planning stage — see [Phase 1 — The comparator cohort](01_studieforberedelse.qmd#comparator-cohort).
-The actual **matching** with `heaven::riskSetMatch()` is shown in the code skeleton below.
+The actual **cohort building and matching** with `heaven::riskSetMatch()` — including pitfalls such as immortal time — are in [Phase 10 — Build your study population](10_byg-din-kohorte.qmd).
 :::
 
 <details>
@@ -580,45 +563,6 @@ saveRDS(cohort_final, "datasets/analysis_dataset.rds")   # save the final datase
 nrow(cohort_final)                                        # verify number of persons
 names(cohort_final)                                       # verify column names
 ```
-
-</details>
-
-<details>
-<summary>More in depth — matching, immortal time and a code skeleton</summary>
-
-**Important pitfalls when building the comparator cohort:**
-
-- **Immortal time bias:** a person in the comparator cohort must be alive, residing in Denmark and meeting the inclusion criteria **on their assigned index date** — not only at study start.
-- **Risk-set / incidence-density sampling:** a person can appear in the comparator cohort and *later* themselves become operated and become a case. Decide how you handle that (heaven supports risk-set matching).
-- **Matching ratio:** e.g. 1:5 exposed:comparator cohort — more controls gives more precision, but with diminishing returns.
-- **The same exclusions** are applied to both groups, otherwise you introduce selection bias.
-
-**Code skeleton** (pattern — not a finished pipeline):
-
-```r
-library(dstDataPrep); library(dplyr); library(heaven)
-
-# 1. Exposed cohort: surgery date as index (SKS codes — see Phase 9)
-exposed <- opr_all %>%                       # from the SKS extraction (Phase 9 / 14d)
-  group_by(pnr) %>% arrange(surgery_date) %>% slice(1) %>% ungroup() %>%
-  transmute(pnr, index_date = surgery_date, exposed = 1L)
-
-# 2. Matchpool from BEF (all who were NOT operated on) — add matching variables
-#    (age at index, sex, calendar year) ...
-
-# 3. Risk-set matching, e.g. 1:5 on sex + birth year
-matched <- riskSetMatch(
-  ptid  = "pnr", event = "exposed",
-  terms = c("koen", "birth_year"),
-  dat   = pool, ratio = 5
-)
-```
-
-::: {.callout-warning}
-**The skeleton is a starting point — use it as inspiration.** Steps 1–3 above can be used now: replace variable names and codes with your own. The full, project-specific and tested pipeline for this study is not yet finished.
-:::
-
-Functions used here are explained in [Phase 15 — Functions: overview](15a_guide_til_funktioner.qmd) (`group_by`, `slice`, `transmute`, `left_join`) and [Phase 14](14a_pakker-oversigt.qmd) (`riskSetMatch`).
 
 </details>
 
