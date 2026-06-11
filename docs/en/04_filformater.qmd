@@ -120,8 +120,9 @@ The file is opened as a *connection*, not as data. You can filter and select col
 
 ::: {.callout-important}
 **SAS files are also large — and are shared with everyone on the server.**
-On DST all users share the server's RAM. `read_sas()` on a large SAS file burdens the server for everyone at the same time. If you use a SAS file repeatedly, it is worth converting it to parquet once — this saves significant RAM and makes loading much faster.
-See [Convert SAS to parquet](#convert-sas-to-parquet) below for the procedure.
+On DST all users share the server's RAM. `read_sas()` on a large SAS file burdens the server for everyone at the same time. DST **automatically kills processes** (RStudio sessions, jobs, etc.) when RAM is close to full — so an oversized extraction can cost you your unsaved work. If you use a SAS file repeatedly, it is worth converting it to parquet once — this saves significant RAM and makes loading much faster.
+See [Convert SAS to parquet](#convert-sas-to-parquet) below for the procedure, and [Phase 12 — Mind your RAM in the shared environment](12_god-kode-praksis.qmd#mind-your-ram) for the practical habits.
+DST's official advice is collected in [DST guide: Reducing RAM use in the shared environment (PDF, Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
 :::
 
 Why lazy loading works, and how `collect()` functions, is the topic of the next phase.
@@ -171,7 +172,13 @@ open_dataset(parq_path) %>% glimpse()
 ```
 
 ::: {.callout-tip}
-**Large SAS files:** `heaven::import_SAS()` (pre-installed on DST) is more efficient than `read_sas()` for large files and can limit what is read — e.g. `keep = c("pnr","atc")`, `where = "..."` (filter rows) or `obs = 1000` (first rows only, good for testing).
+**Read only what you need.** Even before converting you can save RAM by limiting what is read in:
+
+- `read_sas()` (`haven`) takes `col_select = c(pnr, alder, civst)` (pick columns), `n_max = 10000` (first rows only — good for testing) and `skip =`.
+- `heaven::import_SAS()` (pre-installed on DST) is even more efficient for large files and can filter on values — e.g. `keep = c("pnr","atc")`, `where = "..."` (filter rows) or `obs = 1000`.
+- Once the register is in parquet, filter on a list of e.g. CPR numbers with `%in%` or `semi_join()` in the `open_dataset()` pipeline, before you call `collect()`.
+
+You can also convert to Parquet (or `.dta`) in **StatTransfer**, available on every server in the shared environment.
 :::
 
 After conversion you can use the register lazily with `open_dataset()` like any other:
