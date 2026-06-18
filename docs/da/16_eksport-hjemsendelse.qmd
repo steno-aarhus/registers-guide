@@ -6,95 +6,84 @@ date: last-modified
 
 Du har bygget dit datasæt og kørt din analyse (Fase 0–14). Tilbage er det sidste skridt: at få resultaterne sikkert ud af DST.
 
-Data fra Danmarks Statistik er mikrodata underlagt GDPR og særlige regler for forskningsdata.
-Du kan **ikke** kopiere rå data ud — alt skal igennem DST's hjemtagelsesproces.
+Data fra Danmarks Statistik er mikrodata underlagt GDPR. Du kan **ikke** kopiere rå data ud — alt skal igennem DST's hjemtagelsesproces, og de præcise regler står i DST's egen vejledning.
 
-**LÆS OG GENLÆS** [DST — Regler for hjemtagelse af analyseresultater →](https://www.dst.dk/da/TilSalg/data-til-forskning/regler-og-datasikkerhed/regler-for-hjemtagelse-af-analyseresultater)
+::: {.callout-important}
+**Denne side er kun et overblik. DST's egen vejledning har forrang — læs og genlæs den.**
+[DST — Regler for hjemtagelse af analyseresultater →](https://www.dst.dk/da/TilSalg/data-til-forskning/regler-og-datasikkerhed/regler-for-hjemtagelse-af-analyseresultater)
+:::
 
 ---
 
-## Hvad må du eksportere?
+## Hvad må forlade DST?
 
 **Ja:**
+
 - Aggregerede tabeller
 - Grafer og figurer
 - Modeloutput — koefficienter, konfidensintervaller, p-værdier
 
 **Nej:**
+
 - Individdata i nogen form
-- Celler med færre end 3 observationer (nogle registre kræver minimum 5)
+- Celler med færre end 5 observationer
 - Resultater der kan identificere enkeltpersoner — direkte eller indirekte
 
 ::: {.callout-note}
-**Scripts eksporteres også via hjemtagelsesprocessen — ikke frit.**
-Kode/scripts kan hjemsendes, men går igennem den samme proces som resultatfiler.
+**Scripts hjemsendes også via processen — ikke frit.**
+Kode/scripts kan hjemsendes, men går igennem samme proces som resultatfiler.
 :::
 
 ---
 
-## Processen — "Hjemtag Filer" i DDV-appen
+## OBS: min, max, percentiler og median kan pege på én person
 
-1. **Gem filer i din projektmappe** med præcise, sigende filnavne — se nedenfor
-2. **Upload i DDV-appen** via "Hjemtag Filer"
-3. **Systemet scanner automatisk** for potentielle mikrodata og flagger risici
-4. **Tilføj kommentar** hvis en fil flagges — beskriv præcist hvad filen indeholder og hvorfor den er aggregeret
-5. **Bekræft** overholdelse af DST's fortrolighedspolitik (afkrydsning)
-6. **Download** under "Mit overblik" → dit projekt → "Hjemtagelser"
+`min`, `max`, percentiler og `median` gengiver konkrete værdier fra datasættet — en minimums- eller maksimumsværdi *er* én persons faktiske tal. Rapportér dem kun, hvis **mindst 5 personer har den pågældende værdi**; ellers kan tallet pege på en enkelt person.
+
+Er du i tvivl om en deskriptiv tabel med min, max, percentiler eller median, så tjek grænsen i DST's vejledning eller med din datamanager, før du hjemsender den.
+
+---
+
+## OBS: manglende værdier (NA) tæller også
+
+En manglende værdi er også en celle. Har en kategori **færre end 5 manglende**, må tallet heller ikke hjemsendes. Løsninger: imputér, slå kategorier sammen, udelad kategorien — eller en anden løsning aftalt med din datamanager.
+
+Lav et hurtigt overblik over manglende, så du ser de små celler med det samme i stedet for at lægge tal sammen i hovedet:
+
+```r
+colSums(is.na(df))                     # antal NA per kolonne — se straks om nogen er 1–4
+table(df$kategori, useNA = "always")   # viser NA som egen kategori (ellers skjules de)
+```
+
+`table()` skjuler NA som standard — `useNA = "always"` tvinger NA-rækken frem. Se [Fase 7 — `table()` skjuler NA](07_inspicer-data.qmd).
+
+---
+
+## OBS: hvem må hjemsende?
 
 ::: {.callout-important}
-**Brug præcise filnavne og stier — ikke generiske navne som `output.csv`.**
-Når systemet flagger en fil, er dit bedste forsvar et sigende filnavn (`tabel1_deskriptiv_n500.csv`) og en klar kommentar om hvad filen er. Ingen README kræves — beskriv i kommentarfeltet i DDV-appen.
+**På Steno skal den, der varetager hjemtagelsen, være godkendt til opgaven.**
+Afklar med din projektleder/datamanager, hvem der må hjemsende, før du uploader noget.
 :::
 
 ---
 
-## Gem filer til outputmappen
+## Sådan foregår det
 
-Når du ikke angiver en fuld sti i forbindelse med din gem-kommando, så gemmer R filen i din **arbejdsmappe** — tjek den med:
+Selve hjemsendelsen sker via **"Hjemtag Filer"** i DDV-appen. Systemet scanner automatisk for mulige mikrodata og flagger risici. Bliver en fil flagget, tilføjer du en kommentar, der præcist beskriver hvad filen indeholder, og hvorfor den er aggregeret. Brug **sigende filnavne** (`tabel1_deskriptiv_n500.csv`) — ikke generiske navne som `output.csv`.
 
-```r
-getwd()   # viser din nuværende arbejdsmappe, fx "E:/workdata/708421/myproject"
-```
-
-Gem med fuld sti så du er sikker på at filen havner det rigtige sted:
-
-```r
-library(readr)   # write_csv
-
-# Erstat stien med din projekts mappe:
-output_sti <- "E:/workdata/[projektnummer]/workspaces/[dit-mappenavn]/[evt-projekt-navn]/output/"
-
-# Aggregeret tabel som CSV-fil:
-write_csv(min_tabel, paste0(output_sti, "tabel1_deskriptiv.csv"))
-
-# Figur som PNG-fil (width/height i tommer, dpi = opløsning):
-ggsave(paste0(output_sti, "figur1_km.png"),
-       plot = min_figur, width = 8, height = 6, dpi = 300)
-
-# Modeloutput som tekstfil:
-sink(paste0(output_sti, "cox_resultater.txt"))   # alt efterfølgende output skrives til filen
-print(summary(cox_model))                         # skriv resultater
-sink()                                            # stop — output går igen til konsollen
-```
-
----
-
-## Afrunding
-
-DST kræver at tælleværdier er tilstrækkeligt aggregerede. Manuel afrunding til nærmeste 5:
-
-```r
-round(antal / 5) * 5   # 23 → 25, 12 → 10
-```
+Den fulde trin-for-trin-proces og de gældende regler står i [DST's vejledning](https://www.dst.dk/da/TilSalg/data-til-forskning/regler-og-datasikkerhed/regler-for-hjemtagelse-af-analyseresultater) — følg den.
 
 ---
 
 ## Tjekliste inden du uploader
 
 - [ ] Ingen individdata — kun aggregerede resultater
-- [ ] Alle celler ≥ 3 observationer (tjek om dit register kræver ≥ 5)
-- [ ] Filnavne er præcise og sigende
-- [ ] Scripts er rene — ingen mikrodata i koden
+- [ ] Alle celler ≥ 5 observationer
+- [ ] Min, max, percentiler, median: mindst 5 personer bag hver værdi
+- [ ] Ingen kategori har 1–4 manglende (NA) — imputér, slå sammen eller udelad
+- [ ] Sigende filnavne; scripts rene — ingen mikrodata i koden
+- [ ] Du er godkendt til at hjemsende
 
 ---
 
