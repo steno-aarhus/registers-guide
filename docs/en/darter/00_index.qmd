@@ -62,28 +62,16 @@ Do it again if `library(dstDataPrep)` reports `Error: there is no package called
 ::: {.callout-important}
 **Step 2 — Reinstall `duckplyr` at the start of each session**
 
+`duckplyr` provides the DuckDB engine behind `compute()` (see the [Large registers](#store-registre) section below). DST resets installed packages at logout, so it must be reinstalled at the start of each session:
+
 ```r
 install.packages("duckplyr")   # run before library() — resets at logout
 ```
 :::
 
-::: {.callout-tip}
-**Alternative: use `compute()` for DuckDB connection**
-`load_database()` returns an Arrow connection that only supports a subset of dplyr functions.
-If you need DuckDB-specific functionality or experience slow performance, you can pipe to `compute()`:
-
-```r
-lmdb <- load_database("lmdb") %>%
-  filter(pnr %in% !!kohort$pnr) %>%   # filter in Arrow BEFORE compute — reduce data
-  compute()                             # convert to DuckDB connection
-```
-
-Always reduce data with `filter()`/`select()` before `compute()`. See [osdc documentation](https://steno-aarhus.github.io/osdc/) for DuckDB configuration and memory limits.
-:::
-
 ---
 
-**Before running a script:** verify that `path_output` at the top of each script points to your workspace folder.
+**Before running a script:** verify that `path_output` at the top of each script points to your workspace folder (defined under [Base paths in Register paths and datastores](01_registersti-datastores.qmd#basestier)).
 
 ### Recommendation: create a helper function for LPR extractions
 
@@ -202,10 +190,31 @@ This is the DARTER variant (using `load_database()` and the confirmed register n
 
 ---
 
+## Large registers — `compute()` vs `collect()` {#store-registre}
+
+`get_lpr_diagnoses()` above ends each extraction with `collect()` — which pulls the result **into R**. On a very large register (e.g. LMDB or laboratory results) you can pipe to `compute()` instead.
+
+`load_database()` returns an **Arrow** connection that only supports a subset of dplyr functions. If you need DuckDB-specific functionality or experience slow performance, `compute()` helps.
+
+**The difference between `collect()` and `compute()`:** `collect()` pulls the data **into R** (you are done with the lazy connection and can now use `$`, `table()`, etc.). `compute()` runs the query but leaves the result **in the database** (Arrow → DuckDB) — it is still a lazy connection you can keep piping on, without filling R's RAM. That is the DuckDB engine from `duckplyr` (see Step 2 above). You still `collect()` at the end when you want the data in R. More on lazy connections and `collect()`: [Phase 5 — Extracting data step by step](../05_universelle-moenster.qmd).
+
+```r
+lmdb <- load_database("lmdb") %>%
+  filter(pnr %in% !!kohort$pnr) %>%   # filter in Arrow BEFORE compute — reduce data
+  compute()                             # materialise as DuckDB — not in R yet
+```
+
+Always reduce data with `filter()`/`select()` before `compute()`. The `!!` sign before an R variable is explained in [Phase 5 — The most important rule](../05_universelle-moenster.qmd#filtrer-foer-hent). See [osdc documentation](https://steno-aarhus.github.io/osdc/) for DuckDB configuration and memory limits.
+
+---
+
 ## See also
 
 `get_lpr_diagnoses()` above wraps the pattern from the general guide:
 
-- [Phase 9 — Hospital contacts (LPR)](../09a_forstaa_lpr.qmd) — the explanation behind the two-phase strategy, LPR2/LPR3 and the D-prefix
 - [Phase 8 — Know your registers](../08_kend-dine-registre.qmd) — which register contains what
+- [Phase 9 — Hospital contacts (LPR)](../09a_forstaa_lpr.qmd) — the explanation behind the two-phase strategy, LPR2/LPR3 and the D-prefix
+- [Phase 10 — Build your cohort](../10_byg-din-kohorte.qmd) — where you create `full_cohort.rds`, which the function above reads
 - [Register paths and datastores](01_registersti-datastores.qmd) — confirmed paths on 708421
+
+**Further down the pipeline:** [Phase 7 — Inspect data](../07_inspicer-data.qmd) · [Phase 11 — Data manipulation](../11_data-manipulation.qmd) · [Phase 16 — Export and repatriation](../16_eksport-hjemsendelse.qmd)

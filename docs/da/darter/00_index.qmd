@@ -62,28 +62,16 @@ Gør det igen hvis `library(dstDataPrep)` melder `Error: there is no package cal
 ::: {.callout-important}
 **Trin 2 — Geninstaller `duckplyr` i starten af hver session**
 
+`duckplyr` leverer DuckDB-motoren bag `compute()` (se afsnittet [Store registre](#store-registre) nedenfor). DST nulstiller installerede pakker ved logout, så den skal geninstalleres i starten af hver session:
+
 ```r
 install.packages("duckplyr")   # kør inden library() — nulstilles ved logout
 ```
 :::
 
-::: {.callout-tip}
-**Alternativ: brug `compute()` til DuckDB-forbindelse**
-`load_database()` returnerer en Arrow-forbindelse der kun understøtter et subset af dplyr-funktioner.
-Har du brug for DuckDB-specifik funktionalitet eller oplever du langsom ydeevne, kan du pipe til `compute()`:
-
-```r
-lmdb <- load_database("lmdb") %>%
-  filter(pnr %in% !!kohort$pnr) %>%   # filtrer i Arrow FØR compute — reducer data
-  compute()                             # konvertér til DuckDB-forbindelse
-```
-
-Reducer altid data med `filter()`/`select()` inden `compute()`. Se [osdc-dokumentationen](https://steno-aarhus.github.io/osdc/) for DuckDB-konfiguration og memory limits.
-:::
-
 ---
 
-**Inden du kører et script:** kontroller at `path_output` øverst i hvert script peger på din workspace-mappe.
+**Inden du kører et script:** kontroller at `path_output` øverst i hvert script peger på din workspace-mappe (defineret under [Basestier i Registersti og datastores](01_registersti-datastores.qmd#basestier)).
 
 ### Anbefaling: lav en hjælpefunktion til LPR-udtræk
 
@@ -202,10 +190,31 @@ Dette er DARTER-varianten (med `load_database()` og de bekræftede registernavne
 
 ---
 
+## Store registre — `compute()` vs `collect()` {#store-registre}
+
+`get_lpr_diagnoses()` ovenfor afslutter hvert udtræk med `collect()` — det henter resultatet **ind i R**. På et meget stort register (fx LMDB eller laboratoriesvar) kan du i stedet pipe til `compute()`.
+
+`load_database()` returnerer en **Arrow**-forbindelse, der kun understøtter et subset af dplyr-funktioner. Har du brug for DuckDB-specifik funktionalitet eller oplever langsom ydeevne, hjælper `compute()`.
+
+**Forskellen på `collect()` og `compute()`:** `collect()` henter data **ind i R** (du er færdig med den dovne forbindelse og kan nu bruge `$`, `table()` mv.). `compute()` udfører forespørgslen, men lader resultatet blive **i databasen** (Arrow → DuckDB) — det er stadig en doven forbindelse, du kan pipe videre på, uden at fylde R's RAM. Det er DuckDB-motoren fra `duckplyr` (se Trin 2 ovenfor). Du `collect()`'er stadig til sidst, når du vil have data ind i R. Mere om dovne forbindelser og `collect()`: [Fase 5 — Udtræk trin for trin](../05_universelle-moenster.qmd).
+
+```r
+lmdb <- load_database("lmdb") %>%
+  filter(pnr %in% !!kohort$pnr) %>%   # filtrer i Arrow FØR compute — reducer data
+  compute()                             # materialisér som DuckDB — endnu ikke i R
+```
+
+Reducer altid data med `filter()`/`select()` inden `compute()`. Tegnet `!!` foran en R-variabel er forklaret i [Fase 5 — Den vigtigste regel](../05_universelle-moenster.qmd#filtrer-foer-hent). Se [osdc-dokumentationen](https://steno-aarhus.github.io/osdc/) for DuckDB-konfiguration og memory limits.
+
+---
+
 ## Se også
 
 `get_lpr_diagnoses()` ovenfor pakker mønstret fra den generelle vejledning ind:
 
-- [Fase 9 — Hospitalskontakter (LPR)](../09a_forstaa_lpr.qmd) — forklaringen bag to-fase strategien, LPR2/LPR3 og D-præfikset
 - [Fase 8 — Kend dine registre](../08_kend-dine-registre.qmd) — hvilket register indeholder hvad
+- [Fase 9 — Hospitalskontakter (LPR)](../09a_forstaa_lpr.qmd) — forklaringen bag to-fase strategien, LPR2/LPR3 og D-præfikset
+- [Fase 10 — Byg din kohorte](../10_byg-din-kohorte.qmd) — her laver du `full_cohort.rds`, som funktionen ovenfor læser
 - [Registersti og datastores](01_registersti-datastores.qmd) — de bekræftede stier på 708421
+
+**Videre i pipelinen:** [Fase 7 — Inspicér data](../07_inspicer-data.qmd) · [Fase 11 — Datamanipulation](../11_data-manipulation.qmd) · [Fase 16 — Eksport og hjemsendelse](../16_eksport-hjemsendelse.qmd)
