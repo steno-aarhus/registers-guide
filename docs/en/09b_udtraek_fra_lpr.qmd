@@ -13,12 +13,21 @@ You use the same extraction pattern as in [Phase 5](05_universelle-moenster.qmd)
 To build your cohort (Phase 10) you need to know how to extract diagnosis codes and procedures from LPR. To extract diagnosis codes from LPR (this page) you need a cohort. We resolve it as follows: **this page teaches you the extraction pattern** — we assume you already have a cohort. **[Phase 10](10_byg-din-kohorte.qmd) shows you how to build that cohort** using exactly the pattern you just learned. Read the phases in order, and come back to the code here when your cohort is ready.
 :::
 
-::: {.callout-note}
-The code examples use the column names DST's parquet registers typically have. Your columns may be named differently — check with `names(your_data)` or look them up in [Phase 15 — Register reference](15d_register_reference.qmd).
+::: {.callout-warning}
+**LPR_A variable names are new — verify against your own data.** LPR3 recently switched from the old LPR_F format to the new LPR_A format (see [LPR3 comes in two file formats](#lpr-a-format) below), and that switch has changed a number of variable names — often opaque Danish abbreviations. The code examples use the names the registers typically have, but always check with `colnames(your_data)` against the actual files, and look them up in [Phase 15 — Register reference](15d_register_reference.qmd), before relying on a column name.
 :::
 
 ::: {.callout-note}
 The code uses `inner_join()` and `bind_rows()`. If these are new concepts, they are explained in detail in [Phase 11 — Joins and pivots](11_data-manipulation.qmd) — you can follow the code here and return to Phase 11 afterwards.
+:::
+
+::: {.callout-warning #lpr-a-format}
+**LPR3 comes in two file formats — be attentive to which files you load**
+DST has switched LPR3 from the old **LPR_F** format (files like `kontakter`, `diagnoser`, `forloeb`) to the new **LPR_A** format (`lpr_a_kontakt`, `lpr_a_diagnose`). Depending on how your project's data was delivered, **both versions may sit in your data folder** and cover the same years. Loading both — or mixing old and new — gives you **duplicated rows**.
+
+Consistently use the **LPR_A** files (`lpr_a_*`), as in the examples here, and leave the old LPR_F files alone.
+
+Some projects also have older data *inside* `lpr_a_kontakt` that is already present in LPR2 — if you combine the two periods without filtering, the same contacts are counted twice. Filter them out with `lprindberetningssystem == "LPR3"`. **That is project-specific** — if you are on **DARTER** it is handled in [pitfall 5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem). Otherwise, check with your data manager whether your project needs a similar filter.
 :::
 
 ---
@@ -365,7 +374,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
   psyk_diag <- open_dataset(paste0(base, "t_psyk_diag/")) %>% rename_with(tolower) %>%
     rename(recnum = v_recnum)                                          # LPR2 psychiatric diagnoses
   lpr3_k    <- open_dataset(paste0(base, "lpr_a_kontakt/"))  %>% rename_with(tolower) %>%
-    filter(lprindberetningssystem == "LPR3")                               # CRITICAL: avoid duplicated rows from LPR_F format
+    filter(lprindberetningssystem == "LPR3")                               # CRITICAL (DARTER): keep only rows from the LPR3 system — avoid overlapping rows
   lpr3_d    <- open_dataset(paste0(base, "lpr_a_diagnose/")) %>% rename_with(tolower)  # LPR3 diagnoses
 
   # Filter on admission type if desired
