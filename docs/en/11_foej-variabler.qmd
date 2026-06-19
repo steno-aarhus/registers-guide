@@ -1,0 +1,46 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Add variables to your cohort"
+subtitle: "Extract outcomes and covariates — filtered to exactly your cohort"
+date: last-modified
+---
+
+You have built your cohort ([Phase 10](10_byg-din-kohorte.qmd)) — a table with `pnr` and `index_date` per person. Now you **extract** the variables you need: outcomes and covariates. On this page you pull out each variable as its own table; in [Phase 12](11_data-manipulation.qmd) you assemble them into one analysis dataset.
+
+::: {.callout-important}
+**Always filter to your cohort — before `collect()`.**
+You only need data on the people you have built. So filter each extraction to your cohort **while it is still lazy** (in Arrow/DuckDB), so you do not pull the entire population into R:
+
+```r
+kohort      <- readRDS("datasets/full_cohort.rds")
+cohort_pnrs <- unique(kohort$pnr)          # vector with ALL pnr (exposed + comparator cohort)
+
+register <- open_dataset("path/to/register/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!cohort_pnrs) %>%        # !! sends your R vector to DuckDB — see Phase 5
+  select(pnr, ...) %>%                       # select only the columns you need
+  collect()                                  # ONLY now is data pulled into R
+```
+
+Alternatively `semi_join()` against your cohort table. `%in% !!cohort_pnrs` is simplest when you just have a pnr vector. Filter and `select()` **before** `collect()` — the single most important rule for speed and memory (see [Phase 5](05_universelle-moenster.qmd)).
+:::
+
+---
+
+## Which variables?
+
+| Type | Page | Source |
+|---|---|---|
+| **Outcomes** (event date, censoring) | [Outcomes](11a_udfald.qmd) | LPR (diagnoses), DODSAARS (death), VNDS (emigration) |
+| **Socioeconomics** (education, income, employment) | [Socioeconomic variables](13_socioekonomiske-variable.qmd) | UDDA, FAIK, AKM |
+| **Comorbidity** (Charlson, multimorbidity) | [Comorbidity](11c_komorbiditet.qmd) | LPR + ready-made algorithms (NMI/`comorbidity`) |
+| **Demographics** (age, sex) | covered in [Phase 6](06_foerste-udtraek.qmd) | BEF |
+
+Each page shows the same pattern: open the register → filter to the cohort → select/derive the variable → `collect()` → save as `.rds`. Once all variables are extracted, you assemble them in [Phase 12 — Assemble and prepare the dataset](11_data-manipulation.qmd).
+
+---
+
+## See also
+
+- [Phase 10 — Build your study population](10_byg-din-kohorte.qmd) — the cohort you filter to
+- [Phase 12 — Assemble and prepare the dataset](11_data-manipulation.qmd) — join all extracts into one dataset
+- [Algorithms & special packages](14a_pakker-oversigt.qmd) — ready-made tools (OSDC, NMI) to derive variables

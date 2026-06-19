@@ -1,0 +1,34 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Outcomes"
+subtitle: "Extract outcome dates and censoring — filtered to your cohort"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under development.** Structural outline — to be expanded. The pattern is the same as in [Phase 9 — Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd), now filtered to your cohort.
+:::
+
+Your outcome is typically **the date of the first event** after index — a diagnosis (LPR), death (DODSAARS) or emigration (VNDS, often censoring). You extract each as its own table with `pnr` + date, filtered to the cohort.
+
+## The pattern
+
+```r
+cohort_pnrs <- unique(readRDS("datasets/full_cohort.rds")$pnr)
+
+# Example: first dementia diagnosis after index (outcome)
+outcome <- open_dataset("path/to/lpr_diag/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!cohort_pnrs) %>%          # ONLY your cohort
+  # ... join to lpr_adm for date, filter on diagnosis codes (see Phase 9) ...
+  collect() %>%
+  group_by(pnr) %>% arrange(event_date) %>% slice(1) %>% ungroup()   # first event
+
+saveRDS(outcome, "datasets/extract_outcome.rds")
+```
+
+- **Censoring:** date of death from DODSAARS (`d_dodsdto`) and emigration from VNDS (`indud_kode == "U"`) — see [Overview of registers](15d_register_reference.qmd).
+- **One outcome variable = one column = one `.rds` file**, joined in [Phase 12](11_data-manipulation.qmd).
+
+## See also
+- [Phase 9 — Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd) — the diagnosis pattern in detail
+- [Phase 12 — Assemble and prepare the dataset](11_data-manipulation.qmd) — join outcomes to the cohort

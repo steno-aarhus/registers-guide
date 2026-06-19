@@ -1,0 +1,34 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Udfald"
+subtitle: "Udtræk udfaldsdatoer og censurering — filtreret til din kohorte"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Strukturel skitse — udbygges. Mønstret er det samme som i [Fase 9 — Hospitalskontakter (LPR)](09b_udtraek_fra_lpr.qmd), nu filtreret til din kohorte.
+:::
+
+Dit udfald er typisk **datoen for den første hændelse** efter index — en diagnose (LPR), død (DODSAARS) eller emigration (VNDS, ofte censurering). Du udtrækker hver som sin egen tabel med `pnr` + dato, filtreret til kohorten.
+
+## Mønstret
+
+```r
+kohort_pnrs <- unique(readRDS("datasets/full_cohort.rds")$pnr)
+
+# Eksempel: første demensdiagnose efter index (udfald)
+udfald <- open_dataset("sti/til/lpr_diag/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!kohort_pnrs) %>%          # KUN din kohorte
+  # ... join til lpr_adm for dato, filtrér på diagnosekoder (se Fase 9) ...
+  collect() %>%
+  group_by(pnr) %>% arrange(event_date) %>% slice(1) %>% ungroup()   # første hændelse
+
+saveRDS(udfald, "datasets/extract_udfald.rds")
+```
+
+- **Censurering:** dødsdato fra DODSAARS (`d_dodsdto`) og emigration fra VNDS (`indud_kode == "U"`) — se [Register-overblik](15d_register_reference.qmd).
+- **Én udfaldsvariabel = én kolonne = én `.rds`-fil**, der joines i [Fase 12](11_data-manipulation.qmd).
+
+## Se også
+- [Fase 9 — Hospitalskontakter (LPR)](09b_udtraek_fra_lpr.qmd) — diagnosemønstret i detaljer
+- [Fase 12 — Saml & klargør datasættet](11_data-manipulation.qmd) — join udfald til kohorten
