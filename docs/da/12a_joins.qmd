@@ -1,0 +1,405 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Kobl udtræk sammen"
+subtitle: "group_by() + slice(), joins og bind_rows() — saml dine udtræk til ét datasæt"
+date: last-modified
+---
+
+Dine udtræk fra [Fase 6](06_foerste-udtraek.qmd), [Fase 9](09b_udtraek_fra_lpr.qmd) og [Fase 11](11_foej-variabler.qmd) ligger som separate RDS-filer — nogle med én række per person, andre med mange. Her reducerer du hvert udtræk til **én række per person** og kobler dem på `pnr` til ét analyseklart datasæt. Til sidst beregner du opfølgningstid og hændelsesvariabel.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts mappestruktur og kolonnenavne.
+:::
+
+---
+
+## Klargør til join — `group_by()` + `slice()`
+
+`left_join()` virker forudsigeligt, når begge tabeller har **én række per `pnr`**. Mange registerudtræk har flere rækker per person (langt format — se [12b — Langt ↔ bredt format](12b_pivots.qmd)). `group_by() + slice()` er den primære måde at reducere et datasæt til én repræsentativ række per person inden join — **det er forberedelse til join, ikke selve join**.
+
+Mønstret er altid det samme: gruppér på `pnr`, sortér så den ønskede række er øverst, tag første række per gruppe.
+
+```r
+# BEF: behold kun den nyeste post per person (BEF har ét snapshot per år)
+bef_en_per_person <- bef %>%
+  group_by(pnr) %>%          # gruppér: alle rækker med samme pnr behandles sammen
+  arrange(desc(aar)) %>%     # sortér inden for gruppen: nyeste år øverst (desc = faldende)
+  slice(1) %>%               # tag kun den første række per gruppe — dvs. det nyeste år
+  ungroup()                  # VIGTIGT: frigiv gruppering efter du er færdig
+```
+
+::: {.callout-important}
+**Husk `ungroup()` — altid.**
+`group_by()` sætter et "grouped_df"-mærke på din data.frame, som *alle* efterfølgende operationer arver. Det betyder:
+- `mutate()` beregner per gruppe, ikke per hele datasæt
+- `n()` tæller rækker per gruppe, ikke i alt
+- `summarize()` giver ét resultat per gruppe
+
+Disse fejl er svære at opdage, fordi koden kører uden fejlbeskeder og giver tilsyneladende fornuftige tal. `ungroup()` fjerner mærket og gør data.frame normal igen. Tommelfingerregel: afslut altid en `group_by()`-kæde med `ungroup()`.
+:::
+
+```r
+# LPR / alle_dx: find første diagnose per person (til udfaldsdefinition)
+foerste_demens <- alle_dx %>%
+  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # kun demenskoder
+  group_by(pnr) %>%              # gruppér per person
+  arrange(date_contact) %>%      # ældste dato øverst (stigende — ingen desc)
+  slice(1) %>%                   # første diagnose per person
+  ungroup()                      # frigiv gruppering
+# → klar til: kohort %>% left_join(foerste_demens, by = "pnr")
+```
+
+```r
+# VNDS: find første udvandring per person (en person kan have udrejst og indrejst igen)
+foerste_emigration <- vnds %>%
+  filter(indud_kode == "U") %>%   # kun udrejser
+  group_by(pnr) %>%
+  arrange(haend_dato) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+::: {.callout-tip}
+**Hvornår bruger du `group_by() + slice()` vs `pivot_wider()`?**
+Vil du have **én repræsentativ værdi** per person (nyeste snapshot, første hændelse, tidligste dato) — brug `group_by() + slice()`.
+Vil du have **to eller flere tidspunkter side om side** som separate kolonner i analysen — brug `pivot_wider()` ([12b](12b_pivots.qmd)).
+I registerbaseret forskning er `group_by() + slice()` langt det hyppigste valg.
+:::
+
+---
+
+## Joins — kobl to tabeller sammen {#joins-kobl-to-tabeller-sammen}
+
+I registerbaseret forskning arbejder du næsten altid med data fra **to eller flere tabeller**, der skal kobles sammen.
+Alle joins i `dplyr` tager to tabeller og én nøgle-kolonne, de deler (fx `pnr`).
+
+Dine udtræk deler typisk alle `pnr` som nøgle — det er den, du kobler på. Et simpelt ER-diagram over nøglerne:
+
+```{mermaid}
+erDiagram
+    full_cohort ||--o| extract_demens : pnr
+    full_cohort ||--o| extract_bef : pnr
+    full_cohort ||--o| extract_nmi : pnr
+    full_cohort {
+        string pnr PK
+        date index_date
+        int exposed
+    }
+    extract_demens {
+        string pnr FK
+        date event_date
+    }
+    extract_bef {
+        string pnr FK
+        int alder
+        int koen
+    }
+    extract_nmi {
+        string pnr FK
+        int nmi_score
+    }
+```
+
+`pnr` er primærnøgle (PK) i kohorten og fremmednøgle (FK) i hvert udtræk. `||--o|` betyder: hver person i kohorten har nul eller én matchende række i udtrækket.
+
+### De joins du vil bruge
+
+```r
+library(dplyr)   # left_join, inner_join, semi_join, anti_join
+
+# left_join: behold ALLE rækker fra x, tilføj kolonner fra y
+# Personer i x uden match i y får NA.
+resultat <- kohort %>%
+  left_join(udfald, by = "pnr")   # alle kohort-medlemmer bevares; udfald = NA hvis ingen hændelse
+
+# inner_join: behold kun rækker med match i BEGGE tabeller
+resultat <- lpr_adm %>%
+  inner_join(lpr_diag, by = "recnum")   # kun kontakter med mindst én diagnose
+
+# right_join: behold alle rækker fra y (sjældent brugt)
+# full_join: behold alle rækker fra begge (sjældent brugt)
+```
+
+### Filtreringsjoins — ændr ikke kolonner, kun rækker
+
+```r
+# semi_join: behold rækker i x SOM HAR match i y
+bef_i_kohort <- bef %>%
+  semi_join(kohort, by = "pnr")   # kun BEF-rækker for kohort-medlemmer
+
+# anti_join: behold rækker i x SOM IKKE HAR match i y
+bef_ikke_i_kohort <- bef %>%
+  anti_join(kohort, by = "pnr")   # kun BEF-rækker for ikke-kohort-medlemmer
+                                  # bruges også som diagnostik — se "Validér dit join" nedenfor
+```
+
+<details>
+<summary>Oversigt: alle joins i én tabel</summary>
+
+| Funktion | Beholder rækker fra | Brugt til |
+|---|---|---|
+| `left_join(x, y)` | Alle fra x | Tilføj udfald/kovariater til kohorte — NA hvis ingen match |
+| `inner_join(x, y)` | Kun match i begge | Join kontakter og diagnoser — vil kun have rækker med begge |
+| `right_join(x, y)` | Alle fra y | Sjældent |
+| `full_join(x, y)` | Alle fra begge | Sjældent |
+| `semi_join(x, y)` | Kun x med match i y | Filtrer et register til kun kohortemedlemmer |
+| `anti_join(x, y)` | Kun x uden match i y | Find alle i BEF der IKKE er i kohorten |
+
+</details>
+
+### Join med flere nøgler
+
+Når to tabeller deler mere end én kolonne som nøgle:
+
+```r
+# Join på pnr OG år
+bef_akm <- bef %>%
+  left_join(akm, by = c("pnr", "aar"))
+```
+
+---
+
+## Validér dit join
+
+Joins fejler sjældent med en fejlbesked — men de kan give stille forkerte resultater.
+Tjek altid disse tre ting efter et `left_join()`:
+
+```r
+# Inden join: hvad er nrow?
+nrow(kohort)                                   # fx 4.823
+
+# Join:
+kohort2 <- kohort %>% left_join(udfald, by = "pnr")
+
+# Tjek 1: steg rækketallet? Duplikerede nøgler i udfald giver ekstra rækker.
+nrow(kohort2)                                  # skal stadig være 4.823
+
+# Tjek 2: hvor mange fik et match?
+sum(!is.na(kohort2$event_date))                # antal med udfald
+sum(is.na(kohort2$event_date))                 # antal uden — forventede censurerede?
+
+# Tjek 3: hvem matchede IKKE? (diagnostisk — ikke nødvendigvis en fejl)
+mangler <- anti_join(kohort, udfald, by = "pnr")   # pnr'er der ikke fandtes i udfald
+nrow(mangler)                                  # 0 = alle matchede; > 0 = undersøg
+```
+
+::: {.callout-tip}
+**`anti_join()` som diagnostik**
+`anti_join(kohort, udfald, by = "pnr")` returnerer de kohortepersoner der *ikke* findes i udfald-tabellen.
+Bruges til "hvem i min kohorte har ingen dødsdato-record?" (alle levende — forventet) eller "hvem mangler i register X?" (uforventet — undersøg).
+:::
+
+---
+
+## Sæt tabeller lodret sammen — `bind_rows()`
+
+`bind_rows()` og `left_join()` løser **to fundamentalt forskellige problemer**:
+
+| | `bind_rows()` | `left_join()` |
+|---|---|---|
+| Hvad den gør | Stacker tabeller **lodret** — tilføjer rækker | Kombinerer tabeller **vandret** — tilføjer kolonner |
+| Kræver | At kolonnerne hedder det samme | At tabellerne deler én fælles nøglekolonne |
+| Resultat | Flere rækker, samme antal kolonner | Samme antal rækker, flere kolonner |
+| Matcher på nøgle? | Nej — alle rækker fra begge tabeller | Ja — match på `pnr` eller anden nøgle |
+| Typisk brug | LPR2 + LPR3 → ét samlet register | Kobl udfald eller kovariat til kohortetabel |
+
+`bind_rows()` er **ikke** et join. Den ser ikke på `pnr` og matcher ikke. Den sætter simpelthen tabel 2's rækker under tabel 1's rækker — som at klistre to Excel-ark sammen lodret.
+
+```r
+# bind_rows: LPR2 og LPR3 har samme kolonner (pnr, date_contact, icd3)
+# → sæt dem sammen lodret til ét samlet diagnoseregister
+lpr2_dx    # 45.000 rækker — diagnoser frem til marts 2019
+lpr3_dx    # 32.000 rækker — diagnoser fra marts 2019 og frem
+
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # 77.000 rækker — begge perioder samlet
+```
+
+Kolonner der mangler i den ene tabel (fx en kolonne der kun findes i LPR3) fyldes automatisk med `NA` for rækker fra den anden tabel.
+
+::: {.callout-note}
+**Hvornår bruger du hvad?**
+`bind_rows()` — når du har **to versioner af det samme register** (LPR2 + LPR3, eksponerede + sammenligningskohorte-medlemmer) og vil slå dem sammen til ét.
+`left_join()` — når du vil **tilknytte en ny variabel** (udfald, dødsdato, alder) til din kohortetabel.
+:::
+
+---
+
+<details>
+<summary>Praktiske eksempler: kobl dødsdato og emigration til kohorten</summary>
+
+**Dødsdato (DODSAARS)**
+
+```r
+# Kohort-data (én række per person):
+kohort <- readRDS("datasets/full_cohort.rds")
+
+# Dødsdatoer fra DODSAARS:
+dodsaars <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
+  rename_with(tolower) %>%               # standardisér kolonnenavne
+  filter(pnr %in% !!kohort$pnr) %>%     # kun kohortens pnr'er
+  select(pnr, death_date = d_dodsdto) %>%   # omdøb d_dodsdto til death_date
+  collect()                              # hent ind i R
+
+# Join: alle kohort-medlemmer bevares; de levende får death_date = NA
+kohort_med_dod <- kohort %>%
+  left_join(dodsaars, by = "pnr")       # tilknyt dødsdato — NA = fortsat i live
+```
+
+**Emigrationsdato (VNDS)**
+
+Emigration censurerer ligesom død — personen forlader studiet den dag de udvandrer.
+VNDS indeholder én række per migrationsbegivenhed; brug kun `"U"` (udvandring) og tag den første dato per person.
+
+```r
+# Emigrationsdatoer fra VNDS:
+vnds <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
+  rename_with(tolower) %>%                       # standardisér kolonnenavne
+  filter(pnr %in% !!kohort$pnr,
+         indud_kode == "U") %>%                  # kun udvandringshændelser
+  select(pnr, emigration_date = haend_dato) %>%  # omdøb haend_dato til emigration_date
+  collect() %>%                                  # hent ind i R
+  group_by(pnr) %>%                              # gruppér for at finde første udvandring
+  arrange(emigration_date) %>%                   # ældste dato først
+  slice(1) %>%                                   # første emigration per person
+  ungroup()                                      # frigiv gruppering
+
+# Join: alle kohort-medlemmer bevares; ikke-emigrerede får emigration_date = NA
+kohort_med_emigration <- kohort %>%
+  left_join(vnds, by = "pnr")                    # NA = aldrig emigreret i studieperioden
+```
+
+</details>
+
+---
+
+## Beregn opfølgningstid og hændelsesvariabel
+
+Inden du kan analysere, skal hvert kohortemedlem have en **censureringsdato** (hvornår opfølgningen slutter) og en **hændelsesvariabel** (fik de udfaldet?).
+
+Censureringsdatoen er den *tidligste* af: hændelses-dato, dødsdato, emigrationsdato og studieslutningstidspunkt.
+
+```r
+studie_slut <- as.Date("2024-12-31")   # erstat med din faktiske studieslutningstidspunkt
+                                        # format: "åååå-mm-dd" (ISO 8601 — R's standard)
+
+kohort <- kohort %>%
+  mutate(
+    # Censureringsdato = det tidligst indtrufne af alle mulige stopårsager
+    censor_date = pmin(event_date, death_date, emigration_date,
+                       studie_slut, na.rm = TRUE),
+
+    # Opfølgningstid i år
+    followup_years = as.numeric(censor_date - index_date) / 365.25,
+
+    # Hændelsesvariabel: 1 = udfald indtruffet inden censurering, 0 = censureret
+    event = as.integer(!is.na(event_date) & event_date <= censor_date)
+  )
+```
+
+::: {.callout-note}
+`pmin()` sammenligner vektorer position for position og returnerer den mindste værdi per person — det er den vektoriserede version af `min()`. `na.rm = TRUE` sikrer at en manglende dødsdato (= levende) ikke gør censureringsdatoen til `NA`.
+:::
+
+---
+
+## Byg din studiepopulation
+
+Nu har du alle byggeklodserne — udtræk (Fase 6), registre (Fase 8), LPR/SKS (Fase 9) og joins (ovenfor) — til at samle din studiepopulation. Det sker i fire trin:
+
+1. **Definer den eksponerede kohorte.** Filtrér det register der definerer eksponeringen — fx bariatri-operationer via SKS-koder i `lpr_sksopr` / `procedurer_kirurgi` ([Fase 9](09b_udtraek_fra_lpr.qmd)). Behold `pnr` og **index-dato** (operationsdatoen).
+2. **Byg sammenligningskohorten.** Match kontroller til de eksponerede på fx alder, køn og kalenderår. Kontrollerne tildeles den matchede eksponeredes index-dato.
+3. **Anvend de samme inklusions-/eksklusionskriterier** på begge grupper, og saml dem (`bind_rows()`).
+4. **Kobl udfald og kovariater på** med `left_join()` (én række per person), beregn opfølgningstid, og afslut med `select()`.
+
+::: {.callout-important}
+**Afslut med `select()` — behold kun de kolonner analysen kræver.**
+
+```r
+kohort_final <- kohort %>%
+  select(pnr, index_date, censor_date, followup_years, event,
+         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
+
+saveRDS(kohort_final, "datasets/analysis_dataset.rds")   # gem det endelige datasæt
+```
+:::
+
+::: {.callout-tip}
+**Designvalgene** (hvem er sammenligningskohorten, immortal time, matching-ratio) hører til planlægningen — se [Fase 1 — Sammenligningskohorten](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
+Selve **kohorteopbygningen og matchingen** med `heaven::riskSetMatch()` — inkl. faldgruber som immortal time — er i [Fase 10 — Byg din studiepopulation](10_byg-din-kohorte.qmd).
+:::
+
+<details>
+<summary>Komplet opskrift — fra kohort til analyseklart datasæt</summary>
+
+```r
+# Komplet opskrift: alle trin i rækkefølge
+
+# 0. Indlæs din kohorte (pnr + index_date, opbygget i Fase 6/9)
+kohort <- readRDS("datasets/full_cohort.rds")   # én række per person
+
+# 1. Ekskluder prævalente tilfælde FØR udfaldsudtrækket (se Fase 9)
+# ... kohort_renset <- kohort %>% anti_join(praevalente, by = "pnr")
+
+# 2. Kobl udfald (fx første demensdiagnose efter index-dato)
+udfald  <- readRDS("datasets/extract_demens.rds")   # pnr + event_date (NA = ingen hændelse)
+kohort <- kohort_renset %>% left_join(udfald, by = "pnr")
+
+# 3. Kobl censurering: dødsdato og emigration
+deaths <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!kohort$pnr) %>%
+  select(pnr, death_date = d_dodsdto) %>% collect()
+
+vnds_data <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
+  rename_with(tolower) %>%
+  filter(pnr %in% !!kohort$pnr, indud_kode == "U") %>%
+  select(pnr, emigration_date = haend_dato) %>% collect() %>%
+  group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()
+
+kohort <- kohort %>%
+  left_join(deaths,    by = "pnr") %>%
+  left_join(vnds_data, by = "pnr")
+
+# 4. Beregn opfølgningstid og hændelsesvariabel
+studie_slut <- as.Date("2024-12-31")
+kohort <- kohort %>%
+  mutate(
+    censor_date    = pmin(event_date, death_date, emigration_date, studie_slut, na.rm = TRUE),
+    followup_years = as.numeric(censor_date - index_date) / 365.25,
+    event          = as.integer(!is.na(event_date) & event_date <= censor_date)
+  )
+
+# 5. Kobl kovariater (demografiske, SES, komorbiditet)
+bef_data <- readRDS("datasets/extract_bef.rds")    # alder, køn fra BEF
+ses_data <- readRDS("datasets/extract_ses.rds")    # uddannelse, indkomst, beskæftigelse
+nmi_data <- readRDS("datasets/extract_nmi.rds")    # NMI-score
+
+kohort <- kohort %>%
+  left_join(bef_data, by = "pnr") %>%
+  left_join(ses_data, by = "pnr") %>%
+  left_join(nmi_data, by = "pnr")
+
+# 6. Behold KUN de kolonner analysen kræver
+kohort_final <- kohort %>%
+  select(pnr, index_date, censor_date, followup_years, event,
+         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
+
+saveRDS(kohort_final, "datasets/analysis_dataset.rds")   # gem det endelige datasæt
+nrow(kohort_final)                                        # verificér antal personer
+names(kohort_final)                                       # verificér kolonnenavne
+```
+
+</details>
+
+---
+
+## Næste skridt
+
+Du har nu ét analyseklart datasæt med én række per person. Næste skridt er analysen:
+
+→ [Fase 13 — Analyse](13_analyse.qmd)
+
+## Se også
+
+- [12b — Langt ↔ bredt format](12b_pivots.qmd) — skift en tabels form med `pivot_wider()` / `pivot_longer()`
+- [Funktioner: oversigt](15a_guide_til_funktioner.qmd) — alle funktioner du bruger til at transformere data
+- [Fase 9 — Hospitalskontakter (LPR)](09b_udtraek_fra_lpr.qmd) — praktisk eksempel på langt registerdata og inner_join

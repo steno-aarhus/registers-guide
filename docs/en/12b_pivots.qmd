@@ -1,0 +1,134 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Long ↔ wide format"
+subtitle: "Wide vs. long, and pivots with pivot_wider() / pivot_longer()"
+date: last-modified
+---
+
+The registers you extract from are almost always in *long format* with many rows per person, while your analysis dataset needs to be in *wide format* with one row per person. This page explains the difference and shows how to switch between them with `pivot_wider()` and `pivot_longer()`.
+
+::: {.callout-note}
+In practice you usually reduce long register data to one row per person with `group_by() + slice()` (see [12a — Link your extracts](12a_joins.qmd)). You use pivots when you explicitly want **several time points side by side** as separate columns.
+:::
+
+---
+
+## Wide vs. long format
+
+Imagine three persons with weight measurements at two time points.
+
+**Wide format** — one row per person, one column per time point:
+
+| pnr | weight_baseline | weight_6mo |
+|---|---|---|
+| 001 | 120 | 95 |
+| 002 | 105 | 88 |
+| 003 | 98 | 80 |
+
+**Long format** — one row per observation, one column for time point and one for value:
+
+| pnr | timepoint | weight |
+|---|---|---|
+| 001 | baseline | 120 |
+| 001 | 6mo | 95 |
+| 002 | baseline | 105 |
+| 002 | 6mo | 88 |
+| 003 | baseline | 98 |
+| 003 | 6mo | 80 |
+
+Both formats contain **the same information** — they are just arranged differently.
+
+---
+
+## Which formats are where?
+
+| Register | Format | Why |
+|---|---|---|
+| BEF | Long | One row per person **per snapshot** — quarterly since 2008, otherwise annual |
+| LPR (lpr_adm + lpr_diag) | Long | One row per **diagnosis per contact** — one admission can have 10 diagnoses |
+| LMDB | Long | One row per **dispensed prescription** — the same person can have hundreds |
+| DODSAARS | Wide | One row per **deceased person** — already one-per-person |
+| Your analysis dataset | Wide | One row per person — one column per covariate |
+
+**Registers are usually in long format. Your analysis dataset should typically be in wide format.**
+
+---
+
+## Pivots — switch between long and wide
+
+### Long → wide with `pivot_wider()`
+
+```r
+library(tidyr)   # pivot_wider, pivot_longer
+
+df_wide <- df_long %>%
+  pivot_wider(
+    names_from  = "timepoint",  # which column should become column names?
+    values_from = "weight"      # which column contains the values?
+  )
+```
+
+::: {.callout-warning}
+**You CANNOT `pivot_wider()` an entire LPR table.**
+LPR potentially has hundreds of unique ICD codes per person — `pivot_wider()` would give you one column per code, i.e. thousands of columns and a dataset that is impossible to work with.
+
+Instead use the pattern from [Phase 9](09b_udtraek_fra_lpr.qmd): extract the first date for one specific diagnosis group, save as `extract_dementia.rds`, and join it as one column with `left_join()`. One outcome variable = one column = one RDS file.
+:::
+
+<details>
+<summary>Practical example: employment status from AKM — long to wide</summary>
+
+AKM (the Labour Classification Module) stores one row per person **per year** — long format. If you want to compare employment status at baseline and follow-up side by side, you can pivot:
+
+```r
+library(dplyr)   # filter, mutate
+library(tidyr)   # pivot_wider
+
+# AKM in long format — two years per person:
+akm_long <- data.frame(
+  pnr   = c("001", "001", "002", "002", "003", "003"),
+  aar   = c(2015, 2020, 2015, 2020, 2015, 2020),
+  socio = c(110, 110, 210, 310, 150, 150)   # employment categories from AKM (socio13)
+)
+
+# Convert to wide — one column per year:
+akm_wide <- akm_long %>%
+  pivot_wider(
+    names_from   = aar,
+    values_from  = socio,
+    names_prefix = "socio_"   # gives columns: socio_2015, socio_2020
+  )
+
+# Result:
+#   pnr   socio_2015  socio_2020
+#   001          110         110
+#   002          210         310
+#   003          150         150
+```
+
+In practice you would typically not pivot AKM — you filter to one specific year with `filter(aar == index_year)` and use `group_by() + slice()` ([12a](12a_joins.qmd)). Pivot is relevant when you explicitly want two time points side by side in the analysis.
+
+</details>
+
+### Wide → long with `pivot_longer()`
+
+```r
+df_long <- df_wide %>%
+  pivot_longer(
+    cols      = c(weight_baseline, weight_6mo),  # columns to "fold in"
+    names_to  = "timepoint",                     # name for the new timepoint column
+    values_to = "weight"                         # name for the new value column
+  )
+```
+
+---
+
+## Next steps
+
+Once your extracts are in the right format, you link them into one analysis-ready dataset:
+
+→ [12a — Link your extracts](12a_joins.qmd)
+
+## See also
+
+- [12a — Link your extracts](12a_joins.qmd) — `group_by() + slice()`, joins and `bind_rows()`
+- [Functions: overview](15a_guide_til_funktioner.qmd) — all functions for transforming data
