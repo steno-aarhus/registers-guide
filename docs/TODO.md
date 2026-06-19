@@ -39,3 +39,13 @@
 - Fuld opskrift: ~/.claude/plans/skal-ndre-i-pakke-serialized-stonebraker.md
 - da + en i 14b_osdc.qmd
 - Faldgruben om future-conditioning er allerede skrevet i 14b (callout i "Dækning og begrænsninger") og henviser til denne guide som "under udarbejdelse"
+
+### Reference: se al feedback (backup uden admin-nøgle)
+- Primært: admin-URL'en `https://dsthelp-feedback.sarasschwartz.workers.dev/admin?key=DIN_NØGLE` (gem i password-manager)
+- Backup via Cloudflare-dashboardet (kræver kun dit login):
+  1. Gå til dash.cloudflare.com → log ind
+  2. Workers & Pages → D1 SQL Database → dsthelp-feedback
+  3. Åbn fanen Console (eller "Studio") og kør:
+     ```sql
+     SELECT * FROM submissions ORDER BY id DESC;
+     ```
