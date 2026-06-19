@@ -1,0 +1,146 @@
+<!-- ============================================================
+     DST_help feedback-widget  →  Cloudflare Worker + D1
+     Cookie-fri. Indsendelser lander privat i din D1-database.
+     Styling: custom.scss (#dsthelp-fb ...)
+     VIGTIGT: erstat FEEDBACK_ENDPOINT nedenfor med din Worker-URL.
+     ============================================================ -->
+<div id="dsthelp-fb" data-state="closed">
+  <button type="button" id="dsthelp-fb-tab" aria-expanded="false" aria-controls="dsthelp-fb-panel">
+    <span id="dsthelp-fb-tab-label">💬 Feedback</span>
+  </button>
+
+  <div id="dsthelp-fb-panel" role="dialog" aria-labelledby="dsthelp-fb-heading" hidden>
+    <button type="button" id="dsthelp-fb-close" aria-label="Luk">×</button>
+    <h2 id="dsthelp-fb-heading"></h2>
+    <p id="dsthelp-fb-intro"></p>
+
+    <form id="dsthelp-fb-form">
+      <label for="dsthelp-fb-message" id="dsthelp-fb-message-label"></label>
+      <textarea id="dsthelp-fb-message" name="message" rows="4" maxlength="4000" required></textarea>
+
+      <label for="dsthelp-fb-email">
+        <span id="dsthelp-fb-email-label"></span>
+        <span class="dsthelp-fb-opt" id="dsthelp-fb-email-opt"></span>
+      </label>
+      <input type="email" id="dsthelp-fb-email" name="email" autocomplete="email">
+
+      <!-- honeypot: skjult for mennesker, fanger bots -->
+      <div class="dsthelp-fb-hp" aria-hidden="true">
+        <label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+
+      <button type="submit" id="dsthelp-fb-submit"></button>
+      <p id="dsthelp-fb-status" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  // >>> ERSTAT med din Worker-URL efter `wrangler deploy` <<<
+  var FEEDBACK_ENDPOINT = "https://dsthelp-feedback.sarasschwartz.workers.dev";
+
+  var en = location.pathname.indexOf("/en/") !== -1;
+  var t = en ? {
+    tab: "💬 Feedback", heading: "Feedback on this page",
+    intro: "Found an error or have a suggestion? It goes privately to the author — no one else sees it.",
+    message: "Your feedback", email: "Email",
+    opt: "(optional — only if you want a reply)",
+    send: "Send", sending: "Sending…",
+    ok: "Thanks for your feedback! 🙌",
+    err: "Something went wrong. Please try again, or email saras@clin.au.dk.",
+    close: "Close"
+  } : {
+    tab: "💬 Feedback", heading: "Feedback til denne side",
+    intro: "Fandt du en fejl eller har du et forslag? Det går privat til forfatteren — ingen andre ser det.",
+    message: "Din feedback", email: "E-mail",
+    opt: "(valgfrit — kun hvis du vil have svar)",
+    send: "Send", sending: "Sender…",
+    ok: "Tak for din feedback! 🙌",
+    err: "Noget gik galt. Prøv igen, eller skriv til saras@clin.au.dk.",
+    close: "Luk"
+  };
+
+  function $(id) { return document.getElementById(id); }
+  $("dsthelp-fb-tab-label").textContent = t.tab;
+  $("dsthelp-fb-heading").textContent = t.heading;
+  $("dsthelp-fb-intro").textContent = t.intro;
+  $("dsthelp-fb-message-label").textContent = t.message;
+  $("dsthelp-fb-email-label").textContent = t.email;
+  $("dsthelp-fb-email-opt").textContent = t.opt;
+  $("dsthelp-fb-submit").textContent = t.send;
+  $("dsthelp-fb-close").setAttribute("aria-label", t.close);
+
+  var root = $("dsthelp-fb"), tab = $("dsthelp-fb-tab"),
+      panel = $("dsthelp-fb-panel"), form = $("dsthelp-fb-form"),
+      status = $("dsthelp-fb-status"), submit = $("dsthelp-fb-submit");
+
+  // --- Placering ---
+  // Brede skærme: docket og altid åben under højre-TOC ("På denne side").
+  // Smalle skærme (TOC skjult af Quarto): flydende fane man klikker for at åbne.
+  var tocSidebar = document.getElementById("quarto-margin-sidebar");
+  var wide = window.matchMedia("(min-width: 992px)");
+
+  function dock() {
+    tocSidebar.appendChild(panel);        // placér efter TOC i højremargenen
+    panel.classList.add("docked");
+    panel.hidden = false;                 // altid åben
+    tab.style.display = "none";
+  }
+  function floatMode() {
+    root.appendChild(panel);
+    panel.classList.remove("docked");
+    tab.style.display = "";
+    panel.hidden = root.getAttribute("data-state") !== "open";
+  }
+  function place() {
+    if (wide.matches && tocSidebar) dock(); else floatMode();
+  }
+  place();
+  if (wide.addEventListener) wide.addEventListener("change", place);
+  else if (wide.addListener) wide.addListener(place); // ældre Safari
+
+  // Åbn/luk-fane gælder kun i flydende tilstand
+  function open() {
+    root.setAttribute("data-state", "open"); panel.hidden = false;
+    tab.setAttribute("aria-expanded", "true"); $("dsthelp-fb-message").focus();
+  }
+  function close() {
+    root.setAttribute("data-state", "closed"); panel.hidden = true;
+    tab.setAttribute("aria-expanded", "false");
+  }
+  tab.addEventListener("click", function () {
+    root.getAttribute("data-state") === "open" ? close() : open();
+  });
+  $("dsthelp-fb-close").addEventListener("click", close);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !panel.classList.contains("docked") &&
+        root.getAttribute("data-state") === "open") close();
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    status.textContent = ""; status.className = "";
+    submit.disabled = true; status.textContent = t.sending;
+    fetch(FEEDBACK_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: form.message.value,
+        email: form.email.value,
+        website: form.website.value, // honeypot
+        page: location.pathname,
+        title: document.title
+      })
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      form.reset();
+      status.textContent = t.ok; status.className = "dsthelp-fb-ok";
+    }).catch(function () {
+      status.textContent = t.err; status.className = "dsthelp-fb-error";
+    }).finally(function () {
+      submit.disabled = false;
+    });
+  });
+})();
+</script>
