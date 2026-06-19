@@ -19,8 +19,11 @@ Forældet udtræk afskærer censureringsdatoer og udfald for tidligt — ingen f
 Hvis registrene ikke dækker din studieperiode, skal du bestille et nyt udtræk hos DST.
 :::
 
-Alle kolonnenavne på denne side er bekræftet på DST 2026-05-15 via `colnames()`.
-De vises **efter** `rename_with(tolower)` er kaldt.
+::: {.callout-important}
+**Kolonnenavnene er tjekket på DARTER (projekt 708421) i juni 2026 — ikke nødvendigvis på dit projekt.**
+Navnene vises **efter** `rename_with(tolower)` er kaldt. I din egen projektmappe kan både *hvilke* kolonner der findes og deres **stavemåde — inkl. store og små bogstaver** — se anderledes ud. Verificér altid mod dine egne filer med `colnames()` (se [Fase 7 — Inspicér din data](07_inspicer-data.qmd)).
+:::
+
 Nøglekolonner — dem du faktisk bruger i koden — er markeret med fed.
 
 ::: {.callout-note}
@@ -57,6 +60,10 @@ Kolonnenavne gælder efter `rename_with(tolower)` — inspicér dit eget registe
 | UDDA | `"udda"` | `pnr` | Alle år | `hfaudd`, `aar` |
 | FAIK | `"faik"` | `familie_id` | Alle år | `famaekvivadisp_13` |
 | AKM | `"akm"` | `pnr` | Alle år | `socio13`, `aar` |
+| Cancerregisteret | se variabelliste | `pnr` | Ca. 1943+ | incidente cancerdiagnoser — afsnit 6 |
+| Primærsektor | `"sysi"` / `"sssy"` | `pnr` | sysi ældre · sssy nyere | almen praksis/speciallæge — afsnit 6 |
+| Laboratoriesvar | `"lab_forsker"` | `pnr` | Varierer | NPU-koder, prøvesvar — afsnit 6 |
+| LPR SKS-undersøgelser | `"lpr_sksube"` | `recnum` | Som LPR | ZZ-undersøgelseskoder — afsnit 5 |
 | Projekt-specifikke registre | Se projektvejledning | `pnr` | Varierer | [DARTER: se registersti →](darter/01_registersti-datastores.qmd) |
 
 ---
@@ -316,6 +323,10 @@ proc_kirurgi <- open_dataset("sti/til/procedurer_kirurgi/") %>%
 Kolonnenavnene er blandet store/små bogstaver i rådata — kald `rename_with(tolower)` umiddelbart efter load.
 :::
 
+### lpr_sksube — SKS-undersøgelser (ZZ-koder)
+
+Undersøgelses-/underprocedurekoder (ZZ-koder) ligger i `lpr_sksube`, adskilt fra operationskoderne ovenfor. Join som de øvrige SKS-tabeller — via `recnum` (LPR2). Mindre brugt, og kolonnenavne er ikke verificeret her — slå op i [DST's variabelliste](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html) og bekræft med `colnames()`.
+
 ### Kombination over hele perioden
 
 ```r
@@ -355,7 +366,29 @@ opr_alle <- bind_rows(opr_lpr2, opr_lpr3)
 
 ---
 
-## 6. LMDB — Lægemiddelstatistikregistret
+## 6. Andre kliniske registre
+
+Disse registre er mindre brugt end de ovenstående og er **ikke** kolonne-verificeret her — beskrivelserne giver overblik, men slå de eksakte variabelnavne op i [DST's oversigt over registre og variabellister](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html) og bekræft mod dine egne filer med `colnames()`.
+
+### Cancerregisteret
+
+Guldstandarden for **incidente cancerdiagnoser** — mere komplet og præcist til cancer end LPR-diagnoser. Én række per tumor; join til din population via `pnr`. Dækker mange årtier tilbage (moderne kodning med ICD-10 + ICD-O morfologi/topografi). Brug det til cancer som udfald eller eksklusion. Variabelnavne: se DST's variabelliste.
+
+### Primærsektor — sysi og sssy (Sygesikringsregisteret)
+
+Kontakter og ydelser i **primærsektoren** (almen praksis, praktiserende speciallæger, fysioterapi mv.). Som med LPR er registret delt over tid: `sysi` dækker de ældre år, `sssy` de nyere. Join via `pnr`. Brug det til fx GP-/speciallægekontakter, screening eller vaccinationer afregnet i primærsektoren. Nøglefelter (speciale, ydelsesnummer, dato) hedder forskelligt i `sysi` og `sssy` — verificér med `colnames()`.
+
+### Laboratoriesvar — lab_forsker
+
+Laboratorie-/blodprøvesvar (fx HbA1c, lipider). **Meget stort** register. Centrale felter: `pnr`, NPU-kode (analyttype), prøvesvar (ofte character — fx "ikke påvist"), enhed og prøvedato. Filtrér og `select()` **før** `collect()`. Tilgængelighed og opbygning er i høj grad projekt-/DARTER-specifik.
+
+::: {.callout-tip}
+**DARTER:** en dedikeret udtræksguide til `laboratorieproevesvar_` er under udarbejdelse — se [DARTER — Registersti og datastores](darter/01_registersti-datastores.qmd).
+:::
+
+---
+
+## 7. LMDB — Lægemiddelstatistikregistret
 
 Én række per ekspederet recept. Dækker ca. 1994 og frem.
 
@@ -380,7 +413,7 @@ opr_alle <- bind_rows(opr_lpr2, opr_lpr3)
 
 ---
 
-## 7. Socioøkonomiske registre
+## 8. Socioøkonomiske registre
 
 Alle tre registre bruges til SEP-udtræk i `03_extract_ses.R` efter SEPLINE-retningslinjerne
 (Hjorth et al. 2025). Ingen samlet SEP-variabel beregnes — tre separate dimensioner.
@@ -435,11 +468,13 @@ SEPLINE-kategorisering af `socio13`:
 
 ---
 
-## 8. Projekt-specifikke registre
+## 9. Projekt-specifikke registre
 
 Mange projekter har adgang til registre ud over standardlisten ovenfor — fx kvalitetsregistre fra kliniske databaser eller færdigberegnede klassifikationsfiler.
 
 Disse er **projekt-specifikke** og ikke tilgængelige i alle projekter på DST.
+
+Eksempler er **private sygehuse** (`priv_adm`, `priv_diag`, `priv_skspor` — opbygget parallelt med LPR) og diverse kliniske kvalitetsregistre. Tilgængeligheden varierer fra projekt til projekt.
 
 ::: {.callout-tip}
 **Arbejder du på DARTER / projekt 708421?**
