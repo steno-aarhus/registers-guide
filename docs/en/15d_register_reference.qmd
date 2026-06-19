@@ -267,7 +267,7 @@ For full coverage both must be queried and the results bound together.
 
 ### lpr_sksopr — LPR2 SKS procedures (up to 2018)
 
-Location: `parquet-registers/lpr_sksopr`
+Location (DARTER): `parquet-registers/lpr_sksopr`
 
 ```r
 lpr_sksopr <- open_dataset("path/to/lpr_sksopr/") %>%
@@ -286,7 +286,7 @@ lpr_sksopr <- open_dataset("path/to/lpr_sksopr/") %>%
 
 ### procedurer_kirurgi — LPR3 SKS procedures (2019 and onwards)
 
-Location: `parquet-external/procedurer_kirurgi`
+Location (DARTER): `parquet-external/procedurer_kirurgi`
 
 ```r
 proc_kirurgi <- open_dataset("path/to/procedurer_kirurgi/") %>%
@@ -295,8 +295,8 @@ proc_kirurgi <- open_dataset("path/to/procedurer_kirurgi/") %>%
 
 | Column (after tolower) | Type | Contents |
 |---|---|---|
-| **`dw_ek_forloeb`** | character | **Join key to `lpr_a_kontakt`** — use this for pnr lookup |
-| `dw_ek_kontakt` | character | **NA for all rows in this parquet file on DARTER** — use `dw_ek_forloeb` instead |
+| **`dw_ek_forloeb`** | character | Intended join key to `lpr_a_kontakt` — but many NA on DARTER, see note below |
+| `dw_ek_kontakt` | character | NA for all rows in this parquet file on DARTER (see note below) |
 | **`procedurekode`** | character | SKS procedure code — use this for matching (e.g. `"KJDF10"`) |
 | **`dato_start`** | Date | Procedure date |
 | `proceduretype` | character | `"P"` = procedure, `"+"` = add-on code |
@@ -310,8 +310,8 @@ proc_kirurgi <- open_dataset("path/to/procedurer_kirurgi/") %>%
 | `procedureregistrering_id` | character | Internal registration ID |
 
 ::: {.callout-warning}
-**`dw_ek_kontakt` is NA for all rows in DARTER's parquet version of `procedurer_kirurgi`** (confirmed 2026-06-02).
-Join to `lpr_a_kontakt` via `dw_ek_forloeb` to fetch `pnr`. Applies to DARTER/project 708421 — check on your own project.
+**The join from `procedurer_kirurgi` to `lpr_a_kontakt` is not yet resolved on DARTER (under investigation).**
+`dw_ek_kontakt` is NA for all rows in DARTER's parquet version (confirmed 2026-06-02), so the obvious join key can't be used. `dw_ek_forloeb` looks like the alternative but **also has many NA**, so the pnr lookup isn't solved yet. Applies to DARTER/project 708421 — check on your own project. We'll update the page with a solution once one is found.
 Column names are mixed case in raw data — call `rename_with(tolower)` immediately after loading.
 :::
 
@@ -335,6 +335,7 @@ surg_lpr2 <- open_dataset("path/to/lpr_sksopr/") %>%
   collect()
 
 # SKS from LPR3 (2019 and onwards) — join via dw_ek_forloeb
+# NOTE: the join is unresolved on DARTER (many NA) — see the warning above
 surg_lpr3 <- open_dataset("path/to/procedurer_kirurgi/") %>%
   rename_with(tolower) %>%
   filter(toupper(procedurekode) %in% !!SKS_CODES) %>%   # !! sends the local R vector to DuckDB

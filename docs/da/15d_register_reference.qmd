@@ -268,7 +268,7 @@ Til en fuld dækning skal begge forespørges og resultatet bindes sammen.
 
 ### lpr_sksopr — LPR2 SKS-procedurer (frem til 2018)
 
-Placering: `parquet-registers/lpr_sksopr`
+Placering (DARTER): `parquet-registers/lpr_sksopr`
 
 ```r
 lpr_sksopr <- open_dataset("sti/til/lpr_sksopr/") %>%
@@ -287,7 +287,7 @@ lpr_sksopr <- open_dataset("sti/til/lpr_sksopr/") %>%
 
 ### procedurer_kirurgi — LPR3 SKS-procedurer (2019 og frem)
 
-Placering: `parquet-external/procedurer_kirurgi`
+Placering (DARTER): `parquet-external/procedurer_kirurgi`
 
 ```r
 proc_kirurgi <- open_dataset("sti/til/procedurer_kirurgi/") %>%
@@ -296,8 +296,8 @@ proc_kirurgi <- open_dataset("sti/til/procedurer_kirurgi/") %>%
 
 | Kolonne (efter tolower) | Type | Indhold |
 |---|---|---|
-| **`dw_ek_forloeb`** | character | **Join-nøgle til `lpr_a_kontakt`** — brug denne til pnr-opslag |
-| `dw_ek_kontakt` | character | **NA for alle rækker i denne parquet-fil på DARTER** — brug `dw_ek_forloeb` i stedet |
+| **`dw_ek_forloeb`** | character | Tiltænkt join-nøgle til `lpr_a_kontakt` — men mange NA på DARTER, se note nedenfor |
+| `dw_ek_kontakt` | character | NA for alle rækker i denne parquet-fil på DARTER (se note nedenfor) |
 | **`procedurekode`** | character | SKS-procedurekode — brug denne til matching (f.eks. `"KJDF10"`) |
 | **`dato_start`** | Date | Proceduredato |
 | `proceduretype` | character | `"P"` = procedure, `"+"` = add-on kode |
@@ -311,8 +311,8 @@ proc_kirurgi <- open_dataset("sti/til/procedurer_kirurgi/") %>%
 | `procedureregistrering_id` | character | Internt registrerings-ID |
 
 ::: {.callout-warning}
-**`dw_ek_kontakt` er NA for alle rækker i DARTER's parquet-version af `procedurer_kirurgi`** (bekræftet 2026-06-02).
-Join til `lpr_a_kontakt` via `dw_ek_forloeb` for at hente `pnr`. Gælder DARTER/projekt 708421 — tjek på dit eget projekt.
+**Join'et fra `procedurer_kirurgi` til `lpr_a_kontakt` er endnu uafklaret på DARTER (under undersøgelse).**
+`dw_ek_kontakt` er NA for alle rækker i DARTER's parquet-version (bekræftet 2026-06-02), så den oplagte join-nøgle kan ikke bruges. `dw_ek_forloeb` ligner alternativet, men har **også mange NA**, så pnr-opslaget er ikke løst endnu. Gælder DARTER/projekt 708421 — tjek på dit eget projekt. Vi opdaterer siden med en løsning, når den er fundet.
 Kolonnenavnene er blandet store/små bogstaver i rådata — kald `rename_with(tolower)` umiddelbart efter load.
 :::
 
@@ -336,6 +336,7 @@ opr_lpr2 <- open_dataset("sti/til/lpr_sksopr/") %>%
   collect()
 
 # SKS fra LPR3 (2019 og frem) — join via dw_ek_forloeb
+# BEMÆRK: join'et er uafklaret på DARTER (mange NA) — se advarslen ovenfor
 opr_lpr3 <- open_dataset("sti/til/procedurer_kirurgi/") %>%
   rename_with(tolower) %>%
   filter(toupper(procedurekode) %in% !!SKS_KODER) %>%   # !! sender den lokale R-vektor til DuckDB
