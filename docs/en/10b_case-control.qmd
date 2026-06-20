@@ -12,7 +12,7 @@ This page continues from [Build your study population](10_byg-din-kohorte.qmd). 
 
 ::: {.callout-note}
 **Functions used here.**
-`left_join()` (attach a variable) and `transmute()` (create new columns, keep only those) are explained in [10a](10a_sammenligningskohorte.qmd) and [12b](12b_joins.qmd#joins-link-two-tables). `pmin()`, `if_else()` and `as.factor()` are in the [Function guide](15a_guide_til_funktioner.qmd). New here: `incidenceMatch()` / `Epi::ccwc()` for sampling and `survival::clogit()` for the analysis.
+`left_join()` (attach a variable) and `transmute()` (create new columns, keep only those) are explained in [Comparison cohort](10a_sammenligningskohorte.qmd) and [12b](12b_joins.qmd#joins-link-two-tables). `pmin()`, `if_else()` and `as.factor()` are in the [Function guide](15a_guide_til_funktioner.qmd). New here: `incidenceMatch()` / `Epi::ccwc()` for sampling and `survival::clogit()` for the analysis.
 :::
 
 ::: {.callout-note}
@@ -44,17 +44,17 @@ It is the **same mechanic** as the matching in [Comparison cohort](10a_sammenlig
 
 *(Steps 1 and 2 - identify cases and exclude prevalent cases - are on the [landing page](10_byg-din-kohorte.qmd).)*
 
-You need one row per person with matching variables and the dates eligibility depends on. Build it **exactly like the pool in [10a, Steps 3-4](10a_sammenligningskohorte.qmd)** (demographics + `earliest_bef` + death date + emigration date + lookback). For case-control, though:
+You need one row per person with matching variables and the dates eligibility depends on. Build it **exactly like the pool in [Comparison cohort, Steps 3-4](10a_sammenligningskohorte.qmd)** (demographics + `earliest_bef` + death date + emigration date + lookback). For case-control, though:
 
-- You do **not** need an exposure date as an eligibility criterion - exposure is a *variable* you measure, not a filter.
+- **Exposure is not an eligibility criterion here** (unlike the comparison cohort, where a control must be *exposure-free* at index). In case-control, exposure is exactly what you **study**: you measure it for both cases and controls *afterwards* and do not use it to decide who can be a control. A control just needs to be outcome-free (and meet your other criteria) at the case's index.
 - You need to know **who is a case** (developed the outcome) and **when** (outcome date = index).
 
 <details>
 <summary>Show code</summary>
 
 ```r
-# 'population' = one row per person from 10a (pnr, sex, birth_year,
-#                death_date, emigration_date, earliest_bef_year). See 10a Steps 3-4.
+# 'population' = one row per person from Comparison cohort (pnr, sex, birth_year,
+#                death_date, emigration_date, earliest_bef_year). See Comparison cohort, Steps 3-4.
 STUDY_END <- as.Date("2022-12-31")                # we choose: last day of the study
 outcome <- readRDS("path/to/outcome_dates.rds")   # pnr, first_outcome_date (FIRST outcome; NA = never)
 
@@ -80,7 +80,7 @@ all_persons <- population %>%
 
 Two routes. Both do incidence-density sampling; pick one.
 
-**Route A - `heaven::incidenceMatch()`** (sibling of `exposureMatch()` from [10a](10a_sammenligningskohorte.qmd), but the "event" is the outcome).
+**Route A - `heaven::incidenceMatch()`** (sibling of `exposureMatch()` from [Comparison cohort](10a_sammenligningskohorte.qmd), but the "event" is the outcome).
 
 <details>
 <summary>Show code (Route A)</summary>
@@ -132,34 +132,14 @@ ncc <- ccwc(
 </details>
 
 ::: {.callout-note}
-**Same rules as in [10a](10a_sammenligningskohorte.qmd):** apply inclusion/exclusion criteria BEFORE sampling and to everyone (cases + pool); set a `seed`; and decide on [with/without replacement](10a_sammenligningskohorte.qmd#with-or-without-replacement) (controls can typically be used for several cases) - which must be handled in the analysis. `incidenceMatch()` itself handles the risk-set time dimension via `case.index` + `end.followup`.
+**Same rules as in [Comparison cohort](10a_sammenligningskohorte.qmd):** apply inclusion/exclusion criteria BEFORE sampling and to everyone (cases + pool); set a `seed`; and decide on [with/without replacement](10a_sammenligningskohorte.qmd#with-or-without-replacement) (controls can typically be used for several cases) - which must be handled in the analysis. `incidenceMatch()` itself handles the risk-set time dimension via `case.index` + `end.followup`.
 :::
 
 ---
 
-## Step 5 - Analysis: conditional logistic regression {.step-heading}
+## Analysis (brief)
 
-Matched case-control data are analyzed with **conditional logistic regression** (`survival::clogit()`), so the matching is respected (each matched set is its own stratum). First attach exposure and covariates to the matched persons (from [Phase 11](11_foej-variabler.qmd)/[Phase 12](11_data-manipulation.qmd)).
-
-<details>
-<summary>Show code</summary>
-
-```r
-library(survival)   # clogit
-
-# matched (from Route A) + exposure and covariates attached (Phase 11/12)
-fit <- clogit(
-  case ~ exposure + covariate1 + covariate2 + strata(case.id),  # strata() = respect the matched set
-  data = matched_with_variables
-)
-summary(fit)        # exp(coef) = odds ratio, which here estimates the rate/hazard ratio
-```
-
-</details>
-
-::: {.callout-note}
-If you use `Epi::ccwc()` (Route B), the matched-set variable is called `Set`, so it is `strata(Set)`. The analysis step itself belongs to [Phase 13 - Analysis](13_analyse.qmd).
-:::
+The analysis itself belongs to [Phase 13 - Analysis](13_analyse.qmd) (not yet written) - here only briefly, so you know where this leads. Matched case-control data **can** be analyzed with **conditional logistic regression** (`survival::clogit()` with a `strata()` term per matched set), so the matching is respected; the odds ratio from an incidence-density design estimates the rate/hazard ratio. This is the standard approach for matched case-control studies (see e.g. Breslow & Day 1980, *The analysis of case-control studies*, IARC). Before the analysis you attach exposure and covariates to the matched persons (from [Phase 11](11_foej-variabler.qmd)/[Phase 12](11_data-manipulation.qmd)). The matched-set id is called `case.id` (Route A) or `Set` (Route B).
 
 ---
 
