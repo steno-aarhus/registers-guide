@@ -322,16 +322,47 @@ Når du omdøber inde i `select()`, er retningen `nyt_navn = gammelt_navn` - det
 
 ### `mutate(ny_kolonne = udtryk)`
 
-**Hvad det gør:** tilføjer en ny kolonne eller ændrer en eksisterende.
+**Hvad det gør:** tilføjer en ny kolonne (eller ændrer en eksisterende), beregnet ud fra de kolonner du allerede har. Antallet af rækker er det samme - `mutate()` tilføjer information, fjerner ikke rækker. (`df` er bare navnet på din data frame - kald den, hvad du vil.)
 
-**Anekdote:** Du har en kolonne med fødselsdato.
-Du vil gerne have en kolonne med fødselsår.
-`mutate(birth_year = year(foed_dag))` tilføjer den nye kolonne uden at ændre noget andet.
-Antallet af rækker er det samme efter `mutate()` - det tilføjer information, fjerner ikke rækker.
+```r
+library(dplyr)
+
+df <- df %>%
+  mutate(
+    bmi     = vaegt / (hoejde^2),   # ny kolonne beregnet fra to eksisterende
+    obesity = bmi >= 30             # TRUE/FALSE - en nyligt lavet kolonne kan bruges med det samme
+  )
+```
+
+Du kan lave **flere variable i ét kald**, og en variabel du lige har lavet, er straks tilgængelig længere nede (her bruger `obesity_class` den netop beregnede `bmi`):
+
+```r
+df <- df %>%
+  mutate(
+    bmi = vaegt / (hoejde^2),
+    obesity_class = case_when(       # case_when: flere betingelser; den FØRSTE sande bestemmer værdien
+      bmi < 25 ~ "Normal",
+      bmi < 30 ~ "Overvægt",
+      TRUE     ~ "Svær overvægt"     # TRUE = "alt andet"
+    )
+  )
+```
+
+::: {.callout-warning}
+**Tjek enhederne først.** BMI = vægt (kg) / højde (m)². Er højden i **cm**, bliver `vaegt / (hoejde^2)` forkert. Lav højden om til meter i et `mutate()`-trin, *før* du beregner BMI:
+
+```r
+df <- df %>%
+  mutate(hoejde_m = hoejde_cm / 100) %>%   # cm -> m FØRST
+  mutate(bmi = vaegt / (hoejde_m^2))       # ... så er BMI korrekt
+```
+:::
+
+`case_when()` har sit eget opslag nedenfor. Flere eksempler på `mutate()`:
 
 ```r
 mutate(icd3 = substr(c_diag, 2, 4))   # ny kolonne: ICD-kode uden D-præfikset, 3 tegn
-mutate(alder = as.numeric(difftime(surgery_date, foed_dag, units = "days")) / 365.25)   # alder ved operation i år
+mutate(birth_year = year(foed_dag))   # fødselsår ud fra fødselsdato
 ```
 
 ---

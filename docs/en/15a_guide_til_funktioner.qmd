@@ -322,16 +322,47 @@ When renaming inside `select()`, the direction is `new_name = old_name` - the ne
 
 ### `mutate(new_column = expression)`
 
-**What it does:** adds a new column or modifies an existing one.
+**What it does:** adds a new column (or modifies an existing one), computed from the columns you already have. The number of rows is the same - `mutate()` adds information, does not remove rows. (`df` is just the name of your data frame - call it whatever you like.)
 
-**Analogy:** You have a column with date of birth.
-You want a column with birth year.
-`mutate(birth_year = year(foed_dag))` adds the new column without changing anything else.
-The number of rows is the same after `mutate()` - it adds information, does not remove rows.
+```r
+library(dplyr)
+
+df <- df %>%
+  mutate(
+    bmi     = weight / (height^2),   # new column computed from two existing ones
+    obesity = bmi >= 30              # TRUE/FALSE - a newly created column is usable right away
+  )
+```
+
+You can create **several variables in one call**, and a variable you just made is immediately available further down (here `obesity_class` uses the just-computed `bmi`):
+
+```r
+df <- df %>%
+  mutate(
+    bmi = weight / (height^2),
+    obesity_class = case_when(       # case_when: several conditions; the FIRST true one wins
+      bmi < 25 ~ "Normal",
+      bmi < 30 ~ "Overweight",
+      TRUE     ~ "Obesity"           # TRUE = "everything else"
+    )
+  )
+```
+
+::: {.callout-warning}
+**Check the units first.** BMI = weight (kg) / height (m)². If height is in **cm**, `weight / (height^2)` is wrong. Convert height to metres in a `mutate()` step *before* you compute BMI:
+
+```r
+df <- df %>%
+  mutate(height_m = height_cm / 100) %>%   # cm -> m FIRST
+  mutate(bmi = weight / (height_m^2))      # ... then BMI is correct
+```
+:::
+
+`case_when()` has its own entry below. More examples of `mutate()`:
 
 ```r
 mutate(icd3 = substr(c_diag, 2, 4))   # new column: ICD code without D-prefix, 3 characters
-mutate(age = as.numeric(difftime(surgery_date, foed_dag, units = "days")) / 365.25)   # age at surgery in years
+mutate(birth_year = year(foed_dag))   # birth year from date of birth
 ```
 
 ---
