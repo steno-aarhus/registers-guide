@@ -1,16 +1,16 @@
 ---
 title: "![](images/icons/icon_09.png){.title-icon} Understand LPR"
-subtitle: "Structure, history and nuances — before you write code"
+subtitle: "Structure, history and nuances - before you write code"
 date: last-modified
 ---
 
 The National Patient Register (LPR) is the source of diagnoses and hospital contacts.
 It covers all public hospital admissions and outpatient contacts in Denmark.
 
-LPR is more complex than most registers, because it changed format in 2019 and is split into somatic and psychiatric tables. This page explains the **structure** — the periods, the ICD codes, the diagnosis types and the pitfalls you need to know before you extract data. The concrete extraction recipes are in [Phase 9b — Extract from LPR](09b_udtraek_fra_lpr.qmd).
+LPR is more complex than most registers, because it changed format in 2019 and is split into somatic and psychiatric tables. This page explains the **structure** - the periods, the ICD codes, the diagnosis types and the pitfalls you need to know before you extract data. The concrete extraction recipes are in [Phase 9b - Extract from LPR](09b_udtraek_fra_lpr.qmd).
 
 ::: {.callout-tip}
-**In short:** LPR changed format in 2019 — use LPR2 (up to March 2019) and LPR3 (after) and combine them. All ICD codes carry a `D` prefix you usually strip, and you choose diagnosis types (A/B for outcomes, +G for baseline comorbidity).
+**In short:** LPR changed format in 2019 - use LPR2 (up to March 2019) and LPR3 (after) and combine them. All ICD codes carry a `D` prefix you usually strip, and you choose diagnosis types (A/B for outcomes, +G for baseline comorbidity).
 :::
 
 ::: {.callout-tip}
@@ -36,13 +36,13 @@ In March 2019 LPR changed format. Studies covering the period across 2019 must q
 | **Diagnosis type** | `c_diagtype` | `c_diagtype` | `diag_kode_type` |
 | **Contact type** | `c_pattype` (`"0"` = inpatient) | `c_pattype` | `kont_type` (`"ALCA00"` = inpatient) |
 
-¹ `t_psyk_adm` has `k_recnum`; `t_psyk_diag` has `v_recnum` — rename both to `recnum` before joining.
-² datetime format — convert with `as.Date()`.
+¹ `t_psyk_adm` has `k_recnum`; `t_psyk_diag` has `v_recnum` - rename both to `recnum` before joining.
+² datetime format - convert with `as.Date()`.
 ³ Rename: `rename(pnr = v_cpr)`.
 
 ::: {.callout-note}
 **Psychiatry: separate in LPR2, combined in LPR3**
-Before 2019, psychiatric diagnoses (F-codes: dementia, depression etc.) were stored in separate registers (`t_psyk_adm`, `t_psyk_diag`). The structure resembles somatic LPR2, but column names differ — see the table footnotes above. From March 2019, LPR3 combines both: somatic and psychiatric contacts and diagnoses are in the same tables, and no separate psychiatric query is needed.
+Before 2019, psychiatric diagnoses (F-codes: dementia, depression etc.) were stored in separate registers (`t_psyk_adm`, `t_psyk_diag`). The structure resembles somatic LPR2, but column names differ - see the table footnotes above. From March 2019, LPR3 combines both: somatic and psychiatric contacts and diagnoses are in the same tables, and no separate psychiatric query is needed.
 :::
 
 ```{mermaid}
@@ -59,7 +59,7 @@ gantt
 ```
 
 ::: {.callout-note}
-**LPR3 is delivered as `lpr_a_*` files (LPR_A format).** Older LPR_F versions of the same data may sit in your folder — be attentive to which files you load so you don't get duplicates. See [Phase 9b — LPR3 comes in two file formats](09b_udtraek_fra_lpr.qmd#lpr-a-format).
+**LPR3 is delivered as `lpr_a_*` files (LPR_A format).** Older LPR_F versions of the same data may sit in your folder - be attentive to which files you load so you don't get duplicates. See [Phase 9b - LPR3 comes in two file formats](09b_udtraek_fra_lpr.qmd#lpr-a-format).
 :::
 
 ---
@@ -71,7 +71,7 @@ gantt
 All ICD-10 codes in DST have a prepended `"D"`:
 `"DG30"` (Alzheimer's), `"DF00"` (dementia), `"DI21"` (acute myocardial infarction).
 
-**Strip the D-prefix before comparison** — it makes code more readable and easier to reuse:
+**Strip the D-prefix before comparison** - it makes code more readable and easier to reuse:
 
 ```r
 mutate(icd3 = substr(c_diag, 2, 4))   # "DG30" → "G30" (3-digit code)
@@ -86,9 +86,9 @@ mutate(icd4 = substr(c_diag, 2, 5))   # "DI219" → "I219" (4-digit code)
 
 | Code | Meaning | When to include |
 |---|---|---|
-| A | Action diagnosis — primary reason for the contact | Always for outcomes |
-| B | Secondary diagnosis — additional condition present | Always for outcomes |
-| G | Underlying condition — background comorbidity | Only for baseline comorbidity |
+| A | Action diagnosis - primary reason for the contact | Always for outcomes |
+| B | Secondary diagnosis - additional condition present | Always for outcomes |
+| G | Underlying condition - background comorbidity | Only for baseline comorbidity |
 
 ```r
 # For outcomes and exclusion diagnoses:
@@ -108,7 +108,7 @@ LPR3 flags diagnoses that have been retracted. The standard filter:
 filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
 ```
 
-The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns `NA` — not `TRUE`. A filter treats `NA` as `FALSE` and *drops* the row. `filter(senere_afkraeftet != "Ja")` *alone* would therefore remove all diagnoses that have no retraction marker at all (i.e. `NA` fields) — even though they are definitely not retracted. `is.na(...)` fixes this: "keep the row if the field is `NA` OR if it is not `"Ja"`". The filter thus retains uncategorised diagnoses, which is the safest assumption.
+The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns `NA` - not `TRUE`. A filter treats `NA` as `FALSE` and *drops* the row. `filter(senere_afkraeftet != "Ja")` *alone* would therefore remove all diagnoses that have no retraction marker at all (i.e. `NA` fields) - even though they are definitely not retracted. `is.na(...)` fixes this: "keep the row if the field is `NA` OR if it is not `"Ja"`". The filter thus retains uncategorised diagnoses, which is the safest assumption.
 
 ---
 
@@ -116,20 +116,20 @@ The `is.na()` part is deliberate. R's default behaviour is: `NA != "Ja"` returns
 
 You now know LPR's structure and the most important pitfalls. The next step is to extract the diagnoses with code:
 
-→ [Phase 9b — Extract from LPR](09b_udtraek_fra_lpr.qmd)
+→ [Phase 9b - Extract from LPR](09b_udtraek_fra_lpr.qmd)
 
 ## See also
 
-- [Overview of registers](15d_register_reference.qmd) — confirmed column names for all LPR registers
-- [DST pitfalls](15c_dst_faldgruber.qmd) — known issues with LPR on DST
+- [Overview of registers](15d_register_reference.qmd) - confirmed column names for all LPR registers
+- [DST pitfalls](15c_dst_faldgruber.qmd) - known issues with LPR on DST
 
 ### External resources on LPR3 and the 2019 transition
 
-- [ctpteam/DST — "Guide to LPR3"](https://github.com/ctpteam/DST) — institutional guide to the LPR3 structure
-- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) — peer-reviewed, thorough example of diagnostic stability across the LPR2→LPR3 transition (methodological inspiration, not code for reuse)
+- [ctpteam/DST - "Guide to LPR3"](https://github.com/ctpteam/DST) - institutional guide to the LPR3 structure
+- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) - peer-reviewed, thorough example of diagnostic stability across the LPR2→LPR3 transition (methodological inspiration, not code for reuse)
 
 ### Code look-ups
 
-- [The SKS browser](https://medinfo.dk/sks/brows.php) — look up ICD diagnosis and SKS procedure codes (in Danish)
-- [LPR code sheet (PDF download)](https://www.esundhed.dk/Dokumentation/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx) — esundhed.dk's combined code sheet for LPR (in Danish)
-- [DST TIMES — the DIAG variable](https://www.dst.dk/da/Statistik/dokumentation/Times/forebyggelsesregistret/diag) — DST's value set for D-prefixed ICD diagnosis codes (documented under the Prevention Register) (in Danish)
+- [The SKS browser](https://medinfo.dk/sks/brows.php) - look up ICD diagnosis and SKS procedure codes (in Danish)
+- [LPR code sheet (PDF download)](https://www.esundhed.dk/Dokumentation/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx) - esundhed.dk's combined code sheet for LPR (in Danish)
+- [DST TIMES - the DIAG variable](https://www.dst.dk/da/Statistik/dokumentation/Times/forebyggelsesregistret/diag) - DST's value set for D-prefixed ICD diagnosis codes (documented under the Prevention Register) (in Danish)

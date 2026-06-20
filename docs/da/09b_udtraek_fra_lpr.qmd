@@ -1,66 +1,66 @@
 ---
 title: "![](images/icons/icon_09.png){.title-icon} Udtræk fra LPR"
-subtitle: "Praktiske opskrifter — de to tilgange, helper-funktioner og integration med kohorten"
+subtitle: "Praktiske opskrifter - de to tilgange, helper-funktioner og integration med kohorten"
 date: last-modified
 ---
 
-Denne side viser, hvordan du trækker diagnoser ud af LPR med kode. Den bygger på strukturen fra [Fase 9a — Forstå LPR](09a_forstaa_lpr.qmd): perioderne (LPR2/LPR3), D-præfikset, diagnosetyperne (A/B/G) og filtret for tilbagekaldte diagnoser. Læs den side først, hvis du ikke allerede har.
+Denne side viser, hvordan du trækker diagnoser ud af LPR med kode. Den bygger på strukturen fra [Fase 9a - Forstå LPR](09a_forstaa_lpr.qmd): perioderne (LPR2/LPR3), D-præfikset, diagnosetyperne (A/B/G) og filtret for tilbagekaldte diagnoser. Læs den side først, hvis du ikke allerede har.
 
-Du bruger det samme udtræksmønster som i [Fase 5](05_universelle-moenster.qmd) og [Fase 6](06_foerste-udtraek.qmd) — bare anvendt på LPR's to generationer. Det er den vigtigste og nok den mest komplekse del af guiden.
+Du bruger det samme udtræksmønster som i [Fase 5](05_universelle-moenster.qmd) og [Fase 6](06_foerste-udtraek.qmd) - bare anvendt på LPR's to generationer. Det er den vigtigste og nok den mest komplekse del af guiden.
 
 ::: {.callout-note}
-**Denne side og Fase 10 hænger cirkulært sammen — det er bevidst.**
-For at bygge din kohorte (Fase 10) skal du vide, hvordan man udtrækker diagnosekoder og procedurer fra LPR. For at udtrække diagnosekoder fra LPR (denne side) har du brug for en kohorte. Vi løser det sådan: **denne side lærer dig udtræksmønstret** — vi antager at du allerede har en kohorte. **[Fase 10](10_byg-din-kohorte.qmd) viser dig, hvordan du bygger den kohorte** ved at bruge præcis det mønster du lige har lært. Læs faserne i rækkefølge, og kom tilbage til koden her, når du har din kohorte klar.
+**Denne side og Fase 10 hænger cirkulært sammen - det er bevidst.**
+For at bygge din kohorte (Fase 10) skal du vide, hvordan man udtrækker diagnosekoder og procedurer fra LPR. For at udtrække diagnosekoder fra LPR (denne side) har du brug for en kohorte. Vi løser det sådan: **denne side lærer dig udtræksmønstret** - vi antager at du allerede har en kohorte. **[Fase 10](10_byg-din-kohorte.qmd) viser dig, hvordan du bygger den kohorte** ved at bruge præcis det mønster du lige har lært. Læs faserne i rækkefølge, og kom tilbage til koden her, når du har din kohorte klar.
 :::
 
 ::: {.callout-warning}
-**LPR_A-variabelnavne er nye — verificér mod dine egne data.** LPR3 er for nylig skiftet fra det gamle LPR_F-format til det nye LPR_A-format (se [LPR3 findes i to filformater](#lpr-a-format) nedenfor), og det skift har ændret en række variabelnavne — ofte uigennemsigtige danske forkortelser. Kodeeksemplerne bruger de navne registrene typisk har, men tjek altid med `colnames(din_data)` mod de faktiske filer, og slå dem op i [Register-overblik](15d_register_reference.qmd), før du stoler på et kolonnenavn.
+**LPR_A-variabelnavne er nye - verificér mod dine egne data.** LPR3 er for nylig skiftet fra det gamle LPR_F-format til det nye LPR_A-format (se [LPR3 findes i to filformater](#lpr-a-format) nedenfor), og det skift har ændret en række variabelnavne - ofte uigennemsigtige danske forkortelser. Kodeeksemplerne bruger de navne registrene typisk har, men tjek altid med `colnames(din_data)` mod de faktiske filer, og slå dem op i [Register-overblik](15d_register_reference.qmd), før du stoler på et kolonnenavn.
 :::
 
 ::: {.callout-note}
-Koden bruger `inner_join()` og `bind_rows()`. Er det nye begreber, er de forklaret grundigt i [Fase 12 — Saml & klargør datasættet](11_data-manipulation.qmd) — du kan sagtens følge koden her og vende tilbage til Fase 12 bagefter.
+Koden bruger `inner_join()` og `bind_rows()`. Er det nye begreber, er de forklaret grundigt i [Fase 12 - Saml & klargør datasættet](11_data-manipulation.qmd) - du kan sagtens følge koden her og vende tilbage til Fase 12 bagefter.
 :::
 
 ::: {.callout-warning #lpr-a-format}
-**LPR3 findes i to filformater — vær opmærksom på hvilke filer du loader**
-DST har skiftet LPR3 fra det gamle **LPR_F**-format (filer som `kontakter`, `diagnoser`, `forloeb`) til det nye **LPR_A**-format (`lpr_a_kontakt`, `lpr_a_diagnose`). Afhængigt af hvordan dit projekts data er leveret, kan **begge versioner ligge i din datamappe** og dække de samme år. Loader du begge — eller blander gammelt og nyt — får du **duplikerede rækker**.
+**LPR3 findes i to filformater - vær opmærksom på hvilke filer du loader**
+DST har skiftet LPR3 fra det gamle **LPR_F**-format (filer som `kontakter`, `diagnoser`, `forloeb`) til det nye **LPR_A**-format (`lpr_a_kontakt`, `lpr_a_diagnose`). Afhængigt af hvordan dit projekts data er leveret, kan **begge versioner ligge i din datamappe** og dække de samme år. Loader du begge - eller blander gammelt og nyt - får du **duplikerede rækker**.
 
 Brug konsekvent **LPR_A**-filerne (`lpr_a_*`), som i eksemplerne her, og lad de gamle LPR_F-filer ligge.
 
-Nogle projekter har desuden ældre data *inde i* `lpr_a_kontakt`, som **allerede findes i LPR2** — kombinerer du de to perioder uden at filtrere, tælles de samme kontakter dobbelt. Filtrér dem fra med `lprindberetningssystem == "LPR3"`. **Det er projekt-specifikt** — er du på **DARTER**, er det håndteret i [faldgrube 5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem). Ellers: afklar med din datamanager, om dit projekt kræver et tilsvarende filter.
+Nogle projekter har desuden ældre data *inde i* `lpr_a_kontakt`, som **allerede findes i LPR2** - kombinerer du de to perioder uden at filtrere, tælles de samme kontakter dobbelt. Filtrér dem fra med `lprindberetningssystem == "LPR3"`. **Det er projekt-specifikt** - er du på **DARTER**, er det håndteret i [faldgrube 5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem). Ellers: afklar med din datamanager, om dit projekt kræver et tilsvarende filter.
 :::
 
 ---
 
-## Hent diagnoser fra LPR — vælg tilgang
+## Hent diagnoser fra LPR - vælg tilgang
 
 Vælg **én** af to tilgange afhængigt af dit studie:
 
-| | Tilgang 1 — direkte udtræk | Tilgang 2 — `alle_dx` |
+| | Tilgang 1 - direkte udtræk | Tilgang 2 - `alle_dx` |
 |---|---|---|
 | **Bedst når** | Du har **et mindre antal udfald** | Du har **flere udfald** fra LPR |
 | **Workflow** | Hent specifikke koder → Ekskluder → færdig | Hent alle → Ekskluder → filtrer per udfald |
 | **Fordel** | Simplere og hurtigere ved enkeltudtræk | LPR forespørges kun én gang; genbrug til alle udfald |
 
-**Tilgang 1** er bedst ved et mindre antal diagnoser du vil trække ud. Du filtrerer på specifikke ICD-koder direkte i `filter()`-steget *inden* `collect()`. DuckDB/Arrow sender filteret ned til lagringsformatet — kun relevante rækker hentes i RAM.
+**Tilgang 1** er bedst ved et mindre antal diagnoser du vil trække ud. Du filtrerer på specifikke ICD-koder direkte i `filter()`-steget *inden* `collect()`. DuckDB/Arrow sender filteret ned til lagringsformatet - kun relevante rækker hentes i RAM.
 
-**Tilgang 2** er bedst når du har mange udfald du vil trække ud. Du forespørger LPR én enkelt gang og bygger `alle_dx`: en fælles tabel med alle A- og B-diagnoser. For hvert nyt udfald filtrerer du blot `alle_dx` på koderne — den eneste linje du ændrer er kode-listen.
+**Tilgang 2** er bedst når du har mange udfald du vil trække ud. Du forespørger LPR én enkelt gang og bygger `alle_dx`: en fælles tabel med alle A- og B-diagnoser. For hvert nyt udfald filtrerer du blot `alle_dx` på koderne - den eneste linje du ændrer er kode-listen.
 
 ::: {.callout-note}
-Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. `kohort` er data.frame med `pnr` og `index_date` per person — se [Fase 10](10_byg-din-kohorte.qmd). Er registrene i SAS, konverter dem først: [Fase 4 — SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
+Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. `kohort` er data.frame med `pnr` og `index_date` per person - se [Fase 10](10_byg-din-kohorte.qmd). Er registrene i SAS, konverter dem først: [Fase 4 - SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
 :::
 
 <details>
-<summary>Tilgang 1 — hent bestemte diagnoser direkte (start her ved ét udfald)</summary>
+<summary>Tilgang 1 - hent bestemte diagnoser direkte (start her ved ét udfald)</summary>
 
-Filtrer på specifikke koder **inden** `collect()`. Eksemplet henter diabetes mellitus (E10–E14) — erstat `KODER_REGEX` med dine egne koder.
+Filtrer på specifikke koder **inden** `collect()`. Eksemplet henter diabetes mellitus (E10–E14) - erstat `KODER_REGEX` med dine egne koder.
 
 ```r
 library(arrow)
 library(dplyr)
 
 kohort_pnrs <- unique(kohort$pnr)
-KODER_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10–E14) — med D-præfiks
+KODER_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10–E14) - med D-præfiks
 
 # ── LPR2 somatisk ────────────────────────────────────────────────────────
 lpr_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
@@ -72,7 +72,7 @@ lpr2_dm <- lpr_adm %>%
   inner_join(
     lpr_diag %>%
       filter(c_diagtype %in% c("A", "B"),
-             grepl(KODER_REGEX, c_diag)) %>%   # filtrer FØR collect — D-præfiks i regex
+             grepl(KODER_REGEX, c_diag)) %>%   # filtrer FØR collect - D-præfiks i regex
       select(recnum, c_diag, c_diagtype),
     by = "recnum"
   ) %>%
@@ -110,7 +110,7 @@ KODER_REGEX <- paste0("^D(", paste(koder, collapse = "|"), ")")
 :::
 
 ::: {.callout-note}
-**Har du F-koder (fx demens, depression)?** Tilpas regex til at inkludere dem, fx `"^DE1[0-4]|^DF0[0-3]|^DG30"`, og tilføj psykiatrisk LPR2 — se Tilgang 2 nedenfor for kode.
+**Har du F-koder (fx demens, depression)?** Tilpas regex til at inkludere dem, fx `"^DE1[0-4]|^DF0[0-3]|^DG30"`, og tilføj psykiatrisk LPR2 - se Tilgang 2 nedenfor for kode.
 :::
 
 <details>
@@ -130,8 +130,8 @@ lpr <- left_join(lpr_adm, lpr_diag, by = "RECNUM") |>
 
 Den er kortere, men har tre faldgruber på DST:
 
-1. **D-præfiks-fejl:** `"^S72"` matcher IKKE `"DS72..."` i DST's data — returnerer nul rækker uden fejlmeddelelse. Brug `"^DS72"` (med D) eller strip præfikset først.
-2. **`left_join` i stedet for `inner_join`:** Beholder alle kontakter fra `lpr_adm` — også dem uden diagnose. Unødvendigt tungt på nationale registre.
+1. **D-præfiks-fejl:** `"^S72"` matcher IKKE `"DS72..."` i DST's data - returnerer nul rækker uden fejlmeddelelse. Brug `"^DS72"` (med D) eller strip præfikset først.
+2. **`left_join` i stedet for `inner_join`:** Beholder alle kontakter fra `lpr_adm` - også dem uden diagnose. Unødvendigt tungt på nationale registre.
 3. **Ingen pnr-filter:** Henter hele befolkningens data. Rigtigt ved kohorteopbygning (Fase 10), ikke ved udtræk fra eksisterende kohorte.
 
 </details>
@@ -139,9 +139,9 @@ Den er kortere, men har tre faldgruber på DST:
 </details>
 
 <details>
-<summary>Tilgang 2 — hent alle diagnoser + filtrer udfald (ved flere udfald)</summary>
+<summary>Tilgang 2 - hent alle diagnoser + filtrer udfald (ved flere udfald)</summary>
 
-**Del 1 — byg `alle_dx`**
+**Del 1 - byg `alle_dx`**
 
 ```r
 library(arrow)
@@ -207,13 +207,13 @@ alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
 :::
 
 ::: {.callout-tip}
-**Bruger du duckplyr?** `union_all()` kombinerer tabellerne inden `collect()` og kræver identiske kolonnenavne og -typer. Omdøb LPR3-kolonnerne til LPR2-format inden kombination — se onboarding-dokumentet for eksempel.
+**Bruger du duckplyr?** `union_all()` kombinerer tabellerne inden `collect()` og kræver identiske kolonnenavne og -typer. Omdøb LPR3-kolonnerne til LPR2-format inden kombination - se onboarding-dokumentet for eksempel.
 :::
 
 **Filtrer din udtrukne tabel for specifikke udfald**
 
 ```r
-KODER <- c("G30", "F00", "F01", "F02", "F03")   # demens — skift til dit udfald
+KODER <- c("G30", "F00", "F01", "F02", "F03")   # demens - skift til dit udfald
 
 udfald <- alle_dx %>%
   filter(icd3 %in% KODER) %>%
@@ -225,7 +225,7 @@ udfald <- alle_dx %>%
   ungroup() %>%
   select(pnr, event_date = date_contact)
 
-# Join til kohort — NA = ingen hændelse (censureres ved studieafslutning)
+# Join til kohort - NA = ingen hændelse (censureres ved studieafslutning)
 resultat <- kohort %>%
   select(pnr) %>%
   left_join(udfald, by = "pnr")
@@ -234,7 +234,7 @@ saveRDS(resultat, "datasets/extract_demens.rds")   # skift filnavn for hvert nyt
 ```
 
 ::: {.callout-note}
-Ekskludering af prævalente tilfælde — personer der allerede havde diagnosen inden index-dato — sker i [Fase 10, Trin 2](10_byg-din-kohorte.qmd). Brug `kohort_renset` i stedet for `kohort` i koden ovenfor, efter at du har gennemført det trin.
+Ekskludering af prævalente tilfælde - personer der allerede havde diagnosen inden index-dato - sker i [Fase 10, Trin 2](10_byg-din-kohorte.qmd). Brug `kohort_renset` i stedet for `kohort` i koden ovenfor, efter at du har gennemført det trin.
 :::
 
 </details>
@@ -242,17 +242,17 @@ Ekskludering af prævalente tilfælde — personer der allerede havde diagnosen 
 ---
 
 <details>
-<summary>Prøv det selv — kørbart eksempel med syntetiske data (Tilgang 1)</summary>
+<summary>Prøv det selv - kørbart eksempel med syntetiske data (Tilgang 1)</summary>
 
 ::: {.callout-important}
-Dette eksempel kræver **RStudio installeret lokalt på din computer** — ikke DST-serveren.
+Dette eksempel kræver **RStudio installeret lokalt på din computer** - ikke DST-serveren.
 Det syntetiske datasæt (`fakeregs`) er ikke tilgængeligt på DST.
 Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
 :::
 
-Eksemplet trækker CVD-diagnoser (iskæmisk hjertesygdom, ICD-10 I20–I25) fra LPR2 og LPR3 kombineret — det komplette mønster fra teoriafsnittet ovenfor, men kørbart lokalt med syntetiske data. Det følger **Tilgang 1**: specifikke koder filtreres fra *inden* `collect()`.
+Eksemplet trækker CVD-diagnoser (iskæmisk hjertesygdom, ICD-10 I20–I25) fra LPR2 og LPR3 kombineret - det komplette mønster fra teoriafsnittet ovenfor, men kørbart lokalt med syntetiske data. Det følger **Tilgang 1**: specifikke koder filtreres fra *inden* `collect()`.
 
-De syntetiske LPR-data genereres med `fakeregs`-pakken, som du allerede kender fra [Fase 6 — Første udtræk](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data). Har du allerede genereret og gemt data der, er `synth_data/lpr_adm/` klar og du kan springe forberedelsesblokken over.
+De syntetiske LPR-data genereres med `fakeregs`-pakken, som du allerede kender fra [Fase 6 - Første udtræk](06_foerste-udtraek.qmd#forberedelse-installer-fakeregs-og-generer-syntetiske-data). Har du allerede genereret og gemt data der, er `synth_data/lpr_adm/` klar og du kan springe forberedelsesblokken over.
 
 Tilpasset fra Anders Aasted Isaksens
 [`dev/common_tasks_datatable.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/dev/common_tasks_datatable.qmd)
@@ -285,17 +285,17 @@ write_parquet(lpr_a_d_synth,  "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet"
 ```
 
 ::: {.callout-tip}
-**Stien er relativ til dit working directory** — tjek med `getwd()`.
+**Stien er relativ til dit working directory** - tjek med `getwd()`.
 Har du allerede kørt forberedelsesblokken i [Fase 6](06_foerste-udtraek.qmd), er `synth_data/lpr_adm/` allerede gemt.
 :::
 
 ```r
-# De ICD-koder vi søger — skift disse til dit eget udfald
+# De ICD-koder vi søger - skift disse til dit eget udfald
 CVD_KODER <- c("I20", "I21", "I22", "I23", "I24", "I25")   # iskæmisk hjertesygdom
 
 # ── LPR2 somatisk (frem til marts 2019) ──────────────────────────────────
-lpr_adm  <- open_dataset("synth_data/lpr_adm/")  %>% rename_with(tolower)   # LPR2 kontakttabel — syntetisk
-lpr_diag <- open_dataset("synth_data/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosetabel — syntetisk
+lpr_adm  <- open_dataset("synth_data/lpr_adm/")  %>% rename_with(tolower)   # LPR2 kontakttabel - syntetisk
+lpr_diag <- open_dataset("synth_data/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosetabel - syntetisk
 
 lpr2_cvd <- lpr_adm %>%
   select(pnr, recnum, date_contact = d_inddto) %>%           # vælg kun nødvendige kolonner
@@ -310,8 +310,8 @@ lpr2_cvd <- lpr_adm %>%
   mutate(icd3 = substr(c_diag, 2, 4))                        # gem renset kode som ny kolonne
 
 # ── LPR3 (marts 2019 og frem) ─────────────────────────────────────────────
-lpr3_k <- open_dataset("synth_data/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 kontakttabel — syntetisk
-lpr3_d <- open_dataset("synth_data/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosetabel — syntetisk
+lpr3_k <- open_dataset("synth_data/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 kontakttabel - syntetisk
+lpr3_d <- open_dataset("synth_data/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosetabel - syntetisk
 
 lpr3_cvd <- lpr3_k %>%
   select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%   # dw_ek_kontakt er join-nøgle til lpr_a_diagnose
@@ -336,7 +336,7 @@ nrow(alle_cvd)                                               # tjek: antal diagn
 length(unique(alle_cvd$pnr))                                 # tjek: antal unikke personer
 table(alle_cvd$icd3)                                         # fordeling på koder
 
-saveRDS(alle_cvd, "datasets/extract_cvd.rds")                # gem — skift sti til din egen mappe
+saveRDS(alle_cvd, "datasets/extract_cvd.rds")                # gem - skift sti til din egen mappe
 ```
 
 </details>
@@ -353,7 +353,7 @@ Henter du diagnoser for flere udfald, betaler det sig at samle Tilgang 2-mønstr
 - Fejl introduceres ét sted i stedet for i hver kopi
 
 ::: {.callout-tip}
-**Arbejder du på DARTER (eller andet projekt med `dstDataPrep`)?** Byt `open_dataset("E:/workdata/.../<register>/")` ud med `load_database("<register>")` — så finder den stien automatisk. Se [DARTER — oversigt og pipeline](darter/00_index.qmd) for den fuldt tilpassede variant — den er opdateret med de aktuelle, bekræftede registernavne (pr. juni 2026).
+**Arbejder du på DARTER (eller andet projekt med `dstDataPrep`)?** Byt `open_dataset("E:/workdata/.../<register>/")` ud med `load_database("<register>")` - så finder den stien automatisk. Se [DARTER - oversigt og pipeline](darter/00_index.qmd) for den fuldt tilpassede variant - den er opdateret med de aktuelle, bekræftede registernavne (pr. juni 2026).
 :::
 
 <details>
@@ -374,7 +374,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
   psyk_diag <- open_dataset(paste0(base, "t_psyk_diag/")) %>% rename_with(tolower) %>%
     rename(recnum = v_recnum)                                          # LPR2 psykiatrisk diagnoser
   lpr3_k    <- open_dataset(paste0(base, "lpr_a_kontakt/"))  %>% rename_with(tolower) %>%
-    filter(lprindberetningssystem == "LPR3")                               # KRITISK (DARTER): behold kun rækker fra LPR3-systemet — undgå overlappende rækker
+    filter(lprindberetningssystem == "LPR3")                               # KRITISK (DARTER): behold kun rækker fra LPR3-systemet - undgå overlappende rækker
   lpr3_d    <- open_dataset(paste0(base, "lpr_a_diagnose/")) %>% rename_with(tolower)  # LPR3 diagnoser
 
   # Filtrer på indlæggelsestype hvis ønsket
@@ -424,13 +424,13 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 }
 ```
 
-**Brug funktionen** — ét kald pr. udtræk, skift kun `KODER`:
+**Brug funktionen** - ét kald pr. udtræk, skift kun `KODER`:
 
 ```r
 kohort    <- readRDS("datasets/full_cohort.rds")
 pnr_liste <- unique(kohort$pnr)
 
-# Hent alle diagnoser for kohorten (Fase 1 — se hospitalskontakter-siden)
+# Hent alle diagnoser for kohorten (Fase 1 - se hospitalskontakter-siden)
 alle_dx <- get_lpr_diagnoses(
   pnr_vector    = pnr_liste,
   diagtypes     = c("A", "B"),
@@ -438,7 +438,7 @@ alle_dx <- get_lpr_diagnoses(
 )
 # Returnerer: pnr | date_contact | c_diag | icd3
 
-# Udtræk ét udfald — skift kun KODER (Fase 2)
+# Udtræk ét udfald - skift kun KODER (Fase 2)
 KODER <- c("F00", "F01", "F02", "F03", "G30", "G31")   # demens
 
 demens <- alle_dx %>%
@@ -460,11 +460,11 @@ saveRDS(resultat, "datasets/extract_dementia.rds")
 
 Du har nu trukket diagnoser fra to LPR-generationer. Næste skridt er at forme og kombinere dine udtræk:
 
-→ [Fase 12 — Saml & klargør datasættet](11_data-manipulation.qmd)
+→ [Fase 12 - Saml & klargør datasættet](11_data-manipulation.qmd)
 
 ## Se også
 
-- [Fase 9a — Forstå LPR](09a_forstaa_lpr.qmd) — struktur, perioder, D-præfiks og diagnosetyper
-- [Fase 6 — Første udtræk](06_foerste-udtraek.qmd) — trin-for-trin introduktion til open_dataset, collect og saveRDS
-- [Register-overblik](15d_register_reference.qmd) — bekræftede kolonnenavne for alle LPR-registre
-- [Faldgruber på DST](15c_dst_faldgruber.qmd) — kendte problemer med LPR på DST
+- [Fase 9a - Forstå LPR](09a_forstaa_lpr.qmd) - struktur, perioder, D-præfiks og diagnosetyper
+- [Fase 6 - Første udtræk](06_foerste-udtraek.qmd) - trin-for-trin introduktion til open_dataset, collect og saveRDS
+- [Register-overblik](15d_register_reference.qmd) - bekræftede kolonnenavne for alle LPR-registre
+- [Faldgruber på DST](15c_dst_faldgruber.qmd) - kendte problemer med LPR på DST

@@ -9,46 +9,46 @@ der nu er erstattet af sidebar-navigationens fase-struktur.
 
 **Generelt**
 
-- [Studieforberedelse](01_studieforberedelse.qmd) — analyseplan, STROBE, hvad er DST
-- [Ressourcer og hjælp](02b_ressourcer-og-hjaelp.qmd) — hjælpeliste, kurser, AI-tips
+- [Studieforberedelse](01_studieforberedelse.qmd) - analyseplan, STROBE, hvad er DST
+- [Ressourcer og hjælp](02b_ressourcer-og-hjaelp.qmd) - hjælpeliste, kurser, AI-tips
 
 **R og RStudio**
 
-- [Kom i gang med R](02a_r-intro.qmd) — RStudio, første projekt, genveje
-- [Datastrukturer](10a_datastrukturer.qmd) — langt og bredt format
-- [Basiskommandoer](07_basiskommandoer.qmd) — udforsk og forstå dine data
-- [Filformater](04_filformater.qmd) — SAS, Parquet, RDS, CSV
+- [Kom i gang med R](02a_r-intro.qmd) - RStudio, første projekt, genveje
+- [Datastrukturer](10a_datastrukturer.qmd) - langt og bredt format
+- [Basiskommandoer](07_basiskommandoer.qmd) - udforsk og forstå dine data
+- [Filformater](04_filformater.qmd) - SAS, Parquet, RDS, CSV
 
 **DST-serveren**
 
-- [Kom i gang på DST](03_getting-started-dst.qmd) — de første 10 minutter, det universelle mønster
-- [Parquet, Arrow og DuckDB](05_parquet-arrow-duckdb.qmd) — doven evaluering, collect(), RAM
+- [Kom i gang på DST](03_getting-started-dst.qmd) - de første 10 minutter, det universelle mønster
+- [Parquet, Arrow og DuckDB](05_parquet-arrow-duckdb.qmd) - doven evaluering, collect(), RAM
 
 **Kode og data**
 
-- [Første udtræk](06_foerste-udtraek.qmd) — trin-for-trin fra register til gemt datasæt
-- [Funktioner — oversigt](14a_guide_til_funktioner.qmd) — filter, select, mutate, joins
-- [Joins og pivots](10b_joins-og-pivots.qmd) — kobl datasæt sammen
-- [Formateringstabeller](14b_formateringstabeller.qmd) — oversæt koder til tekst
-- [Hospitalskontakter (LPR)](09a_forstaa_lpr.qmd) — LPR2 + LPR3, ICD-koder
-- [Socioøkonomiske variable](11a_socioekonomiske-variable.qmd) — uddannelse, indkomst, beskæftigelse
+- [Første udtræk](06_foerste-udtraek.qmd) - trin-for-trin fra register til gemt datasæt
+- [Funktioner - oversigt](14a_guide_til_funktioner.qmd) - filter, select, mutate, joins
+- [Joins og pivots](10b_joins-og-pivots.qmd) - kobl datasæt sammen
+- [Formateringstabeller](14b_formateringstabeller.qmd) - oversæt koder til tekst
+- [Hospitalskontakter (LPR)](09a_forstaa_lpr.qmd) - LPR2 + LPR3, ICD-koder
+- [Socioøkonomiske variable](11a_socioekonomiske-variable.qmd) - uddannelse, indkomst, beskæftigelse
 
 **Pakker og algoritmer**
 
-- [Oversigt](13a_pakker-oversigt.qmd) — OSDC, NMI og SEPLINE
-- [OSDC](13b_osdc.qmd) — Open Source Diabetes Classifier
-- [NMI](13c_nmi.qmd) — Nordic Multimorbidity Index
-- [SEPLINE](11b_sepline.qmd) — socioøkonomisk position
+- [Oversigt](13a_pakker-oversigt.qmd) - OSDC, NMI og SEPLINE
+- [OSDC](13b_osdc.qmd) - Open Source Diabetes Classifier
+- [NMI](13c_nmi.qmd) - Nordic Multimorbidity Index
+- [SEPLINE](11b_sepline.qmd) - socioøkonomisk position
 
 **Reference og hjemsendelse**
 
-- [Registerreference](08_register_reference.qmd) — bekræftede kolonnenavne for alle registre
-- [Faldgruber](14c_dst_faldgruber.qmd) — 10 DST-specifikke fejl
-- [Eksport og hjemsendelse](15_eksport-hjemsendelse.qmd) — GDPR og outputkontrol
+- [Registerreference](08_register_reference.qmd) - bekræftede kolonnenavne for alle registre
+- [Faldgruber](14c_dst_faldgruber.qmd) - 10 DST-specifikke fejl
+- [Eksport og hjemsendelse](15_eksport-hjemsendelse.qmd) - GDPR og outputkontrol
 
 ---
 
-## Fra 02a_r-intro.qmd: "Opret dit R-projekt" (DST-specifik — flyttes til Fase 3)
+## Fra 02a_r-intro.qmd: "Opret dit R-projekt" (DST-specifik - flyttes til Fase 3)
 
 Et R-projekt er en mappe på computeren, der samler alle dine scripts, outputfiler og indstillinger.
 **Hvert studie bør have sit eget projekt.**
@@ -57,7 +57,7 @@ Et R-projekt er en mappe på computeren, der samler alle dine scripts, outputfil
 
 1. Åbn RStudio
 2. **File → New Project → New Directory → New Project**
-3. Giv projektet et navn og vælg en placering — på DST typisk under `E:/workdata/[projektnummer]/workspaces/[ditNavn]/`
+3. Giv projektet et navn og vælg en placering - på DST typisk under `E:/workdata/[projektnummer]/workspaces/[ditNavn]/`
 4. Klik **Create Project**
 
 Anbefalet mappestruktur:
@@ -70,7 +70,7 @@ mit-projekt/
 
 ---
 
-## Fra 02a_r-intro.qmd: Keyboard genveje-tabel (reference — evt. til Fase 13)
+## Fra 02a_r-intro.qmd: Keyboard genveje-tabel (reference - evt. til Fase 13)
 
 | Genvej (Windows/Mac i Remote Desktop) | Hvad den gør |
 |---|---|
@@ -87,14 +87,14 @@ mit-projekt/
 
 ## Fra 02a_r-intro.qmd: "Gem ikke workspace" tip
 
-RStudio spørger ved lukning: *"Save workspace image?"* — **vælg altid Nej**.
+RStudio spørger ved lukning: *"Save workspace image?"* - **vælg altid Nej**.
 Indstil det permanent under **Tools → Global Options → General → "Save workspace to .RData" → Never**.
 
 ---
 
 ## Fra 02b_ressourcer-og-hjaelp.qmd: DST-dokumentation (flyttes til Fase 3)
 
-**TIMES — variabelbeskrivelser**
+**TIMES - variabelbeskrivelser**
 Slå op hvad en variabel betyder:
 [dst.dk/da/Statistik/dokumentation/Times](https://www.dst.dk/da/Statistik/dokumentation/Times)
 

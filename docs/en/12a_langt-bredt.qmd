@@ -1,10 +1,10 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Long ↔ wide format"
-subtitle: "Get one extract down to one row per person — with group_by() + slice() or pivot"
+subtitle: "Get one extract down to one row per person - with group_by() + slice() or pivot"
 date: last-modified
 ---
 
-Before you can link your extracts together ([12b — Link your extracts](12b_joins.qmd)), each extract needs to be in **wide format with one row per person**. The registers you extract from are almost always in *long format* with many rows per person. This page explains the difference and shows the two ways you reshape an extract: `group_by() + slice()` and `pivot_wider()` / `pivot_longer()`.
+Before you can link your extracts together ([12b - Link your extracts](12b_joins.qmd)), each extract needs to be in **wide format with one row per person**. The registers you extract from are almost always in *long format* with many rows per person. This page explains the difference and shows the two ways you reshape an extract: `group_by() + slice()` and `pivot_wider()` / `pivot_longer()`.
 
 ::: {.callout-note}
 The code examples use generic paths and variable names. Adapt to your project's folder structure and column names.
@@ -16,7 +16,7 @@ The code examples use generic paths and variable names. Adapt to your project's 
 
 Imagine three persons with weight measurements at two time points.
 
-**Wide format** — one row per person, one column per time point:
+**Wide format** - one row per person, one column per time point:
 
 | pnr | weight_baseline | weight_6mo |
 |---|---|---|
@@ -24,7 +24,7 @@ Imagine three persons with weight measurements at two time points.
 | 002 | 105 | 88 |
 | 003 | 98 | 80 |
 
-**Long format** — one row per observation, one column for time point and one for value:
+**Long format** - one row per observation, one column for time point and one for value:
 
 | pnr | timepoint | weight |
 |---|---|---|
@@ -35,7 +35,7 @@ Imagine three persons with weight measurements at two time points.
 | 003 | baseline | 98 |
 | 003 | 6mo | 80 |
 
-Both formats contain **the same information** — they are just arranged differently.
+Both formats contain **the same information** - they are just arranged differently.
 
 ---
 
@@ -43,11 +43,11 @@ Both formats contain **the same information** — they are just arranged differe
 
 | Register | Format | Why |
 |---|---|---|
-| BEF | Long | One row per person **per snapshot** — quarterly since 2008, otherwise annual |
-| LPR (lpr_adm + lpr_diag) | Long | One row per **diagnosis per contact** — one admission can have 10 diagnoses |
-| LMDB | Long | One row per **dispensed prescription** — the same person can have hundreds |
-| DODSAARS | Wide | One row per **deceased person** — already one-per-person |
-| Your analysis dataset | Wide | One row per person — one column per covariate |
+| BEF | Long | One row per person **per snapshot** - quarterly since 2008, otherwise annual |
+| LPR (lpr_adm + lpr_diag) | Long | One row per **diagnosis per contact** - one admission can have 10 diagnoses |
+| LMDB | Long | One row per **dispensed prescription** - the same person can have hundreds |
+| DODSAARS | Wide | One row per **deceased person** - already one-per-person |
+| Your analysis dataset | Wide | One row per person - one column per covariate |
 
 **Registers are usually in long format. Your analysis dataset should typically be in wide format.**
 
@@ -62,11 +62,11 @@ The key choice is *what you want out* of the long register:
 | **One representative value** per person (newest snapshot, first event, earliest date) | `group_by() + slice()` | One row per person, same columns |
 | **Several time points side by side** as separate columns | `pivot_wider()` | One row per person, one new column per time point |
 
-In register-based research, `group_by() + slice()` is by far the most common choice — you usually just want "the newest" or "the first" value per person. You use `pivot_wider()` when you explicitly want to compare several time points.
+In register-based research, `group_by() + slice()` is by far the most common choice - you usually just want "the newest" or "the first" value per person. You use `pivot_wider()` when you explicitly want to compare several time points.
 
 ---
 
-## `group_by()` + `slice()` — one representative row
+## `group_by()` + `slice()` - one representative row
 
 The pattern is always the same: group by `pnr`, sort so the desired row is on top, take the first row per group.
 
@@ -75,7 +75,7 @@ The pattern is always the same: group by `pnr`, sort so the desired row is on to
 bef_one_per_person <- bef %>%
   group_by(pnr) %>%          # group: all rows with the same pnr are treated together
   arrange(desc(aar)) %>%     # sort within group: newest year first (desc = descending)
-  slice(1) %>%               # take only the first row per group — i.e. the newest year
+  slice(1) %>%               # take only the first row per group - i.e. the newest year
   ungroup()                  # IMPORTANT: release grouping when done
 ```
 
@@ -94,7 +94,7 @@ These errors are hard to detect because the code runs without error messages and
 first_dementia <- alle_dx %>%
   filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # only dementia codes
   group_by(pnr) %>%              # group per person
-  arrange(date_contact) %>%      # oldest date first (ascending — no desc)
+  arrange(date_contact) %>%      # oldest date first (ascending - no desc)
   slice(1) %>%                   # first diagnosis per person
   ungroup()                      # release grouping
 # → ready for join: cohort %>% left_join(first_dementia, by = "pnr")
@@ -112,7 +112,7 @@ first_emigration <- vnds %>%
 
 ---
 
-## Pivots — switch between long and wide
+## Pivots - switch between long and wide
 
 ### Long → wide with `pivot_wider()`
 
@@ -128,28 +128,28 @@ df_wide <- df_long %>%
 
 ::: {.callout-warning}
 **You CANNOT `pivot_wider()` an entire LPR table.**
-LPR potentially has hundreds of unique ICD codes per person — `pivot_wider()` would give you one column per code, i.e. thousands of columns and a dataset that is impossible to work with.
+LPR potentially has hundreds of unique ICD codes per person - `pivot_wider()` would give you one column per code, i.e. thousands of columns and a dataset that is impossible to work with.
 
 Instead use the pattern from [Phase 9](09b_udtraek_fra_lpr.qmd): extract the first date for one specific diagnosis group (with `group_by() + slice()` above), save as `extract_dementia.rds`, and join it as one column with `left_join()`.
 :::
 
 <details>
-<summary>Practical example: employment status from AKM — long to wide</summary>
+<summary>Practical example: employment status from AKM - long to wide</summary>
 
-AKM (the Labour Classification Module) stores one row per person **per year** — long format. If you want to compare employment status at baseline and follow-up side by side, you can pivot:
+AKM (the Labour Classification Module) stores one row per person **per year** - long format. If you want to compare employment status at baseline and follow-up side by side, you can pivot:
 
 ```r
 library(dplyr)   # filter, mutate
 library(tidyr)   # pivot_wider
 
-# AKM in long format — two years per person:
+# AKM in long format - two years per person:
 akm_long <- data.frame(
   pnr   = c("001", "001", "002", "002", "003", "003"),
   aar   = c(2015, 2020, 2015, 2020, 2015, 2020),
   socio = c(110, 110, 210, 310, 150, 150)   # employment categories from AKM (socio13)
 )
 
-# Convert to wide — one column per year:
+# Convert to wide - one column per year:
 akm_wide <- akm_long %>%
   pivot_wider(
     names_from   = aar,
@@ -164,7 +164,7 @@ akm_wide <- akm_long %>%
 #   003          150         150
 ```
 
-In practice you would typically not pivot AKM — you filter to one specific year with `filter(aar == index_year)` and use `group_by() + slice()` above. Pivot is relevant when you explicitly want two time points side by side in the analysis.
+In practice you would typically not pivot AKM - you filter to one specific year with `filter(aar == index_year)` and use `group_by() + slice()` above. Pivot is relevant when you explicitly want two time points side by side in the analysis.
 
 </details>
 
@@ -185,9 +185,9 @@ df_long <- df_wide %>%
 
 Once each extract is down to one row per person, you link them into one analysis-ready dataset:
 
-→ [12b — Link your extracts](12b_joins.qmd)
+→ [12b - Link your extracts](12b_joins.qmd)
 
 ## See also
 
-- [12b — Link your extracts](12b_joins.qmd) — joins, `bind_rows()` and calculating follow-up time
-- [Functions: overview](15a_guide_til_funktioner.qmd) — all functions for transforming data
+- [12b - Link your extracts](12b_joins.qmd) - joins, `bind_rows()` and calculating follow-up time
+- [Functions: overview](15a_guide_til_funktioner.qmd) - all functions for transforming data

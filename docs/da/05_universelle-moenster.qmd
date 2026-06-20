@@ -5,50 +5,50 @@ date: last-modified
 ---
 
 I Fase 4 så du, at registre indlæses *dovent*: du åbner en forbindelse, ikke data.
-Denne side viser **arbejdsmetoden** der følger af det — det samme mønster, du vil bruge i hvert eneste udtræk resten af guiden.
+Denne side viser **arbejdsmetoden** der følger af det - det samme mønster, du vil bruge i hvert eneste udtræk resten af guiden.
 
 ::: {.callout-important}
-**Dette er det vigtigste mønster i hele guiden.** Alle udtræk fra DST-registre følger denne struktur. Lær det her én gang — du genkender det overalt fra Fase 6 og frem.
+**Dette er det vigtigste mønster i hele guiden.** Alle udtræk fra DST-registre følger denne struktur. Lær det her én gang - du genkender det overalt fra Fase 6 og frem.
 :::
 
 ::: {.callout-note}
 **Hvorfor kan vi ikke bare indlæse et register som en CSV-fil?**
-Fordi registrene er for store. En CSV (eller et `readRDS`) læser hele filen ind i hukommelsen på én gang — det går fint med dine egne små datasæt, men BEF og LMDB har millioner til hundredvis af millioner af rækker og ville crashe din session. Den dovne forbindelse lader dig filtrere *inden* du henter, så kun de rækker du faktisk skal bruge, nogensinde rammer hukommelsen.
+Fordi registrene er for store. En CSV (eller et `readRDS`) læser hele filen ind i hukommelsen på én gang - det går fint med dine egne små datasæt, men BEF og LMDB har millioner til hundredvis af millioner af rækker og ville crashe din session. Den dovne forbindelse lader dig filtrere *inden* du henter, så kun de rækker du faktisk skal bruge, nogensinde rammer hukommelsen.
 :::
 
 ---
 
 ## Mønstret: åbn forbindelse → filtrér → vælg → hent
 
-Forestil dig et supermarked. Du kan enten købe hele butikken og sortere derhjemme — eller sende en indkøbsliste og kun få det på listen leveret. Doven indlæsning er det sidste: du beskriver hvad du vil have, og henter først varerne hjem til sidst med `collect()`.
+Forestil dig et supermarked. Du kan enten købe hele butikken og sortere derhjemme - eller sende en indkøbsliste og kun få det på listen leveret. Doven indlæsning er det sidste: du beskriver hvad du vil have, og henter først varerne hjem til sidst med `collect()`.
 
 ```r
 library(arrow)   # open_dataset
 library(dplyr)   # filter, select, collect
 
-# 1. Åbn doven forbindelse — ingen data flyttes
+# 1. Åbn doven forbindelse - ingen data flyttes
 bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
   rename_with(tolower)
 
-# 2. Filtrér rækker og vælg kolonner — stadig ingen data i R
+# 2. Filtrér rækker og vælg kolonner - stadig ingen data i R
 bef_filtreret <- bef %>%
   filter(aar == 2020) %>%
   select(pnr, koen, foed_dag, familie_id)
 
-# 3. collect() — HER flyttes de udvalgte data ind i R's hukommelse
+# 3. collect() - HER flyttes de udvalgte data ind i R's hukommelse
 bef_data <- bef_filtreret %>% collect()
 ```
 
-Trin 1–2 er rene *instruktioner* — de koster næsten ingen hukommelse.
+Trin 1–2 er rene *instruktioner* - de koster næsten ingen hukommelse.
 `collect()` i trin 3 er den eneste linje, der faktisk flytter data.
 
 ::: {.callout-tip}
-**Arbejder du på DARTER?** Erstat `open_dataset("E:/workdata/...")` med `load_database("bef")` fra `dstDataPrep`. Se [DARTER — oversigt og pipeline](darter/00_index.qmd).
+**Arbejder du på DARTER?** Erstat `open_dataset("E:/workdata/...")` med `load_database("bef")` fra `dstDataPrep`. Se [DARTER - oversigt og pipeline](darter/00_index.qmd).
 :::
 
 ::: {.callout-note}
 **Hvorfor `rename_with(tolower)` som første trin?**
-Rå kolonnenavne i DST-registre har inkonsistent store/små bogstaver — `PNR`, `pnr`, `Pnr`. Ved at standardisere til små bogstaver med det samme kan resten af din kode bruge `pnr` overalt uden at tænke på det. Tilføj det umiddelbart efter `open_dataset()` som det første led i din pipe — inden du filtrerer eller vælger kolonner.
+Rå kolonnenavne i DST-registre har inkonsistent store/små bogstaver - `PNR`, `pnr`, `Pnr`. Ved at standardisere til små bogstaver med det samme kan resten af din kode bruge `pnr` overalt uden at tænke på det. Tilføj det umiddelbart efter `open_dataset()` som det første led i din pipe - inden du filtrerer eller vælger kolonner.
 :::
 
 ---
@@ -56,20 +56,20 @@ Rå kolonnenavne i DST-registre har inkonsistent store/små bogstaver — `PNR`,
 ## Den vigtigste regel: filtrér og vælg kolonner FØR du henter {#filtrer-foer-hent}
 
 ```r
-# RIGTIGT — filtrér og vælg kolonner FØR collect
+# RIGTIGT - filtrér og vælg kolonner FØR collect
 resultat <- stort_register %>%
   filter(pnr %in% !!kohort_pnrs) %>%   # behold kun de rigtige rækker
   select(pnr, dato, vaerdi) %>%          # behold kun de kolonner du bruger
   collect()
 
-# FORKERT — henter millioner af rækker og alle kolonner ind i RAM
+# FORKERT - henter millioner af rækker og alle kolonner ind i RAM
 resultat <- stort_register %>%
   collect() %>%
   filter(pnr %in% kohort_pnrs)
 ```
 
 BEF har millioner af rækker; LMDB har hundredvis af millioner.
-At kalde `collect()` før `filter()` kan crashe din session — og fordi alle deler serverens RAM, gør det serveren langsom for **alle andre** samtidig. Jo mere du har filtreret og valgt kolonner på forhånd, jo hurtigere og mere stabilt kører det.
+At kalde `collect()` før `filter()` kan crashe din session - og fordi alle deler serverens RAM, gør det serveren langsom for **alle andre** samtidig. Jo mere du har filtreret og valgt kolonner på forhånd, jo hurtigere og mere stabilt kører det.
 
 ::: {.callout-tip}
 **Tommelfingerregel:** `filter()` begrænser rækker. `select()` begrænser kolonner. Brug begge *inden* `collect()`.
@@ -80,17 +80,17 @@ At kalde `collect()` før `filter()` kan crashe din session — og fordi alle de
 <details>
 <summary>Dybde: hvad !! betyder, og hvorfor det er nødvendigt</summary>
 
-Lagde du mærke til `!!` i eksemplet ovenfor — `filter(pnr %in% !!kohort_pnrs)`?
+Lagde du mærke til `!!` i eksemplet ovenfor - `filter(pnr %in% !!kohort_pnrs)`?
 
 **Hvad er `kohort_pnrs`?**
-Det er en vektor (en liste) med de personnumre der skal indgå i dit studie — fx alle der har fået en bestemt operation eller diagnose. Du har bygget den fra et register ved at filtrere på en SKS- eller ICD-kode. Den ser fx sådan ud i R:
+Det er en vektor (en liste) med de personnumre der skal indgå i dit studie - fx alle der har fået en bestemt operation eller diagnose. Du har bygget den fra et register ved at filtrere på en SKS- eller ICD-kode. Den ser fx sådan ud i R:
 
 ```r
 kohort_pnrs <- unique(kohort$pnr)   # trukket fra dit kohorte-datasæt
 ```
 
 ::: {.callout-warning}
-**Du må aldrig skrive reelle personnumre (pnr) i din kode** — kun variabelnavne og vektorer. At skrive faktiske CPR-numre direkte i et script er en overtrædelse af DST's regler for håndtering af mikrodata.
+**Du må aldrig skrive reelle personnumre (pnr) i din kode** - kun variabelnavne og vektorer. At skrive faktiske CPR-numre direkte i et script er en overtrædelse af DST's regler for håndtering af mikrodata.
 :::
 
 **Tilbage til `!!`:** Den dovne forespørgsel udføres ikke af R, men af databasemotoren (Arrow/DuckDB), som kører *adskilt* fra R og ikke kender dine lokale variabler.
@@ -99,7 +99,7 @@ kohort_pnrs <- unique(kohort$pnr)   # trukket fra dit kohorte-datasæt
 filter(pnr %in% !!kohort_pnrs)
 ```
 
-Uden `!!` ville motoren lede efter en *kolonne* ved navn `kohort_pnrs` inde i registret. Den findes ikke — `kohort_pnrs` er en R-vektor, du har lavet lokalt. `!!` betyder: *"dette er et R-objekt, ikke et kolonnenavn — slå dets værdier op i R og brug dem i forespørgslen."*
+Uden `!!` ville motoren lede efter en *kolonne* ved navn `kohort_pnrs` inde i registret. Den findes ikke - `kohort_pnrs` er en R-vektor, du har lavet lokalt. `!!` betyder: *"dette er et R-objekt, ikke et kolonnenavn - slå dets værdier op i R og brug dem i forespørgslen."*
 
 Du vil se `!!` foran næsten enhver lokal variabel, der bruges inde i et `filter()` på et dovent objekt.
 
@@ -113,7 +113,7 @@ Tommelfingerregel: refererer du til en **kolonne** i registret, skriver du navne
 
 ## Tjek: har du data eller bare en forbindelse?
 
-Mange fejl opstår, fordi man tror, man har hentet data — men faktisk stadig sidder med en ueksekveret forespørgsel. Spørg objektet hvad det er:
+Mange fejl opstår, fordi man tror, man har hentet data - men faktisk stadig sidder med en ueksekveret forespørgsel. Spørg objektet hvad det er:
 
 ```r
 class(mit_objekt)
@@ -121,14 +121,14 @@ class(mit_objekt)
 
 | Hvad `class()` returnerer | Hvad det betyder | Hvad du gør |
 |---|---|---|
-| `"tbl_df" "data.frame"` | Data er i R | Ingenting — du er klar |
+| `"tbl_df" "data.frame"` | Data er i R | Ingenting - du er klar |
 | `"tbl_duckdb_connection"` | Usendt DuckDB-forespørgsel | Tilføj `%>% collect()` |
 | `"Table" "ArrowObject"` | Usendt Arrow-forespørgsel | Tilføj `%>% collect()` |
 
 ---
 
 <details>
-<summary>Dybde: RAM er delt — ryd op efter store udtræk</summary>
+<summary>Dybde: RAM er delt - ryd op efter store udtræk</summary>
 
 På DST deler alle brugere serverens hukommelse. Når hukommelseslinjen i RStudio bliver rød, sænker det alles sessioner.
 
@@ -137,9 +137,9 @@ rm(stort_register)   # fjerner objektet fra din R-session (forsvinder fra listen
 gc()                 # beder operativsystemet om at genvinde hukommelsen R ikke længere bruger
 ```
 
-`rm()` fjerner objektet fra din aktive session — det kan ikke længere bruges i koden og forsvinder fra Environment-panelet (øverst til højre i RStudio).
+`rm()` fjerner objektet fra din aktive session - det kan ikke længere bruges i koden og forsvinder fra Environment-panelet (øverst til højre i RStudio).
 
-`gc()` (*garbage collection*) påvirker ikke din session — alle dine øvrige objekter er stadig der. R holder normalt på frigjort hukommelse lidt ekstra, fordi det er hurtigere at genbruge end at bede operativsystemet om ny. `gc()` tvinger R til at aflevere den hukommelse tilbage til operativsystemet *med det samme*, så den bliver tilgængelig for andre brugere på den fælles DST-server. Du mister ingenting — det hjælper dine kolleger.
+`gc()` (*garbage collection*) påvirker ikke din session - alle dine øvrige objekter er stadig der. R holder normalt på frigjort hukommelse lidt ekstra, fordi det er hurtigere at genbruge end at bede operativsystemet om ny. `gc()` tvinger R til at aflevere den hukommelse tilbage til operativsystemet *med det samme*, så den bliver tilgængelig for andre brugere på den fælles DST-server. Du mister ingenting - det hjælper dine kolleger.
 
 Ryd altid op efter store udtræk, inden du fortsætter.
 
@@ -153,14 +153,14 @@ Ryd altid op efter store udtræk, inden du fortsætter.
 flowchart TD
     P[("Parquet-register<br>på DST-serveren")]:::store
     L["open_dataset()"]:::lazy
-    F["filter() — vælg rækker"]:::lazy
-    S["select() — vælg kolonner"]:::lazy
-    J["inner_join() — kobl (valgfrit)"]:::lazy
+    F["filter() - vælg rækker"]:::lazy
+    S["select() - vælg kolonner"]:::lazy
+    J["inner_join() - kobl (valgfrit)"]:::lazy
     C(["collect()"]):::collect
     R[("data.frame i R")]:::store
     V["saveRDS() → datasets/"]:::save
 
-    P -->|"doven — intet flyttes endnu"| L
+    P -->|"doven - intet flyttes endnu"| L
     L --> F --> S --> J
     J -->|"send forespørgslen"| C
     C -->|"kun udvalgte rækker + kolonner"| R
@@ -172,27 +172,27 @@ flowchart TD
     classDef save fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
 ```
 
-De blå trin er **dovne** — de bygger kun en forespørgsel op. Først ved `collect()` (orange) flyttes data ind i R. Derfor skal `filter()` og `select()` stå *før* `collect()`.
+De blå trin er **dovne** - de bygger kun en forespørgsel op. Først ved `collect()` (orange) flyttes data ind i R. Derfor skal `filter()` og `select()` stå *før* `collect()`.
 
 ---
 
 <details>
 <summary>Vil du vide mere? Hvad er Parquet, Arrow og DuckDB egentlig?</summary>
 
-Du behøver ikke kende disse navne for at bruge mønstret ovenfor — men her er hvad der sker under motorhjelmen.
+Du behøver ikke kende disse navne for at bruge mønstret ovenfor - men her er hvad der sker under motorhjelmen.
 
-**Parquet** er et filformat der gemmer data *kolonne for kolonne* i stedet for række for række. Vil du kun have `pnr` og `aar`, læser computeren kun de to kolonner — ikke resten. Det er derfor det er hurtigt.
+**Parquet** er et filformat der gemmer data *kolonne for kolonne* i stedet for række for række. Vil du kun have `pnr` og `aar`, læser computeren kun de to kolonner - ikke resten. Det er derfor det er hurtigt.
 
-På DARTER-projektet (708421) er de fleste SAS-datasæt allerede konverteret til parquet og kan åbnes direkte med `load_database()` — se [DARTER — Registersti og datastores](darter/01_registersti-datastores.qmd). På andre projekter kan du selv konvertere SAS-filer til parquet — se [Fase 4 — Konvertér SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
+På DARTER-projektet (708421) er de fleste SAS-datasæt allerede konverteret til parquet og kan åbnes direkte med `load_database()` - se [DARTER - Registersti og datastores](darter/01_registersti-datastores.qmd). På andre projekter kan du selv konvertere SAS-filer til parquet - se [Fase 4 - Konvertér SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
 
 **Arrow** er R-pakken der læser parquet-filer og oversætter dine dplyr-kommandoer til effektive parquet-forespørgsler. `open_dataset()` bruger Arrow.
 
-**DuckDB** er en database, der kører direkte i din R-session. Den er lynhurtig og understøtter næsten al dplyr-syntaks. Bruger du `load_database()` (DARTER/dstDataPrep), bruges Arrow og DuckDB under motorhjelmen. Du skriver bare normal dplyr-kode — begge veje.
+**DuckDB** er en database, der kører direkte i din R-session. Den er lynhurtig og understøtter næsten al dplyr-syntaks. Bruger du `load_database()` (DARTER/dstDataPrep), bruges Arrow og DuckDB under motorhjelmen. Du skriver bare normal dplyr-kode - begge veje.
 
 </details>
 
 <details>
-<summary>Mere teknisk: Arrow vs. DuckDB — hvornår bruges hvad?</summary>
+<summary>Mere teknisk: Arrow vs. DuckDB - hvornår bruges hvad?</summary>
 
 Begge pakker bruger doven evaluering og `collect()`.
 
@@ -210,4 +210,4 @@ Støder du på en fejl om *"unsupported function"*, er du sandsynligvis ved at b
 
 Du kender nu mønstret. I næste fase bruger du det på rigtige (syntetiske) registerdata fra start til slut.
 
-→ [Fase 6 — Første udtræk](06_foerste-udtraek.qmd)
+→ [Fase 6 - Første udtræk](06_foerste-udtraek.qmd)

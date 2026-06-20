@@ -1,31 +1,31 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Outcomes"
-subtitle: "Extract outcome dates and censoring — filtered to your cohort"
+subtitle: "Extract outcome dates and censoring - filtered to your cohort"
 date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under development.** Structural outline — to be expanded. The pattern is the same as in [Phase 9 — Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd), now filtered to your cohort.
+**Under development.** Structural outline - to be expanded. The pattern is the same as in [Phase 9 - Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd), now filtered to your cohort.
 :::
 
-Your **outcome** is typically the date of the first event after index — e.g. a diagnosis (LPR). But to calculate follow-up time you also need the dates on which a person **stops being at risk** for the outcome: **death** (DODSAARS) and **emigration** (VNDS). You extract each date as its own table with `pnr` + date, filtered to the cohort.
+Your **outcome** is typically the date of the first event after index - e.g. a diagnosis (LPR). But to calculate follow-up time you also need the dates on which a person **stops being at risk** for the outcome: **death** (DODSAARS) and **emigration** (VNDS). You extract each date as its own table with `pnr` + date, filtered to the cohort.
 
 ::: {.callout-note}
 **Why dates other than the outcome itself?**
-In a time-to-event study you follow each person from the index date until the outcome occurs — *or* until the person can no longer have the outcome observed. A person who **dies** or **emigrates** disappears from the Danish registers, and you can no longer know whether they later developed the outcome. So you **censor** them on the death or emigration date. You extract these dates here so that in [Phase 12](11_data-manipulation.qmd) you can calculate correct follow-up time — the earliest of outcome, death, emigration and end of study.
+In a time-to-event study you follow each person from the index date until the outcome occurs - *or* until the person can no longer have the outcome observed. A person who **dies** or **emigrates** disappears from the Danish registers, and you can no longer know whether they later developed the outcome. So you **censor** them on the death or emigration date. You extract these dates here so that in [Phase 12](11_data-manipulation.qmd) you can calculate correct follow-up time - the earliest of outcome, death, emigration and end of study.
 :::
 
 ## The pattern
 
 ```r
-# unique() removes duplicates, so you get one pnr per person — a clean list of the cohort's people
+# unique() removes duplicates, so you get one pnr per person - a clean list of the cohort's people
 cohort_pnrs <- unique(readRDS("datasets/full_cohort.rds")$pnr)
 
 # Example: first dementia diagnosis after index (outcome)
 outcome <- open_dataset("path/to/lpr_diag/") %>%
   rename_with(tolower) %>%
   filter(pnr %in% !!cohort_pnrs) %>%          # ONLY your cohort
-  # ... get the contact date from lpr_adm and filter on diagnosis codes — see Phase 9 ...
+  # ... get the contact date from lpr_adm and filter on diagnosis codes - see Phase 9 ...
   collect() %>%
   group_by(pnr) %>% arrange(event_date) %>% slice(1) %>% ungroup()   # first event
 
@@ -33,12 +33,12 @@ saveRDS(outcome, "datasets/extract_outcome.rds")
 ```
 
 ::: {.callout-note}
-**Two kinds of joins — don't confuse them.** The join in the code above (`lpr_diag` → `lpr_adm`) fetches the *contact date* for the diagnosis and is part of the LPR extraction — explained in [Phase 9](09b_udtraek_fra_lpr.qmd). It is **not** the same as linking the extraction onto your cohort; that happens later, in [Phase 12](12b_joins.qmd), once all your extractions are done.
+**Two kinds of joins - don't confuse them.** The join in the code above (`lpr_diag` → `lpr_adm`) fetches the *contact date* for the diagnosis and is part of the LPR extraction - explained in [Phase 9](09b_udtraek_fra_lpr.qmd). It is **not** the same as linking the extraction onto your cohort; that happens later, in [Phase 12](12b_joins.qmd), once all your extractions are done.
 :::
 
-- **Censoring:** also extract date of death from DODSAARS (`d_dodsdto`) and emigration from VNDS (`indud_kode == "U"`) — each as its own table, see [Overview of registers](15d_register_reference.qmd).
-- **Save each extraction as its own `.rds` file.** An `.rds` file can hold several columns (it does for covariates, for example) — for outcomes it is typically `pnr` + one date column. In [Phase 12](11_data-manipulation.qmd) you link them all onto the cohort and calculate follow-up time from the outcome, death and emigration dates.
+- **Censoring:** also extract date of death from DODSAARS (`d_dodsdto`) and emigration from VNDS (`indud_kode == "U"`) - each as its own table, see [Overview of registers](15d_register_reference.qmd).
+- **Save each extraction as its own `.rds` file.** An `.rds` file can hold several columns (it does for covariates, for example) - for outcomes it is typically `pnr` + one date column. In [Phase 12](11_data-manipulation.qmd) you link them all onto the cohort and calculate follow-up time from the outcome, death and emigration dates.
 
 ## See also
-- [Phase 9 — Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd) — the diagnosis pattern in detail
-- [Phase 12 — Assemble and prepare the dataset](11_data-manipulation.qmd) — join outcomes to the cohort
+- [Phase 9 - Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd) - the diagnosis pattern in detail
+- [Phase 12 - Assemble and prepare the dataset](11_data-manipulation.qmd) - join outcomes to the cohort

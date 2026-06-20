@@ -1,5 +1,5 @@
 ---
-title: "DARTER — Projektspecifikke faldgruber"
+title: "DARTER - Projektspecifikke faldgruber"
 subtitle: "Quirks og kendte problemer specifikt for projekt 708421"
 date: last-modified
 ---
@@ -11,7 +11,7 @@ Denne side supplerer de [generelle DST-faldgruber](../15c_dst_faldgruber.qmd) me
 ## 1. Tjek at parquet-filerne er opdaterede
 
 De fleste registre er pr. 2026 opdateret til **slutningen af 2024** (bekræftet af Anders Aasted Isaksen/Marie Kempf Frydendahl, DARTER-team).
-**`dodsaars` dækker dog kun ~1970–2001** — dødsfald efter 2001 fanges ikke af den nuværende kode.
+**`dodsaars` dækker dog kun ~1970–2001** - dødsfald efter 2001 fanges ikke af den nuværende kode.
 
 ```r
 # Tjek hvornår parquet-mappen sidst blev opdateret:
@@ -22,11 +22,11 @@ Samme gælder potentielt for andre registre. Bekræft altid at dækningen matche
 
 ::: {.callout-warning}
 **Hvis parquet-filen ikke dækker din studieperiode:**
-Du skal trække data fra den rå SAS-fil på DST. Kontakt din datamanager — de kan hjælpe med adgang til rådata og konvertering.
+Du skal trække data fra den rå SAS-fil på DST. Kontakt din datamanager - de kan hjælpe med adgang til rådata og konvertering.
 :::
 
 ```r
-# Nuværende kode — fanger kun dødsfald frem til parquet-filens dækning:
+# Nuværende kode - fanger kun dødsfald frem til parquet-filens dækning:
 dod <- load_database("dodsaars") %>% rename_with(tolower)   # doven forbindelse
 deaths <- dod %>%
   filter(pnr %in% !!pnr_liste) %>%   # kun kohortens pnr'er
@@ -34,7 +34,7 @@ deaths <- dod %>%
   collect()                            # hent ind i R
 ```
 
-**Konsekvens ved manglende dækning:** Komparatorer og BS-patienter der dør efter parquet-filens slutdato behandles som levende — det påvirker censurering og matching i `01_build_cohorts.R`.
+**Konsekvens ved manglende dækning:** Komparatorer og BS-patienter der dør efter parquet-filens slutdato behandles som levende - det påvirker censurering og matching i `01_build_cohorts.R`.
 
 ---
 
@@ -42,19 +42,19 @@ deaths <- dod %>%
 
 Procedurekoder er opdelt i to registre efter periode:
 
-- **`lpr_sksopr`** (parquet-registers) — procedurer og kirurgi 1996–2018, joines til `lpr_adm` via `recnum`
-- **`procedurer_kirurgi`** (parquet-external) — 2019 og frem, joines til `lpr_a_kontakt` via `dw_ek_forloeb`
+- **`lpr_sksopr`** (parquet-registers) - procedurer og kirurgi 1996–2018, joines til `lpr_adm` via `recnum`
+- **`procedurer_kirurgi`** (parquet-external) - 2019 og frem, joines til `lpr_a_kontakt` via `dw_ek_forloeb`
 
 ::: {.callout-warning}
 **`dw_ek_kontakt` er NA for alle rækker i `procedurer_kirurgi`** (bekræftet 2026-06-02).
-Brug `dw_ek_forloeb` — ikke `dw_ek_kontakt` — til at hente `pnr` fra `lpr_a_kontakt`.
+Brug `dw_ek_forloeb` - ikke `dw_ek_kontakt` - til at hente `pnr` fra `lpr_a_kontakt`.
 :::
 
 ```r
-# FORKERT — dw_ek_kontakt er NA:
+# FORKERT - dw_ek_kontakt er NA:
 proc %>% left_join(kontakter, by = "dw_ek_kontakt")   # joiner ingenting
 
-# KORREKT — brug dw_ek_forloeb:
+# KORREKT - brug dw_ek_forloeb:
 proc <- load_database("procedurer_kirurgi") %>%
   rename_with(tolower) %>%
   left_join(
@@ -67,9 +67,9 @@ proc <- load_database("procedurer_kirurgi") %>%
 
 ---
 
-## 3. `lpr_a_diagnose` — "a" betyder ikke A-type diagnoser
+## 3. `lpr_a_diagnose` - "a" betyder ikke A-type diagnoser
 
-Tabellen hedder `lpr_a_diagnose` — "a" refererer til analysemodel-betegnelsen (LPR_A-serien).
+Tabellen hedder `lpr_a_diagnose` - "a" refererer til analysemodel-betegnelsen (LPR_A-serien).
 Det er **ikke** et filter på A-type diagnoser. Tabellen indeholder A, B og G.
 Du skal stadig filtrere på `diag_kode_type`.
 
@@ -79,22 +79,22 @@ Du skal stadig filtrere på `diag_kode_type`.
 
 | Variabel | Hvad den er |
 |---|---|
-| `nmi_score` | **Vægtet** score — Nordic Multimorbidity Index (50 prediktorer med individuelle vægte) |
+| `nmi_score` | **Vægtet** score - Nordic Multimorbidity Index (50 prediktorer med individuelle vægte) |
 | `nmi_count` | Simpel **optælling** af antal kroniske tilstande (33 mulige) |
 
 Bruger du `nmi_count` i din Cox-model i stedet for `nmi_score`, justerer du for noget andet end du tror.
 
 ---
 
-## 5. LPR3 — filtrer på `lprindberetningssystem == "LPR3"` {#lpr3-lprindberetningssystem}
+## 5. LPR3 - filtrer på `lprindberetningssystem == "LPR3"` {#lpr3-lprindberetningssystem}
 
-Ud over de egentlige LPR3-indberetninger indeholder `lpr_a_kontakt` også **ældre data, som allerede findes i LPR2** (`lpr_adm`), lagt ind i den nye LPR_A-tabel. Kombinerer du LPR2 og LPR3 uden at filtrere, tæller de samme kontakter med to gange — du får **duplikerede rækker**. `lprindberetningssystem == "LPR3"` beholder kun rækkerne fra LPR3-systemet (bekræftet af Anders Aasted Isaksen, DARTER-team 2026).
+Ud over de egentlige LPR3-indberetninger indeholder `lpr_a_kontakt` også **ældre data, som allerede findes i LPR2** (`lpr_adm`), lagt ind i den nye LPR_A-tabel. Kombinerer du LPR2 og LPR3 uden at filtrere, tæller de samme kontakter med to gange - du får **duplikerede rækker**. `lprindberetningssystem == "LPR3"` beholder kun rækkerne fra LPR3-systemet (bekræftet af Anders Aasted Isaksen, DARTER-team 2026).
 
 ```r
-# KORREKT — filtrer til kun LPR_A-format:
+# KORREKT - filtrer til kun LPR_A-format:
 lpr3_k <- load_database("lpr_a_kontakt") %>%
   rename_with(tolower) %>%
-  filter(lprindberetningssystem == "LPR3")   # behold kun rækker fra LPR3-systemet — fjerner overlappende rækker
+  filter(lprindberetningssystem == "LPR3")   # behold kun rækker fra LPR3-systemet - fjerner overlappende rækker
 ```
 
 ::: {.callout-warning}
@@ -103,23 +103,23 @@ lpr3_k <- load_database("lpr_a_kontakt") %>%
 
 ---
 
-## 6. Laboratoriesvar — brug `laboratorieproevesvar_`
+## 6. Laboratoriesvar - brug `laboratorieproevesvar_`
 
 Det nye laboratoriedataregister hedder `laboratorieproevesvar_` og indeholder >2,2 milliarder rækker.
-Det gamle `lab_forsker` / `lab_dm_forsker` eksisterer stadig men dækker samme data — brug **kun én kilde** for at undgå duplikater.
+Det gamle `lab_forsker` / `lab_dm_forsker` eksisterer stadig men dækker samme data - brug **kun én kilde** for at undgå duplikater.
 
 ```r
 lab <- load_database("laboratorieproevesvar_") %>%
   rename_with(tolower) %>%
-  filter(pnr %in% !!kohort$pnr) %>%   # filtrer FØR collect — registret er meget stort
+  filter(pnr %in% !!kohort$pnr) %>%   # filtrer FØR collect - registret er meget stort
   select(pnr, npu, samplingdato, samplevalue) %>%
   collect()
-# samplevalue er character — kan indeholde "ikke påvist", "negativ" mv.
+# samplevalue er character - kan indeholde "ikke påvist", "negativ" mv.
 ```
 
 ---
 
 ## Se også
 
-- [Generelle DST-faldgruber](../15c_dst_faldgruber.qmd) — 10 faldgruber der gælder alle projekter
-- [Registersti og datastores](01_registersti-datastores.qmd) — bekræftede stier og adgangsmetoder
+- [Generelle DST-faldgruber](../15c_dst_faldgruber.qmd) - 10 faldgruber der gælder alle projekter
+- [Registersti og datastores](01_registersti-datastores.qmd) - bekræftede stier og adgangsmetoder

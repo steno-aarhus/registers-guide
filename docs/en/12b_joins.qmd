@@ -1,10 +1,10 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Link your extracts"
-subtitle: "Joins, bind_rows() and calculating follow-up time — assemble your extracts into one dataset"
+subtitle: "Joins, bind_rows() and calculating follow-up time - assemble your extracts into one dataset"
 date: last-modified
 ---
 
-Your extracts from [Phase 6](06_foerste-udtraek.qmd), [Phase 9](09b_udtraek_fra_lpr.qmd) and [Phase 11](11_foej-variabler.qmd) are stored as separate RDS files. Once each extract is down to **one row per person** ([12a — Long ↔ wide format](12a_langt-bredt.qmd)), you join them on `pnr` into one analysis-ready dataset. Finally, you calculate follow-up time and the event variable.
+Your extracts from [Phase 6](06_foerste-udtraek.qmd), [Phase 9](09b_udtraek_fra_lpr.qmd) and [Phase 11](11_foej-variabler.qmd) are stored as separate RDS files. Once each extract is down to **one row per person** ([12a - Long ↔ wide format](12a_langt-bredt.qmd)), you join them on `pnr` into one analysis-ready dataset. Finally, you calculate follow-up time and the event variable.
 
 ::: {.callout-note}
 The code examples use generic paths and variable names. Adapt to your project's folder structure and column names.
@@ -12,17 +12,17 @@ The code examples use generic paths and variable names. Adapt to your project's 
 
 ::: {.callout-important}
 **First get each extract down to one row per person.**
-`left_join()` only behaves predictably when both tables have **one row per `pnr`**. Many register extracts have multiple rows per person (long format). Reduce them to one row per person with `group_by() + slice()` or `pivot_wider()` — explained in [12a — Long ↔ wide format](12a_langt-bredt.qmd). This page assumes your extracts are already in that shape.
+`left_join()` only behaves predictably when both tables have **one row per `pnr`**. Many register extracts have multiple rows per person (long format). Reduce them to one row per person with `group_by() + slice()` or `pivot_wider()` - explained in [12a - Long ↔ wide format](12a_langt-bredt.qmd). This page assumes your extracts are already in that shape.
 :::
 
 ---
 
-## Joins — link two tables {#joins-link-two-tables}
+## Joins - link two tables {#joins-link-two-tables}
 
 In register-based research you almost always work with data from **two or more tables** that need to be linked.
 All joins in `dplyr` take two tables and one key column they share (e.g. `pnr`).
 
-Your extracts typically all share `pnr` as the key — that is what you join on. A simple ER diagram of the keys:
+Your extracts typically all share `pnr` as the key - that is what you join on. A simple ER diagram of the keys:
 
 ```{mermaid}
 erDiagram
@@ -69,7 +69,7 @@ result <- lpr_adm %>%
 # full_join: keep all rows from both (rarely used)
 ```
 
-### Filter joins — change rows only, not columns
+### Filter joins - change rows only, not columns
 
 ```r
 # semi_join: keep rows in x THAT HAVE a match in y
@@ -79,7 +79,7 @@ bef_in_cohort <- bef %>%
 # anti_join: keep rows in x THAT DO NOT HAVE a match in y
 bef_not_in_cohort <- bef %>%
   anti_join(cohort, by = "pnr")   # only BEF rows for non-cohort members
-                                  # also used for diagnostics — see "Validate your join" below
+                                  # also used for diagnostics - see "Validate your join" below
 ```
 
 <details>
@@ -87,8 +87,8 @@ bef_not_in_cohort <- bef %>%
 
 | Function | Keeps rows from | Used for |
 |---|---|---|
-| `left_join(x, y)` | All from x | Add outcomes/covariates to cohort — NA if no match |
-| `inner_join(x, y)` | Only matches in both | Join contacts and diagnoses — only want rows with both |
+| `left_join(x, y)` | All from x | Add outcomes/covariates to cohort - NA if no match |
+| `inner_join(x, y)` | Only matches in both | Join contacts and diagnoses - only want rows with both |
 | `right_join(x, y)` | All from y | Rarely |
 | `full_join(x, y)` | All from both | Rarely |
 | `semi_join(x, y)` | Only x with match in y | Filter a register to only cohort members |
@@ -110,7 +110,7 @@ bef_akm <- bef %>%
 
 ## Validate your join
 
-Joins rarely fail with an error message — but they can produce silently wrong results.
+Joins rarely fail with an error message - but they can produce silently wrong results.
 Always check these three things after a `left_join()`:
 
 ```r
@@ -125,9 +125,9 @@ nrow(cohort2)                                  # should still be 4,823
 
 # Check 2: how many got a match?
 sum(!is.na(cohort2$event_date))                # number with outcome
-sum(is.na(cohort2$event_date))                 # number without — expected censored?
+sum(is.na(cohort2$event_date))                 # number without - expected censored?
 
-# Check 3: who did NOT match? (diagnostic — not necessarily an error)
+# Check 3: who did NOT match? (diagnostic - not necessarily an error)
 missing <- anti_join(cohort, outcome, by = "pnr")   # pnr's not found in outcome
 nrow(missing)                                  # 0 = all matched; > 0 = investigate
 ```
@@ -135,40 +135,40 @@ nrow(missing)                                  # 0 = all matched; > 0 = investig
 ::: {.callout-tip}
 **`anti_join()` as diagnostics**
 `anti_join(cohort, outcome, by = "pnr")` returns the cohort members that are *not* found in the outcome table.
-Use it for "who in my cohort has no death date record?" (all alive — expected) or "who is missing from register X?" (unexpected — investigate).
+Use it for "who in my cohort has no death date record?" (all alive - expected) or "who is missing from register X?" (unexpected - investigate).
 :::
 
 ---
 
-## Stack tables vertically — `bind_rows()`
+## Stack tables vertically - `bind_rows()`
 
 `bind_rows()` and `left_join()` solve **two fundamentally different problems**:
 
 | | `bind_rows()` | `left_join()` |
 |---|---|---|
-| What it does | Stacks tables **vertically** — adds rows | Combines tables **horizontally** — adds columns |
+| What it does | Stacks tables **vertically** - adds rows | Combines tables **horizontally** - adds columns |
 | Requires | That the columns have the same names | That the tables share one common key column |
 | Result | More rows, same number of columns | Same number of rows, more columns |
-| Matches on key? | No — all rows from both tables | Yes — match on `pnr` or other key |
+| Matches on key? | No - all rows from both tables | Yes - match on `pnr` or other key |
 | Typical use | LPR2 + LPR3 → one combined register | Link outcome or covariate to cohort table |
 
-`bind_rows()` is **not** a join. It does not look at `pnr` and does not match. It simply places table 2's rows below table 1's rows — like pasting two Excel sheets together vertically.
+`bind_rows()` is **not** a join. It does not look at `pnr` and does not match. It simply places table 2's rows below table 1's rows - like pasting two Excel sheets together vertically.
 
 ```r
 # bind_rows: LPR2 and LPR3 have the same columns (pnr, date_contact, icd3)
 # → stack them vertically into one combined diagnosis register
-lpr2_dx    # 45,000 rows — diagnoses up to March 2019
-lpr3_dx    # 32,000 rows — diagnoses from March 2019 onwards
+lpr2_dx    # 45,000 rows - diagnoses up to March 2019
+lpr3_dx    # 32,000 rows - diagnoses from March 2019 onwards
 
-alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # 77,000 rows — both periods combined
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # 77,000 rows - both periods combined
 ```
 
 Columns missing in one table (e.g. a column that only exists in LPR3) are automatically filled with `NA` for rows from the other table.
 
 ::: {.callout-note}
 **When do you use which?**
-`bind_rows()` — when you have **two versions of the same register** (LPR2 + LPR3, exposed + comparators) and want to merge them into one.
-`left_join()` — when you want to **attach a new variable** (outcome, date of death, age) to your cohort table.
+`bind_rows()` - when you have **two versions of the same register** (LPR2 + LPR3, exposed + comparators) and want to merge them into one.
+`left_join()` - when you want to **attach a new variable** (outcome, date of death, age) to your cohort table.
 :::
 
 ---
@@ -191,12 +191,12 @@ dodsaars <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-regis
 
 # Join: all cohort members retained; the living get death_date = NA
 cohort_with_death <- kohort %>%
-  left_join(dodsaars, by = "pnr")       # attach death date — NA = still alive
+  left_join(dodsaars, by = "pnr")       # attach death date - NA = still alive
 ```
 
 **Emigration date (VNDS)**
 
-Emigration censors just like death — the person leaves the study on the day they emigrate.
+Emigration censors just like death - the person leaves the study on the day they emigrate.
 VNDS contains one row per migration event; use only `"U"` (emigration) and take the first date per person.
 
 ```r
@@ -229,7 +229,7 @@ The censoring date is the *earliest* of: event date, date of death, emigration d
 
 ```r
 study_end <- as.Date("2024-12-31")   # replace with your actual study end date
-                                      # format: "yyyy-mm-dd" (ISO 8601 — R's standard)
+                                      # format: "yyyy-mm-dd" (ISO 8601 - R's standard)
 
 kohort <- kohort %>%
   mutate(
@@ -246,22 +246,22 @@ kohort <- kohort %>%
 ```
 
 ::: {.callout-note}
-`pmin()` compares vectors position by position and returns the smallest value per person — it is the vectorised version of `min()`. `na.rm = TRUE` ensures that a missing death date (= alive) does not make the censoring date `NA`.
+`pmin()` compares vectors position by position and returns the smallest value per person - it is the vectorised version of `min()`. `na.rm = TRUE` ensures that a missing death date (= alive) does not make the censoring date `NA`.
 :::
 
 ---
 
 ## Build your study population
 
-You now have all the building blocks — extractions (Phase 6), registers (Phase 8), LPR/SKS (Phase 9) and joins (above) — to assemble your study population. It happens in four steps:
+You now have all the building blocks - extractions (Phase 6), registers (Phase 8), LPR/SKS (Phase 9) and joins (above) - to assemble your study population. It happens in four steps:
 
-1. **Define the exposed cohort.** Filter the register that defines the exposure — e.g. bariatric surgery via SKS codes in `lpr_sksopr` / `procedurer_kirurgi` ([Phase 9](09b_udtraek_fra_lpr.qmd)). Keep `pnr` and **index date** (the surgery date).
+1. **Define the exposed cohort.** Filter the register that defines the exposure - e.g. bariatric surgery via SKS codes in `lpr_sksopr` / `procedurer_kirurgi` ([Phase 9](09b_udtraek_fra_lpr.qmd)). Keep `pnr` and **index date** (the surgery date).
 2. **Build the comparator cohort.** Match controls to the exposed on e.g. age, sex and calendar year. Controls are assigned the matched exposed person's index date.
 3. **Apply the same inclusion/exclusion criteria** to both groups, and assemble them (`bind_rows()`).
 4. **Link outcomes and covariates** with `left_join()` (one row per person), calculate follow-up time, and end with `select()`.
 
 ::: {.callout-important}
-**End with `select()` — keep only the columns the analysis requires.**
+**End with `select()` - keep only the columns the analysis requires.**
 
 ```r
 cohort_final <- kohort %>%
@@ -273,12 +273,12 @@ saveRDS(cohort_final, "datasets/analysis_dataset.rds")   # save the final datase
 :::
 
 ::: {.callout-tip}
-**Design choices** (who is the comparator cohort, immortal time, matching ratio) belong to the planning stage — see [Phase 1 — The comparator cohort](01_studieforberedelse.qmd#comparator-cohort).
-The actual **cohort building and matching** with `heaven::riskSetMatch()` — including pitfalls such as immortal time — are in [Phase 10 — Build your study population](10_byg-din-kohorte.qmd).
+**Design choices** (who is the comparator cohort, immortal time, matching ratio) belong to the planning stage - see [Phase 1 - The comparator cohort](01_studieforberedelse.qmd#comparator-cohort).
+The actual **cohort building and matching** with `heaven::riskSetMatch()` - including pitfalls such as immortal time - are in [Phase 10 - Build your study population](10_byg-din-kohorte.qmd).
 :::
 
 <details>
-<summary>Complete recipe — from cohort to analysis-ready dataset</summary>
+<summary>Complete recipe - from cohort to analysis-ready dataset</summary>
 
 ```r
 # Complete recipe: all steps in order
@@ -346,10 +346,10 @@ names(cohort_final)                                       # verify column names
 
 You now have one analysis-ready dataset with one row per person. The next step is the analysis:
 
-→ [Phase 13 — Analysis](13_analyse.qmd)
+→ [Phase 13 - Analysis](13_analyse.qmd)
 
 ## See also
 
-- [12a — Long ↔ wide format](12a_langt-bredt.qmd) — get each extract down to one row per person
-- [Functions: overview](15a_guide_til_funktioner.qmd) — all functions for transforming data
-- [Phase 9 — Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd) — practical example of long register data and inner_join
+- [12a - Long ↔ wide format](12a_langt-bredt.qmd) - get each extract down to one row per person
+- [Functions: overview](15a_guide_til_funktioner.qmd) - all functions for transforming data
+- [Phase 9 - Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd) - practical example of long register data and inner_join
