@@ -20,7 +20,7 @@ Alle udtræk i de øvrige faser - udfald ([Fase 9](09b_udtraek_fra_lpr.qmd)), ko
 
 ::: {.callout-note}
 **Funktioner brugt her.**
-`inner_join()` og `bind_rows()` er vist i [Fase 9](09b_udtraek_fra_lpr.qmd). `group_by() + slice()` er vist kortfattet der og forklares grundigt i [Fase 12](11_data-manipulation.qmd).
+`inner_join()` og `bind_rows()` er vist i [Fase 9](09b_udtraek_fra_lpr.qmd). `group_by() + slice()` er vist kortfattet der og forklares grundigt i [Fase 12](11_data-manipulation.qmd). Nyt i Trin 2: `anti_join()`, `distinct()`, `pull()` samt `nrow()`, `cat()` og `stopifnot()` - se [Guide til funktioner](15a_guide_til_funktioner.qmd).
 :::
 
 ---
@@ -144,11 +144,60 @@ eksponerede <- lpr_adm %>%
 
 ---
 
+## Trin 2 - Ekskludér prævalente tilfælde {.step-heading}
+
+Personer der allerede havde **dit outcome** før index-dato skal ekskluderes - ellers tæller de som nye tilfælde, selvom de ikke er det. Det gælder **alle designs**, også et prævalensstudie uden sammenligningsgruppe, så det hører til her, hvor du bygger den eksponerede kohorte.
+
+Tæl hvor mange der ryger fra ved hvert eksklusionstrin, så du kan beskrive frafaldet og senere tegne et **STROBE flow-diagram** (også kaldet et deltager- eller attrition-diagram; se [STROBE-checklisten](https://www.strobe-statement.org/checklists/)).
+
+::: {.callout-note}
+**En lille hjælpe-funktion.** Skal samme tjek bruges flere gange (fx også på en sammenligningsgruppe senere, se [Fase 10a](10a_sammenligningskohorte.qmd)), kan du pakke logikken i en funktion, så de to tjek ikke skrider fra hinanden. Se [God kode-praksis](12_god-kode-praksis.qmd).
+:::
+
+<details>
+<summary>Vis kode</summary>
+
+```r
+# diagnoser = dit LPR-udtræk fra Fase 9 (kolonner: pnr, date_contact, icd3)
+OUTCOME_KODER <- c("G30", "F00", "F01", "F02", "F03")   # ICD-10 for dit outcome - tilpas
+
+# Hjælpe-funktion: hvilke pnr havde outcome FØR deres index-dato?
+prior_outcome_pnrs <- function(diagnoser, koder, kohorte) {
+  diagnoser %>%
+    filter(icd3 %in% koder) %>%
+    inner_join(kohorte %>% select(pnr, index_date), by = "pnr") %>%  # tilknyt hver persons index
+    filter(date_contact < index_date) %>%                            # kun kontakter FØR index
+    distinct(pnr) %>%                                                 # én række per person
+    pull(pnr)                                                         # vektor af pnr at ekskludere
+}
+
+praevalente <- prior_outcome_pnrs(diagnoser, OUTCOME_KODER, eksponerede)
+
+n_before <- nrow(eksponerede)                 # nrow() = antal rækker (her: antal personer)
+eksponerede <- eksponerede %>%
+  filter(!pnr %in% praevalente)               # behold kun dem UDEN prævalent outcome
+
+# cat() printer bare en læsbar linje i konsollen, så du kan følge frafaldet undervejs.
+cat("Efter prævalens-eksklusion:", nrow(eksponerede),
+    "| ekskluderet:", n_before - nrow(eksponerede), "\n")
+# Er beskeden kun til dig selv, kan du nøjes med:  nrow(eksponerede)   # antal tilbage
+
+stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))   # tjek: én række per person
+```
+
+</details>
+
+::: {.callout-tip}
+`nrow()`, `cat()` og `stopifnot()` er forklaret i [Guide til funktioner](15a_guide_til_funktioner.qmd).
+:::
+
+---
+
 ::: {.callout-tip}
 **Hvad nu - vælg dit design:**
 
 - **Prævalensstudie / kohorte uden sammenligningsgruppe** - du har nu din studiepopulation med en index-dato. Spring videre til [Fase 11 - Udtræk variable](11_foej-variabler.qmd) og [Fase 12 - Saml & klargør datasættet](11_data-manipulation.qmd).
-- **Kohortestudie med sammenligningskohorte** → [Sammenligningskohorte](10a_sammenligningskohorte.qmd) - ekskludér prævalente, byg matchpool, og risk-set match en komparator.
+- **Kohortestudie med sammenligningskohorte** → [Sammenligningskohorte](10a_sammenligningskohorte.qmd) - byg en matchpool og risk-set match en sammenligningsgruppe.
 - **(Nested) case-control** → [Case-control](10b_case-control.qmd) - din "eksponerede" gruppe ovenfor er her dine **cases**; du sampler kontroller der var i risiko, da casen fik udfaldet.
 :::
 

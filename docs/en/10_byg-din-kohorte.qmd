@@ -20,7 +20,7 @@ All extractions in the other phases - outcomes ([Phase 9](09b_udtraek_fra_lpr.qm
 
 ::: {.callout-note}
 **Functions used here.**
-`inner_join()` and `bind_rows()` are shown in [Phase 9](09b_udtraek_fra_lpr.qmd). `group_by() + slice()` is shown briefly there and explained in detail in [Phase 12](11_data-manipulation.qmd).
+`inner_join()` and `bind_rows()` are shown in [Phase 9](09b_udtraek_fra_lpr.qmd). `group_by() + slice()` is shown briefly there and explained in detail in [Phase 12](11_data-manipulation.qmd). New in Step 2: `anti_join()`, `distinct()`, `pull()` plus `nrow()`, `cat()` and `stopifnot()` - see [Function guide](15a_guide_til_funktioner.qmd).
 :::
 
 ---
@@ -144,11 +144,60 @@ exposed <- lpr_adm %>%
 
 ---
 
+## Step 2 - Exclude prevalent cases {.step-heading}
+
+People who already had **your outcome** before the index date must be excluded - otherwise they count as new cases even though they are not. This applies to **all designs**, including a prevalence study without a comparison group, so it belongs here where you build the exposed cohort.
+
+Count how many drop out at each exclusion step, so you can describe the attrition and later draw a **STROBE flow diagram** (also called a participant or attrition diagram; see the [STROBE checklist](https://www.strobe-statement.org/checklists/)).
+
+::: {.callout-note}
+**A small helper function.** If the same check is needed more than once (e.g. also on a comparison group later, see [Phase 10a](10a_sammenligningskohorte.qmd)), wrap the logic in a function so the two checks do not drift apart. See [Good coding practice](12_god-kode-praksis.qmd).
+:::
+
+<details>
+<summary>Show code</summary>
+
+```r
+# diagnoses = your LPR extract from Phase 9 (columns: pnr, date_contact, icd3)
+OUTCOME_CODES <- c("G30", "F00", "F01", "F02", "F03")   # ICD-10 for your outcome - adapt
+
+# Helper: which pnr had the outcome BEFORE their index date?
+prior_outcome_pnrs <- function(diagnoses, codes, cohort) {
+  diagnoses %>%
+    filter(icd3 %in% codes) %>%
+    inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%   # attach each person's index
+    filter(date_contact < index_date) %>%                            # only contacts BEFORE index
+    distinct(pnr) %>%                                                 # one row per person
+    pull(pnr)                                                         # vector of pnr's to exclude
+}
+
+prevalent <- prior_outcome_pnrs(diagnoses, OUTCOME_CODES, exposed)
+
+n_before <- nrow(exposed)                     # nrow() = number of rows (here: number of persons)
+exposed <- exposed %>%
+  filter(!pnr %in% prevalent)                 # keep only those WITHOUT a prevalent outcome
+
+# cat() simply prints a readable line in the console so you can follow the attrition.
+cat("After prevalence exclusion:", nrow(exposed),
+    "| excluded:", n_before - nrow(exposed), "\n")
+# If the message is only for yourself, you can settle for:  nrow(exposed)   # number remaining
+
+stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # check: one row per person
+```
+
+</details>
+
+::: {.callout-tip}
+`nrow()`, `cat()` and `stopifnot()` are explained in the [Function guide](15a_guide_til_funktioner.qmd).
+:::
+
+---
+
 ::: {.callout-tip}
 **What now - choose your design:**
 
 - **Prevalence study / cohort without a comparison group** - you now have your study population with an index date. Continue to [Phase 11 - Extract variables](11_foej-variabler.qmd) and [Phase 12 - Assemble and prepare the dataset](11_data-manipulation.qmd).
-- **Cohort study with a comparison cohort** → [Comparison cohort](10a_sammenligningskohorte.qmd) - exclude prevalent cases, build a match pool, and risk-set match a comparator.
+- **Cohort study with a comparison cohort** → [Comparison cohort](10a_sammenligningskohorte.qmd) - build a match pool and risk-set match a comparison group.
 - **(Nested) case-control** → [Case-control](10b_case-control.qmd) - your "exposed" group above is here your **cases**; you sample controls who were at risk when the case had the outcome.
 :::
 

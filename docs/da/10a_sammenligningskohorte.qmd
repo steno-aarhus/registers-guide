@@ -1,10 +1,10 @@
 ---
 title: "![](images/icons/icon_10.png){.title-icon} Sammenligningskohorte"
-subtitle: "Matchet kohortestudie - byg en komparator til dine eksponerede"
+subtitle: "Matchet kohortestudie - teori og kodeflow til at bygge en sammenligningsgruppe"
 date: last-modified
 ---
 
-Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd), hvor du identificerede dine **eksponerede** (objektet `eksponerede` med `pnr`, `index_date` og `exposed = 1`). Her bygger du en **matchet sammenligningskohorte**: personer der *ikke* er eksponerede, men ligner de eksponerede på de variable du matcher på, og som var i risiko på index-datoen.
+Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd), hvor du identificerede dine **eksponerede** og ekskluderede prævalente tilfælde (objektet `eksponerede` med `pnr`, `index_date` og `exposed = 1`). Her bygger du en **matchet sammenligningsgruppe**: personer der *ikke* er eksponerede, men ligner de eksponerede på de variable du matcher på, og som var i risiko på den tildelte index-dato.
 
 ::: {.callout-warning}
 **Stadig under udvikling.** Koden skal gennemgås og testes yderligere inden den bruges direkte. Brug den som strukturel vejledning og tilpas til dit eget projekt. Bekræft desuden pakkenavne (`heaven::riskSetMatch`) på dit eget projekt.
@@ -12,33 +12,84 @@ Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd), h
 
 ::: {.callout-note}
 **Funktioner brugt her.**
-`anti_join()` (behold rækker *uden* match) er ny her - se forklaringen i kodeblokken og i [12b - Kobl udtræk sammen](12b_joins.qmd#joins-kobl-to-tabeller-sammen). `inner_join()` og `bind_rows()` er vist i [Fase 9](09b_udtraek_fra_lpr.qmd); `group_by() + slice()` i [12a - Langt ↔ bredt format](12a_langt-bredt.qmd).
+`left_join()` (tilknyt en variabel) og `semi_join()` (behold kun rækker *med* match) forklares i [12b - Kobl udtræk sammen](12b_joins.qmd#joins-kobl-to-tabeller-sammen). `mutate()` (lav en ny variabel) er vist i [Fase 2](02_r-intro.qmd). Nyt her: en `for`-løkke + `set.seed()` til selve matchingen (forklares i Trin 4). Funktioner som `slice_sample()`, `count()` og `nrow()` er i [Guide til funktioner](15a_guide_til_funktioner.qmd).
 :::
 
 ---
 
 ## Lidt teori, før du matcher
 
-Inden du matcher, skal du tage eksplicit stilling til fire ting. **Matchvariablene** er typisk køn, fødselsår og kalenderår; ofte også SES og kommune. Match kun på det du vil justere for ved design. De tre øvrige valg er vigtigere at forstå - fold dem ud:
+En sammenligningsgruppe giver dig den **kontrafaktiske** erfaring: hvad var der sket med de eksponerede, hvis de ikke var blevet eksponerede. Inden du matcher, skal du tage eksplicit stilling til nogle få ting. **Matchvariablene** er typisk køn og fødselsår, men kan også være indexdato/kalenderår, SES og kommune. Fold boksene ud:
 
 <details>
-<summary>**Risk-set / incidens-densitets-matching** - hvornår skal komparatoren være i risiko?</summary>
+<summary>**Risk-set / incidens-densitets-matching** - hvornår skal sammenligningspersonen være i risiko?</summary>
 
-En sammenligningsperson skal være i risiko **på den tildelte index-dato** - ikke kun ved studiestart. Det betyder, at en person kan fungere som komparator nu og *selv* blive eksponeret (og dermed case) senere. Risk-set sampling håndterer dette ved at sample komparatorer fra alle, der var i risiko på netop den eksponeredes index-dato.
+Først forskellen på to datoer:
+
+- **Studiestart** er den fælles dato, hvor dit studie begynder at se på data (fx 1. januar 2010). Den er den samme for alle.
+- **Index-dato** er personens *egen* start på opfølgning. For en eksponeret er det eksponeringsdatoen; en sammenligningsperson får tildelt **samme dato som den eksponerede, de matches med**. Den er altså individuel.
+
+En sammenligningsperson skal være "i risiko" (i live, bosat i Danmark, fri for dit outcome og opfylde dine kriterier) **på sin tildelte index-dato** - ikke bare ved studiestart. Tjekker du kun ved studiestart, kan du komme til at inkludere nogen, der allerede var død, udvandret eller havde fået outcome, da den eksponerede blev eksponeret.
+
+Pointen: vælg sammenligningspersoner blandt alle, der var i risiko netop på den eksponeredes index-dato. En person kan godt være sammenligningsperson nu og selv blive eksponeret (og dermed case) senere - det er korrekt og er præcis det, risk-set sampling håndterer.
+
+**Hvad betyder "risk-set"?** Begrebet kommer fra overlevelsesanalyse: ved hver index-dato er "risikosættet" alle, der stadig er i risiko netop da (i live, outcome-fri, under observation). Sammenligningspersoner samples fra det sæt. Og ja - det hænger sammen med, at uexponerede kan ændre status: en person er i det uexponerede risikosæt, indtil de selv bliver eksponerede; derefter forlader de det (og kan blive case). Risk-set sampling fanger netop den dynamik, fordi eligibilitet vurderes PÅ index-datoen, ikke én gang for alle.
 
 </details>
 
 <details>
-<summary>**Varierende vs. fast index-dato** - og hvilken dato komparatoren får</summary>
+<summary>**Varierende vs. fast index-dato** - og hvilken dato sammenligningspersonen får</summary>
 
-Når index-dato varierer per eksponeret (fx får hver ny T2D-patient sin egen diagnosedato), skal komparatoren matches på *netop den dato*. **Den matchede komparator tildeles den eksponeredes index-dato** - det er den dato, der markerer starten på komparatorens opfølgning, og alt baseline måles relativt til den. Det er præcis det, risk-set sampling gør.
+Når index-dato varierer per eksponeret (fx får hver ny patient sin egen eksponeringsdato), skal sammenligningspersonen matches på *netop den dato*. **Den matchede sammenligningsperson tildeles den eksponeredes index-dato** - det er den dato, der markerer starten på personens opfølgning, og alt baseline måles relativt til den.
 
 </details>
 
 <details>
-<summary>**Med eller uden replacement** - må en person være komparator flere gange?</summary>
+<summary>**Matchet vs. umatchet sammenligningsgruppe** - matching er ikke obligatorisk</summary>
 
-Tag stilling til, om en person må være komparator for flere eksponerede (replacement). Replacement øger den effektive stikprøvestørrelse, men giver **korrelerede observationer**, som skal håndteres i analysen (fx robuste standardfejl eller clustering på den enkelte person).
+Du har to lovlige veje:
+
+- **Matchet:** balancér på designtidspunktet (køn, alder, kalendertid) via risk-set sampling. Index-dato tildeles naturligt ved matchet. Nem balance på stærke confounders, men matchede variable kan ikke længere studeres som eksponering, og poolen kan tømmes.
+- **Umatchet:** tag hele den eligible uexponerede population og justér for confounders i analysen (regression, IPTW i [Fase 13](13_analyse.qmd)). Bevarer al information, men kræver korrekt index-tildeling (ellers immortal time), og confounding håndteres udelukkende analytisk.
+
+Mange registerstudier bruger en umatchet sammenligningsgruppe + justering. Match kun hvis det giver designmæssig mening.
+
+</details>
+
+<details>
+<summary>**Valg af sammenligningsgruppe** - generel befolkning vs. aktiv sammenligning</summary>
+
+- **Generel befolkning:** maksimal kontrast, men risiko for confounding by indication (de eksponerede adskiller sig systematisk fra baggrundsbefolkningen).
+- **Aktiv sammenligning:** uexponerede MED samme underliggende indikation (fx personer med samme grundsygdom, men en anden eller ingen behandling). Reducerer confounding by indication, men gruppen er mindre og kan selv være selekteret, afhængigt af hvordan indikationen identificeres.
+
+Vælg ud fra dit forskningsspørgsmål; nogle studier rapporterer begge. Bruger du **mere end én** sammenligningsgruppe, kan de dele personer - analysér da hver gruppe separat mod de samme eksponerede, og pool dem ikke.
+
+</details>
+
+<details>
+<summary>**Matchvariable og ratio** - match kun på confounders</summary>
+
+Match kun på det du vil justere for ved design (typisk køn, alder, kalendertid). **Over-matching** (match på en mediator eller på selve eksponeringens konsekvenser) biaser mod nul - undgå det.
+
+Ratio (fx 1:5): flere sammenligningspersoner giver mere præcision, men med aftagende udbytte. En stor ratio + en smal pool kan tømme poolen, så nogle eksponerede får færre end ratio. Mål og rapportér hvor mange (se Trin 5).
+
+**Hvor mange per eksponeret/case?** Præcisionen stiger med ratioen, men gevinsten aftager hurtigt: omkring **4-5 sammenligningspersoner per eksponeret** fanger det meste af den statistiske styrke, og mere giver kun lidt ekstra. Vælg en højere ratio, hvis udfaldet er sjældent, eller hvis poolen er rigelig. Se [Grimes & Schulz, *Lancet* 2005](https://pubmed.ncbi.nlm.nih.gov/15836892/) om kontrol-til-case-ratio.
+
+</details>
+
+<details>
+<summary>**Med eller uden replacement** - må en person bruges flere gange?</summary>
+
+Kort: replacement øger den effektive stikprøvestørrelse men giver **korrelerede observationer**, som skal håndteres i analysen. Se det dedikerede afsnit [Med eller uden replacement](#med-eller-uden-replacement) nedenfor for hvornår det er nødvendigt, pakker og analysekonsekvens.
+
+</details>
+
+<details>
+<summary>**Crossover** - sammenligningsperson der senere bliver eksponeret</summary>
+
+I et risk-set design får en fremtidigt eksponeret lov at være sammenligningsperson INDTIL sin egen eksponeringsdato. **Ekskludér derfor IKKE alle, der nogensinde bliver eksponerede** - det betinger på fremtiden og kan overestimere effekten (immortal-time-/selektionsbias). Gem i stedet en `crossover_date` = datoen hvor personen selv bliver eksponeret, og beslut håndtering: censurér ved crossover, eller lad personen skifte gruppe.
+
+Crossover forklares kort her; den fulde behandling (censurering) ligger i [Fase 11a - Udfald](11a_udfald.qmd).
 
 </details>
 
@@ -46,190 +97,341 @@ For en grundig gennemgang af samplingstrategier til sammenligningskohorter, se [
 
 ---
 
-## Trin 2 - Ekskluder prævalente tilfælde {.step-heading}
+## Trin 2 - Klargør de eksponerede til matching {.step-heading}
 
-*(Trin 1 - identificér de eksponerede - ligger på [forsiden](10_byg-din-kohorte.qmd).)*
+*(Trin 1 - identificér de eksponerede - og prævalens-eksklusion ligger på [forsiden](10_byg-din-kohorte.qmd).)*
 
-Ekskluder personer der allerede havde **dit outcome** (fx en diagnose) *inden* index-dato - ellers tæller de som nye tilfælde, selvom de ikke er det. Husk at index-dato for de eksponerede er **datoen for eksponeringen**. Dette trin skal ske **inden** matching, så sammenligningskohorten ikke samples fra en forurenet pool.
-
-Du skal bruge din udtrukne LPR-diagnosetabel fra [Fase 9](09b_udtraek_fra_lpr.qmd) - enten `alle_dx` eller dit direkte udtræk.
-
-<details>
-<summary>Vis kode</summary>
-
-```r
-EKSKL_KODER <- c("G30", "F00", "F01", "F02", "F03")   # skift til dine egne eksklusionskoder
-
-# diagnoser = alle_dx (Tilgang 2) eller dit direkte udtræk (Tilgang 1) fra Fase 9
-praevalente <- diagnoser %>%
-  filter(icd3 %in% EKSKL_KODER) %>%
-  inner_join(eksponerede %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact < index_date) %>%
-  distinct(pnr)
-
-cat("Eksponerede inden ekskludering: ", nrow(eksponerede),                          "\n")
-eksponerede_renset <- eksponerede %>%
-  anti_join(praevalente, by = "pnr")
-cat("Eksponerede efter ekskludering: ", nrow(eksponerede_renset),                   "\n")
-cat("Ekskluderede:                   ", nrow(eksponerede) - nrow(eksponerede_renset), "\n")
-```
-
-</details>
+Tilknyt køn og fødselsdato fra BEF (nødvendigt hvis du vil matche på alder eller fødselsår), **afled** de variable du skal bruge (fx alder ved index), og anvend dine inklusionskriterier. De samme kriterier anvendes på poolen i Trin 3.
 
 ::: {.callout-note}
-**Det samme gælder sammenligningskohorten.** Når du senere bygger matchpoolen (Trin 3), tildeles hver sammenligningsperson en index-dato fra den eksponerede, de matches med. De må naturligvis heller ikke have haft dit outcome **inden den tildelte index-dato** - ellers matcher du dine eksponerede til personer, der ikke var i risiko. Anvend derfor den samme prævalens-eksklusion på matchpoolen, inden du sampler.
+**Lav en afledt variabel.** En ny variabel beregnes fra eksisterende kolonner med `mutate()`. Alder ved index = antal dage mellem index og fødsel, delt med 365.25 (et år er 365.25 dage pga. skudår):
+
+```r
+mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)
+```
+
+Samme princip for andre afledte mål, fx BMI fra højde og vægt: `mutate(bmi = vaegt_kg / (hoejde_m^2))`. Beregn variablen ÉN gang og genbrug den, så match-alder og Table 1 altid er enige.
 :::
-
----
-
-## Trin 3 - Byg matchpool fra BEF {.step-heading}
-
-Deltagere til sammenligningskohorten hentes fra BEF - alle i befolkningen der endnu ikke er eksponerede. Tilføj de variable du vil matche på (fødselsår, køn, kalenderår mv.).
 
 <details>
 <summary>Vis kode</summary>
 
 ```r
+library(arrow); library(dplyr); library(lubridate)
+
+RATIO   <- 5L        # antal sammenligningspersoner per eksponeret
+AAR_FRA <- 2005L     # studievindue (BEF-år)
+AAR_TIL <- 2022L
+
 bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
   rename_with(tolower)
 
-matchpool <- bef %>%
-  filter(aar == 2015) %>%                                   # ét BEF-snapshot - juster til dit studievindue
-  select(pnr, foed_dag, koen) %>%
+# Nyeste BEF-snapshot per person: køn + fødselsdato
+demografi <- bef %>%
+  filter(year >= AAR_FRA, year <= AAR_TIL) %>%
+  select(pnr, foed_dag, koen, year) %>%
   collect() %>%
-  anti_join(eksponerede, by = "pnr") %>%                    # behold kun pnr der IKKE er i eksponerede
-                                                            # anti_join = omvendt inner_join: ingen match = behold
-                                                            # se Fase 12 for fuld forklaring af join-typer
+  arrange(pnr, desc(year)) %>%
+  distinct(pnr, .keep_all = TRUE) %>%          # én række per person
   mutate(
-    foedselsaar = as.integer(format(as.Date(foed_dag), "%Y")),  # matchingvariabel
-    exposed     = 0L                                            # markér som potentiel sammenligningsperson
+    foed_dag   = as.Date(foed_dag),
+    birth_year = year(foed_dag),
+    sex        = if_else(koen == 1L, "Male", "Female")
   )
 
-nrow(matchpool)                                             # antal potentielle sammenligningspersoner
+# 'eksponerede' kommer fra Fase 10 (identificeret + prævalente ekskluderet)
+eksponerede <- eksponerede %>%
+  left_join(demografi %>% select(pnr, foed_dag, birth_year, sex), by = "pnr") %>%
+  mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)   # afledt variabel
+
+# Inklusionskriterier (de SAMME anvendes på poolen i Trin 3) - tæl frafaldet
+n_before <- nrow(eksponerede)
+eksponerede <- eksponerede %>% filter(age_at_index >= 18)   # fx kun voksne - tilpas
+cat("Efter alderskrav:", nrow(eksponerede), "| ekskluderet:", n_before - nrow(eksponerede), "\n")
+
+# 5-års residens-lookback (fx så covariater kan beregnes): kræv et BEF-år i year(index) - 5
+bef_aar <- bef %>%
+  filter(year >= AAR_FRA, year <= AAR_TIL) %>%
+  select(pnr, year) %>% collect() %>% distinct(pnr, year)
+
+n_before <- nrow(eksponerede)
+eksponerede <- eksponerede %>%
+  mutate(lookback_year = year(index_date) - 5L) %>%
+  semi_join(bef_aar, by = c("pnr", "lookback_year" = "year")) %>%   # behold kun dem med record
+  select(-lookback_year)
+cat("Efter 5-års lookback:", nrow(eksponerede), "| ekskluderet:", n_before - nrow(eksponerede), "\n")
+
+stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))   # én række per person
 ```
 
 </details>
 
 ---
 
-## Trin 4 - Anvend inklusionskriterier FØR sampling {.step-heading}
+## Trin 3 - Byg sammenligningspoolen {.step-heading}
+
+Nu bygger vi den **pool**, som sammenligningsgruppen skal trækkes fra. Et medlem skal opfylde to ting: (1) være i BEF i de relevante år (dvs. bosat i Danmark), og (2) leve op til dine ind- og eksklusionskriterier. Kriterierne afhænger af datoer fra flere registre (død, udvandring, eksponering, outcome), så vi **joiner** forskellige datasæt sammen for at samle matchpoolen.
+
+De tids-varierende kriterier (i live, eksponeringsfri og outcome-fri PÅ den tildelte index-dato) kan vi ikke filtrere væk her - de afgøres ved matchtid i Trin 4. Derfor sørger vi i dette trin for, at poolen *bærer alle de datoer*, der skal til for at anvende dem.
+
+Poolen hentes fra BEF for de relevante år. Tilknyt alt, som eligibilitet afhænger af: **dødsdato**, **udvandringsdato**, **eksponeringsdato**, **outcome-dato** (så outcome før den tildelte index-dato kan ekskluderes for sammenligningspersonen, præcis som for de eksponerede på forsiden) og **lookback-år**. Disse datoer udtrækkes direkte for poolen med samme mønstre som [Fase 9](09b_udtraek_fra_lpr.qmd) (her vist som færdige tabeller).
 
 ::: {.callout-important}
-**Inklusionskriterier skal anvendes FØR matching - ikke efter.**
-Eksklusion af fx personer under 18 år eller ikke-bosiddende i Danmark skal ske på **matchpoolen**, inden sammenligningskohorte samples. At ekskludere efter matching introducerer systematisk bias, fordi du ændrer den population som de eksponerede er matchet til.
-
-Se: [Lund et al., *Clinical Epidemiology* 2015](https://doi.org/10.2147/CLEP.S164456) for en gennemgang af bias ved forkert eksklusionsrækkefølge.
+**Sammenligningspersonen skal være eksponeringsfri PÅ index - ikke "aldrig eksponeret".**
+Tilknyt hver persons FØRSTE eksponeringsdato til poolen, og afgør eligibilitet ved matchtid med `exposure_date > index_date`. Det udelukker automatisk en eksponeret person ved deres egen index, men tillader en fremtidigt eksponeret at være sammenligningsperson for en tidligere index-dato (korrekt - de var uexponerede da). At fjerne alle ever-eksponerede betinger på fremtiden og introducerer bias.
 :::
 
 <details>
 <summary>Vis kode</summary>
 
 ```r
-# Tilknyt BEF-variabler til matchpoolen og anvend inklusionskriterier
-bef_baseline <- bef %>%
-  filter(aar == 2015) %>%                                   # brug samme snapshot-år
-  select(pnr, alder, opr_land) %>%
-  collect()
+# Datoer udtrukket for poolen (direkte register-udtræk, jf. Fase 9)
+doed    <- readRDS("sti/til/doedsdatoer.rds")     # pnr, death_date      (DODSAARS, eksakt dato)
+udv     <- readRDS("sti/til/udvandring.rds")      # pnr, emigration_date (VNDS)
+udfald  <- readRDS("sti/til/outcome_dates.rds")   # pnr, first_outcome_date
+eksp_dt <- readRDS("sti/til/exposure_dates.rds")  # pnr, exposure_date   (FØRSTE eksponering, også fremtidig)
 
-matchpool_renset <- matchpool %>%
-  inner_join(bef_baseline, by = "pnr") %>%
-  filter(
-    alder >= 18,                                            # kun voksne
-    opr_land == 5100                                        # dansk bopæl
+pool <- bef %>%
+  filter(year >= AAR_FRA, year <= AAR_TIL) %>%
+  select(pnr, foed_dag, koen, year) %>%
+  collect() %>%
+  distinct(pnr, year, .keep_all = TRUE) %>%        # fjern dobbelt person-år-rækker
+  # vi fjerner IKKE alle eksponerede her - eksponeringsfri-status afgøres PÅ index nedenfor
+  mutate(
+    foed_dag   = as.Date(foed_dag),
+    birth_year = year(foed_dag),
+    sex        = if_else(koen == 1L, "Male", "Female")
   )
 
-# Anvend de samme kriterier på eksponerede (prævalensekskludering er allerede gjort i Trin 2):
-eksponerede_renset <- eksponerede_renset %>%
-  inner_join(bef_baseline, by = "pnr") %>%
-  filter(alder >= 18, opr_land == 5100)
+# Lookback-år (tidligste BEF-år per person) + tilknyt datoer
+lookback <- pool %>% group_by(pnr) %>%
+  summarise(earliest_bef_year = min(year), .groups = "drop")
+
+pool <- pool %>%
+  distinct(pnr, .keep_all = TRUE) %>%              # én række per person til poolen
+  left_join(doed,     by = "pnr") %>%
+  left_join(udv,      by = "pnr") %>%
+  left_join(udfald,   by = "pnr") %>%
+  left_join(eksp_dt,  by = "pnr") %>%
+  left_join(lookback, by = "pnr")
 ```
 
 </details>
 
 ---
 
-## Trin 5 - Match sammenligningskohorte {.step-heading}
+::: {.callout-important}
+**Eksklusion sker FØR sampling - og på begge grupper.**
+Det er ikke et separat trin, men en regel: alle inklusions- og eksklusionskriterier (alder, residens, prævalent outcome) skal være anvendt på BÅDE de eksponerede og poolen, hver relativt til sin egen/tildelte index-dato, INDEN du sampler. At ekskludere efter matching ændrer den population, de eksponerede er matchet til, og introducerer selektionsbias. Se [Lund et al. 2015](https://doi.org/10.2147/CLEP.S164456).
+:::
 
-`heaven::riskSetMatch()` implementerer risk-set sampling / incidence-density sampling - standarden i registerbaserede kohorter.
+## Trin 4 - Match sammenligningsgruppen {.step-heading}
+
+Sæt altid en seed før sampling, så matchingen er reproducerbar.
+
+::: {.callout-note}
+**Vej A og Vej B gør det samme ene trin (selve matchingen) - vælg én.** En pakke som `exposureMatch()` erstatter KUN selve sampling-løkken. Alt det andet (klargør de eksponerede, byg pool, eksklusioner, saml/validér) gør du uanset hvilken vej du vælger. Bruger du Vej A, kan du springe den manuelle løkke og performance-foldud over.
+:::
+
+**Vej A - `heaven::exposureMatch()` (anbefalet for de fleste).** Den er bygget netop til en sammenligningskohorte: en case er en person, der bliver eksponeret på index, og en kontrol er en, der *endnu ikke* er eksponeret på casens index. (`incidenceMatch()` er søster-funktionen til [case-control](10b_case-control.qmd); `riskSetMatch()` er den interne motor under begge.)
 
 <details>
-<summary>Vis kode</summary>
+<summary>Vis kode (Vej A)</summary>
 
 ```r
-library(heaven)   # riskSetMatch
+library(heaven)   # exposureMatch
+STUDIE_SLUT <- as.Date("2022-12-31")
 
-# Kombinér til ét datasæt: exposed = 1 (eksponeret) og exposed = 0 (potentiel sammenligningsperson)
-pool <- bind_rows(
-  eksponerede_renset %>% select(pnr, index_date, exposed, koen, foedselsaar),
-  matchpool_renset   %>% select(pnr, exposed, koen, foedselsaar)
-)
+# Saml ÉN tabel med både eksponerede (event = 1) og pool (event = 0), én række per person.
+# end_fu = datoen hvor personen IKKE længere kan vælges som kontrol: den tidligste af
+#          død, udvandring, egen eksponering (= crossover), outcome eller studieslut.
+alle <- bind_rows(
+  eksponerede %>% transmute(
+    pnr, event = 1L, sex, birth_year,
+    case_index = index_date,                       # eksponeringsdato (casens index)
+    end_fu     = STUDIE_SLUT                        # forfin evt. med død/outcome efter index
+  ),
+  pool %>% transmute(
+    pnr, event = 0L, sex, birth_year,
+    case_index = as.Date(NA),                      # kontroller har ingen event
+    end_fu     = pmin(death_date, emigration_date, exposure_date,
+                      first_outcome_date, STUDIE_SLUT, na.rm = TRUE)
+  )
+) %>%
+  mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' SKAL være factor/character
 
-# Risk-set matching - 1:5 på køn og fødselsår
-# Resultatet "matched" bliver din fulde kohorte: eksponerede + matchede sammenligningspersoner
-matched <- riskSetMatch(
-  ptid   = "pnr",                          # personidentifikator
-  event  = "exposed",                      # 1 = eksponeret, 0 = potentiel sammenligningsperson
-  terms  = c("koen", "foedselsaar"),       # matchingvariable - tilpas til dit studie
-  dat    = pool,
-  ratio  = 5                               # op til 5 sammenligningspersoner per eksponeret
+matched <- exposureMatch(
+  ptid         = "pnr",
+  event        = "event",          # 1 = eksponeret (case), 0 = potentiel kontrol
+  terms        = c("sex", "birth_year"),
+  data         = alle,
+  n.controls   = RATIO,            # antal kontroller per case
+  case.index   = "case_index",     # casens index-dato (eksponeringsdato)
+  end.followup = "end_fu",         # hvornår man ophører med at kunne være kontrol
+  seed         = 20260620          # reproducerbarhed (funktionen har sit eget seed-argument)
 )
+# Output: data.table med 'case.id' der identificerer hvert matchsæt (1 case + kontroller)
 ```
 
 </details>
 
 ::: {.callout-note}
-**Kronologisk sampling og replacement.**
-`riskSetMatch()` sampler kronologisk - personer kan bidrage til sammenligningskohorte frem til det tidspunkt de selv eksponeres. Tag eksplicit stilling til om der skal være **replacement** (en person kan matches til flere eksponerede) eller ej. Replacement øger effektiv stikprøvestørrelse men giver korrelerede observationer - det skal håndteres i analysen. Se [Lund et al. 2015](https://doi.org/10.2147/CLEP.S164456) og `?riskSetMatch` for detaljer.
+**Hvad kan `exposureMatch()` selv klare?** Rigtig meget: den matcher eksakt på `terms`, og via `case.index` + `end.followup` håndterer den selve risk-set-tidsdimensionen - hvem var stadig i risiko på casens index. **`end.followup`** er netop den dato, hvor en person ophører med at kunne være kontrol (død, udvandring, **egen eksponering = crossover**, eller outcome), så funktionen klarer crossover og konkurrerende risici. Tids-afhængige komorbiditeter kan matches med `date.terms`. Kun helt usædvanlige kriterier kræver den manuelle løkke.
 
-`riskSetMatch()` er forklaret i [Algoritmer & specialpakker](14a_pakker-oversigt.qmd) og designvalget bag matching i [Fase 1](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
+**Argumenterne** (det du skriver inde i parentesen): `ptid` = person-id, `event` = 0/1 (1 = case/eksponeret), `terms` = matchvariable (SKAL være factor/character; kategorisér fx alder), `data` = data, `n.controls` = antal kontroller per case, `case.index` = casens index-dato, `end.followup`, samt `seed`. Hvad et argument er, er forklaret i [Guide til funktioner](15a_guide_til_funktioner.qmd).
+
+**Se en funktions argumenter og hjælp i R:** skriv `?exposureMatch` eller `help(exposureMatch)`, brug `args(exposureMatch)` for en hurtig liste, eller sæt markøren i funktionsnavnet og tryk `F1` i RStudio. For CRAN-pakker (fx [`MatchIt`](https://cran.r-project.org/package=MatchIt), [`Epi`](https://cran.r-project.org/package=Epi)) er der også en online-side med vignetter. `heaven` ligger på GitHub ([tagteam/heaven](https://github.com/tagteam/heaven)) - bekræft tilgængelighed og argumenter på dit eget projekt (argumentnavne har varieret mellem versioner). Designvalget bag matching er i [Fase 1](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
 :::
 
-Matchede sammenligningspersoner får automatisk tildelt den matchede eksponeredes index-dato.
+<details>
+<summary>Avanceret: manuel risk-set-løkke (fuld kontrol over eligibilitet)</summary>
+
+Den viser også, hvad `exposureMatch()` gør indeni. Brug den, når du har brug for skræddersyet eligibilitet, eller bare vil forstå mekanikken. Den er kraftfuld men fejlbarlig - foretræk Vej A, hvis du ikke har brug for det.
+
+**Kronologisk rækkefølge:** vi sorterer de eksponerede efter index-dato (`arrange(index_date)`), så den tidligst eksponerede får sammenligningspersoner først. Det afspejler den virkelige tidsrækkefølge: hver eksponeret matches mod dem, der var i risiko netop på dens index-dato. Uden replacement sikrer rækkefølgen også, at hver person stadig er i risiko, når de bruges, og at samplingen er reproducerbar.
+
+```r
+set.seed(20260620)
+eksp_sorteret <- eksponerede %>% arrange(index_date)        # tidligst eksponerede først
+brugte        <- character(0)                                # uden replacement (udelad for replacement)
+match_liste   <- vector("list", nrow(eksp_sorteret))
+
+for (i in seq_len(nrow(eksp_sorteret))) {
+  idx   <- eksp_sorteret$index_date[i]
+  alder <- floor(as.numeric(idx - eksp_sorteret$foed_dag[i]) / 365.25)
+
+  eligible <- pool %>%
+    filter(sex == eksp_sorteret$sex[i]) %>%
+    filter(floor(as.numeric(idx - foed_dag) / 365.25) == alder) %>%      # samme heltalsalder
+    filter(is.na(death_date)         | death_date         >  idx) %>%    # i live på index
+    filter(is.na(emigration_date)    | emigration_date    >  idx) %>%    # bosat på index
+    filter(is.na(exposure_date)      | exposure_date      >  idx) %>%    # eksponeringsfri PÅ index
+    filter(is.na(first_outcome_date) | first_outcome_date >= idx) %>%    # outcome-fri på index
+    filter(earliest_bef_year <= year(idx) - 5L) %>%                      # 5-års lookback
+    filter(!pnr %in% brugte)                                             # uden replacement
+
+  n <- min(RATIO, nrow(eligible))
+  if (n == 0L) next
+
+  valgt <- eligible %>%
+    slice_sample(n = n) %>%
+    mutate(
+      match_id       = eksp_sorteret$pnr[i],
+      index_date     = idx,
+      crossover_date = if_else(!is.na(exposure_date) & exposure_date > idx,
+                               exposure_date, as.Date(NA))   # censureringsdato hvis personen senere eksponeres
+    )
+  match_liste[[i]] <- valgt
+  brugte <- c(brugte, valgt$pnr)
+}
+sammenligningsgruppe <- bind_rows(match_liste)
+```
+
+</details>
 
 <details>
-<summary>Mere i dybden - faldgruber ved sammenligningskohorten</summary>
+<summary>Performance: forhåndsopdel poolen (store datasæt)</summary>
 
-- **Immortal time bias:** en person i sammenligningskohorten skal være i live, bosat i Danmark og opfylde inklusionskriterierne **på sin tildelte index-dato** - ikke kun ved studiestart.
-- **Risk-set / incidence-density sampling:** en person kan optræde i sammenligningskohorten og *senere* selv blive eksponeret og blive case. Beslut hvordan du håndterer det (`riskSetMatch()` understøtter risk-set-matching).
-- **Matching-ratio:** fx 1:5 eksponeret:sammenligningskohorte - flere kontroller giver mere præcision, men aftagende udbytte.
-- **Samme eksklusioner** anvendes på begge grupper, ellers introducerer du selektionsbias.
+Med en pool på millioner af rækker er det dyrt at filtrere hele poolen i hver iteration (= ét gennemløb af løkken, dvs. én eksponeret person ad gangen). Forhåndsopdel den i en **navngivet liste** med en nøgle af `sex + birth_year`, og hent kun nabo-årgangene per iteration (fødselsår ±1). Det er samme logik som løkken ovenfor, blot hurtigere.
+
+```r
+pool <- pool %>% mutate(pool_key = paste(sex, birth_year))
+pool_split <- split(pool, pool$pool_key)        # navngivet liste; ét element per stratum
+
+# Inde i løkken: hent kun kandidat-strata i stedet for hele poolen
+cand_keys   <- paste(eksp_sorteret$sex[i], eksp_sorteret$birth_year[i] + c(-1L, 0L, 1L))
+cand_frames <- pool_split[cand_keys]
+candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%
+  distinct(pnr, .keep_all = TRUE)
+# anvend derefter de SAMME eligibilitets-filtre som ovenfor på 'candidates'
+```
+
+Fjern de valgte fra deres strata efter hver sampling (`pool_split[[k]] <- filter(pool_split[[k]], !pnr %in% valgt$pnr)`) for at gøre senere iterationer hurtigere. Bruger du person-år-rækker (én pr. BEF-år) for at kræve en BEF-record i index-året som bopælsproxy, så føj BEF-året til nøglen.
 
 </details>
 
 ---
 
-## Trin 6 - Gem din kohorte {.step-heading}
+## Med eller uden replacement
+
+Når du sampler sammenligningspersoner, skal du beslutte, om den **samme person må bruges flere gange** - et valg, der påvirker både matchingen og **analysen bagefter**. Tag stilling FØR du matcher.
+
+- **Har du en stor gruppe at trække fra** (fx hele baggrundsbefolkningen), er det sjældent et problem at sample **uden replacement**: der er rigeligt med kandidater, og hver bruges højst én gang (det er det, `brugte`-vektoren gør i den manuelle løkke).
+- **Er gruppen lille** (sjældne match-strata, smalle alders-/køns-bånd, eller en høj ratio som 1:25), kan poolen blive tømt. Så kan **replacement** være nødvendigt for at få nok sammenligningspersoner per eksponeret: en person kan da matches til flere eksponerede (og selv blive eksponeret/case senere). Det er også standard for ren incidens-densitets-sampling.
+
+::: {.callout-important}
+**Med replacement skal du tage højde for det i analysen.** Når samme person indgår flere gange, er observationerne **korrelerede**. Brug klyngebaserede/robuste standardfejl (clustering på person-id) eller en model der tillader det - ellers bliver konfidensintervallerne for snævre. Det samme gælder, når en sammenligningsperson senere selv bliver eksponeret (crossover). Uddybes i [Fase 13 - Analyse](13_analyse.qmd).
+:::
+
+| Pakke | Bruges til | Replacement |
+|---|---|---|
+| `heaven::exposureMatch()` | risk-set-matching til sammenligningskohorte | se note nedenfor + `matchReport()` |
+| `heaven::incidenceMatch()` | risk-set-matching til [case-control](10b_case-control.qmd) | se note nedenfor + `matchReport()` |
+| `MatchIt::matchit()` | generel matching (fx propensity score) | eksplicit via `replace = TRUE/FALSE` |
+| `Epi::ccwc()` | nested case-control sampling | risk-set sampling, se [Case-control](10b_case-control.qmd) |
+| manuel løkke | fuld kontrol | du styrer det selv (`brugte`-vektor = uden replacement) |
+
+I `heaven`s nuværende version er der ikke et til/fra-argument for replacement. Funktionen laver risk-set-matching: en person, der endnu ikke er eksponeret, kan vælges som kontrol, og en fremtidig case kan være kontrol indtil sin egen eksponering (styret af `end.followup`). En kontrol kan typisk bruges til flere cases (genbrug) - brug `heaven::matchReport()` til at se, hvor ofte kontroller bruges. Uanset genbrug eller crossover skal analysen bruge klyngebaserede standardfejl. Bekræft pakkenavne og argumenter på dit eget projekt.
+
+---
+
+## Trin 5 - Saml, validér og gem {.step-heading}
 
 ```r
-# "matched" fra riskSetMatch() er nu din fulde kohorte:
-# eksponerede (exposed = 1) + matchede sammenligningspersoner (exposed = 0)
-kohort <- matched   # omdøb til "kohort" - det er denne du bruger fremover
+# matched fra Vej A ER allerede den fulde kohorte. Ved den manuelle løkke (Vej B) samler du selv:
+kohort <- bind_rows(
+  eksponerede          %>% mutate(exposed = 1L),
+  sammenligningsgruppe %>% mutate(exposed = 0L)
+)
 
-saveRDS(kohort, "sti/til/full_cohort.rds")   # gem
+# De eksponerede skal have netop én række hver
+stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))
 
-# Verificér:
-nrow(kohort)                                  # antal personer i alt
-table(kohort$exposed)                         # 0 = sammenligningskohorte, 1 = eksponerede
-names(kohort)                                 # hvilke kolonner er med?
+# Bug-tjek: samme sammenligningsperson brugt to gange i SAMME matchsæt (bør være 0 rækker;
+# typisk årsag er dobbelt person-år-rækker i poolen, jf. Trin 3)
+sammenligningsgruppe %>% count(match_id, pnr) %>% filter(n > 1)
+
+# Info (ikke en fejl): en person kan optræde i flere matchsæt (replacement) eller
+# både som sammenligningsperson og senere som eksponeret (crossover). Forventet i risk-set
+# design, men kræver klyngebaserede standardfejl i analysen (Fase 13).
+kohort %>% count(pnr) %>% filter(n > 1) %>% nrow()
+table(kohort$exposed)                                 # gruppestørrelser
+
+# Matchgrad: hvor mange eksponerede fik færre end RATIO sammenligningspersoner?
+n_pr_eksp <- sammenligningsgruppe %>% count(match_id)
+sum(n_pr_eksp$n < RATIO)                              # eksponerede uden fuld ratio
+sum(!eksponerede$pnr %in% n_pr_eksp$match_id)         # eksponerede uden NOGEN sammenligningsperson
+
+saveRDS(kohort, "sti/til/full_cohort.rds")
 ```
+
+::: {.callout-note}
+**Behold matchsæt-id'et** (`match_id` i den manuelle løkke; `exposureMatch()` kalder det `case.id`). Det fortæller, hvilke sammenligningspersoner der hører til hvilken eksponeret. Det er vigtigt, når analysen skal **respektere matchingen**: stratificeret eller betinget analyse (fx stratificeret Cox på matchsæt, eller betinget logistisk regression i [case-control](10b_case-control.qmd)), eller som minimum klyngebaserede standardfejl. Uden `match_id` kan du ikke lave en korrekt matchet analyse. Se [Fase 13](13_analyse.qmd).
+:::
+
+<details>
+<summary>Variant: umatchet sammenligningsgruppe</summary>
+
+Vil du ikke matche, så spring Trin 4 over: brug hele `pool` (efter eksklusioner) som sammenligningsgruppe, tildel index-datoer via kalendertid eller en fælles studiestart, og justér for confounders i analysen ([Fase 13](13_analyse.qmd), IPTW/regression). Index-tildelingen skal stadig undgå immortal time.
+
+</details>
 
 ---
 
 ## Hvad nu?
 
-Du har `full_cohort.rds` - én række per person med `pnr` og `index_date` for **begge grupper** (eksponerede + sammenligningskohorte). Brug den i alle efterfølgende udtræk:
+Du har `full_cohort.rds` - én række per person med `pnr` og `index_date` for **begge grupper** (eksponerede + sammenligningsgruppe). Brug den i alle efterfølgende udtræk:
 
 ```r
 kohort      <- readRDS("sti/til/full_cohort.rds")
-kohort_pnrs <- unique(kohort$pnr)   # vektor med alle pnr'er - det er denne der sættes ind
-                                    # overalt hvor de øvrige faser bruger "kohort_pnrs"
+kohort_pnrs <- unique(kohort$pnr)   # vektor med alle pnr'er - både eksponerede og sammenligningspersoner
 ```
 
-`kohort_pnrs` indeholder altså pnr'erne for **både eksponerede og sammenligningspersoner** - ikke kun de eksponerede. Det er vigtigt: udtræk af udfald og kovariater skal dække hele studiegruppen.
+`kohort_pnrs` indeholder altså pnr'erne for **både eksponerede og sammenligningspersoner** - ikke kun de eksponerede. Udtræk af udfald og kovariater skal dække hele studiegruppen.
 
 | Udtræk | Fase |
 |---|---|
-| Udfald (diagnoser, dødsdato, emigration) | [Fase 9](09b_udtraek_fra_lpr.qmd), [Fase 12](11_data-manipulation.qmd) |
+| Udfald (diagnoser, dødsdato, emigration) | [Fase 9](09b_udtraek_fra_lpr.qmd), [Fase 11a](11a_udfald.qmd) |
 | Kovariater fra BEF (alder, køn) | [Fase 6](06_foerste-udtraek.qmd) |
 | Socioøkonomiske variable | [Socioøkonomiske variable](13_socioekonomiske-variable.qmd) |
 | Komorbiditet (NMI) | [NMI](14c_nmi.qmd) |
@@ -239,9 +441,10 @@ kohort_pnrs <- unique(kohort$pnr)   # vektor med alle pnr'er - det er denne der 
 
 ## Se også
 
-- [Byg din studiepopulation](10_byg-din-kohorte.qmd) - identificér de eksponerede (Trin 1)
-- [Case-control](10b_case-control.qmd) - alternativt design med kontrol-sampling
+- [Byg din studiepopulation](10_byg-din-kohorte.qmd) - identificér de eksponerede (Trin 1) og ekskludér prævalente (Trin 2)
+- [Case-control](10b_case-control.qmd) - samme risk-set-mekanik, men "event" er udfaldet
 - [Fase 1 - Studieforberedelse](01_studieforberedelse.qmd) - designvalg bag kohorte og matching
+- [Fase 11a - Udfald](11a_udfald.qmd) - udfaldsdatoer, censurering og crossover
 - [Fase 12 - Saml & klargør datasættet](11_data-manipulation.qmd) - saml alle udtræk til ét datasæt
-- [Register-overblik](15d_register_reference.qmd) - kolonnenavne for lpr_sksopr, procedurer_kirurgi m.fl.
-- [Lund et al. (2015), *Clinical Epidemiology*](https://doi.org/10.2147/CLEP.S164456) - bias ved forkert eksklusionsrækkefølge i risk-set sampling
+- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/) - samplingstrategier for sammenligningskohorter
+- [Lund et al. (2015), *Clinical Epidemiology*](https://doi.org/10.2147/CLEP.S164456) - bias ved forkert eksklusionsrækkefølge
