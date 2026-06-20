@@ -4,28 +4,18 @@ subtitle: "Identify your cases/exposed - then choose your study design"
 date: last-modified
 ---
 
-All extractions in the other phases - outcomes ([Phase 9](09b_udtraek_fra_lpr.qmd)), covariates ([Phase 6](06_foerste-udtraek.qmd)) and socioeconomics ([Socioeconomic variables](13_socioekonomiske-variable.qmd)) - assume you already have a cohort: a table with `pnr` and `index_date` per person. This page shows how to identify your study population; then you choose a study design.
+The later phases - extract variables ([Phase 11](11_foej-variabler.qmd)), assemble the dataset ([Phase 12](11_data-manipulation.qmd)) and analysis ([Phase 13](13_analyse.qmd)) - assume you already have a **cohort**: a table with `pnr` and `index_date` per person. This page shows how to identify your study population and give each person an index date; then you choose a study design.
 
 ::: {.callout-tip}
 **In short:** First you identify your **cases/exposed** and give each an **index date**. After that, the path depends on your design:
 
-- **Prevalence study / cohort without a comparison group** - you are done here; continue to [Phase 11 - Extract variables](11_foej-variabler.qmd) and [Phase 12](11_data-manipulation.qmd).
-- **Cohort study with a comparison cohort** → [Comparison cohort](10a_sammenligningskohorte.qmd)
-- **(Nested) case-control** → [Case-control](10b_case-control.qmd)
+- **Prevalence study / cohort without a comparison group** - after this page you are done building the study population; continue to [Phase 11 - Extract variables](11_foej-variabler.qmd).
+- **Cohort study with a comparison cohort** - after this page continue to → [Comparison cohort](10a_sammenligningskohorte.qmd).
+- **(Nested) case-control** - after this page continue to → [Case-control](10b_case-control.qmd).
 :::
 
-::: {.callout-warning}
-**This page is still under development.** The code needs further review and testing before being used directly. Use it as structural guidance and adapt to your own project.
-:::
-
-::: {.callout-note}
-**Functions used here.**
-`inner_join()` and `bind_rows()` are shown in [Phase 9](09b_udtraek_fra_lpr.qmd). `group_by() + slice()` is shown briefly there and explained in detail in [Phase 12](11_data-manipulation.qmd). New in Step 2: `anti_join()`, `distinct()`, `pull()` plus `nrow()`, `cat()` and `stopifnot()` - see [Function guide](15a_guide_til_funktioner.qmd).
-:::
-
----
-
-## What is index date?
+<details>
+<summary>**What is index date?**</summary>
 
 **Index date** is the point in time that marks the start of follow-up for a given person.
 
@@ -33,6 +23,17 @@ All extractions in the other phases - outcomes ([Phase 9](09b_udtraek_fra_lpr.qm
 - **Comparator cohort:** the index date assigned from the matched exposed person
 
 Everything that follows - outcome date, covariates at baseline, follow-up time - is calculated relative to index date. The definition of index date is crucial for study validity.
+
+</details>
+
+::: {.callout-warning}
+**This page is still under development.** The code needs further review and testing before being used directly. Use it as structural guidance and adapt to your own project.
+:::
+
+::: {.callout-note}
+**Functions used here.**
+`inner_join()` and `bind_rows()` are already shown in [Phase 9](09b_udtraek_fra_lpr.qmd) and explained in detail in [12b - Link your extracts](12b_joins.qmd#joins-link-two-tables). `group_by() + slice()` is explained in [12a - Long ↔ wide format](12a_langt-bredt.qmd). New in Step 2: `anti_join()`, `distinct()`, `pull()` plus `nrow()`, `cat()` and `stopifnot()` - see [Function guide](15a_guide_til_funktioner.qmd).
+:::
 
 ---
 
@@ -53,6 +54,8 @@ You scan the register that defines your exposure. **You do not yet have a `cohor
 
 <details>
 <summary>Example A: SKS codes (surgery/procedure)</summary>
+
+`lpr_sksopr` holds the procedure code (`c_opr`) + `recnum`, but **not** `pnr` or date; those live in `lpr_adm`. So you join the two on `recnum` to get person + date + procedure together - exactly the same pattern as diagnoses (contact + diagnosis register), see [Phase 9a](09a_forstaa_lpr.qmd).
 
 ```r
 library(arrow)    # open_dataset
@@ -150,9 +153,9 @@ People who already had **your outcome** before the index date must be excluded -
 
 Count how many drop out at each exclusion step, so you can describe the attrition and later draw a **STROBE flow diagram** (also called a participant or attrition diagram; see the [STROBE checklist](https://www.strobe-statement.org/checklists/)).
 
-::: {.callout-note}
-**A small helper function.** If the same check is needed more than once (e.g. also on a comparison group later, see [Phase 10a](10a_sammenligningskohorte.qmd)), wrap the logic in a function so the two checks do not drift apart. See [Good coding practice](12_god-kode-praksis.qmd).
-:::
+**Helper function for excluding prevalent cases**
+
+If the same check is needed more than once (e.g. also on a comparison group later, see [Phase 10a](10a_sammenligningskohorte.qmd)), wrap the logic in a function so the two checks do not drift apart. See [Good coding practice](12_god-kode-praksis.qmd).
 
 <details>
 <summary>Show code</summary>
@@ -196,9 +199,9 @@ stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # check: one row per perso
 ::: {.callout-tip}
 **What now - choose your design:**
 
-- **Prevalence study / cohort without a comparison group** - you now have your study population with an index date. Continue to [Phase 11 - Extract variables](11_foej-variabler.qmd) and [Phase 12 - Assemble and prepare the dataset](11_data-manipulation.qmd).
-- **Cohort study with a comparison cohort** → [Comparison cohort](10a_sammenligningskohorte.qmd) - build a match pool and risk-set match a comparison group.
-- **(Nested) case-control** → [Case-control](10b_case-control.qmd) - your "exposed" group above is here your **cases**; you sample controls who were at risk when the case had the outcome.
+- **Prevalence study / cohort without a comparison group** - after this page you are done: you have your study population with an index date. Continue to [Phase 11 - Extract variables](11_foej-variabler.qmd) and [Phase 12 - Assemble and prepare the dataset](11_data-manipulation.qmd).
+- **Cohort study with a comparison cohort** - after this page continue to → [Comparison cohort](10a_sammenligningskohorte.qmd), where you build a match pool and risk-set match a comparison group.
+- **(Nested) case-control** - after this page continue to → [Case-control](10b_case-control.qmd), where your "exposed" group above is instead your **cases**, and you sample controls who were at risk when the case had the outcome.
 :::
 
 ---
