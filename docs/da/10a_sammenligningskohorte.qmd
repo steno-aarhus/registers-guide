@@ -119,50 +119,53 @@ Samme princip for andre afledte mål, fx BMI fra højde og vægt: `mutate(bmi = 
 ```r
 library(arrow); library(dplyr); library(lubridate)
 
+# --- Konstanter (det vi SELV vælger og kan ændre) ---
 RATIO   <- 5L        # antal sammenligningspersoner per eksponeret
-AAR_FRA <- 2005L     # studievindue (BEF-år)
-AAR_TIL <- 2022L
+AAR_FRA <- 2005L     # studievindue: FØRSTE BEF-år. Skal nå mindst 5 år før din tidligste index-dato (se fold-ud)
+AAR_TIL <- 2022L     # studievindue: sidste BEF-år
 
+# Åbn BEF (lazy: intet læses ind endnu)
 bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
-  rename_with(tolower)
+  rename_with(tolower)                          # kolonnenavne til små bogstaver
 
-# Nyeste BEF-snapshot per person: køn + fødselsdato
-demografi <- bef %>%
-  filter(year >= AAR_FRA, year <= AAR_TIL) %>%
-  select(pnr, foed_dag, koen, year) %>%
-  collect() %>%
-  arrange(pnr, desc(year)) %>%                 # nyeste BEF-år øverst per person (desc = faldende)
-  distinct(pnr, .keep_all = TRUE) %>%          # behold den øverste = nyeste række per person
+# --- Hent BEF person-år ÉN gang og genbrug det (både til eksponerede OG poolen i Trin 4) ---
+bef_py <- bef %>%
+  filter(year >= AAR_FRA, year <= AAR_TIL) %>%  # kun studievinduet
+  select(pnr, foed_dag, koen, year) %>%         # kun de kolonner vi skal bruge
+  collect()                                     # hent i RAM - én konkret tabel (ikke lazy)
+
+# Demografi: ÉN (nyeste) række per person - køn/fødselsdato ændrer sig ikke over tid
+demografi <- bef_py %>%
+  arrange(pnr, desc(year)) %>%                  # nyeste BEF-år øverst per person (desc = faldende)
+  distinct(pnr, .keep_all = TRUE) %>%           # behold øverste = nyeste række per person
   mutate(
-    foed_dag   = as.Date(foed_dag),
-    birth_year = year(foed_dag),
-    sex        = if_else(koen == 1L, "Male", "Female")
-  )
+    foed_dag   = as.Date(foed_dag),             # gør teksten til en rigtig dato, så vi kan regne (fx alder)
+    birth_year = year(foed_dag),                # træk fødselsåret ud - bruges som matchvariabel
+    sex        = if_else(koen == 1L, "Male", "Female")  # oversæt køn-koden (1/2) til læsbar tekst (matchvariabel)
+  ) %>%
+  select(pnr, foed_dag, birth_year, sex)        # behold kun det vi skal bruge fremover
 
-# 'eksponerede' kommer fra Fase 10 (identificeret + prævalente ekskluderet)
+# Bopæls-lookback: tidligste BEF-år per person (SAMME definition bruges på poolen i Trin 4)
+earliest_bef <- bef_py %>%
+  group_by(pnr) %>%                             # én gruppe per person
+  summarise(earliest_bef_year = min(year), .groups = "drop")  # første år personen ses i BEF
+
+# --- Tilknyt til de eksponerede (kommer fra Fase 10: identificeret + prævalente ekskluderet) ---
 eksponerede <- eksponerede %>%
-  left_join(demografi %>% select(pnr, foed_dag, birth_year, sex), by = "pnr") %>%
-  mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)   # afledt variabel
+  left_join(demografi,    by = "pnr") %>%       # tilføj køn, fødselsdato, fødselsår
+  left_join(earliest_bef, by = "pnr") %>%       # tilføj tidligste BEF-år
+  mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)  # afledt: alder ved index i år
 
-# Inklusionskriterier (de SAMME anvendes på poolen i Trin 4) - tæl frafaldet
-n_before <- nrow(eksponerede)
-eksponerede <- eksponerede %>% filter(age_at_index >= 18)   # fx kun voksne - tilpas
-cat("Efter alderskrav:", nrow(eksponerede), "| ekskluderet:", n_before - nrow(eksponerede), "\n")
+# --- Inklusionskriterier (de SAMME anvendes på poolen i Trin 4) - tæl frafaldet ---
+n_before <- nrow(eksponerede)                   # nrow() = antal rækker (her: personer) før eksklusion
+eksponerede <- eksponerede %>%
+  filter(age_at_index >= 18) %>%                          # fx kun voksne - tilpas
+  filter(earliest_bef_year <= year(index_date) - 5L)      # 5-års lookback (5L = heltal); se fold-ud nedenfor
+cat("Efter inklusionskriterier:", nrow(eksponerede),
+    "| ekskluderet:", n_before - nrow(eksponerede), "\n")
 # cat() printer bare en læsbar linje i konsollen; se Guide til funktioner (15a) for cat() og nrow()
 
-# 5-års residens-lookback (fx så covariater kan beregnes): kræv et BEF-år i year(index) - 5
-bef_aar <- bef %>%
-  filter(year >= AAR_FRA, year <= AAR_TIL) %>%
-  select(pnr, year) %>% collect() %>% distinct(pnr, year)
-
-n_before <- nrow(eksponerede)
-eksponerede <- eksponerede %>%
-  mutate(lookback_year = year(index_date) - 5L) %>%                 # 5L: L gør 5 til et heltal (integer)
-  semi_join(bef_aar, by = c("pnr", "lookback_year" = "year")) %>%   # behold kun dem med en BEF-post det år
-  select(-lookback_year)
-cat("Efter 5-års lookback:", nrow(eksponerede), "| ekskluderet:", n_before - nrow(eksponerede), "\n")
-
-stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))   # én række per person
+stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))  # tjek: stadig én række per person
 ```
 
 </details>
@@ -170,9 +173,23 @@ stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))   # én række per p
 <details>
 <summary>Hvordan virker 5-års-lookback'et?</summary>
 
-`bef_aar` er en tabel med én række per person per år, de optræder i BEF (dvs. de år, personen var bosat i Danmark). For hver eksponeret beregner vi `lookback_year = year(index_date) - 5` - kalenderåret 5 år før deres index. `semi_join()` beholder kun en eksponeret, hvis der findes en række i `bef_aar` med samme `pnr` OG `year == lookback_year`, altså hvis personen har en BEF-post netop det år. Kravet bliver dermed: personen var registreret i Danmark mindst 5 år før index.
+`earliest_bef` har for hver person det **tidligste år, de optræder i BEF** inden for studievinduet (dvs. hvornår vi tidligst kan se, at de var bosat i Danmark). Lookback-kravet er:
 
-**Derfor skal BEF-vinduet nå langt nok tilbage.** Vi filtrerer `bef_aar` til `AAR_FRA`-`AAR_TIL`, så `AAR_FRA` skal være mindst 5 år før den tidligste index-dato. Med index i 2010-2022 og `AAR_FRA = 2005` er lookback-årene 2005-2017, som alle ligger i vinduet. Og ja: `bef` er indlæst dovent (`open_dataset`), men `bef_aar` hentes i hukommelsen med `collect()` - det er en konkret tabel, vi slår op i, ikke et lazy-filter.
+`earliest_bef_year <= year(index_date) - 5`
+
+altså: personen skal have været i BEF mindst 5 år før sin index-dato. Det **samme** krav bruges på de eksponerede (Trin 3) og på poolen ved matchtid (Trin 5), så begge grupper behandles ens.
+
+**BEF-vinduet skal nå langt nok tilbage.** `earliest_bef_year` kan aldrig være tidligere end `AAR_FRA`, så `AAR_FRA` skal være mindst 5 år før din **tidligste** index-dato - ellers ryger folk fejlagtigt ud.
+
+::: {.callout-tip}
+**Konkret eksempel.** Index-datoer i **2010-2022** og `AAR_FRA = 2005`:
+
+- Lookback-året er `index-år − 5`, dvs. **2005-2017**.
+- Alle disse år ligger inden for vinduet **2005-2022** → lookback'et virker for alle.
+- Satte du derimod `AAR_FRA = 2008`, kunne en person med index i 2010 ikke opfylde `earliest_bef_year <= 2005`, og ville ryge fejlagtigt ud.
+:::
+
+Og ja: `bef` er indlæst dovent (`open_dataset`), men `bef_py` hentes i RAM med `collect()` - det er en konkret tabel, vi regner på, ikke et lazy-filter.
 
 </details>
 
@@ -184,7 +201,7 @@ Nu bygger vi den **pool**, som sammenligningsgruppen skal trækkes fra. Et medle
 
 De tids-varierende kriterier (i live, eksponeringsfri og outcome-fri PÅ den tildelte index-dato) kan vi ikke filtrere væk her - de afgøres ved matchtid i Trin 5. Derfor sørger vi i dette trin for, at poolen *bærer alle de datoer*, der skal til for at anvende dem.
 
-Poolen hentes fra BEF for de relevante år. Tilknyt alt, som eligibilitet afhænger af: **dødsdato**, **udvandringsdato**, **eksponeringsdato**, **outcome-dato** (så outcome før den tildelte index-dato kan ekskluderes for sammenligningspersonen, præcis som for de eksponerede på forsiden) og **lookback-år**. Disse datoer udtrækkes direkte for poolen med samme mønstre som [Fase 9](09b_udtraek_fra_lpr.qmd) (her vist som færdige tabeller).
+Poolen bygger vi **oven på `demografi` og `earliest_bef` fra Trin 3** (samme BEF-udtræk - vi henter det altså ikke igen) og tilføjer alt, som eligibilitet afhænger af: **dødsdato**, **udvandringsdato**, **eksponeringsdato**, **outcome-dato** (så outcome før den tildelte index-dato kan ekskluderes for sammenligningspersonen, præcis som for de eksponerede i Trin 3) og **lookback-år**. Datoerne udtrækkes direkte for befolkningen med samme mønstre som [Fase 9](09b_udtraek_fra_lpr.qmd) (her vist som færdige tabeller).
 
 ::: {.callout-important}
 **Sammenligningspersonen skal være eksponeringsfri PÅ index - ikke "aldrig eksponeret".**
@@ -195,35 +212,21 @@ Tilknyt hver persons FØRSTE eksponeringsdato til poolen, og afgør eligibilitet
 <summary>Vis kode</summary>
 
 ```r
-# Datoer udtrukket for poolen (direkte register-udtræk, jf. Fase 9)
-doed    <- readRDS("sti/til/doedsdatoer.rds")     # pnr, death_date      (DODSAARS, eksakt dato)
-udv     <- readRDS("sti/til/udvandring.rds")      # pnr, emigration_date (VNDS)
-udfald  <- readRDS("sti/til/outcome_dates.rds")   # pnr, first_outcome_date
-eksp_dt <- readRDS("sti/til/exposure_dates.rds")  # pnr, exposure_date   (FØRSTE eksponering, også fremtidig)
+# Datoer udtrukket direkte for befolkningen (samme mønstre som Fase 9; her som færdige tabeller)
+doed    <- readRDS("sti/til/doedsdatoer.rds")     # pnr, death_date         (DODSAARS, eksakt dødsdato)
+udv     <- readRDS("sti/til/udvandring.rds")      # pnr, emigration_date    (VNDS, udvandringsdato)
+udfald  <- readRDS("sti/til/outcome_dates.rds")   # pnr, first_outcome_date (FØRSTE outcome nogensinde)
+eksp_dt <- readRDS("sti/til/exposure_dates.rds")  # pnr, exposure_date      (FØRSTE eksponering, også fremtidig)
 
-pool <- bef %>%
-  filter(year >= AAR_FRA, year <= AAR_TIL) %>%
-  select(pnr, foed_dag, koen, year) %>%
-  collect() %>%
-  distinct(pnr, year, .keep_all = TRUE) %>%        # fjern dobbelt person-år-rækker
-  # vi fjerner IKKE alle eksponerede her - eksponeringsfri-status afgøres PÅ index nedenfor
-  mutate(
-    foed_dag   = as.Date(foed_dag),
-    birth_year = year(foed_dag),
-    sex        = if_else(koen == 1L, "Male", "Female")
-  )
-
-# Lookback-år (tidligste BEF-år per person) + tilknyt datoer
-lookback <- pool %>% group_by(pnr) %>%
-  summarise(earliest_bef_year = min(year), .groups = "drop")
-
-pool <- pool %>%
-  distinct(pnr, .keep_all = TRUE) %>%              # én række per person til poolen
-  left_join(doed,     by = "pnr") %>%
-  left_join(udv,      by = "pnr") %>%
-  left_join(udfald,   by = "pnr") %>%
-  left_join(eksp_dt,  by = "pnr") %>%
-  left_join(lookback, by = "pnr")
+# Poolen GENBRUGER demografi + earliest_bef fra Trin 3 (vi henter IKKE BEF igen) og tilføjer datoerne.
+# demografi har allerede én række per person (pnr, foed_dag, birth_year, sex).
+pool <- demografi %>%
+  left_join(earliest_bef, by = "pnr") %>%         # tidligste BEF-år (bruges til lookback ved matchtid)
+  left_join(doed,         by = "pnr") %>%         # dødsdato;          NA = ingen registreret død
+  left_join(udv,          by = "pnr") %>%         # udvandringsdato;   NA = ikke udvandret
+  left_join(udfald,       by = "pnr") %>%         # første outcome;    NA = aldrig outcome
+  left_join(eksp_dt,      by = "pnr")             # første eksponering; NA = aldrig eksponeret
+# Bemærk: vi fjerner IKKE alle eksponerede - eksponeringsfri-status afgøres PÅ index i Trin 5.
 ```
 
 </details>
@@ -250,37 +253,44 @@ Sæt altid en seed før sampling, så matchingen er reproducerbar.
 
 ```r
 library(heaven)   # exposureMatch
-STUDIE_SLUT <- as.Date("2022-12-31")
+STUDIE_SLUT <- as.Date("2022-12-31")   # vi selv vælger: sidste dag i studiet
 
-# Saml ÉN tabel med både eksponerede (event = 1) og pool (event = 0), én række per person.
-# end_fu = datoen hvor personen IKKE længere kan vælges som kontrol: den tidligste af
-#          død, udvandring, egen eksponering (= crossover), outcome eller studieslut.
+# Saml ÉN tabel med både eksponerede og pool. transmute() = som mutate(), men beholder
+# KUN de kolonner, vi navngiver her (resten smides væk) - så tabellen er ren til matchingen.
 alle <- bind_rows(
   eksponerede %>% transmute(
-    pnr, event = 1L, sex, birth_year,
-    case_index = index_date,                       # eksponeringsdato (casens index)
-    end_fu     = STUDIE_SLUT                        # forfin evt. med død/outcome efter index
+    pnr,                                           # person-id (beholdes)
+    event      = 1L,                               # NY kolonne 'event' = 1: disse er cases (eksponerede)
+    sex, birth_year,                               # matchvariable (beholdes)
+    case_index = index_date,                       # NY kolonne: casens index = eksponeringsdato
+    end_fu     = STUDIE_SLUT                       # NY kolonne: slut på followup (forfin evt. m. død/outcome)
   ),
   pool %>% transmute(
-    pnr, event = 0L, sex, birth_year,
-    case_index = as.Date(NA),                      # kontroller har ingen event
+    pnr,
+    event      = 0L,                               # 'event' = 0: potentielle kontroller
+    sex, birth_year,
+    case_index = as.Date(NA),                      # kontroller har ingen event-dato (NA)
+    # end_fu for en kontrol = datoen de IKKE længere kan vælges som kontrol: den TIDLIGSTE af
+    # død, udvandring, egen eksponering (= crossover), outcome eller studieslut. pmin = mindste/tidligste.
     end_fu     = pmin(death_date, emigration_date, exposure_date,
-                      first_outcome_date, STUDIE_SLUT, na.rm = TRUE)
+                      first_outcome_date, STUDIE_SLUT, na.rm = TRUE)   # na.rm: ignorér manglende datoer
   )
 ) %>%
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' SKAL være factor/character
 
+# I kaldet nedenfor: navnet til VENSTRE for = er funktionens ARGUMENT (fast, defineret af exposureMatch);
+# værdien til HØJRE er det, VI sætter det til (typisk navnet på en kolonne i 'alle', i anførselstegn).
 matched <- exposureMatch(
-  ptid         = "pnr",
-  event        = "event",          # 1 = eksponeret (case), 0 = potentiel kontrol
-  terms        = c("sex", "birth_year"),
-  data         = alle,
-  n.controls   = RATIO,            # antal kontroller per case
-  case.index   = "case_index",     # casens index-dato (eksponeringsdato)
-  end.followup = "end_fu",         # hvornår man ophører med at kunne være kontrol
-  seed         = 20260620          # reproducerbarhed (funktionen har sit eget seed-argument)
+  ptid         = "pnr",                  # argument 'ptid'  <- kolonnen med person-id
+  event        = "event",                # argument 'event' <- kolonnen der er 1 for case, 0 for kontrol
+  terms        = c("sex", "birth_year"), # argument 'terms' <- kolonner der matches eksakt på
+  data         = alle,                   # argument 'data'  <- selve datasættet (ikke i anførselstegn)
+  n.controls   = RATIO,                  # argument 'n.controls' <- antal kontroller per case
+  case.index   = "case_index",           # argument 'case.index'  <- kolonnen med casens index-dato
+  end.followup = "end_fu",               # argument 'end.followup' <- kolonnen med slut-på-followup
+  seed         = 20260620                # argument 'seed' <- fast tal => reproducerbart resultat
 )
-# Output: data.table med 'case.id' der identificerer hvert matchsæt (1 case + kontroller)
+# Output: data.table med 'case.id' der identificerer hvert matchsæt (1 case + dens kontroller)
 ```
 
 </details>
@@ -288,7 +298,7 @@ matched <- exposureMatch(
 ::: {.callout-note}
 **Hvad kan `exposureMatch()` selv klare?** Rigtig meget: den matcher eksakt på `terms`, og via `case.index` + `end.followup` håndterer den selve risk-set-tidsdimensionen - hvem var stadig i risiko på casens index. **`end.followup`** er netop den dato, hvor en person ophører med at kunne være kontrol (død, udvandring, **egen eksponering = crossover**, eller outcome), så funktionen klarer crossover og konkurrerende risici. Tids-afhængige komorbiditeter kan matches med `date.terms`. Kun helt usædvanlige kriterier kræver den manuelle løkke.
 
-**Argumenterne** (det du skriver inde i parentesen): `ptid` = person-id, `event` = 0/1 (1 = case/eksponeret), `terms` = matchvariable (SKAL være factor/character; kategorisér fx alder), `data` = data, `n.controls` = antal kontroller per case, `case.index` = casens index-dato, `end.followup`, samt `seed`. Hvad et argument er, er forklaret i [Guide til funktioner](15a_guide_til_funktioner.qmd).
+**Argument vs. værdi.** I et funktionskald står argumentets **navn** til venstre for `=` (fastlagt af funktionen, kan ikke laves om), og den **værdi** du giver det, til højre (typisk navnet på en af dine kolonner, i anførselstegn). Fx `event = "event"`: argumentet hedder `event`, og vi sætter det til vores kolonne `"event"`. Bemærk forskellen på `transmute(event = 1L)` (her *laver* vi en kolonne ved navn `event`) og `exposureMatch(event = "event")` (her *peger* vi funktionens argument hen på den kolonne). Argumenterne her: `ptid` = person-id, `event` = 0/1-indikator, `terms` = matchvariable (SKAL være factor/character; kategorisér fx alder), `data` = datasættet, `n.controls` = antal kontroller per case, `case.index` = casens index-dato, `end.followup`, samt `seed`. Hvad et argument er, er forklaret i [Guide til funktioner](15a_guide_til_funktioner.qmd).
 
 **Se en funktions argumenter og hjælp i R:** skriv `?exposureMatch` eller `help(exposureMatch)`, brug `args(exposureMatch)` for en hurtig liste, eller sæt markøren i funktionsnavnet og tryk `F1` i RStudio. For CRAN-pakker (fx [`MatchIt`](https://cran.r-project.org/package=MatchIt), [`Epi`](https://cran.r-project.org/package=Epi)) er der også en online-side med vignetter. `heaven` ligger på GitHub ([tagteam/heaven](https://github.com/tagteam/heaven)) - bekræft tilgængelighed og argumenter på dit eget projekt (argumentnavne har varieret mellem versioner). Designvalget bag matching er i [Fase 1](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
 :::
@@ -301,40 +311,40 @@ Den viser også, hvad `exposureMatch()` gør indeni. Brug den, når du har brug 
 **Kronologisk rækkefølge:** vi sorterer de eksponerede efter index-dato (`arrange(index_date)`), så den tidligst eksponerede får sammenligningspersoner først. Det afspejler den virkelige tidsrækkefølge: hver eksponeret matches mod dem, der var i risiko netop på dens index-dato. Uden replacement sikrer rækkefølgen også, at hver person stadig er i risiko, når de bruges, og at samplingen er reproducerbar.
 
 ```r
-set.seed(20260620)
-eksp_sorteret <- eksponerede %>% arrange(index_date)        # tidligst eksponerede først
-brugte        <- character(0)                                # uden replacement (udelad for replacement)
-match_liste   <- vector("list", nrow(eksp_sorteret))
+set.seed(20260620)                                          # fast seed => reproducerbar sampling
+eksp_sorteret <- eksponerede %>% arrange(index_date)        # tidligst eksponerede først (kronologisk)
+brugte        <- character(0)                                # tom liste over brugte pnr (uden replacement)
+match_liste   <- vector("list", nrow(eksp_sorteret))         # tom liste til at samle hvert matchsæt
 
-for (i in seq_len(nrow(eksp_sorteret))) {
-  idx   <- eksp_sorteret$index_date[i]
-  alder <- floor(as.numeric(idx - eksp_sorteret$foed_dag[i]) / 365.25)
+for (i in seq_len(nrow(eksp_sorteret))) {                    # gennemløb én eksponeret ad gangen
+  idx   <- eksp_sorteret$index_date[i]                       # denne eksponeredes index-dato
+  alder <- floor(as.numeric(idx - eksp_sorteret$foed_dag[i]) / 365.25)  # heltalsalder ved index
 
-  eligible <- pool %>%
-    filter(sex == eksp_sorteret$sex[i]) %>%
-    filter(floor(as.numeric(idx - foed_dag) / 365.25) == alder) %>%      # samme heltalsalder
+  eligible <- pool %>%                                                   # find mulige kontroller i poolen
+    filter(sex == eksp_sorteret$sex[i]) %>%                              # samme køn
+    filter(floor(as.numeric(idx - foed_dag) / 365.25) == alder) %>%      # samme heltalsalder PÅ idx
     filter(is.na(death_date)         | death_date         >  idx) %>%    # i live på index
     filter(is.na(emigration_date)    | emigration_date    >  idx) %>%    # bosat på index
     filter(is.na(exposure_date)      | exposure_date      >  idx) %>%    # eksponeringsfri PÅ index
     filter(is.na(first_outcome_date) | first_outcome_date >= idx) %>%    # outcome-fri på index
     filter(earliest_bef_year <= year(idx) - 5L) %>%                      # 5-års lookback
-    filter(!pnr %in% brugte)                                             # uden replacement
+    filter(!pnr %in% brugte)                                             # ikke allerede brugt
 
-  n <- min(RATIO, nrow(eligible))
-  if (n == 0L) next
+  n <- min(RATIO, nrow(eligible))                            # træk op til RATIO (færre hvis poolen er tynd)
+  if (n == 0L) next                                          # ingen mulige? spring til næste eksponerede
 
   valgt <- eligible %>%
-    slice_sample(n = n) %>%
+    slice_sample(n = n) %>%                                  # træk n tilfældige kontroller
     mutate(
-      match_id       = eksp_sorteret$pnr[i],
-      index_date     = idx,
+      match_id       = eksp_sorteret$pnr[i],                 # bind kontrollerne til denne case (matchsæt)
+      index_date     = idx,                                  # kontrollerne tildeles casens index-dato
       crossover_date = if_else(!is.na(exposure_date) & exposure_date > idx,
-                               exposure_date, as.Date(NA))   # censureringsdato hvis personen senere eksponeres
+                               exposure_date, as.Date(NA))    # censureringsdato hvis kontrollen senere eksponeres
     )
-  match_liste[[i]] <- valgt
-  brugte <- c(brugte, valgt$pnr)
+  match_liste[[i]] <- valgt                                  # gem dette matchsæt
+  brugte <- c(brugte, valgt$pnr)                             # marker de valgte som brugt (uden replacement)
 }
-sammenligningsgruppe <- bind_rows(match_liste)
+sammenligningsgruppe <- bind_rows(match_liste)               # saml alle matchsæt til én tabel
 ```
 
 </details>
@@ -345,14 +355,14 @@ sammenligningsgruppe <- bind_rows(match_liste)
 Med en pool på millioner af rækker er det dyrt at filtrere hele poolen i hver iteration (= ét gennemløb af løkken, dvs. én eksponeret person ad gangen). Forhåndsopdel den i en **navngivet liste** med en nøgle af `sex + birth_year`, og hent kun nabo-årgangene per iteration (fødselsår ±1). Det er samme logik som løkken ovenfor, blot hurtigere.
 
 ```r
-pool <- pool %>% mutate(pool_key = paste(sex, birth_year))
-pool_split <- split(pool, pool$pool_key)        # navngivet liste; ét element per stratum
+pool <- pool %>% mutate(pool_key = paste(sex, birth_year))   # lav en nøgle-streng per stratum
+pool_split <- split(pool, pool$pool_key)        # navngivet liste; ét element (en deltabel) per stratum
 
 # Inde i løkken: hent kun kandidat-strata i stedet for hele poolen
-cand_keys   <- paste(eksp_sorteret$sex[i], eksp_sorteret$birth_year[i] + c(-1L, 0L, 1L))
-cand_frames <- pool_split[cand_keys]
-candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%
-  distinct(pnr, .keep_all = TRUE)
+cand_keys   <- paste(eksp_sorteret$sex[i], eksp_sorteret$birth_year[i] + c(-1L, 0L, 1L))  # samme køn, fødselsår ±1
+cand_frames <- pool_split[cand_keys]            # slå de relevante strata op i listen
+candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%  # saml dem (drop tomme strata)
+  distinct(pnr, .keep_all = TRUE)               # én række per person på tværs af de 3 årgange
 # anvend derefter de SAMME eligibilitets-filtre som ovenfor på 'candidates'
 ```
 
@@ -408,8 +418,8 @@ Hverken matching eller justering fjerner confounding fra variable, du ikke har m
 ```r
 # matched fra Vej A ER allerede den fulde kohorte. Ved den manuelle løkke (Vej B) samler du selv:
 kohort <- bind_rows(
-  eksponerede          %>% mutate(exposed = 1L),
-  sammenligningsgruppe %>% mutate(exposed = 0L)
+  eksponerede          %>% mutate(exposed = 1L),   # exposed = 1: de eksponerede
+  sammenligningsgruppe %>% mutate(exposed = 0L)    # exposed = 0: sammenligningsgruppen
 )
 
 # De eksponerede skal have netop én række hver

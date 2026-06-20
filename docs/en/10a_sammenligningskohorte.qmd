@@ -119,50 +119,53 @@ The same principle applies to other derived measures, e.g. BMI from height and w
 ```r
 library(arrow); library(dplyr); library(lubridate)
 
+# --- Constants (what WE choose and can change) ---
 RATIO     <- 5L        # comparison persons per exposed
-YEAR_FROM <- 2005L     # study window (BEF years)
-YEAR_TO   <- 2022L
+YEAR_FROM <- 2005L     # study window: FIRST BEF year. Must reach at least 5 years before your earliest index (see fold-out)
+YEAR_TO   <- 2022L     # study window: last BEF year
 
+# Open BEF (lazy: nothing is read in yet)
 bef <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>%
-  rename_with(tolower)
+  rename_with(tolower)                          # column names to lower case
 
-# Latest BEF snapshot per person: sex + birth date
-demographics <- bef %>%
-  filter(year >= YEAR_FROM, year <= YEAR_TO) %>%
-  select(pnr, foed_dag, koen, year) %>%
-  collect() %>%
-  arrange(pnr, desc(year)) %>%                 # newest BEF year on top per person (desc = descending)
-  distinct(pnr, .keep_all = TRUE) %>%          # keep the top = newest row per person
+# --- Pull BEF person-years ONCE and reuse it (for both the exposed AND the pool in Step 4) ---
+bef_py <- bef %>%
+  filter(year >= YEAR_FROM, year <= YEAR_TO) %>%  # study window only
+  select(pnr, foed_dag, koen, year) %>%           # only the columns we need
+  collect()                                       # pull into RAM - one concrete table (not lazy)
+
+# Demographics: ONE (newest) row per person - sex/birth date do not change over time
+demographics <- bef_py %>%
+  arrange(pnr, desc(year)) %>%                  # newest BEF year on top per person (desc = descending)
+  distinct(pnr, .keep_all = TRUE) %>%           # keep the top = newest row per person
   mutate(
-    foed_dag   = as.Date(foed_dag),
-    birth_year = year(foed_dag),
-    sex        = if_else(koen == 1L, "Male", "Female")
-  )
+    foed_dag   = as.Date(foed_dag),             # turn the text into a real date, so we can compute (e.g. age)
+    birth_year = year(foed_dag),                # extract birth year - used as a matching variable
+    sex        = if_else(koen == 1L, "Male", "Female")  # translate the sex code (1/2) to readable text (matching variable)
+  ) %>%
+  select(pnr, foed_dag, birth_year, sex)        # keep only what we need going forward
 
-# 'exposed' comes from Phase 10 (identified + prevalent cases excluded)
+# Residency lookback: earliest BEF year per person (SAME definition is used on the pool in Step 4)
+earliest_bef <- bef_py %>%
+  group_by(pnr) %>%                             # one group per person
+  summarise(earliest_bef_year = min(year), .groups = "drop")  # first year the person appears in BEF
+
+# --- Attach to the exposed (comes from Phase 10: identified + prevalent cases excluded) ---
 exposed <- exposed %>%
-  left_join(demographics %>% select(pnr, foed_dag, birth_year, sex), by = "pnr") %>%
-  mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)   # derived variable
+  left_join(demographics, by = "pnr") %>%       # add sex, birth date, birth year
+  left_join(earliest_bef, by = "pnr") %>%       # add earliest BEF year
+  mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)  # derived: age at index in years
 
-# Inclusion criteria (the SAME are applied to the pool in Step 4) - count the attrition
-n_before <- nrow(exposed)
-exposed <- exposed %>% filter(age_at_index >= 18)   # e.g. adults only - adapt
-cat("After age requirement:", nrow(exposed), "| excluded:", n_before - nrow(exposed), "\n")
+# --- Inclusion criteria (the SAME are applied to the pool in Step 4) - count the attrition ---
+n_before <- nrow(exposed)                       # nrow() = number of rows (here: persons) before exclusion
+exposed <- exposed %>%
+  filter(age_at_index >= 18) %>%                          # e.g. adults only - adapt
+  filter(earliest_bef_year <= year(index_date) - 5L)      # 5-year lookback (5L = integer); see fold-out below
+cat("After inclusion criteria:", nrow(exposed),
+    "| excluded:", n_before - nrow(exposed), "\n")
 # cat() just prints a readable line in the console; see the Function guide (15a) for cat() and nrow()
 
-# 5-year residency lookback (e.g. so covariates can be computed): require a BEF year in year(index) - 5
-bef_years <- bef %>%
-  filter(year >= YEAR_FROM, year <= YEAR_TO) %>%
-  select(pnr, year) %>% collect() %>% distinct(pnr, year)
-
-n_before <- nrow(exposed)
-exposed <- exposed %>%
-  mutate(lookback_year = year(index_date) - 5L) %>%                  # 5L: the L makes 5 an integer
-  semi_join(bef_years, by = c("pnr", "lookback_year" = "year")) %>%   # keep only those with a BEF record that year
-  select(-lookback_year)
-cat("After 5-year lookback:", nrow(exposed), "| excluded:", n_before - nrow(exposed), "\n")
-
-stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # one row per person
+stopifnot(n_distinct(exposed$pnr) == nrow(exposed))  # check: still one row per person
 ```
 
 </details>
@@ -170,9 +173,23 @@ stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # one row per person
 <details>
 <summary>How does the 5-year lookback work?</summary>
 
-`bef_years` is a table with one row per person per year they appear in BEF (i.e. the years the person was resident in Denmark). For each exposed person we compute `lookback_year = year(index_date) - 5` - the calendar year 5 years before their index. `semi_join()` keeps an exposed person only if there is a row in `bef_years` with the same `pnr` AND `year == lookback_year`, i.e. if the person has a BEF record in exactly that year. So the requirement becomes: the person was registered in Denmark at least 5 years before index.
+`earliest_bef` holds, for each person, the **earliest year they appear in BEF** within the study window (i.e. the earliest point at which we can see they were resident in Denmark). The lookback requirement is:
 
-**That is why the BEF window must reach far enough back.** We filter `bef_years` to `YEAR_FROM`-`YEAR_TO`, so `YEAR_FROM` must be at least 5 years before the earliest index date. With index in 2010-2022 and `YEAR_FROM = 2005`, the lookback years are 2005-2017, all within the window. And yes: `bef` is loaded lazily (`open_dataset`), but `bef_years` is pulled into memory with `collect()` - it is a concrete table we look up in, not a lazy filter.
+`earliest_bef_year <= year(index_date) - 5`
+
+i.e. the person must have been in BEF at least 5 years before their index date. The **same** requirement is used on the exposed (Step 3) and on the pool at match time (Step 5), so both groups are treated identically.
+
+**The BEF window must reach far enough back.** `earliest_bef_year` can never be earlier than `YEAR_FROM`, so `YEAR_FROM` must be at least 5 years before your **earliest** index date - otherwise people are wrongly dropped.
+
+::: {.callout-tip}
+**Concrete example.** Index dates in **2010-2022** and `YEAR_FROM = 2005`:
+
+- The lookback year is `index year − 5`, i.e. **2005-2017**.
+- All of these years lie within the window **2005-2022** → the lookback works for everyone.
+- If instead you set `YEAR_FROM = 2008`, a person with index in 2010 could not satisfy `earliest_bef_year <= 2005`, and would be wrongly dropped.
+:::
+
+And yes: `bef` is loaded lazily (`open_dataset`), but `bef_py` is pulled into RAM with `collect()` - it is a concrete table we compute on, not a lazy filter.
 
 </details>
 
@@ -184,7 +201,7 @@ Now we build the **pool** that the comparison group will be drawn from. A member
 
 The time-varying criteria (alive, exposure-free and outcome-free ON the assigned index date) cannot be filtered out here - they are decided at match time in Step 5. So in this step we make sure the pool *carries all the dates* needed to apply them.
 
-The pool is drawn from BEF for the relevant years. Attach everything eligibility depends on: **death date**, **emigration date**, **exposure date**, **outcome date** (so the outcome before the assigned index date can be excluded for the comparison person, exactly as for the exposed on the landing page) and **lookback year**. These dates are extracted directly for the pool using the same patterns as [Phase 9](09b_udtraek_fra_lpr.qmd) (shown here as finished tables).
+We build the pool **on top of `demographics` and `earliest_bef` from Step 3** (the same BEF extract - we do not pull it again) and attach everything eligibility depends on: **death date**, **emigration date**, **exposure date**, **outcome date** (so the outcome before the assigned index date can be excluded for the comparison person, exactly as for the exposed in Step 3) and **lookback year**. The dates are extracted directly for the population using the same patterns as [Phase 9](09b_udtraek_fra_lpr.qmd) (shown here as finished tables).
 
 ::: {.callout-important}
 **The comparison person must be exposure-free ON index - not "never exposed".**
@@ -195,35 +212,21 @@ Attach each person's FIRST exposure date to the pool, and decide eligibility at 
 <summary>Show code</summary>
 
 ```r
-# Dates extracted for the pool (direct register extracts, cf. Phase 9)
-death   <- readRDS("path/to/death_dates.rds")     # pnr, death_date      (DODSAARS, exact date)
-emig    <- readRDS("path/to/emigration.rds")      # pnr, emigration_date (VNDS)
-outcome <- readRDS("path/to/outcome_dates.rds")   # pnr, first_outcome_date
-exp_dt  <- readRDS("path/to/exposure_dates.rds")  # pnr, exposure_date   (FIRST exposure, also future)
+# Dates extracted directly for the population (same patterns as Phase 9; here as finished tables)
+death   <- readRDS("path/to/death_dates.rds")     # pnr, death_date         (DODSAARS, exact date of death)
+emig    <- readRDS("path/to/emigration.rds")      # pnr, emigration_date    (VNDS, emigration date)
+outcome <- readRDS("path/to/outcome_dates.rds")   # pnr, first_outcome_date (FIRST outcome ever)
+exp_dt  <- readRDS("path/to/exposure_dates.rds")  # pnr, exposure_date      (FIRST exposure, also future)
 
-pool <- bef %>%
-  filter(year >= YEAR_FROM, year <= YEAR_TO) %>%
-  select(pnr, foed_dag, koen, year) %>%
-  collect() %>%
-  distinct(pnr, year, .keep_all = TRUE) %>%        # remove duplicate person-year rows
-  # we do NOT remove all exposed here - exposure-free status is decided ON index below
-  mutate(
-    foed_dag   = as.Date(foed_dag),
-    birth_year = year(foed_dag),
-    sex        = if_else(koen == 1L, "Male", "Female")
-  )
-
-# Lookback year (earliest BEF year per person) + attach dates
-lookback <- pool %>% group_by(pnr) %>%
-  summarise(earliest_bef_year = min(year), .groups = "drop")
-
-pool <- pool %>%
-  distinct(pnr, .keep_all = TRUE) %>%              # one row per person for the pool
-  left_join(death,    by = "pnr") %>%
-  left_join(emig,     by = "pnr") %>%
-  left_join(outcome,  by = "pnr") %>%
-  left_join(exp_dt,   by = "pnr") %>%
-  left_join(lookback, by = "pnr")
+# The pool REUSES demographics + earliest_bef from Step 3 (we do NOT pull BEF again) and adds the dates.
+# demographics already has one row per person (pnr, foed_dag, birth_year, sex).
+pool <- demographics %>%
+  left_join(earliest_bef, by = "pnr") %>%         # earliest BEF year (used for lookback at match time)
+  left_join(death,        by = "pnr") %>%         # date of death;     NA = no registered death
+  left_join(emig,         by = "pnr") %>%         # emigration date;   NA = not emigrated
+  left_join(outcome,      by = "pnr") %>%         # first outcome;     NA = never outcome
+  left_join(exp_dt,       by = "pnr")             # first exposure;    NA = never exposed
+# Note: we do NOT remove all exposed - exposure-free status is decided ON index in Step 5.
 ```
 
 </details>
@@ -250,37 +253,44 @@ Always set a seed before sampling, so the matching is reproducible.
 
 ```r
 library(heaven)   # exposureMatch
-STUDY_END <- as.Date("2022-12-31")
+STUDY_END <- as.Date("2022-12-31")   # we choose: last day of the study
 
-# Assemble ONE table with both exposed (event = 1) and pool (event = 0), one row per person.
-# end_fu = the date the person can NO LONGER be selected as a control: the earliest of
-#          death, emigration, own exposure (= crossover), outcome or study end.
+# Assemble ONE table with both exposed and pool. transmute() = like mutate(), but keeps
+# ONLY the columns we name here (the rest are dropped) - so the table is clean for matching.
 all_persons <- bind_rows(
   exposed %>% transmute(
-    pnr, event = 1L, sex, birth_year,
-    case_index = index_date,                       # exposure date (the case index)
-    end_fu     = STUDY_END                         # optionally refine with death/outcome after index
+    pnr,                                           # person id (kept)
+    event      = 1L,                               # NEW column 'event' = 1: these are cases (exposed)
+    sex, birth_year,                               # matching variables (kept)
+    case_index = index_date,                       # NEW column: the case index = exposure date
+    end_fu     = STUDY_END                         # NEW column: end of follow-up (optionally refine w. death/outcome)
   ),
   pool %>% transmute(
-    pnr, event = 0L, sex, birth_year,
-    case_index = as.Date(NA),                      # controls have no event
+    pnr,
+    event      = 0L,                               # 'event' = 0: potential controls
+    sex, birth_year,
+    case_index = as.Date(NA),                      # controls have no event date (NA)
+    # end_fu for a control = the date they can no longer be selected as a control: the EARLIEST of
+    # death, emigration, own exposure (= crossover), outcome or study end. pmin = smallest/earliest.
     end_fu     = pmin(death_date, emigration_date, exposure_date,
-                      first_outcome_date, STUDY_END, na.rm = TRUE)
+                      first_outcome_date, STUDY_END, na.rm = TRUE)   # na.rm: ignore missing dates
   )
 ) %>%
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' MUST be factor/character
 
+# In the call below: the name LEFT of = is the function's ARGUMENT (fixed, defined by exposureMatch);
+# the value on the RIGHT is what WE set it to (usually the name of a column in 'all_persons', in quotes).
 matched <- exposureMatch(
-  ptid         = "pnr",
-  event        = "event",          # 1 = exposed (case), 0 = potential control
-  terms        = c("sex", "birth_year"),
-  data         = all_persons,
-  n.controls   = RATIO,            # controls per case
-  case.index   = "case_index",     # the case's index date (exposure date)
-  end.followup = "end_fu",         # when a person stops being eligible as a control
-  seed         = 20260620          # reproducibility (the function has its own seed argument)
+  ptid         = "pnr",                  # argument 'ptid'  <- the person-id column
+  event        = "event",                # argument 'event' <- the column that is 1 for case, 0 for control
+  terms        = c("sex", "birth_year"), # argument 'terms' <- columns to match exactly on
+  data         = all_persons,            # argument 'data'  <- the dataset itself (not in quotes)
+  n.controls   = RATIO,                  # argument 'n.controls' <- controls per case
+  case.index   = "case_index",           # argument 'case.index'  <- the column with the case index date
+  end.followup = "end_fu",               # argument 'end.followup' <- the column with end-of-follow-up
+  seed         = 20260620                # argument 'seed' <- fixed number => reproducible result
 )
-# Output: data.table with 'case.id' identifying each matched set (1 case + controls)
+# Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
 ```
 
 </details>
@@ -288,7 +298,7 @@ matched <- exposureMatch(
 ::: {.callout-note}
 **What can `exposureMatch()` handle itself?** A great deal: it matches exactly on `terms`, and via `case.index` + `end.followup` it handles the risk-set time dimension - who was still at risk at the case's index. **`end.followup`** is exactly the date a person stops being eligible as a control (death, emigration, **own exposure = crossover**, or outcome), so the function handles crossover and competing risks. Time-dependent comorbidities can be matched with `date.terms`. Only quite unusual criteria require the manual loop.
 
-**The arguments** (what you write inside the parentheses): `ptid` = person id, `event` = 0/1 (1 = case/exposed), `terms` = matching variables (MUST be factor/character; categorize e.g. age), `data` = the data, `n.controls` = controls per case, `case.index` = the case's index date, `end.followup`, and `seed`. What an argument is, is explained in the [Function guide](15a_guide_til_funktioner.qmd).
+**Argument vs. value.** In a function call, the argument's **name** is on the left of `=` (fixed, defined by the function, cannot be changed), and the **value** you give it is on the right (usually the name of one of your columns, in quotes). E.g. `event = "event"`: the argument is called `event`, and we set it to our column `"event"`. Note the difference between `transmute(event = 1L)` (here we *create* a column called `event`) and `exposureMatch(event = "event")` (here we *point* the function's argument at that column). The arguments here: `ptid` = person id, `event` = 0/1 indicator, `terms` = matching variables (MUST be factor/character; categorize e.g. age), `data` = the dataset, `n.controls` = controls per case, `case.index` = the case's index date, `end.followup`, and `seed`. What an argument is, is explained in the [Function guide](15a_guide_til_funktioner.qmd).
 
 **See a function's arguments and help in R:** type `?exposureMatch` or `help(exposureMatch)`, use `args(exposureMatch)` for a quick list, or place the cursor in the function name and press `F1` in RStudio. For CRAN packages (e.g. [`MatchIt`](https://cran.r-project.org/package=MatchIt), [`Epi`](https://cran.r-project.org/package=Epi)) there is also an online page with vignettes. `heaven` is on GitHub ([tagteam/heaven](https://github.com/tagteam/heaven)) - confirm availability and arguments on your own project (argument names have varied between versions). The design choice behind matching is in [Phase 1](01_studieforberedelse.qmd#comparator-cohort).
 :::
@@ -301,40 +311,40 @@ It also shows what `exposureMatch()` does under the hood. Use it when you need t
 **Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. Without replacement, the order also ensures each person is still at risk when used, and that the sampling is reproducible.
 
 ```r
-set.seed(20260620)
-exp_sorted  <- exposed %>% arrange(index_date)          # earliest exposed first
-used        <- character(0)                              # without replacement (omit for replacement)
-match_list  <- vector("list", nrow(exp_sorted))
+set.seed(20260620)                                       # fixed seed => reproducible sampling
+exp_sorted  <- exposed %>% arrange(index_date)           # earliest exposed first (chronological)
+used        <- character(0)                              # empty list of already-used pnr (without replacement)
+match_list  <- vector("list", nrow(exp_sorted))          # empty list to collect each matched set
 
-for (i in seq_len(nrow(exp_sorted))) {
-  idx <- exp_sorted$index_date[i]
-  age <- floor(as.numeric(idx - exp_sorted$foed_dag[i]) / 365.25)
+for (i in seq_len(nrow(exp_sorted))) {                   # loop one exposed person at a time
+  idx <- exp_sorted$index_date[i]                        # this exposed person's index date
+  age <- floor(as.numeric(idx - exp_sorted$foed_dag[i]) / 365.25)  # integer age at index
 
-  eligible <- pool %>%
-    filter(sex == exp_sorted$sex[i]) %>%
-    filter(floor(as.numeric(idx - foed_dag) / 365.25) == age) %>%        # same integer age
-    filter(is.na(death_date)         | death_date         >  idx) %>%    # alive on index
-    filter(is.na(emigration_date)    | emigration_date    >  idx) %>%    # resident on index
-    filter(is.na(exposure_date)      | exposure_date      >  idx) %>%    # exposure-free ON index
-    filter(is.na(first_outcome_date) | first_outcome_date >= idx) %>%    # outcome-free on index
-    filter(earliest_bef_year <= year(idx) - 5L) %>%                      # 5-year lookback
-    filter(!pnr %in% used)                                               # without replacement
+  eligible <- pool %>%                                                 # find possible controls in the pool
+    filter(sex == exp_sorted$sex[i]) %>%                               # same sex
+    filter(floor(as.numeric(idx - foed_dag) / 365.25) == age) %>%      # same integer age ON idx
+    filter(is.na(death_date)         | death_date         >  idx) %>%  # alive on index
+    filter(is.na(emigration_date)    | emigration_date    >  idx) %>%  # resident on index
+    filter(is.na(exposure_date)      | exposure_date      >  idx) %>%  # exposure-free ON index
+    filter(is.na(first_outcome_date) | first_outcome_date >= idx) %>%  # outcome-free on index
+    filter(earliest_bef_year <= year(idx) - 5L) %>%                    # 5-year lookback
+    filter(!pnr %in% used)                                             # not already used
 
-  n <- min(RATIO, nrow(eligible))
-  if (n == 0L) next
+  n <- min(RATIO, nrow(eligible))                        # draw up to RATIO (fewer if the pool is thin)
+  if (n == 0L) next                                      # none eligible? skip to the next exposed
 
   chosen <- eligible %>%
-    slice_sample(n = n) %>%
+    slice_sample(n = n) %>%                              # draw n random controls
     mutate(
-      match_id       = exp_sorted$pnr[i],
-      index_date     = idx,
+      match_id       = exp_sorted$pnr[i],                # bind the controls to this case (matched set)
+      index_date     = idx,                              # controls are assigned the case's index date
       crossover_date = if_else(!is.na(exposure_date) & exposure_date > idx,
-                               exposure_date, as.Date(NA))   # censoring date if the person is later exposed
+                               exposure_date, as.Date(NA))   # censoring date if the control is later exposed
     )
-  match_list[[i]] <- chosen
-  used <- c(used, chosen$pnr)
+  match_list[[i]] <- chosen                              # store this matched set
+  used <- c(used, chosen$pnr)                            # mark the chosen as used (without replacement)
 }
-comparison_group <- bind_rows(match_list)
+comparison_group <- bind_rows(match_list)                # combine all matched sets into one table
 ```
 
 </details>
@@ -345,14 +355,14 @@ comparison_group <- bind_rows(match_list)
 With a pool of millions of rows it is expensive to filter the whole pool in every iteration (= one pass of the loop, i.e. one exposed person at a time). Pre-split it into a **named list** keyed by `sex + birth_year`, and pull only the neighbouring birth cohorts per iteration (birth year ±1). It is the same logic as the loop above, just faster.
 
 ```r
-pool <- pool %>% mutate(pool_key = paste(sex, birth_year))
-pool_split <- split(pool, pool$pool_key)        # named list; one element per stratum
+pool <- pool %>% mutate(pool_key = paste(sex, birth_year))   # build a key string per stratum
+pool_split <- split(pool, pool$pool_key)        # named list; one element (a sub-table) per stratum
 
 # Inside the loop: pull only the candidate strata instead of the whole pool
-cand_keys   <- paste(exp_sorted$sex[i], exp_sorted$birth_year[i] + c(-1L, 0L, 1L))
-cand_frames <- pool_split[cand_keys]
-candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%
-  distinct(pnr, .keep_all = TRUE)
+cand_keys   <- paste(exp_sorted$sex[i], exp_sorted$birth_year[i] + c(-1L, 0L, 1L))  # same sex, birth year ±1
+cand_frames <- pool_split[cand_keys]            # look up the relevant strata in the list
+candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%  # combine them (drop empty strata)
+  distinct(pnr, .keep_all = TRUE)               # one row per person across the 3 birth cohorts
 # then apply the SAME eligibility filters as above on 'candidates'
 ```
 
@@ -408,8 +418,8 @@ Neither matching nor adjustment removes confounding from variables you have not 
 ```r
 # matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:
 kohort <- bind_rows(
-  exposed          %>% mutate(exposed = 1L),
-  comparison_group %>% mutate(exposed = 0L)
+  exposed          %>% mutate(exposed = 1L),   # exposed = 1: the exposed
+  comparison_group %>% mutate(exposed = 0L)    # exposed = 0: the comparison group
 )
 
 # The exposed must have exactly one row each
