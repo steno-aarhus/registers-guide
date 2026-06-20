@@ -1,68 +1,18 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Kobl udtræk sammen"
-subtitle: "group_by() + slice(), joins og bind_rows() — saml dine udtræk til ét datasæt"
+subtitle: "Joins, bind_rows() og beregning af opfølgningstid — saml dine udtræk til ét datasæt"
 date: last-modified
 ---
 
-Dine udtræk fra [Fase 6](06_foerste-udtraek.qmd), [Fase 9](09b_udtraek_fra_lpr.qmd) og [Fase 11](11_foej-variabler.qmd) ligger som separate RDS-filer — nogle med én række per person, andre med mange. Her reducerer du hvert udtræk til **én række per person** og kobler dem på `pnr` til ét analyseklart datasæt. Til sidst beregner du opfølgningstid og hændelsesvariabel.
+Dine udtræk fra [Fase 6](06_foerste-udtraek.qmd), [Fase 9](09b_udtraek_fra_lpr.qmd) og [Fase 11](11_foej-variabler.qmd) ligger som separate RDS-filer. Når hvert udtræk er nede på **én række per person** ([12a — Langt ↔ bredt format](12a_langt-bredt.qmd)), kobler du dem sammen på `pnr` til ét analyseklart datasæt. Til sidst beregner du opfølgningstid og hændelsesvariabel.
 
 ::: {.callout-note}
 Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts mappestruktur og kolonnenavne.
 :::
 
----
-
-## Klargør til join — `group_by()` + `slice()`
-
-`left_join()` virker forudsigeligt, når begge tabeller har **én række per `pnr`**. Mange registerudtræk har flere rækker per person (langt format — se [12b — Langt ↔ bredt format](12b_pivots.qmd)). `group_by() + slice()` er den primære måde at reducere et datasæt til én repræsentativ række per person inden join — **det er forberedelse til join, ikke selve join**.
-
-Mønstret er altid det samme: gruppér på `pnr`, sortér så den ønskede række er øverst, tag første række per gruppe.
-
-```r
-# BEF: behold kun den nyeste post per person (BEF har ét snapshot per år)
-bef_en_per_person <- bef %>%
-  group_by(pnr) %>%          # gruppér: alle rækker med samme pnr behandles sammen
-  arrange(desc(aar)) %>%     # sortér inden for gruppen: nyeste år øverst (desc = faldende)
-  slice(1) %>%               # tag kun den første række per gruppe — dvs. det nyeste år
-  ungroup()                  # VIGTIGT: frigiv gruppering efter du er færdig
-```
-
 ::: {.callout-important}
-**Husk `ungroup()` — altid.**
-`group_by()` sætter et "grouped_df"-mærke på din data.frame, som *alle* efterfølgende operationer arver. Det betyder:
-- `mutate()` beregner per gruppe, ikke per hele datasæt
-- `n()` tæller rækker per gruppe, ikke i alt
-- `summarize()` giver ét resultat per gruppe
-
-Disse fejl er svære at opdage, fordi koden kører uden fejlbeskeder og giver tilsyneladende fornuftige tal. `ungroup()` fjerner mærket og gør data.frame normal igen. Tommelfingerregel: afslut altid en `group_by()`-kæde med `ungroup()`.
-:::
-
-```r
-# LPR / alle_dx: find første diagnose per person (til udfaldsdefinition)
-foerste_demens <- alle_dx %>%
-  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # kun demenskoder
-  group_by(pnr) %>%              # gruppér per person
-  arrange(date_contact) %>%      # ældste dato øverst (stigende — ingen desc)
-  slice(1) %>%                   # første diagnose per person
-  ungroup()                      # frigiv gruppering
-# → klar til: kohort %>% left_join(foerste_demens, by = "pnr")
-```
-
-```r
-# VNDS: find første udvandring per person (en person kan have udrejst og indrejst igen)
-foerste_emigration <- vnds %>%
-  filter(indud_kode == "U") %>%   # kun udrejser
-  group_by(pnr) %>%
-  arrange(haend_dato) %>%
-  slice(1) %>%
-  ungroup()
-```
-
-::: {.callout-tip}
-**Hvornår bruger du `group_by() + slice()` vs `pivot_wider()`?**
-Vil du have **én repræsentativ værdi** per person (nyeste snapshot, første hændelse, tidligste dato) — brug `group_by() + slice()`.
-Vil du have **to eller flere tidspunkter side om side** som separate kolonner i analysen — brug `pivot_wider()` ([12b](12b_pivots.qmd)).
-I registerbaseret forskning er `group_by() + slice()` langt det hyppigste valg.
+**Få først hvert udtræk ned til én række per person.**
+`left_join()` virker kun forudsigeligt, når begge tabeller har **én række per `pnr`**. Mange registerudtræk har flere rækker per person (langt format). Reducér dem til én række per person med `group_by() + slice()` eller `pivot_wider()` — det er forklaret i [12a — Langt ↔ bredt format](12a_langt-bredt.qmd). Denne side antager, at dine udtræk allerede er på den form.
 :::
 
 ---
@@ -400,6 +350,6 @@ Du har nu ét analyseklart datasæt med én række per person. Næste skridt er 
 
 ## Se også
 
-- [12b — Langt ↔ bredt format](12b_pivots.qmd) — skift en tabels form med `pivot_wider()` / `pivot_longer()`
+- [12a — Langt ↔ bredt format](12a_langt-bredt.qmd) — få hvert udtræk ned til én række per person
 - [Funktioner: oversigt](15a_guide_til_funktioner.qmd) — alle funktioner du bruger til at transformere data
 - [Fase 9 — Hospitalskontakter (LPR)](09b_udtraek_fra_lpr.qmd) — praktisk eksempel på langt registerdata og inner_join

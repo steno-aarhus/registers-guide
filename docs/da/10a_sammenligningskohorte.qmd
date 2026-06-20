@@ -12,17 +12,37 @@ Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd), h
 
 ::: {.callout-note}
 **Funktioner brugt her.**
-`anti_join()` (behold rækker *uden* match) er ny her — se forklaringen i kodeblokken og i [Fase 12](12a_joins.qmd#joins-kobl-to-tabeller-sammen). `inner_join()`, `bind_rows()` og `group_by() + slice()` er vist i [Fase 9](09b_udtraek_fra_lpr.qmd) og [Fase 12](11_data-manipulation.qmd).
+`anti_join()` (behold rækker *uden* match) er ny her — se forklaringen i kodeblokken og i [12b — Kobl udtræk sammen](12b_joins.qmd#joins-kobl-to-tabeller-sammen). `inner_join()` og `bind_rows()` er vist i [Fase 9](09b_udtraek_fra_lpr.qmd); `group_by() + slice()` i [12a — Langt ↔ bredt format](12a_langt-bredt.qmd).
 :::
 
-::: {.callout-tip}
-**Lidt teori, før du matcher.** Tag eksplicit stilling til:
+---
 
-- **Matchvariable:** typisk køn, fødselsår og kalenderår; ofte også SES og kommune. Match kun på det du vil justere for ved design.
-- **Risk-set / incidens-densitets-matching:** en sammenligningsperson skal være i risiko **på den tildelte index-dato** — ikke kun ved studiestart. En person kan være komparator nu og selv blive eksponeret (case) senere.
-- **Varierende vs. fast index-dato:** når index-dato varierer per eksponeret (fx hver ny T2D-patient får sin egen dato), skal komparatoren matches på *netop den dato* — det er præcis hvad risk-set sampling gør.
-- **Med eller uden replacement:** må en person være komparator for flere eksponerede? Replacement øger den effektive stikprøvestørrelse, men giver korrelerede observationer, som skal håndteres i analysen.
-:::
+## Lidt teori, før du matcher
+
+Inden du matcher, skal du tage eksplicit stilling til fire ting. **Matchvariablene** er typisk køn, fødselsår og kalenderår; ofte også SES og kommune. Match kun på det du vil justere for ved design. De tre øvrige valg er vigtigere at forstå — fold dem ud:
+
+<details>
+<summary>**Risk-set / incidens-densitets-matching** — hvornår skal komparatoren være i risiko?</summary>
+
+En sammenligningsperson skal være i risiko **på den tildelte index-dato** — ikke kun ved studiestart. Det betyder, at en person kan fungere som komparator nu og *selv* blive eksponeret (og dermed case) senere. Risk-set sampling håndterer dette ved at sample komparatorer fra alle, der var i risiko på netop den eksponeredes index-dato.
+
+</details>
+
+<details>
+<summary>**Varierende vs. fast index-dato** — og hvilken dato komparatoren får</summary>
+
+Når index-dato varierer per eksponeret (fx får hver ny T2D-patient sin egen diagnosedato), skal komparatoren matches på *netop den dato*. **Den matchede komparator tildeles den eksponeredes index-dato** — det er den dato, der markerer starten på komparatorens opfølgning, og alt baseline måles relativt til den. Det er præcis det, risk-set sampling gør.
+
+</details>
+
+<details>
+<summary>**Med eller uden replacement** — må en person være komparator flere gange?</summary>
+
+Tag stilling til, om en person må være komparator for flere eksponerede (replacement). Replacement øger den effektive stikprøvestørrelse, men giver **korrelerede observationer**, som skal håndteres i analysen (fx robuste standardfejl eller clustering på den enkelte person).
+
+</details>
+
+For en grundig gennemgang af samplingstrategier til sammenligningskohorter, se [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/).
 
 ---
 
@@ -30,7 +50,7 @@ Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd), h
 
 *(Trin 1 — identificér de eksponerede — ligger på [forsiden](10_byg-din-kohorte.qmd).)*
 
-Ekskluder personer der allerede havde diagnosen *inden* index-dato — ellers tæller de som nye tilfælde, selvom de ikke er det. Dette trin skal ske **inden** matching, så sammenligningskohorte ikke samples fra en forurenet pool.
+Ekskluder personer der allerede havde **dit outcome** (fx en diagnose) *inden* index-dato — ellers tæller de som nye tilfælde, selvom de ikke er det. Husk at index-dato for de eksponerede er **datoen for eksponeringen**. Dette trin skal ske **inden** matching, så sammenligningskohorten ikke samples fra en forurenet pool.
 
 Du skal bruge din udtrukne LPR-diagnosetabel fra [Fase 9](09b_udtraek_fra_lpr.qmd) — enten `alle_dx` eller dit direkte udtræk.
 
@@ -56,17 +76,8 @@ cat("Ekskluderede:                   ", nrow(eksponerede) - nrow(eksponerede_ren
 
 </details>
 
-::: {.callout-tip}
-**Lookback-periode:** Overvej at begrænse `date_contact < index_date` yderligere — fx kun de 5 år inden index — for at undgå falske eksklusioner baseret på meget gamle diagnoser.
-
-```r
-filter(date_contact >= index_date - 365*5,
-       date_contact < index_date)
-```
-:::
-
 ::: {.callout-note}
-Prævalensekskludering gælder også **matchpoolen** (trin 3) — ekskluder tilsvarende folk med prævalent udfald inden sampling, ellers matches dine eksponerede til folk der ikke var i risiko.
+**Det samme gælder sammenligningskohorten.** Når du senere bygger matchpoolen (Trin 3), tildeles hver sammenligningsperson en index-dato fra den eksponerede, de matches med. De må naturligvis heller ikke have haft dit outcome **inden den tildelte index-dato** — ellers matcher du dine eksponerede til personer, der ikke var i risiko. Anvend derfor den samme prævalens-eksklusion på matchpoolen, inden du sampler.
 :::
 
 ---
@@ -221,7 +232,7 @@ kohort_pnrs <- unique(kohort$pnr)   # vektor med alle pnr'er — det er denne de
 | Udfald (diagnoser, dødsdato, emigration) | [Fase 9](09b_udtraek_fra_lpr.qmd), [Fase 12](11_data-manipulation.qmd) |
 | Kovariater fra BEF (alder, køn) | [Fase 6](06_foerste-udtraek.qmd) |
 | Socioøkonomiske variable | [Socioøkonomiske variable](13_socioekonomiske-variable.qmd) |
-| Komorbiditet (NMI, Charlson) | [NMI](14c_nmi.qmd) |
+| Komorbiditet (NMI) | [NMI](14c_nmi.qmd) |
 | Saml til ét analysedatasæt | [Fase 12](11_data-manipulation.qmd) |
 
 ---

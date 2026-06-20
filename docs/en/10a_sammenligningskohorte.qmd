@@ -12,17 +12,37 @@ This page continues from [Build your study population](10_byg-din-kohorte.qmd), 
 
 ::: {.callout-note}
 **Functions used here.**
-`anti_join()` (keep rows *without* a match) is new here — see the explanation in the code block and in [Phase 12](12a_joins.qmd#joins-link-two-tables). `inner_join()`, `bind_rows()` and `group_by() + slice()` are shown in [Phase 9](09b_udtraek_fra_lpr.qmd) and [Phase 12](11_data-manipulation.qmd).
+`anti_join()` (keep rows *without* a match) is new here — see the explanation in the code block and in [12b — Link your extracts](12b_joins.qmd#joins-link-two-tables). `inner_join()` and `bind_rows()` are shown in [Phase 9](09b_udtraek_fra_lpr.qmd); `group_by() + slice()` in [12a — Long ↔ wide format](12a_langt-bredt.qmd).
 :::
 
-::: {.callout-tip}
-**A little theory before you match.** Take an explicit position on:
+---
 
-- **Matching variables:** typically sex, birth year and calendar year; often also SES and municipality. Match only on what you want to adjust for by design.
-- **Risk-set / incidence-density matching:** a comparator must be at risk **on the assigned index date** — not only at the start of the study. A person can be a comparator now and become exposed (a case) later.
-- **Varying vs. fixed index date:** when the index date varies per exposed person (e.g. each new T2D patient gets their own date), the comparator must be matched on *exactly that date* — which is precisely what risk-set sampling does.
-- **With or without replacement:** can a person be a comparator for several exposed individuals? Replacement increases the effective sample size but gives correlated observations that must be handled in the analysis.
-:::
+## A little theory before you match
+
+Before you match, take an explicit position on four things. The **matching variables** are typically sex, birth year and calendar year; often also SES and municipality. Match only on what you want to adjust for by design. The other three choices are more important to understand — expand them:
+
+<details>
+<summary>**Risk-set / incidence-density matching** — when must the comparator be at risk?</summary>
+
+A comparator must be at risk **on the assigned index date** — not only at the start of the study. That means a person can serve as a comparator now and *themselves* become exposed (and thus a case) later. Risk-set sampling handles this by sampling comparators from everyone who was at risk on the exposed person's index date.
+
+</details>
+
+<details>
+<summary>**Varying vs. fixed index date** — and which date the comparator gets</summary>
+
+When the index date varies per exposed person (e.g. each new T2D patient gets their own diagnosis date), the comparator must be matched on *exactly that date*. **The matched comparator is assigned the exposed person's index date** — that is the date marking the start of the comparator's follow-up, and everything at baseline is measured relative to it. That is precisely what risk-set sampling does.
+
+</details>
+
+<details>
+<summary>**With or without replacement** — can a person be a comparator more than once?</summary>
+
+Decide whether a person may be a comparator for several exposed individuals (replacement). Replacement increases the effective sample size but gives **correlated observations** that must be handled in the analysis (e.g. robust standard errors or clustering on the individual).
+
+</details>
+
+For a thorough review of sampling strategies for comparison cohorts, see [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/).
 
 ---
 
@@ -30,7 +50,7 @@ This page continues from [Build your study population](10_byg-din-kohorte.qmd), 
 
 *(Step 1 — identify the exposed — is on the [landing page](10_byg-din-kohorte.qmd).)*
 
-Exclude persons who already had the diagnosis *before* index date — otherwise they count as new cases even though they are not. This step must happen **before** matching, so the comparator pool is not sampled from a contaminated source.
+Exclude persons who already had **your outcome** (e.g. a diagnosis) *before* index date — otherwise they count as new cases even though they are not. Remember that the index date for the exposed is the **date of the exposure**. This step must happen **before** matching, so the comparator pool is not sampled from a contaminated source.
 
 You need your extracted LPR diagnosis table from [Phase 9](09b_udtraek_fra_lpr.qmd) — either `alle_dx` or your direct extraction.
 
@@ -56,17 +76,8 @@ cat("Excluded:                 ", nrow(exposed) - nrow(exposed_excl),   "\n")
 
 </details>
 
-::: {.callout-tip}
-**Lookback period:** Consider restricting `date_contact < index_date` further — e.g. only the 5 years before index — to avoid false exclusions based on very old diagnoses.
-
-```r
-filter(date_contact >= index_date - 365*5,
-       date_contact < index_date)
-```
-:::
-
 ::: {.callout-note}
-Prevalence exclusion also applies to the **matchpool** (step 3) — exclude people with prevalent outcome from the pool too, otherwise your exposed are matched to persons who were not actually at risk.
+**The same applies to the comparison cohort.** When you later build the match pool (Step 3), each comparator is assigned an index date from the exposed person they are matched with. They must of course also not have had your outcome **before that assigned index date** — otherwise you match your exposed to persons who were not actually at risk. So apply the same prevalence exclusion to the match pool before you sample.
 :::
 
 ---
@@ -221,7 +232,7 @@ cohort_pnrs <- unique(kohort$pnr)   # vector with all pnr's — this is what is 
 | Outcomes (diagnoses, date of death, emigration) | [Phase 9](09b_udtraek_fra_lpr.qmd), [Phase 12](11_data-manipulation.qmd) |
 | Covariates from BEF (age, sex) | [Phase 6](06_foerste-udtraek.qmd) |
 | Socioeconomic variables | [Socioeconomic variables](13_socioekonomiske-variable.qmd) |
-| Comorbidity (NMI, Charlson) | [NMI](14c_nmi.qmd) |
+| Comorbidity (NMI) | [NMI](14c_nmi.qmd) |
 | Assemble into one analysis dataset | [Phase 12](11_data-manipulation.qmd) |
 
 ---

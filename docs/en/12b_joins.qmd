@@ -1,68 +1,18 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Link your extracts"
-subtitle: "group_by() + slice(), joins and bind_rows() — assemble your extracts into one dataset"
+subtitle: "Joins, bind_rows() and calculating follow-up time — assemble your extracts into one dataset"
 date: last-modified
 ---
 
-Your extracts from [Phase 6](06_foerste-udtraek.qmd), [Phase 9](09b_udtraek_fra_lpr.qmd) and [Phase 11](11_foej-variabler.qmd) are stored as separate RDS files — some with one row per person, others with many. Here you reduce each extract to **one row per person** and join them on `pnr` into one analysis-ready dataset. Finally, you calculate follow-up time and the event variable.
+Your extracts from [Phase 6](06_foerste-udtraek.qmd), [Phase 9](09b_udtraek_fra_lpr.qmd) and [Phase 11](11_foej-variabler.qmd) are stored as separate RDS files. Once each extract is down to **one row per person** ([12a — Long ↔ wide format](12a_langt-bredt.qmd)), you join them on `pnr` into one analysis-ready dataset. Finally, you calculate follow-up time and the event variable.
 
 ::: {.callout-note}
 The code examples use generic paths and variable names. Adapt to your project's folder structure and column names.
 :::
 
----
-
-## Prepare for join — `group_by()` + `slice()`
-
-`left_join()` behaves predictably when both tables have **one row per `pnr`**. Many register extracts have multiple rows per person (long format — see [12b — Long ↔ wide format](12b_pivots.qmd)). `group_by() + slice()` is the primary way to reduce a dataset to one representative row per person before joining — **it is preparation for the join, not the join itself**.
-
-The pattern is always the same: group by `pnr`, sort so the desired row is on top, take the first row per group.
-
-```r
-# BEF: keep only the newest record per person (BEF has one snapshot per year)
-bef_one_per_person <- bef %>%
-  group_by(pnr) %>%          # group: all rows with the same pnr are treated together
-  arrange(desc(aar)) %>%     # sort within group: newest year first (desc = descending)
-  slice(1) %>%               # take only the first row per group — i.e. the newest year
-  ungroup()                  # IMPORTANT: release grouping when done
-```
-
 ::: {.callout-important}
-**Always remember `ungroup()`.**
-`group_by()` puts a "grouped_df" tag on your data.frame, which *all* subsequent operations inherit. That means:
-- `mutate()` calculates per group, not across the entire dataset
-- `n()` counts rows per group, not in total
-- `summarize()` gives one result per group
-
-These errors are hard to detect because the code runs without error messages and produces seemingly reasonable numbers. `ungroup()` removes the tag and makes the data.frame normal again. Rule of thumb: always end a `group_by()` chain with `ungroup()`.
-:::
-
-```r
-# LPR / alle_dx: find first diagnosis per person (for outcome definition)
-first_dementia <- alle_dx %>%
-  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # only dementia codes
-  group_by(pnr) %>%              # group per person
-  arrange(date_contact) %>%      # oldest date first (ascending — no desc)
-  slice(1) %>%                   # first diagnosis per person
-  ungroup()                      # release grouping
-# → ready for: cohort %>% left_join(first_dementia, by = "pnr")
-```
-
-```r
-# VNDS: find first emigration per person (a person may have emigrated and returned)
-first_emigration <- vnds %>%
-  filter(indud_kode == "U") %>%   # only emigration events
-  group_by(pnr) %>%
-  arrange(haend_dato) %>%
-  slice(1) %>%
-  ungroup()
-```
-
-::: {.callout-tip}
-**When do you use `group_by() + slice()` vs `pivot_wider()`?**
-If you want **one representative value** per person (newest snapshot, first event, earliest date) — use `group_by() + slice()`.
-If you want **two or more time points side by side** as separate columns in the analysis — use `pivot_wider()` ([12b](12b_pivots.qmd)).
-In register-based research, `group_by() + slice()` is by far the most common choice.
+**First get each extract down to one row per person.**
+`left_join()` only behaves predictably when both tables have **one row per `pnr`**. Many register extracts have multiple rows per person (long format). Reduce them to one row per person with `group_by() + slice()` or `pivot_wider()` — explained in [12a — Long ↔ wide format](12a_langt-bredt.qmd). This page assumes your extracts are already in that shape.
 :::
 
 ---
@@ -400,6 +350,6 @@ You now have one analysis-ready dataset with one row per person. The next step i
 
 ## See also
 
-- [12b — Long ↔ wide format](12b_pivots.qmd) — reshape a table with `pivot_wider()` / `pivot_longer()`
+- [12a — Long ↔ wide format](12a_langt-bredt.qmd) — get each extract down to one row per person
 - [Functions: overview](15a_guide_til_funktioner.qmd) — all functions for transforming data
 - [Phase 9 — Hospital contacts (LPR)](09b_udtraek_fra_lpr.qmd) — practical example of long register data and inner_join

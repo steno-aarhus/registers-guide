@@ -1,0 +1,193 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Langt ↔ bredt format"
+subtitle: "Få ét udtræk ned til én række per person — med group_by() + slice() eller pivot"
+date: last-modified
+---
+
+Før du kan koble dine udtræk sammen ([12b — Kobl udtræk sammen](12b_joins.qmd)), skal hvert udtræk være i **bredt format med én række per person**. Registrene du trækker fra er næsten altid i *langt format* med mange rækker per person. Denne side forklarer forskellen og viser de to måder, du former et udtræk om på: `group_by() + slice()` og `pivot_wider()` / `pivot_longer()`.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts mappestruktur og kolonnenavne.
+:::
+
+---
+
+## Bredt vs. langt format
+
+Forestil dig tre personer med målinger af vægt ved to tidspunkter.
+
+**Bredt (wide) format** — én række per person, én kolonne per tidspunkt:
+
+| pnr | vaegt_baseline | vaegt_6mdr |
+|---|---|---|
+| 001 | 120 | 95 |
+| 002 | 105 | 88 |
+| 003 | 98 | 80 |
+
+**Langt (long) format** — én række per observation, én kolonne til tidspunkt og én til værdi:
+
+| pnr | tidspunkt | vaegt |
+|---|---|---|
+| 001 | baseline | 120 |
+| 001 | 6mdr | 95 |
+| 002 | baseline | 105 |
+| 002 | 6mdr | 88 |
+| 003 | baseline | 98 |
+| 003 | 6mdr | 80 |
+
+Begge formater indeholder **de samme oplysninger** — de er bare arrangeret forskelligt.
+
+---
+
+## Hvor er der hvilke formater?
+
+| Register | Format | Hvorfor |
+|---|---|---|
+| BEF | Langt | Én række per person **per snapshot** — kvartalsvis siden 2008, ellers årligt |
+| LPR (lpr_adm + lpr_diag) | Langt | Én række per **diagnose per kontakt** — en indlæggelse kan have 10 diagnoser |
+| LMDB | Langt | Én række per **ekspederet recept** — samme person kan have hundredvis |
+| DODSAARS | Bredt | Én række per **afdød person** — allerede én-per-person |
+| Dit analysedatasæt | Bredt | Én række per person — én kolonne per kovariat |
+
+**Registre er oftest i langt format. Dit analysedatasæt skal typisk være i bredt format.**
+
+---
+
+## To måder at få én række per person
+
+Det afgørende valg er, *hvad du vil have ud* af det lange register:
+
+| Du vil have… | Brug | Resultat |
+|---|---|---|
+| **Én repræsentativ værdi** per person (nyeste snapshot, første hændelse, tidligste dato) | `group_by() + slice()` | Én række per person, samme kolonner |
+| **Flere tidspunkter side om side** som separate kolonner | `pivot_wider()` | Én række per person, én ny kolonne per tidspunkt |
+
+I registerbaseret forskning er `group_by() + slice()` langt det hyppigste valg — du vil som regel bare have "den nyeste" eller "den første" værdi per person. `pivot_wider()` bruger du, når du eksplicit vil sammenligne flere tidspunkter.
+
+---
+
+## `group_by()` + `slice()` — én repræsentativ række
+
+Mønstret er altid det samme: gruppér på `pnr`, sortér så den ønskede række er øverst, tag første række per gruppe.
+
+```r
+# BEF: behold kun den nyeste post per person (BEF har ét snapshot per år)
+bef_en_per_person <- bef %>%
+  group_by(pnr) %>%          # gruppér: alle rækker med samme pnr behandles sammen
+  arrange(desc(aar)) %>%     # sortér inden for gruppen: nyeste år øverst (desc = faldende)
+  slice(1) %>%               # tag kun den første række per gruppe — dvs. det nyeste år
+  ungroup()                  # VIGTIGT: frigiv gruppering efter du er færdig
+```
+
+::: {.callout-important}
+**Husk `ungroup()` — altid.**
+`group_by()` sætter et "grouped_df"-mærke på din data.frame, som *alle* efterfølgende operationer arver. Det betyder:
+- `mutate()` beregner per gruppe, ikke per hele datasæt
+- `n()` tæller rækker per gruppe, ikke i alt
+- `summarize()` giver ét resultat per gruppe
+
+Disse fejl er svære at opdage, fordi koden kører uden fejlbeskeder og giver tilsyneladende fornuftige tal. `ungroup()` fjerner mærket og gør data.frame normal igen. Tommelfingerregel: afslut altid en `group_by()`-kæde med `ungroup()`.
+:::
+
+```r
+# LPR / alle_dx: find første diagnose per person (til udfaldsdefinition)
+foerste_demens <- alle_dx %>%
+  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # kun demenskoder
+  group_by(pnr) %>%              # gruppér per person
+  arrange(date_contact) %>%      # ældste dato øverst (stigende — ingen desc)
+  slice(1) %>%                   # første diagnose per person
+  ungroup()                      # frigiv gruppering
+# → klar til join: kohort %>% left_join(foerste_demens, by = "pnr")
+```
+
+```r
+# VNDS: find første udvandring per person (en person kan have udrejst og indrejst igen)
+foerste_emigration <- vnds %>%
+  filter(indud_kode == "U") %>%   # kun udrejser
+  group_by(pnr) %>%
+  arrange(haend_dato) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+---
+
+## Pivots — skift mellem langt og bredt
+
+### Langt → bredt med `pivot_wider()`
+
+```r
+library(tidyr)   # pivot_wider, pivot_longer
+
+df_bredt <- df_langt %>%
+  pivot_wider(
+    names_from  = "tidspunkt",  # hvilken kolonne skal blive til kolonnenavne?
+    values_from = "vaegt"       # hvilken kolonne indeholder værdierne?
+  )
+```
+
+::: {.callout-warning}
+**Du kan IKKE `pivot_wider()` en hel LPR-tabel.**
+LPR har potentielt hundredvis af unikke ICD-koder per person — `pivot_wider()` ville give dig én kolonne per kode, dvs. tusindvis af kolonner og et datasæt der er umuligt at arbejde med.
+
+I stedet bruger du mønstret fra [Fase 9](09b_udtraek_fra_lpr.qmd): udtræk første dato for én specifik diagnosegruppe (med `group_by() + slice()` ovenfor), gem som `extract_demens.rds`, og join den som én kolonne med `left_join()`.
+:::
+
+<details>
+<summary>Praktisk eksempel: beskæftigelsesstatus fra AKM — langt til bredt</summary>
+
+AKM (arbejdsklassifikationsmodulet) gemmer én række per person **per år** — langt format. Vil du sammenligne beskæftigelsesstatus ved baseline og opfølgning side om side, kan du pivotere:
+
+```r
+library(dplyr)   # filter, mutate
+library(tidyr)   # pivot_wider
+
+# AKM i langt format — to år per person:
+akm_langt <- data.frame(
+  pnr   = c("001", "001", "002", "002", "003", "003"),
+  aar   = c(2015, 2020, 2015, 2020, 2015, 2020),
+  socio = c(110, 110, 210, 310, 150, 150)   # beskæftigelseskategorier fra AKM (socio13)
+)
+
+# Konverter til bredt — én kolonne per år:
+akm_bredt <- akm_langt %>%
+  pivot_wider(
+    names_from   = aar,
+    values_from  = socio,
+    names_prefix = "socio_"   # giver kolonner: socio_2015, socio_2020
+  )
+
+# Resultat:
+#   pnr   socio_2015  socio_2020
+#   001          110         110
+#   002          210         310
+#   003          150         150
+```
+
+I praksis vil du typisk ikke pivotere AKM — du filtrerer til ét specifikt år med `filter(aar == index_aar)` og bruger `group_by() + slice()` ovenfor. Pivot er relevant, når du eksplicit vil have to tidspunkter side om side i analysen.
+
+</details>
+
+### Bredt → langt med `pivot_longer()`
+
+```r
+df_langt <- df_bredt %>%
+  pivot_longer(
+    cols      = c(vaegt_baseline, vaegt_6mdr),  # kolonner der skal "foldes ind"
+    names_to  = "tidspunkt",                    # navn på den nye tidspunkt-kolonne
+    values_to = "vaegt"                         # navn på den nye værdi-kolonne
+  )
+```
+
+---
+
+## Næste skridt
+
+Når hvert udtræk er nede på én række per person, kobler du dem sammen til ét analyseklart datasæt:
+
+→ [12b — Kobl udtræk sammen](12b_joins.qmd)
+
+## Se også
+
+- [12b — Kobl udtræk sammen](12b_joins.qmd) — joins, `bind_rows()` og beregning af opfølgningstid
+- [Funktioner: oversigt](15a_guide_til_funktioner.qmd) — alle funktioner du bruger til at transformere data
