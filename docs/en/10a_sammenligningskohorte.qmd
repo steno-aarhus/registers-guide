@@ -19,30 +19,29 @@ This page continues from [Build your study population](10_byg-din-kohorte.qmd), 
 
 ## A little theory before you match
 
-A comparison group gives you the **counterfactual** experience: what would have happened to the exposed had they not been exposed. Before you match, take an explicit position on a few things. The **matching variables** are typically sex and birth year, but can also be index date/calendar year, SES and municipality. Expand the boxes:
+A comparison group gives you the **counterfactual** experience: what would have happened to the exposed had they not been exposed.
+
+**The most important rule:** a comparison person is **assigned the exposed person's index date** and must be **at risk on exactly that date** - alive, resident in Denmark, free of your outcome and meeting your criteria. This is the core of **risk-set (incidence-density) sampling**, and it is what prevents *immortal time bias* (assigning someone follow-up time during which they could not possibly have had the outcome). A person can be a comparison person now and become exposed themselves later - that is correct (see *Crossover* below).
+
+Before you match, you make a few **design choices**. The matching variables are typically sex and birth year, but can also be index date/calendar year, SES and municipality. Expand each box:
 
 <details>
-<summary>**Risk-set / incidence-density matching** - when must the comparison person be at risk?</summary>
+<summary>**Risk-set / incidence-density sampling** - in depth</summary>
 
-First, the difference between two dates:
+**Study start vs. index date.** Study start is the common date when the study begins to look at data (e.g. 1 January 2010) - the same for everyone. Index date is a person's *own* start of follow-up and is individual: for an exposed person it is the exposure date, and a comparison person is assigned the exposed person's index date. The index date therefore varies per exposed person, and each comparison person is matched on *exactly that date*. Requiring "at risk" on the index date (not just at study start) is what prevents you from e.g. including someone who had already died or emigrated by the time the exposed person was exposed.
 
-- **Study start** is the common date when your study begins to look at data (e.g. 1 January 2010). It is the same for everyone.
-- **Index date** is a person's *own* start of follow-up. For an exposed person it is the exposure date; a comparison person is assigned **the same date as the exposed person they are matched with**. So it is individual.
-
-A comparison person must be "at risk" (alive, resident in Denmark, free of your outcome and meeting your criteria) **on their assigned index date** - not just at study start. If you only check at study start, you may include someone who had already died, emigrated or developed the outcome by the time the exposed person was exposed.
-
-The point: choose comparison persons from everyone who was at risk on exactly the exposed person's index date. A person can be a comparison person now and themselves become exposed (and thus a case) later - that is correct, and is precisely what risk-set sampling handles.
-
-**What does "risk set" mean?** The term comes from survival analysis: at each index date the "risk set" is everyone still at risk right then (alive, outcome-free, under observation). Comparison persons are sampled from that set. And yes - it is connected to unexposed people changing status: a person is in the unexposed risk set until they themselves become exposed; then they leave it (and can become a case). Risk-set sampling captures exactly this dynamic, because eligibility is judged ON the index date, not once and for all.
+**What does "risk set" mean?** The term comes from survival analysis: at each index date the "risk set" is everyone still at risk right then (alive, outcome-free, under observation). Comparison persons are sampled from that set. An unexposed person is in the risk set until they themselves become exposed; then they leave it (and can become a case). Risk-set sampling captures this dynamic, because eligibility is judged ON the index date, not once and for all.
 
 ![Risk-set sampling: on the case's index date (dashed line) comparison persons are sampled from those still at risk. A person who later becomes exposed can be a comparison person until their own exposure (crossover) and is then censored; someone who died or emigrated before index is not at risk.](images/risk_set_example.svg){fig-alt="Timeline with six people. A vertical dashed line marks the case's index date. People whose lifeline crosses the index date and are still alive form the risk set and can be sampled as comparison persons. One person later becomes exposed (crossover) and is then censored; another died or emigrated before index and is not at risk." width="100%"}
 
 </details>
 
 <details>
-<summary>**Varying vs. fixed index date** - and which date the comparison person gets</summary>
+<summary>**Crossover** - a comparison person who later becomes exposed</summary>
 
-When the index date varies per exposed person (e.g. each new patient gets their own exposure date), the comparison person must be matched on *exactly that date*. **The matched comparison person is assigned the exposed person's index date** - that is the date marking the start of the person's follow-up, and everything at baseline is measured relative to it.
+In a risk-set design a future-exposed person is allowed to be a comparison person UNTIL their own exposure date. **So do NOT exclude everyone who ever becomes exposed** - that conditions on the future and can overestimate the effect (immortal-time / selection bias). Instead store a `crossover_date` = the date the person themselves becomes exposed, and decide how to handle it: censor at crossover, or let the person switch group.
+
+Crossover is explained briefly here; the full treatment (censoring) is in [Phase 11a - Outcomes](11a_udfald.qmd).
 
 </details>
 
@@ -83,15 +82,6 @@ Ratio (e.g. 1:5): more comparison persons give more precision, but with **dimini
 <summary>**With or without replacement** - can a person be used more than once?</summary>
 
 In short: replacement increases the effective sample size but gives **correlated observations** that must be handled in the analysis. See the dedicated section [With or without replacement](#with-or-without-replacement) below for when it is needed, packages and the analysis consequence.
-
-</details>
-
-<details>
-<summary>**Crossover** - a comparison person who later becomes exposed</summary>
-
-In a risk-set design a future-exposed person is allowed to be a comparison person UNTIL their own exposure date. **So do NOT exclude everyone who ever becomes exposed** - that conditions on the future and can overestimate the effect (immortal-time / selection bias). Instead store a `crossover_date` = the date the person themselves becomes exposed, and decide how to handle it: censor at crossover, or let the person switch group.
-
-Crossover is explained briefly here; the full treatment (censoring) is in [Phase 11a - Outcomes](11a_udfald.qmd).
 
 </details>
 
@@ -310,7 +300,14 @@ matched <- exposureMatch(
 <details>
 <summary>Route B - manual risk-set loop (full control over eligibility)</summary>
 
-It also shows what `exposureMatch()` does under the hood. Use it when you need tailored eligibility, or just want to understand the mechanics. It is powerful but error-prone - prefer Route A if you do not need it.
+It also shows what `exposureMatch()` does under the hood. The manual loop gives full control, but you handle every step yourself, so there are more places it can go wrong - so Route A is often a safe starting point. **When is Route B necessary?** When Route A cannot express what you need, e.g.:
+
+- **Interval / caliper matching.** `exposureMatch()` only matches *exactly* on fixed factor variables (e.g. same birth year). If you want to match within an **interval** around the case's value - e.g. birth year ±1, age ±2 years or BMI ±5 - that cannot be written as exact matching, so you have to loop yourself. (You can put e.g. age into groups and match exactly on the group in Route A; only a rolling ± around each case's value needs the loop.)
+- **Matching criteria computed relative to the case** beyond what `date.terms`/`duration.terms` cover.
+- **Custom sampling** (e.g. counter-matching or special replacement rules) or your own per-matched-set variables.
+- **The package is not available** on your project.
+
+For standard register matching (sex, birth year, calendar time, alive/resident/outcome-free/exposure-free at index, comorbidity timing) Route A is enough.
 
 **Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. Without replacement, the order also ensures each person is still at risk when used, and that the sampling is reproducible.
 
@@ -384,7 +381,7 @@ When you sample comparison persons, decide whether the **same person may be used
 - **If the group is small** (rare matching strata, narrow age/sex bands, or a high ratio like 1:25), the pool can be depleted. Then **replacement** may be necessary to get enough comparison persons per exposed: a person can then be matched to several exposed (and themselves become exposed/a case later). It is also standard for pure incidence-density sampling.
 
 ::: {.callout-important}
-**With replacement you must account for it in the analysis.** When the same person appears multiple times, the observations are **correlated**. Use clustered/robust standard errors (clustering on person id) or a model that allows it - otherwise the confidence intervals become too narrow. The same applies when a comparison person later becomes exposed (crossover). Expanded in [Phase 13 - Analysis](13_analyse.qmd).
+**With replacement, be careful in the analysis.** Standard models assume each row is an **independent** observation. When the same person appears several times (reuse or crossover), that does not hold - the rows are **correlated**, and the model "thinks" it has more independent information than it does. The result is **confidence intervals that are too narrow** (and p-values too small). The fix is **clustered (robust) standard errors**: you tell the model which rows belong to the same person (clustering on person id), so the uncertainty is computed correctly - or you use a model that handles it. This is an **analysis step** to remember; it is expanded in [Phase 13 - Analysis](13_analyse.qmd) (the section is not yet written).
 :::
 
 | Package | Used for | Replacement |
@@ -395,7 +392,7 @@ When you sample comparison persons, decide whether the **same person may be used
 | `Epi::ccwc()` | nested case-control sampling | risk-set sampling, see [Case-control](10b_case-control.qmd) |
 | manual loop | full control | you control it yourself (`used` vector = without replacement) |
 
-In `heaven`'s current version there is no on/off argument for replacement. The function does risk-set matching: a person not yet exposed can be selected as a control, and a future case can be a control until their own exposure (governed by `end.followup`). A control can typically be used for several cases (reuse) - use `heaven::matchReport()` to see how often controls are used. Whether there is reuse or crossover, the analysis must use clustered standard errors. Confirm package names and arguments on your own project.
+That a control can be used for several cases IS exactly **replacement** (the control is "returned to the pool" and can be drawn again for another case). In `heaven`'s current version there is no on/off argument for it; the function does risk-set matching, where a not-yet-exposed person can be chosen as a control, and a future case can be a control until their own exposure (governed by `end.followup`). **Confirm the actual behaviour** with `heaven::matchReport()`, which shows how often each control is used (and thus whether there really is replacement). Also confirm package names and arguments on your own project.
 
 ---
 
