@@ -76,6 +76,45 @@ The two central operations in this phase are **pivots** and **joins** - they sou
 
 ---
 
+## Derived variables: create new columns
+
+Besides reshaping and joining, you almost always need to **compute new variables** from the ones you have. You do this with `mutate()` (introduced in [Phase 2](02_r-intro.qmd)): it adds a column computed from existing columns.
+
+```r
+library(dplyr); library(lubridate)
+
+df <- df %>%
+  mutate(
+    # Age at index: number of days between two dates / 365.25 (a year = 365.25 days, leap years)
+    age_at_index = as.numeric(index_date - foed_dag) / 365.25,
+
+    # BMI from height (m) and weight (kg)
+    bmi = weight_kg / (height_m^2),
+
+    # Binary event indicator: 1 if the outcome occurred before censoring, otherwise 0
+    event = if_else(!is.na(event_date) & event_date <= censor_date, 1L, 0L),
+
+    # Categorize a continuous variable into groups
+    age_group = case_when(
+      age_at_index < 50 ~ "<50",
+      age_at_index < 65 ~ "50-64",
+      TRUE              ~ "65+"      # everything else (here: 65 and over)
+    )
+  )
+```
+
+A few habits:
+
+- **Compute a variable ONCE** and reuse it - so e.g. age at index is the same in the matching and in Table 1.
+- **`if_else()`** for yes/no (two outcomes); **`case_when()`** for several categories. Use the same type in every branch (e.g. `1L`/`0L`, or text in all).
+- **Follow-up time** (`censor_date - index_date`) is usually computed *after* the join, because it uses dates from several extracts - see [12b](12b_joins.qmd).
+
+::: {.callout-tip}
+`mutate()`, `if_else()` and `case_when()` are explained in the [Function guide](15a_guide_til_funktioner.qmd).
+:::
+
+---
+
 ## This phase is split into two technique pages
 
 1. **[12a - Long ↔ wide format](12a_langt-bredt.qmd)** - get each extract down to **one row per person**. Understand the difference between long and wide format, and use either `group_by() + slice()` (one representative value per person) or `pivot_wider()` (several time points side by side).
