@@ -4,10 +4,15 @@ subtitle: "Nested case-control - sample controls for your cases"
 date: last-modified
 ---
 
-This page continues from [Build your study population](10_byg-din-kohorte.qmd). In a **nested case-control study**, your "exposed" group from the landing page is instead your **cases** (those who experienced the outcome). For each case you sample a number of **controls** - people without the outcome who were at risk exactly when the case had their outcome.
+This page continues from [Build your study population](10_byg-din-kohorte.qmd). In a **nested case-control study**, your group from the landing page is instead your **cases** (those who developed the outcome), and their **index date is the outcome date**. For each case you sample a number of **controls**: people without the outcome who were at risk exactly when the case had the outcome.
 
 ::: {.callout-warning}
-**Still under development.** Structural guidance - adapt to your own project, and **confirm package names** (`Epi::ccwc`) on your project before use.
+**Still under development.** Structural guidance - adapt to your own project, and **confirm package names** (`heaven::incidenceMatch`, `Epi::ccwc`) on your project before use.
+:::
+
+::: {.callout-note}
+**Functions used here.**
+`left_join()` (attach a variable) and `transmute()` (create new columns, keep only those) are explained in [10a](10a_sammenligningskohorte.qmd) and [12b](12b_joins.qmd#joins-link-two-tables). `pmin()`, `if_else()` and `as.factor()` are in the [Function guide](15a_guide_til_funktioner.qmd). New here: `incidenceMatch()` / `Epi::ccwc()` for sampling and `survival::clogit()` for the analysis.
 :::
 
 ::: {.callout-note}
@@ -29,30 +34,155 @@ In register research at DST you almost always do the **nested** variant: the coh
 
 ## The principle: incidence-density sampling
 
-Controls are selected by **risk-set / incidence-density sampling**: for each case, you draw controls who, on the case's index date, (1) have not yet had the outcome and (2) meet the inclusion criteria. A person can be a control for one case and *later* become a case themselves - that is correct in this design.
+Controls are selected by **risk-set / incidence-density sampling**: for each case you draw controls who, on the case's index date (= the outcome date), (1) have not yet developed the outcome and (2) meet the inclusion criteria. A person can be a control for one case and *later* become a case themselves - that is correct in this design (and is exactly what the risk set captures).
 
-This is the **same machinery** as the risk-set matching on [Comparison cohort](10a_sammenligningskohorte.qmd): you identify cases (landing page, Step 1), exclude prevalent cases, build a pool from BEF and apply inclusion criteria **before** sampling. The only difference is that the "event" is now the *outcome* (case), not an exposure.
-
----
-
-## Two routes to sampling
-
-- **`heaven::riskSetMatch()`** - the same function as on [Comparison cohort](10a_sammenligningskohorte.qmd), with `event = "case"` (1 = case, 0 = potential control) and your matching variables in `terms`. Convenient if you already use it.
-- **`Epi::ccwc()`** - a function aimed at **nested case-control** (risk-set sampling) from a cohort dataset with entry and exit times. Confirm the package and arguments on your project (`?Epi::ccwc`).
-
-Typically match on sex, birth year and calendar time - and optionally SES/municipality as the case had them on their index date.
+It is the **same mechanic** as the matching in [Comparison cohort](10a_sammenligningskohorte.qmd) - only the "event" has changed: here it is the *outcome* (case), not an exposure. So this page also reuses the person table from there.
 
 ---
 
-## Analysis (briefly)
+## Step 3 - Build the dataset for matching {.step-heading}
 
-Matched case-control data are analysed with **conditional logistic regression** (`survival::clogit()`), so the matching is respected. The analysis itself is outside this page - see the upcoming analysis section.
+*(Steps 1 and 2 - identify cases and exclude prevalent cases - are on the [landing page](10_byg-din-kohorte.qmd).)*
+
+You need one row per person with matching variables and the dates eligibility depends on. Build it **exactly like the pool in [10a, Steps 3-4](10a_sammenligningskohorte.qmd)** (demographics + `earliest_bef` + death date + emigration date + lookback). For case-control, though:
+
+- You do **not** need an exposure date as an eligibility criterion - exposure is a *variable* you measure, not a filter.
+- You need to know **who is a case** (developed the outcome) and **when** (outcome date = index).
+
+<details>
+<summary>Show code</summary>
+
+```r
+# 'population' = one row per person from 10a (pnr, sex, birth_year,
+#                death_date, emigration_date, earliest_bef_year). See 10a Steps 3-4.
+STUDY_END <- as.Date("2022-12-31")                # we choose: last day of the study
+outcome <- readRDS("path/to/outcome_dates.rds")   # pnr, first_outcome_date (FIRST outcome; NA = never)
+
+all_persons <- population %>%
+  left_join(outcome, by = "pnr") %>%              # add outcome date (NA = never outcome)
+  transmute(                                       # keep ONLY the columns we name
+    pnr,
+    case       = if_else(!is.na(first_outcome_date), 1L, 0L),  # 1 = case (had outcome), 0 = potential control
+    sex        = as.factor(sex),                   # matching variable MUST be factor/character
+    birth_year = as.factor(birth_year),            # matching variable
+    case_index = first_outcome_date,               # the case index = outcome date (NA if never)
+    # end_fu = when the person leaves the risk set: the EARLIEST of death, emigration,
+    #          own outcome (they become a case then) or study end. pmin = earliest.
+    end_fu     = pmin(death_date, emigration_date, first_outcome_date, STUDY_END, na.rm = TRUE)
+  )
+```
+
+</details>
+
+---
+
+## Step 4 - Sample controls {.step-heading}
+
+Two routes. Both do incidence-density sampling; pick one.
+
+**Route A - `heaven::incidenceMatch()`** (sibling of `exposureMatch()` from [10a](10a_sammenligningskohorte.qmd), but the "event" is the outcome).
+
+<details>
+<summary>Show code (Route A)</summary>
+
+```r
+library(heaven)   # incidenceMatch
+
+# Argument (left of =) <- value we set (usually a column name in quotes)
+matched <- incidenceMatch(
+  ptid         = "pnr",                  # the person-id column
+  event        = "case",                 # the column that is 1 for case (outcome), 0 for potential control
+  terms        = c("sex", "birth_year"), # matching variables (exact match; factor/character)
+  data         = all_persons,            # the dataset from Step 3
+  n.controls   = 5,                      # controls per case
+  case.index   = "case_index",           # the case's index date (the outcome date)
+  end.followup = "end_fu",               # when a person stops being eligible as a control
+  seed         = 20260620                # reproducibility
+)
+# Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
+```
+
+</details>
+
+**Route B - `Epi::ccwc()`** (counter-matched/risk-set sampling from entry and exit times). Confirm arguments with `?Epi::ccwc`.
+
+<details>
+<summary>Show code (Route B)</summary>
+
+```r
+library(Epi)   # ccwc - case-control within cohort
+
+cohort <- all_persons %>%
+  mutate(
+    entry = as.Date("2010-01-01"),                # study start (adapt; e.g. 18th birthday or first eligible date)
+    exit  = end_fu,                               # exit time = end of risk time (from Step 3)
+    fail  = case                                  # 1 if the person is a case at exit
+  )
+
+ncc <- ccwc(
+  entry    = entry, exit = exit, fail = fail,     # entry time, exit time, failure at exit
+  controls = 5,                                   # controls per case
+  match    = list(sex, birth_year),               # matching variables
+  include  = list(pnr),                           # keep pnr in the output
+  data     = cohort
+)
+# Output: the matched-set id is called 'Set' here (not 'case.id')
+```
+
+</details>
+
+::: {.callout-note}
+**Same rules as in [10a](10a_sammenligningskohorte.qmd):** apply inclusion/exclusion criteria BEFORE sampling and to everyone (cases + pool); set a `seed`; and decide on [with/without replacement](10a_sammenligningskohorte.qmd#with-or-without-replacement) (controls can typically be used for several cases) - which must be handled in the analysis. `incidenceMatch()` itself handles the risk-set time dimension via `case.index` + `end.followup`.
+:::
+
+---
+
+## Step 5 - Analysis: conditional logistic regression {.step-heading}
+
+Matched case-control data are analyzed with **conditional logistic regression** (`survival::clogit()`), so the matching is respected (each matched set is its own stratum). First attach exposure and covariates to the matched persons (from [Phase 11](11_foej-variabler.qmd)/[Phase 12](11_data-manipulation.qmd)).
+
+<details>
+<summary>Show code</summary>
+
+```r
+library(survival)   # clogit
+
+# matched (from Route A) + exposure and covariates attached (Phase 11/12)
+fit <- clogit(
+  case ~ exposure + covariate1 + covariate2 + strata(case.id),  # strata() = respect the matched set
+  data = matched_with_variables
+)
+summary(fit)        # exp(coef) = odds ratio, which here estimates the rate/hazard ratio
+```
+
+</details>
+
+::: {.callout-note}
+If you use `Epi::ccwc()` (Route B), the matched-set variable is called `Set`, so it is `strata(Set)`. The analysis step itself belongs to [Phase 13 - Analysis](13_analyse.qmd).
+:::
+
+---
+
+## What now?
+
+You have a matched dataset (cases + controls) with a matched-set id (`case.id` or `Set`). Use `pnr` to extract exposure and covariates for everyone in the dataset:
+
+```r
+cc_pnrs <- unique(matched$pnr)   # all pnr's (cases + controls) for the other extractions
+```
+
+| Extraction | Phase |
+|---|---|
+| Exposure + covariates | [Phase 11](11_foej-variabler.qmd) |
+| Comorbidity (NMI) | [NMI](14c_nmi.qmd) |
+| Assemble into one analysis dataset | [Phase 12](11_data-manipulation.qmd) |
+| Conditional logistic regression | [Phase 13](13_analyse.qmd) |
 
 ---
 
 ## See also
 
-- [Build your study population](10_byg-din-kohorte.qmd) - identify your cases (Step 1)
-- [Comparison cohort](10a_sammenligningskohorte.qmd) - the same risk-set machinery for a cohort design
+- [Build your study population](10_byg-din-kohorte.qmd) - identify your cases (Step 1) and exclude prevalent cases (Step 2)
+- [Comparison cohort](10a_sammenligningskohorte.qmd) - same risk-set mechanic for a cohort design; build the pool and understand replacement there
 - [Phase 1 - Study preparation](01_studieforberedelse.qmd) - cohort vs. case-control
 - [Heide-Jørgensen et al. (2018), *Clinical Epidemiology* 10:1325-1337](https://pubmed.ncbi.nlm.nih.gov/30310326/) - sampling strategies and bias in risk-set sampling

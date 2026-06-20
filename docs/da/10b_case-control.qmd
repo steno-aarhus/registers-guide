@@ -4,10 +4,15 @@ subtitle: "Nested case-control - sampl kontroller til dine cases"
 date: last-modified
 ---
 
-Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd). I et **nested case-control-studie** er din "eksponerede" gruppe fra forsiden i stedet dine **cases** (dem der fik udfaldet). Til hver case sampler du et antal **kontroller** - personer uden udfaldet, der var i risiko netop da casen fik sit udfald.
+Denne side fortsætter fra [Byg din studiepopulation](10_byg-din-kohorte.qmd). I et **nested case-control-studie** er din gruppe fra forsiden i stedet dine **cases** (dem der fik udfaldet), og deres **index-dato er udfaldsdatoen**. Til hver case sampler du et antal **kontroller**: personer uden udfaldet, der var i risiko netop da casen fik sit udfald.
 
 ::: {.callout-warning}
-**Stadig under udvikling.** Strukturel vejledning - tilpas til dit eget projekt, og **bekræft pakkenavne** (`Epi::ccwc`) på dit projekt før brug.
+**Stadig under udvikling.** Strukturel vejledning - tilpas til dit eget projekt, og **bekræft pakkenavne** (`heaven::incidenceMatch`, `Epi::ccwc`) på dit projekt før brug.
+:::
+
+::: {.callout-note}
+**Funktioner brugt her.**
+`left_join()` (tilknyt en variabel) og `transmute()` (lav nye kolonner, behold kun dem) forklares i [10a](10a_sammenligningskohorte.qmd) og [12b](12b_joins.qmd#joins-kobl-to-tabeller-sammen). `pmin()`, `if_else()` og `as.factor()` er i [Guide til funktioner](15a_guide_til_funktioner.qmd). Nyt her: `incidenceMatch()` / `Epi::ccwc()` til sampling og `survival::clogit()` til analysen.
 :::
 
 ::: {.callout-note}
@@ -29,30 +34,155 @@ I registerforskning på DST laver man stort set altid den **nestede** variant: k
 
 ## Princippet: incidens-densitets-sampling
 
-Kontroller udvælges ved **risk-set / incidens-densitets-sampling**: for hver case udtrækkes kontroller, der på casens index-dato (1) endnu ikke har fået udfaldet og (2) opfylder inklusionskriterierne. En person kan være kontrol for én case og *senere* selv blive case - det er korrekt i dette design.
+Kontroller udvælges ved **risk-set / incidens-densitets-sampling**: for hver case udtrækkes kontroller, der på casens index-dato (= udfaldsdatoen) (1) endnu ikke har fået udfaldet og (2) opfylder inklusionskriterierne. En person kan være kontrol for én case og *senere* selv blive case - det er korrekt i dette design (og det er præcis det, risikosættet fanger).
 
-Det er den **samme mekanik** som risk-set-matchingen i [Sammenligningskohorte](10a_sammenligningskohorte.qmd): du identificerer cases (forsiden, Trin 1), ekskluderer prævalente, bygger en pool fra BEF og anvender inklusionskriterier **før** sampling. Forskellen er kun, at "event" nu er *udfaldet* (case), ikke en eksponering.
-
----
-
-## To veje til sampling
-
-- **`heaven::riskSetMatch()`** - samme funktion som på [Sammenligningskohorte](10a_sammenligningskohorte.qmd), med `event = "case"` (1 = case, 0 = potentiel kontrol) og dine matchvariable i `terms`. Praktisk hvis du allerede bruger den.
-- **`Epi::ccwc()`** - en funktion målrettet **nested case-control** (counter-matching/risk-set sampling) ud fra et kohorte-datasæt med ind- og udtrædelsestider. Bekræft pakke og argumenter på dit projekt (`?Epi::ccwc`).
-
-Match typisk på køn, fødselsår og kalendertid - og evt. SES/kommune, som casen havde på sin index-dato.
+Det er den **samme mekanik** som matchingen i [Sammenligningskohorte](10a_sammenligningskohorte.qmd) - kun "event" er ændret: her er det *udfaldet* (case), ikke en eksponering. Derfor genbruger denne side også person-tabellen derfra.
 
 ---
 
-## Analyse (kort)
+## Trin 3 - Byg datasættet til matching {.step-heading}
 
-Matchede case-control-data analyseres med **betinget logistisk regression** (`survival::clogit()`), så matchningen respekteres. Selve analysen ligger uden for denne side - se den kommende analyse-sektion.
+*(Trin 1 og 2 - identificér cases og ekskludér prævalente tilfælde - ligger på [forsiden](10_byg-din-kohorte.qmd).)*
+
+Du skal bruge én række per person med matchvariable og de datoer, eligibilitet afhænger af. Byg den **præcis som poolen i [10a, Trin 3-4](10a_sammenligningskohorte.qmd)** (demografi + `earliest_bef` + dødsdato + udvandringsdato + lookback). Til case-control gælder dog:
+
+- Du behøver **ikke** eksponeringsdato som eligibilitetskrav - eksponering er en *variabel*, du måler, ikke et filter.
+- Du skal vide, **hvem der er case** (fik udfaldet) og **hvornår** (udfaldsdato = index).
+
+<details>
+<summary>Vis kode</summary>
+
+```r
+# 'befolkning' = én række per person fra 10a (pnr, sex, birth_year,
+#                death_date, emigration_date, earliest_bef_year). Se 10a Trin 3-4.
+STUDIE_SLUT <- as.Date("2022-12-31")              # vi vælger: sidste dag i studiet
+udfald <- readRDS("sti/til/outcome_dates.rds")    # pnr, first_outcome_date (FØRSTE udfald; NA = aldrig)
+
+alle <- befolkning %>%
+  left_join(udfald, by = "pnr") %>%               # tilføj udfaldsdato (NA = aldrig udfald)
+  transmute(                                       # behold KUN de kolonner vi navngiver
+    pnr,
+    case       = if_else(!is.na(first_outcome_date), 1L, 0L),  # 1 = case (fik udfaldet), 0 = potentiel kontrol
+    sex        = as.factor(sex),                   # matchvariabel SKAL være factor/character
+    birth_year = as.factor(birth_year),            # matchvariabel
+    case_index = first_outcome_date,               # casens index = udfaldsdatoen (NA hvis aldrig)
+    # end_fu = hvornår personen forlader risikosættet: den TIDLIGSTE af død, udvandring,
+    #          eget udfald (de bliver selv case der) eller studieslut. pmin = tidligste.
+    end_fu     = pmin(death_date, emigration_date, first_outcome_date, STUDIE_SLUT, na.rm = TRUE)
+  )
+```
+
+</details>
+
+---
+
+## Trin 4 - Sampl kontroller {.step-heading}
+
+To veje. Begge laver incidens-densitets-sampling; vælg én.
+
+**Vej A - `heaven::incidenceMatch()`** (søster til `exposureMatch()` fra [10a](10a_sammenligningskohorte.qmd), men "event" er udfaldet).
+
+<details>
+<summary>Vis kode (Vej A)</summary>
+
+```r
+library(heaven)   # incidenceMatch
+
+# Argument (venstre for =) <- værdi vi sætter (typisk et kolonnenavn i anførselstegn)
+matched <- incidenceMatch(
+  ptid         = "pnr",                  # kolonnen med person-id
+  event        = "case",                 # kolonnen der er 1 for case (udfald), 0 for potentiel kontrol
+  terms        = c("sex", "birth_year"), # matchvariable (eksakt match; factor/character)
+  data         = alle,                   # datasættet fra Trin 3
+  n.controls   = 5,                      # antal kontroller per case
+  case.index   = "case_index",           # casens index-dato (udfaldsdatoen)
+  end.followup = "end_fu",               # hvornår man ophører med at kunne være kontrol
+  seed         = 20260620                # reproducerbarhed
+)
+# Output: data.table med 'case.id' der identificerer hvert matchsæt (1 case + dens kontroller)
+```
+
+</details>
+
+**Vej B - `Epi::ccwc()`** (counter-matched/risk-set sampling ud fra ind- og udtrædelsestider). Bekræft argumenter med `?Epi::ccwc`.
+
+<details>
+<summary>Vis kode (Vej B)</summary>
+
+```r
+library(Epi)   # ccwc - case-control within cohort
+
+kohorte <- alle %>%
+  mutate(
+    entry = as.Date("2010-01-01"),                # studiestart (tilpas; fx 18-årsdag eller første eligible dato)
+    exit  = end_fu,                               # ud-tid = slut på risikotid (fra Trin 3)
+    fail  = case                                  # 1 hvis personen er case ved exit
+  )
+
+ncc <- ccwc(
+  entry    = entry, exit = exit, fail = fail,     # ind-tid, ud-tid, udfald ved exit
+  controls = 5,                                   # kontroller per case
+  match    = list(sex, birth_year),               # matchvariable
+  include  = list(pnr),                           # behold pnr i output
+  data     = kohorte
+)
+# Output: matchsæt-id'et hedder her 'Set' (ikke 'case.id')
+```
+
+</details>
+
+::: {.callout-note}
+**Samme regler som i [10a](10a_sammenligningskohorte.qmd):** anvend inklusions-/eksklusionskriterier FØR sampling og på alle (cases + pool); sæt en `seed`; og tag stilling til [med/uden replacement](10a_sammenligningskohorte.qmd#med-eller-uden-replacement) (kontroller kan typisk bruges til flere cases) - det skal håndteres i analysen. `incidenceMatch()` håndterer selv risk-set-tidsdimensionen via `case.index` + `end.followup`.
+:::
+
+---
+
+## Trin 5 - Analyse: betinget logistisk regression {.step-heading}
+
+Matchede case-control-data analyseres med **betinget logistisk regression** (`survival::clogit()`), så matchningen respekteres (hvert matchsæt er sit eget stratum). Tilføj først eksponering og covariater til de matchede personer (fra [Fase 11](11_foej-variabler.qmd)/[Fase 12](11_data-manipulation.qmd)).
+
+<details>
+<summary>Vis kode</summary>
+
+```r
+library(survival)   # clogit
+
+# matched (fra Vej A) + eksponering og covariater tilknyttet (Fase 11/12)
+fit <- clogit(
+  case ~ eksponering + covariat1 + covariat2 + strata(case.id),  # strata() = respektér matchsættet
+  data = matched_med_variable
+)
+summary(fit)        # exp(coef) = odds ratio, der her estimerer rate-/hazard ratio
+```
+
+</details>
+
+::: {.callout-note}
+Bruger du `Epi::ccwc()` (Vej B), hedder matchsæt-variablen `Set`, så det er `strata(Set)`. Selve analysetrinnet hører til [Fase 13 - Analyse](13_analyse.qmd).
+:::
+
+---
+
+## Hvad nu?
+
+Du har et matchet datasæt (cases + kontroller) med et matchsæt-id (`case.id` eller `Set`). Brug `pnr` til at udtrække eksponering og covariater for alle i datasættet:
+
+```r
+cc_pnrs <- unique(matched$pnr)   # alle pnr'er (cases + kontroller) til de øvrige udtræk
+```
+
+| Udtræk | Fase |
+|---|---|
+| Eksponering + covariater | [Fase 11](11_foej-variabler.qmd) |
+| Komorbiditet (NMI) | [NMI](14c_nmi.qmd) |
+| Saml til ét analysedatasæt | [Fase 12](11_data-manipulation.qmd) |
+| Betinget logistisk regression | [Fase 13](13_analyse.qmd) |
 
 ---
 
 ## Se også
 
-- [Byg din studiepopulation](10_byg-din-kohorte.qmd) - identificér dine cases (Trin 1)
-- [Sammenligningskohorte](10a_sammenligningskohorte.qmd) - samme risk-set-mekanik for et kohortedesign
+- [Byg din studiepopulation](10_byg-din-kohorte.qmd) - identificér dine cases (Trin 1) og ekskludér prævalente (Trin 2)
+- [Sammenligningskohorte](10a_sammenligningskohorte.qmd) - samme risk-set-mekanik for et kohortedesign; byg poolen og forstå replacement der
 - [Fase 1 - Studieforberedelse](01_studieforberedelse.qmd) - kohorte vs. case-control
 - [Heide-Jørgensen et al. (2018), *Clinical Epidemiology* 10:1325-1337](https://pubmed.ncbi.nlm.nih.gov/30310326/) - samplingstrategier og bias ved risk-set sampling
