@@ -12,7 +12,7 @@ This page continues from [Build your study population](10_byg-din-kohorte.qmd), 
 
 ::: {.callout-note}
 **Functions used here.**
-`left_join()` (attach a variable) and `semi_join()` (keep only rows *with* a match) are explained in [12b - Link your extracts](12b_joins.qmd#joins-link-two-tables). `mutate()` (create a new variable) is shown in [Phase 2](02_r-intro.qmd). New here: a `for` loop + `set.seed()` for the matching itself (explained in Step 4). Functions like `slice_sample()`, `count()` and `nrow()` are in the [Function guide](15a_guide_til_funktioner.qmd).
+`left_join()` (attach a variable) and `semi_join()` (keep only rows *with* a match) are explained in [12b - Link your extracts](12b_joins.qmd#joins-link-two-tables). `mutate()` (create a new variable) is shown in [Phase 2](02_r-intro.qmd). New here: a `for` loop + `set.seed()` for the matching itself (explained in Step 5). Functions like `slice_sample()`, `count()` and `nrow()` are in the [Function guide](15a_guide_til_funktioner.qmd).
 :::
 
 ---
@@ -69,9 +69,9 @@ Choose based on your research question; some studies report both. If you use **m
 <details>
 <summary>**Matching variables and ratio** - match only on confounders</summary>
 
-Match only on what you want to adjust for by design (typically sex, age, calendar time). **Over-matching** (matching on a mediator or on consequences of the exposure itself) biases towards the null - avoid it.
+Match only on what you want to adjust for by design (typically sex, age, calendar time). **Avoid over-matching** (matching on a mediator or on a consequence of the exposure itself). At best it just costs precision; at worst you risk introducing bias.
 
-Ratio (e.g. 1:5): more comparison persons give more precision, but with diminishing returns. A large ratio + a narrow pool can deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 5).
+Ratio (e.g. 1:5): more comparison persons give more precision, but with **diminishing returns** - each extra comparison person raises precision less and less, so at some point the gain is not worth the extra data. A large ratio + a narrow pool can also deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 6).
 
 **How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** captures most of the statistical power. [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) concludes exactly that "it is questionable if there is much to gain in statistical power when the sampling ratio exceeds four". Choose a higher ratio if the outcome is rare or the pool is plentiful.
 
@@ -97,11 +97,11 @@ For a thorough review of sampling strategies for comparison cohorts, see [Heide-
 
 ---
 
-## Step 2 - Prepare the exposed for matching {.step-heading}
+## Step 3 - Prepare the exposed for matching {.step-heading}
 
-*(Step 1 - identify the exposed - and the prevalence exclusion are on the [landing page](10_byg-din-kohorte.qmd).)*
+*(Steps 1 and 2 - identify the exposed and exclude prevalent cases - are on the [landing page](10_byg-din-kohorte.qmd).)*
 
-Attach sex and birth date from BEF (needed if you want to match on age or birth year), **derive** the variables you need (e.g. age at index), and apply your inclusion criteria. The same criteria are applied to the pool in Step 3.
+Attach sex and birth date from BEF (needed if you want to match on age or birth year), **derive** the variables you need (e.g. age at index), and apply your inclusion criteria. The same criteria are applied to the pool in Step 4.
 
 ::: {.callout-note}
 **Create a derived variable.** A new variable is computed from existing columns with `mutate()`. Age at index = number of days between index and birth, divided by 365.25 (a year is 365.25 days because of leap years):
@@ -131,8 +131,8 @@ demographics <- bef %>%
   filter(year >= YEAR_FROM, year <= YEAR_TO) %>%
   select(pnr, foed_dag, koen, year) %>%
   collect() %>%
-  arrange(pnr, desc(year)) %>%
-  distinct(pnr, .keep_all = TRUE) %>%          # one row per person
+  arrange(pnr, desc(year)) %>%                 # newest BEF year on top per person (desc = descending)
+  distinct(pnr, .keep_all = TRUE) %>%          # keep the top = newest row per person
   mutate(
     foed_dag   = as.Date(foed_dag),
     birth_year = year(foed_dag),
@@ -144,10 +144,11 @@ exposed <- exposed %>%
   left_join(demographics %>% select(pnr, foed_dag, birth_year, sex), by = "pnr") %>%
   mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)   # derived variable
 
-# Inclusion criteria (the SAME are applied to the pool in Step 3) - count the attrition
+# Inclusion criteria (the SAME are applied to the pool in Step 4) - count the attrition
 n_before <- nrow(exposed)
 exposed <- exposed %>% filter(age_at_index >= 18)   # e.g. adults only - adapt
 cat("After age requirement:", nrow(exposed), "| excluded:", n_before - nrow(exposed), "\n")
+# cat() just prints a readable line in the console; see the Function guide (15a) for cat() and nrow()
 
 # 5-year residency lookback (e.g. so covariates can be computed): require a BEF year in year(index) - 5
 bef_years <- bef %>%
@@ -156,8 +157,8 @@ bef_years <- bef %>%
 
 n_before <- nrow(exposed)
 exposed <- exposed %>%
-  mutate(lookback_year = year(index_date) - 5L) %>%
-  semi_join(bef_years, by = c("pnr", "lookback_year" = "year")) %>%   # keep only those with a record
+  mutate(lookback_year = year(index_date) - 5L) %>%                  # 5L: the L makes 5 an integer
+  semi_join(bef_years, by = c("pnr", "lookback_year" = "year")) %>%   # keep only those with a BEF record that year
   select(-lookback_year)
 cat("After 5-year lookback:", nrow(exposed), "| excluded:", n_before - nrow(exposed), "\n")
 
@@ -166,13 +167,22 @@ stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # one row per person
 
 </details>
 
+<details>
+<summary>How does the 5-year lookback work?</summary>
+
+`bef_years` is a table with one row per person per year they appear in BEF (i.e. the years the person was resident in Denmark). For each exposed person we compute `lookback_year = year(index_date) - 5` - the calendar year 5 years before their index. `semi_join()` keeps an exposed person only if there is a row in `bef_years` with the same `pnr` AND `year == lookback_year`, i.e. if the person has a BEF record in exactly that year. So the requirement becomes: the person was registered in Denmark at least 5 years before index.
+
+**That is why the BEF window must reach far enough back.** We filter `bef_years` to `YEAR_FROM`-`YEAR_TO`, so `YEAR_FROM` must be at least 5 years before the earliest index date. With index in 2010-2022 and `YEAR_FROM = 2005`, the lookback years are 2005-2017, all within the window. And yes: `bef` is loaded lazily (`open_dataset`), but `bef_years` is pulled into memory with `collect()` - it is a concrete table we look up in, not a lazy filter.
+
+</details>
+
 ---
 
-## Step 3 - Build the comparison pool {.step-heading}
+## Step 4 - Build the comparison pool {.step-heading}
 
 Now we build the **pool** that the comparison group will be drawn from. A member must satisfy two things: (1) be in BEF in the relevant years (i.e. resident in Denmark), and (2) meet your inclusion and exclusion criteria. The criteria depend on dates from several registers (death, emigration, exposure, outcome), so we **join** different datasets together to assemble the match pool.
 
-The time-varying criteria (alive, exposure-free and outcome-free ON the assigned index date) cannot be filtered out here - they are decided at match time in Step 4. So in this step we make sure the pool *carries all the dates* needed to apply them.
+The time-varying criteria (alive, exposure-free and outcome-free ON the assigned index date) cannot be filtered out here - they are decided at match time in Step 5. So in this step we make sure the pool *carries all the dates* needed to apply them.
 
 The pool is drawn from BEF for the relevant years. Attach everything eligibility depends on: **death date**, **emigration date**, **exposure date**, **outcome date** (so the outcome before the assigned index date can be excluded for the comparison person, exactly as for the exposed on the landing page) and **lookback year**. These dates are extracted directly for the pool using the same patterns as [Phase 9](09b_udtraek_fra_lpr.qmd) (shown here as finished tables).
 
@@ -225,7 +235,7 @@ pool <- pool %>%
 This is not a separate step but a rule: all inclusion and exclusion criteria (age, residency, prevalent outcome) must be applied to BOTH the exposed and the pool, each relative to its own/assigned index date, BEFORE you sample. Excluding after matching changes the population the exposed are matched to and introduces selection bias. See [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) on correct comparison-cohort sampling.
 :::
 
-## Step 4 - Match the comparison group {.step-heading}
+## Step 5 - Match the comparison group {.step-heading}
 
 Always set a seed before sampling, so the matching is reproducible.
 
@@ -379,12 +389,12 @@ In `heaven`'s current version there is no on/off argument for replacement. The f
 
 A comparison group does not have to be matched. **Matching and adjustment are two ways to handle the same confounders:**
 
-- **Matching (design):** you balance the groups on e.g. sex, age and calendar year before you look at the outcome (that is what Step 4 does).
+- **Matching (design):** you balance the groups on e.g. sex, age and calendar year before you look at the outcome (that is what Step 5 does).
 - **Adjustment (analysis):** you take a broader unexposed group *without* matching and instead control for the same variables in the analysis.
 
 If you "just" want a comparison group that is not matched on anything:
 
-1. **Define the eligible unexposed group** with the same inclusion and exclusion criteria as the exposed (alive, resident, outcome-free and exposure-free at their index). This is still the pool from Step 3.
+1. **Define the eligible unexposed group** with the same inclusion and exclusion criteria as the exposed (alive, resident, outcome-free and exposure-free at their index). This is still the pool from Step 4.
 2. **You need no matching function** - just combine exposed and unexposed with an `exposed` indicator (1/0).
 3. **Assign a start of follow-up (index)** to the unexposed, so follow-up begins at a comparable point. This is the hard part: do it so you avoid immortal time (e.g. using calendar time as the time axis, or assigning index dates from the exposed persons' distribution).
 4. **Adjust in the analysis** for the variables you would otherwise have matched on (sex, age, calendar year, SES ...) - either as covariates in a regression model or with weighting (IPTW). See [Phase 13](13_analyse.qmd).
@@ -393,7 +403,7 @@ Neither matching nor adjustment removes confounding from variables you have not 
 
 ---
 
-## Step 5 - Assemble, validate and save {.step-heading}
+## Step 6 - Assemble, validate and save {.step-heading}
 
 ```r
 # matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:
@@ -406,7 +416,7 @@ kohort <- bind_rows(
 stopifnot(n_distinct(exposed$pnr) == nrow(exposed))
 
 # Bug check: same comparison person used twice in the SAME matched set (should be 0 rows;
-# the usual cause is duplicate person-year rows in the pool, cf. Step 3)
+# the usual cause is duplicate person-year rows in the pool, cf. Step 4)
 comparison_group %>% count(match_id, pnr) %>% filter(n > 1)
 
 # Info (not an error): a person can appear in several matched sets (replacement) or
