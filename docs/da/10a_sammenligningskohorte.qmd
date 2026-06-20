@@ -47,12 +47,12 @@ Når index-dato varierer per eksponeret (fx får hver ny patient sin egen ekspon
 <details>
 <summary>**Matchet vs. umatchet sammenligningsgruppe** - matching er ikke obligatorisk</summary>
 
-Du har to lovlige veje:
+Matching og justering er **to måder at håndtere de samme confoundere på** - ved design eller ved analyse:
 
 - **Matchet:** balancér på designtidspunktet (køn, alder, kalendertid) via risk-set sampling. Index-dato tildeles naturligt ved matchet. Nem balance på stærke confounders, men matchede variable kan ikke længere studeres som eksponering, og poolen kan tømmes.
-- **Umatchet:** tag hele den eligible uexponerede population og justér for confounders i analysen (regression, IPTW i [Fase 13](13_analyse.qmd)). Bevarer al information, men kræver korrekt index-tildeling (ellers immortal time), og confounding håndteres udelukkende analytisk.
+- **Umatchet:** tag en bredere eligible uexponeret population og justér for de samme confoundere i analysen (regression, IPTW i [Fase 13](13_analyse.qmd)). Bevarer al information, men kræver korrekt index-tildeling (ellers immortal time), og confounding håndteres udelukkende analytisk.
 
-Mange registerstudier bruger en umatchet sammenligningsgruppe + justering. Match kun hvis det giver designmæssig mening.
+Mange registerstudier bruger en umatchet sammenligningsgruppe + justering. Match kun hvis det giver designmæssig mening. Se afsnittet [Uden matching](#uden-matching-en-umatchet-sammenligningsgruppe) for hvordan.
 
 </details>
 
@@ -73,7 +73,7 @@ Match kun på det du vil justere for ved design (typisk køn, alder, kalendertid
 
 Ratio (fx 1:5): flere sammenligningspersoner giver mere præcision, men med aftagende udbytte. En stor ratio + en smal pool kan tømme poolen, så nogle eksponerede får færre end ratio. Mål og rapportér hvor mange (se Trin 5).
 
-**Hvor mange per eksponeret/case?** Præcisionen stiger med ratioen, men gevinsten aftager hurtigt: omkring **4-5 sammenligningspersoner per eksponeret** fanger det meste af den statistiske styrke, og mere giver kun lidt ekstra. Vælg en højere ratio, hvis udfaldet er sjældent, eller hvis poolen er rigelig. Se [Grimes & Schulz, *Lancet* 2005](https://pubmed.ncbi.nlm.nih.gov/15836892/) om kontrol-til-case-ratio.
+**Hvor mange per eksponeret/case?** Præcisionen stiger med ratioen, men gevinsten aftager hurtigt: omkring **4-5 sammenligningspersoner per eksponeret** fanger det meste af den statistiske styrke. [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) konkluderer netop, at "der er tvivlsomt meget at vinde i statistisk styrke, når samplingsratioen overstiger fire". Vælg en højere ratio, hvis udfaldet er sjældent, eller hvis poolen er rigelig.
 
 </details>
 
@@ -222,7 +222,7 @@ pool <- pool %>%
 
 ::: {.callout-important}
 **Eksklusion sker FØR sampling - og på begge grupper.**
-Det er ikke et separat trin, men en regel: alle inklusions- og eksklusionskriterier (alder, residens, prævalent outcome) skal være anvendt på BÅDE de eksponerede og poolen, hver relativt til sin egen/tildelte index-dato, INDEN du sampler. At ekskludere efter matching ændrer den population, de eksponerede er matchet til, og introducerer selektionsbias. Se [Lund et al. 2015](https://doi.org/10.2147/CLEP.S164456).
+Det er ikke et separat trin, men en regel: alle inklusions- og eksklusionskriterier (alder, residens, prævalent outcome) skal være anvendt på BÅDE de eksponerede og poolen, hver relativt til sin egen/tildelte index-dato, INDEN du sampler. At ekskludere efter matching ændrer den population, de eksponerede er matchet til, og introducerer selektionsbias. Se [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) om korrekt sampling af sammenligningskohorter.
 :::
 
 ## Trin 4 - Match sammenligningsgruppen {.step-heading}
@@ -375,6 +375,24 @@ I `heaven`s nuværende version er der ikke et til/fra-argument for replacement. 
 
 ---
 
+## Uden matching: en umatchet sammenligningsgruppe
+
+En sammenligningsgruppe behøver ikke at være matchet. **Matching og justering er to måder at håndtere de samme confoundere på:**
+
+- **Matching (design):** du balancerer grupperne på fx køn, alder og kalenderår, før du ser på udfaldet (det er det, Trin 4 gør).
+- **Justering (analyse):** du tager en bredere uexponeret gruppe *uden* at matche og kontrollerer i stedet for de samme variable i analysen.
+
+Vil du "bare" have en sammenligningsgruppe, der ikke er matchet på noget:
+
+1. **Definér den eligible uexponerede gruppe** med de samme ind- og eksklusionskriterier som de eksponerede (i live, bosat, outcome-fri og eksponeringsfri ved deres index). Det er stadig poolen fra Trin 3.
+2. **Du behøver ingen matchfunktion** - kombinér blot eksponerede og uexponerede med en `exposed`-indikator (1/0).
+3. **Tildel et starttidspunkt (index)** til de uexponerede, så opfølgningen begynder et sammenligneligt sted. Det er den vanskelige del: gør det, så du undgår immortal time (fx ved at bruge kalendertid som tidsakse, eller ved at tildele index-datoer fra de eksponeredes fordeling).
+4. **Justér i analysen** for de variable, du ellers ville have matchet på (køn, alder, kalenderår, SES ...) - enten som kovariater i en regressionsmodel eller med vægtning (IPTW). Se [Fase 13](13_analyse.qmd).
+
+Hverken matching eller justering fjerner confounding fra variable, du ikke har målt. Vælg ud fra dit studie: matching balancerer stærke confounders ved design og er let at kommunikere; justering bevarer al information og lader dig studere flere variable. Du kan også kombinere (matche på lidt, justere for resten).
+
+---
+
 ## Trin 5 - Saml, validér og gem {.step-heading}
 
 ```r
@@ -409,12 +427,7 @@ saveRDS(kohort, "sti/til/full_cohort.rds")
 **Behold matchsæt-id'et** (`match_id` i den manuelle løkke; `exposureMatch()` kalder det `case.id`). Det fortæller, hvilke sammenligningspersoner der hører til hvilken eksponeret. Det er vigtigt, når analysen skal **respektere matchingen**: stratificeret eller betinget analyse (fx stratificeret Cox på matchsæt, eller betinget logistisk regression i [case-control](10b_case-control.qmd)), eller som minimum klyngebaserede standardfejl. Uden `match_id` kan du ikke lave en korrekt matchet analyse. Se [Fase 13](13_analyse.qmd).
 :::
 
-<details>
-<summary>Variant: umatchet sammenligningsgruppe</summary>
-
-Vil du ikke matche, så spring Trin 4 over: brug hele `pool` (efter eksklusioner) som sammenligningsgruppe, tildel index-datoer via kalendertid eller en fælles studiestart, og justér for confounders i analysen ([Fase 13](13_analyse.qmd), IPTW/regression). Index-tildelingen skal stadig undgå immortal time.
-
-</details>
+Vil du ikke matche, så se afsnittet [Uden matching](#uden-matching-en-umatchet-sammenligningsgruppe) ovenfor.
 
 ---
 
@@ -446,5 +459,4 @@ kohort_pnrs <- unique(kohort$pnr)   # vektor med alle pnr'er - både eksponerede
 - [Fase 1 - Studieforberedelse](01_studieforberedelse.qmd) - designvalg bag kohorte og matching
 - [Fase 11a - Udfald](11a_udfald.qmd) - udfaldsdatoer, censurering og crossover
 - [Fase 12 - Saml & klargør datasættet](11_data-manipulation.qmd) - saml alle udtræk til ét datasæt
-- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/) - samplingstrategier for sammenligningskohorter
-- [Lund et al. (2015), *Clinical Epidemiology*](https://doi.org/10.2147/CLEP.S164456) - bias ved forkert eksklusionsrækkefølge
+- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology* 10:1325-1337](https://pubmed.ncbi.nlm.nih.gov/30310326/) - samplingstrategier for sammenligningskohorter (ratio, with/without replacement, kronologisk vs. tilfældig)

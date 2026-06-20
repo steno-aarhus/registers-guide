@@ -47,12 +47,12 @@ When the index date varies per exposed person (e.g. each new patient gets their 
 <details>
 <summary>**Matched vs. unmatched comparison group** - matching is not mandatory</summary>
 
-You have two legitimate routes:
+Matching and adjustment are **two ways to handle the same confounders** - at the design stage or in the analysis:
 
 - **Matched:** balance at the design stage (sex, age, calendar time) via risk-set sampling. The index date is assigned naturally by the match. Easy balance on strong confounders, but matched variables can no longer be studied as an exposure, and the pool can be depleted.
-- **Unmatched:** take the entire eligible unexposed population and adjust for confounders in the analysis (regression, IPTW in [Phase 13](13_analyse.qmd)). Retains all information, but requires correct index assignment (otherwise immortal time), and confounding is handled purely analytically.
+- **Unmatched:** take a broader eligible unexposed population and adjust for the same confounders in the analysis (regression, IPTW in [Phase 13](13_analyse.qmd)). Retains all information, but requires correct index assignment (otherwise immortal time), and confounding is handled purely analytically.
 
-Many register studies use an unmatched comparison group + adjustment. Match only if it makes design sense.
+Many register studies use an unmatched comparison group + adjustment. Match only if it makes design sense. See the section [Without matching](#without-matching-an-unmatched-comparison-group) for how.
 
 </details>
 
@@ -73,7 +73,7 @@ Match only on what you want to adjust for by design (typically sex, age, calenda
 
 Ratio (e.g. 1:5): more comparison persons give more precision, but with diminishing returns. A large ratio + a narrow pool can deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 5).
 
-**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** captures most of the statistical power, and more adds little. Choose a higher ratio if the outcome is rare or the pool is plentiful. See [Grimes & Schulz, *Lancet* 2005](https://pubmed.ncbi.nlm.nih.gov/15836892/) on the control-to-case ratio.
+**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** captures most of the statistical power. [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) concludes exactly that "it is questionable if there is much to gain in statistical power when the sampling ratio exceeds four". Choose a higher ratio if the outcome is rare or the pool is plentiful.
 
 </details>
 
@@ -222,7 +222,7 @@ pool <- pool %>%
 
 ::: {.callout-important}
 **Exclusion happens BEFORE sampling - and on both groups.**
-This is not a separate step but a rule: all inclusion and exclusion criteria (age, residency, prevalent outcome) must be applied to BOTH the exposed and the pool, each relative to its own/assigned index date, BEFORE you sample. Excluding after matching changes the population the exposed are matched to and introduces selection bias. See [Lund et al. 2015](https://doi.org/10.2147/CLEP.S164456).
+This is not a separate step but a rule: all inclusion and exclusion criteria (age, residency, prevalent outcome) must be applied to BOTH the exposed and the pool, each relative to its own/assigned index date, BEFORE you sample. Excluding after matching changes the population the exposed are matched to and introduces selection bias. See [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) on correct comparison-cohort sampling.
 :::
 
 ## Step 4 - Match the comparison group {.step-heading}
@@ -375,6 +375,24 @@ In `heaven`'s current version there is no on/off argument for replacement. The f
 
 ---
 
+## Without matching: an unmatched comparison group
+
+A comparison group does not have to be matched. **Matching and adjustment are two ways to handle the same confounders:**
+
+- **Matching (design):** you balance the groups on e.g. sex, age and calendar year before you look at the outcome (that is what Step 4 does).
+- **Adjustment (analysis):** you take a broader unexposed group *without* matching and instead control for the same variables in the analysis.
+
+If you "just" want a comparison group that is not matched on anything:
+
+1. **Define the eligible unexposed group** with the same inclusion and exclusion criteria as the exposed (alive, resident, outcome-free and exposure-free at their index). This is still the pool from Step 3.
+2. **You need no matching function** - just combine exposed and unexposed with an `exposed` indicator (1/0).
+3. **Assign a start of follow-up (index)** to the unexposed, so follow-up begins at a comparable point. This is the hard part: do it so you avoid immortal time (e.g. using calendar time as the time axis, or assigning index dates from the exposed persons' distribution).
+4. **Adjust in the analysis** for the variables you would otherwise have matched on (sex, age, calendar year, SES ...) - either as covariates in a regression model or with weighting (IPTW). See [Phase 13](13_analyse.qmd).
+
+Neither matching nor adjustment removes confounding from variables you have not measured. Choose based on your study: matching balances strong confounders at the design stage and is easy to communicate; adjustment retains all information and lets you study more variables. You can also combine the two (match on a few, adjust for the rest).
+
+---
+
 ## Step 5 - Assemble, validate and save {.step-heading}
 
 ```r
@@ -409,12 +427,7 @@ saveRDS(kohort, "path/to/full_cohort.rds")
 **Keep the matched-set id** (`match_id` in the manual loop; `exposureMatch()` calls it `case.id`). It tells you which comparison persons belong to which exposed person. This matters when the analysis must **respect the matching**: stratified or conditional analysis (e.g. stratified Cox by matched set, or conditional logistic regression in [case-control](10b_case-control.qmd)), or at least clustered standard errors. Without `match_id` you cannot run a correct matched analysis. See [Phase 13](13_analyse.qmd).
 :::
 
-<details>
-<summary>Variant: unmatched comparison group</summary>
-
-If you do not want to match, skip Step 4: use the entire `pool` (after exclusions) as the comparison group, assign index dates via calendar time or a common study start, and adjust for confounders in the analysis ([Phase 13](13_analyse.qmd), IPTW/regression). The index assignment must still avoid immortal time.
-
-</details>
+If you do not want to match, see the section [Without matching](#without-matching-an-unmatched-comparison-group) above.
 
 ---
 
@@ -446,5 +459,4 @@ cohort_pnrs <- unique(kohort$pnr)   # vector with all pnr's - both exposed and c
 - [Phase 1 - Study preparation](01_studieforberedelse.qmd) - design choices behind cohort and matching
 - [Phase 11a - Outcomes](11a_udfald.qmd) - outcome dates, censoring and crossover
 - [Phase 12 - Assemble and prepare the dataset](11_data-manipulation.qmd) - assemble all extracts into one dataset
-- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/) - sampling strategies for comparison cohorts
-- [Lund et al. (2015), *Clinical Epidemiology*](https://doi.org/10.2147/CLEP.S164456) - bias from incorrect exclusion order
+- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology* 10:1325-1337](https://pubmed.ncbi.nlm.nih.gov/30310326/) - sampling strategies for comparison cohorts (ratio, with/without replacement, chronological vs. random)
