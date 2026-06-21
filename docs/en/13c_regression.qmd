@@ -1,0 +1,88 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Regression"
+subtitle: "Logistic, linear and conditional logistic regression - and when to use robust standard errors"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under development.** This page shows minimal, verified examples. More model types and diagnostics are coming.
+:::
+
+Most register analyses end in a regression model. Base R handles logistic (`glm`) and linear (`lm`) regression; matched case-control data require conditional logistic regression (`survival::clogit`). We use `gtsummary::tbl_regression()` to display the result neatly.
+
+::: {.callout-note}
+The code examples use generic path and variable names. Adapt them to your project. The packages used (`gtsummary`, `survival`, `sandwich`, `lmtest`) must be installed in your R environment on DST.
+:::
+
+---
+
+## Starting point
+
+```r
+library(dplyr)
+library(gtsummary)
+
+df <- readRDS("path/to/analysis.rds")
+```
+
+## Logistic regression (binary outcome)
+
+```r
+model <- glm(outcome ~ exposure + age + sex, data = df, family = binomial)
+
+model %>%
+  tbl_regression(exponentiate = TRUE)   # exponentiate = TRUE gives odds ratios
+```
+
+- `family = binomial` makes it logistic regression.
+- `exponentiate = TRUE` shows **odds ratios** (OR) instead of log-odds coefficients.
+
+## Linear regression (continuous outcome)
+
+```r
+lm(bmi ~ exposure + age + sex, data = df) %>%
+  tbl_regression()
+```
+
+## Matched case-control: conditional logistic regression
+
+When you have matched in a nested case-control design ([Case-control](10b_case-control.qmd)), the analysis must respect the matching with **conditional** logistic regression. Use `clogit()` with a `strata()` term for the matched set.
+
+```r
+library(survival)
+
+clogit(case ~ exposure + age + sex + strata(match_id), data = cc) %>%
+  tbl_regression(exponentiate = TRUE)
+```
+
+- `strata(match_id)` tells the model which rows belong to the same matched set (`case.id` from `incidenceMatch()` or `Set` from `Epi::ccwc()`).
+- `case` = 1 for a case, 0 for a control.
+
+## Robust (clustered) standard errors {#klyngebaserede-standardfejl}
+
+When the same person appears several times in the dataset - e.g. if the comparison cohort is matched **with replacement**, or a comparison person later becomes exposed (crossover, see [Comparison cohort](10a_sammenligningskohorte.qmd)) - the rows are not independent. If you ignore this, the confidence intervals come out too narrow. The fix is **clustered (robust) standard errors**, clustering on the person id.
+
+For a `glm` model you compute a robust covariance matrix and test the coefficients with it:
+
+```r
+library(sandwich)
+library(lmtest)
+
+model <- glm(outcome ~ exposure + age + sex, data = df, family = binomial)
+
+coeftest(model, vcov = vcovCL(model, cluster = ~ pnr))
+```
+
+- `vcovCL(model, cluster = ~ pnr)` is the cluster-robust covariance matrix (clustered on `pnr`).
+- `coeftest()` shows the coefficients with the robust standard errors.
+- For a Cox model you specify it directly with the `cluster` argument in `coxph()` instead (coming on the time-to-event page).
+
+## Check the model's assumptions (briefly)
+
+- **Linear regression:** `plot(model)` gives the classic residual plots (linearity, homoscedasticity, normality of residuals).
+- **Logistic/conditional logistic:** continuous variables are assumed linear in the log-odds. Check e.g. by modelling the variable flexibly (`splines::ns(age, 3)`) and comparing.
+- **Proportional hazards** (for Cox models) belongs on the time-to-event page (`survival::cox.zph()`).
+
+::: {.callout-note}
+Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
+:::

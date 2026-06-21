@@ -1,0 +1,88 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Regression"
+subtitle: "Logistisk, lineær og betinget logistisk regression - og hvornår du skal bruge robuste standardfejl"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Siden viser minimale, verificerede eksempler. Flere modeltyper og diagnostik kommer.
+:::
+
+De fleste registeranalyser ender i en regressionsmodel. Base R klarer logistisk (`glm`) og lineær (`lm`) regression; matchede case-control-data kræver betinget logistisk regression (`survival::clogit`). Vi bruger `gtsummary::tbl_regression()` til at vise resultatet pænt.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. De brugte pakker (`gtsummary`, `survival`, `sandwich`, `lmtest`) skal være installeret i dit R-miljø på DST.
+:::
+
+---
+
+## Udgangspunkt
+
+```r
+library(dplyr)
+library(gtsummary)
+
+df <- readRDS("sti/til/analyse.rds")
+```
+
+## Logistisk regression (binært udfald)
+
+```r
+model <- glm(udfald ~ eksponering + alder + koen, data = df, family = binomial)
+
+model %>%
+  tbl_regression(exponentiate = TRUE)   # exponentiate = TRUE giver odds ratios
+```
+
+- `family = binomial` gør det til logistisk regression.
+- `exponentiate = TRUE` viser **odds ratios** (OR) i stedet for log-odds-koefficienter.
+
+## Lineær regression (kontinuert udfald)
+
+```r
+lm(bmi ~ eksponering + alder + koen, data = df) %>%
+  tbl_regression()
+```
+
+## Matchet case-control: betinget logistisk regression
+
+Når du har matchet i et nested case-control-design ([Case-control](10b_case-control.qmd)), skal analysen respektere matchningen med **betinget** logistisk regression. Brug `clogit()` med et `strata()`-led på matchsættet.
+
+```r
+library(survival)
+
+clogit(case ~ eksponering + alder + koen + strata(match_id), data = cc) %>%
+  tbl_regression(exponentiate = TRUE)
+```
+
+- `strata(match_id)` fortæller modellen, hvilke rækker der hører til samme matchsæt (`case.id` fra `incidenceMatch()` eller `Set` fra `Epi::ccwc()`).
+- `case` = 1 for case, 0 for kontrol.
+
+## Robuste (klyngebaserede) standardfejl {#klyngebaserede-standardfejl}
+
+Når den samme person optræder flere gange i datasættet - fx hvis sammenligningskohorten er matchet **med replacement**, eller en sammenligningsperson senere selv bliver eksponeret (crossover, se [Sammenligningskohorte](10a_sammenligningskohorte.qmd)) - er rækkerne ikke uafhængige. Ignorerer du det, bliver konfidensintervallerne for snævre. Løsningen er **klyngebaserede (robuste) standardfejl**, hvor du klynger på person-id.
+
+For en `glm`-model beregner du en robust kovariansmatrix og tester koefficienterne med den:
+
+```r
+library(sandwich)
+library(lmtest)
+
+model <- glm(udfald ~ eksponering + alder + koen, data = df, family = binomial)
+
+coeftest(model, vcov = vcovCL(model, cluster = ~ pnr))
+```
+
+- `vcovCL(model, cluster = ~ pnr)` er den klynge-robuste kovariansmatrix (klynget på `pnr`).
+- `coeftest()` viser koefficienterne med de robuste standardfejl.
+- For en Cox-model angives det i stedet direkte med `cluster`-argumentet i `coxph()` (kommer på time-to-event-siden).
+
+## Tjek modellens antagelser (kort)
+
+- **Lineær regression:** `plot(model)` giver de klassiske residual-plots (linearitet, varianshomogenitet, normalfordelte residualer).
+- **Logistisk/betinget logistisk:** kontinuerte variable antages lineært relateret til log-odds. Tjek fx ved at modellere variablen fleksibelt (`splines::ns(alder, 3)`) og sammenligne.
+- **Proportional hazards** (for Cox-modeller) hører til time-to-event-siden (`survival::cox.zph()`).
+
+::: {.callout-note}
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+:::
