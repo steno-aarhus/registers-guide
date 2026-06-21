@@ -40,30 +40,35 @@ tabel1 <- df %>%
       all_continuous()  ~ "{median} ({p25}, {p75})",
       all_categorical() ~ "{n} ({p}%)"
     ),
-    digits  = all_continuous() ~ 1,
-    label   = list(alder ~ "Alder (år)", koen ~ "Køn", bmi ~ "BMI"),
+    digits  = all_continuous() ~ 1,          # antal decimaler for kontinuerte tal
+    label   = list(alder ~ "Alder (år)", koen ~ "Køn", bmi ~ "BMI"),  # pæne variabelnavne
     missing = "ifany",                       # vis en "ukendt"-række hvis der mangler værdier
-    missing_text = "Mangler"
+    missing_text = "Mangler"                 # teksten for den række
   ) %>%
   add_overall() %>%                           # tilføj en kolonne med alle samlet
   bold_labels() %>%                           # gør variabelnavnene fede
-  modify_header(label ~ "**Variabel**")       # omdøb venstre kolonneoverskrift
+  modify_header(label ~ "**Variabel**")       # tekst i overskriften på variabel-kolonnen (vælg selv)
 
-tabel1
+tabel1                                        # skriv tabellen ud (vis den)
 ```
 
 Forklaring på det vigtigste:
 
-- `all_continuous()` / `all_categorical()` vælger alle kontinuerte hhv. kategoriske variable.
-- Statistik-koderne i `{}`: `{median} ({p25}, {p75})` = median og kvartiler (IQR); `{n} ({p}%)` = antal og procent. Vil du i stedet have gennemsnit, kan du skrive `{mean} ({sd})`.
-- `tbl_summary()` vælger selv median/IQR for kontinuerte variable som standard - linjen `statistic =` er kun med for at vise, hvordan du styrer det.
+- **`tbl_summary()` gætter selv variabeltypen** ud fra kolonnens indhold og vælger en passende statistik:
+  - faktor- og tekst-variable - og tal med **under 10 forskellige værdier** - bliver *kategoriske* og vises som `{n} ({p}%)` (antal og procent);
+  - øvrige tal bliver *kontinuerte* og vises som `{median} ({p25}, {p75})` (median og kvartiler, dvs. IQR);
+  - variable kodet `0/1`, `ja/nej` eller `TRUE/FALSE` bliver *dikotome* og vises kun med den ene ("ja"-)række.
+- **`statistic =` er derfor valgfri.** Udelader du linjen helt, får du præcis standardvisningen ovenfor. Den er kun med for at vise, hvordan du *ændrer* det - vil du fx have gennemsnit i stedet for median, skriver du `all_continuous() ~ "{mean} ({sd})"`.
+- `all_continuous()` / `all_categorical()` betyder "alle kontinuerte" hhv. "alle kategoriske" variable, så reglen rammer dem alle på én gang.
+- `digits` styrer antallet af decimaler (her 1 for de kontinuerte).
 
 ## Skal der p-værdier på?
 
-Du kan tilføje en p-værdi-kolonne med `add_p()`. Vær opmærksom på, at hypotesetests i en ren baseline-tabel ofte frarådes (de tester ikke det, man tror, ved store registerpopulationer). Brug dem kun bevidst.
+Du kan tilføje en p-værdi-kolonne med `add_p()`. Du kan enten køre det **bagefter** på den færdige `tabel1` (som her), eller sætte `add_p()` ind i kæden ovenfor lige efter `tbl_summary()` - resultatet er det samme. Vær opmærksom på, at hypotesetests i en ren baseline-tabel ofte frarådes (de tester ikke det, man tror, ved store registerpopulationer). Brug dem kun bevidst.
 
 ```r
-tabel1 %>% add_p()
+tabel1 %>%           # tag den allerede byggede tabel ...
+  add_p()            # ... og tilføj en kolonne med p-værdier
 ```
 
 ## Eksportér tabellen (til outputkontrol)
@@ -71,15 +76,20 @@ tabel1 %>% add_p()
 Alt, der forlader DST, skal gennem outputkontrol. En tabel som denne er aggregeret, men tjek altid for **små celler** før eksport.
 
 ```r
-# Direkte til Excel (via huxtable)
-tabel1 %>% as_hux_xlsx(file = "tabel1.xlsx")
+# Til Excel: as_hux_xlsx() kræver, at pakken huxtable er INSTALLERET
+# (du behøver ikke selv kalde library(huxtable) - gtsummary bruger den bag kulisserne).
+tabel1 %>% as_hux_xlsx(file = "tabel1.xlsx")   # skriv tabellen til en .xlsx-fil
 
-# Til et Word-dokument
-tabel1 %>% as_flex_table()
+# Til Word: kræver pakken flextable installeret
+tabel1 %>% as_flex_table()                     # giver et flextable-objekt til et Word-dokument
 
-# Som data.frame, hvis du selv vil arbejde videre med tallene
-tabel1 %>% as_tibble()
+# Virker ALTID uden ekstra pakker (base R): lav tabellen om til en data.frame og gem som CSV
+tabel1 %>%
+  as_tibble() %>%                              # tabellen som almindelig data.frame
+  write.csv("tabel1.csv", row.names = FALSE)   # en CSV kan åbnes direkte i Excel
 ```
+
+Er `huxtable` eller `flextable` ikke tilgængelig på DST, så brug CSV-vejen (base R, ingen pakker nødvendige) eller kontakt din datamanager.
 
 ## Alternativ pakke
 

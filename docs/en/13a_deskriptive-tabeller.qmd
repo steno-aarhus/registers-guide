@@ -40,30 +40,35 @@ table1 <- df %>%
       all_continuous()  ~ "{median} ({p25}, {p75})",
       all_categorical() ~ "{n} ({p}%)"
     ),
-    digits  = all_continuous() ~ 1,
-    label   = list(age ~ "Age (years)", sex ~ "Sex", bmi ~ "BMI"),
+    digits  = all_continuous() ~ 1,          # number of decimals for continuous numbers
+    label   = list(age ~ "Age (years)", sex ~ "Sex", bmi ~ "BMI"),  # nice variable names
     missing = "ifany",                       # show an "unknown" row if values are missing
-    missing_text = "Missing"
+    missing_text = "Missing"                 # the text for that row
   ) %>%
   add_overall() %>%                           # add a column with everyone combined
   bold_labels() %>%                           # bold the variable names
-  modify_header(label ~ "**Variable**")       # rename the left column header
+  modify_header(label ~ "**Variable**")       # text in the header of the variable column (your choice)
 
-table1
+table1                                        # print the table (display it)
 ```
 
 The key parts:
 
-- `all_continuous()` / `all_categorical()` select all continuous resp. categorical variables.
-- The statistic codes in `{}`: `{median} ({p25}, {p75})` = median and quartiles (IQR); `{n} ({p}%)` = count and percentage. If you prefer mean instead, write `{mean} ({sd})`.
-- `tbl_summary()` defaults to median/IQR for continuous variables - the `statistic =` line is only included to show how you control it.
+- **`tbl_summary()` detects the variable type itself** from the column's contents and picks a suitable statistic:
+  - factor and character variables - and numeric variables with **fewer than 10 unique values** - become *categorical* and are shown as `{n} ({p}%)` (count and percentage);
+  - other numeric variables become *continuous* and are shown as `{median} ({p25}, {p75})` (median and quartiles, i.e. IQR);
+  - variables coded `0/1`, `yes/no` or `TRUE/FALSE` become *dichotomous* and are shown with only the one ("yes") row.
+- **`statistic =` is therefore optional.** Omit the line entirely and you get exactly the default display above. It is only included to show how you *change* it - for mean instead of median, write `all_continuous() ~ "{mean} ({sd})"`.
+- `all_continuous()` / `all_categorical()` mean "all continuous" resp. "all categorical" variables, so the rule applies to all of them at once.
+- `digits` controls the number of decimals (here 1 for the continuous variables).
 
 ## Should you add p-values?
 
-You can add a p-value column with `add_p()`. Note that hypothesis tests in a plain baseline table are often discouraged (with large register populations they do not test what people assume). Use them deliberately.
+You can add a p-value column with `add_p()`. You can either run it **afterwards** on the finished `table1` (as here), or insert `add_p()` into the chain above right after `tbl_summary()` - the result is the same. Note that hypothesis tests in a plain baseline table are often discouraged (with large register populations they do not test what people assume). Use them deliberately.
 
 ```r
-table1 %>% add_p()
+table1 %>%           # take the already-built table ...
+  add_p()            # ... and add a column of p-values
 ```
 
 ## Export the table (for output control)
@@ -71,15 +76,20 @@ table1 %>% add_p()
 Anything leaving DST must go through output control. A table like this is aggregated, but always check for **small cells** before exporting.
 
 ```r
-# Straight to Excel (via huxtable)
-table1 %>% as_hux_xlsx(file = "table1.xlsx")
+# To Excel: as_hux_xlsx() requires the huxtable package to be INSTALLED
+# (you don't need to call library(huxtable) yourself - gtsummary uses it behind the scenes).
+table1 %>% as_hux_xlsx(file = "table1.xlsx")   # write the table to a .xlsx file
 
-# To a Word document
-table1 %>% as_flex_table()
+# To Word: requires the flextable package installed
+table1 %>% as_flex_table()                     # gives a flextable object for a Word document
 
-# As a data frame, if you want to work with the numbers yourself
-table1 %>% as_tibble()
+# Works ALWAYS without extra packages (base R): turn the table into a data frame and save as CSV
+table1 %>%
+  as_tibble() %>%                              # the table as a plain data frame
+  write.csv("table1.csv", row.names = FALSE)   # a CSV opens directly in Excel
 ```
+
+If `huxtable` or `flextable` is not available on DST, use the CSV route (base R, no packages needed) or contact your data manager.
 
 ## Alternative package
 
