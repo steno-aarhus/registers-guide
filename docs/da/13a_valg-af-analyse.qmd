@@ -10,13 +10,7 @@ date: last-modified
 
 **Start med dit spørgsmål.** Formulér først dit forskningsspørgsmål og din **nulhypotese** - de styrer resten. Spørg så: vil du **sammenligne grupper** eller **beskrive en sammenhæng**? (Det er grundlæggende det samme - at sammenligne grupper er at undersøge en sammenhæng mellem en gruppe-variabel og udfaldet.)
 
-Selve valget af test afhænger især af **datatypen** (numerisk, binær eller time-to-event), om data er **parrede eller uparrede**, og om antagelserne for en **parametrisk** test er opfyldt (ellers en nonparametrisk). Tabellerne nedenfor matcher hver situation med en test/model og den tilsvarende **R**-kommando.
-
-**Parret eller uparret?** Data er *parrede*, når målingerne hører sammen to og to - typisk den **samme person før og efter** en behandling, eller et **1:1-matchet par** (én case + én matchet kontrol). Effekten beregnes da *inden for* hvert par, og man bruger typisk en parret test (fx paret t-test eller McNemar). Data er *uparrede*, når grupperne er **forskellige, uafhængige personer**.
-
-**Bemærk: matchet med flere kontroller behandles ikke som parret.** 1:1-matchning svarer til parrede data, men matcher du med **flere kontroller** (1:n, fx 1:5 case-control) eller har en **matchet kohorte**, er der matchsæt (strata) med mere end to i hver - så en parret test, der netop kræver par, passer ikke. Det analyseres i stedet med **betinget logistisk regression** (`clogit` med `strata()`, se [Regression](13d_regression.qmd)) for matchet case-control, eller **stratificeret/klynget Cox** for en matchet kohorte (se [Time-to-event](13e_time-to-event.qmd)) - metoder, der generaliserer paret-idéen til matchsæt af vilkårlig størrelse. De hører altså under regression / time-to-event i tabellerne nedenfor.
-
-**Parametrisk eller nonparametrisk?** En *parametrisk* test eller model antager, at data følger en bestemt fordeling - typisk normalfordeling for tests på tal, eller binomialfordelingen for tests på andele. En *nonparametrisk* test antager ingen bestemt fordeling og bygger i stedet på **rangordning** af værdierne (fx Wilcoxon); den er mere robust over for skæve fordelinger og outliers, men har som regel lidt mindre styrke (power). Tommelfingerregel: holder den parametriske tests antagelser (se [Antagelser](#antagelser) nederst), så brug den; ellers den nonparametriske.
+Selve valget af test afhænger især af **datatypen** (numerisk, binær eller time-to-event), om data er **parrede eller uparrede**, og om antagelserne for en **parametrisk** test er opfyldt (ellers en nonparametrisk). Tabellerne nedenfor matcher forskellige situationer med en test/model og den tilsvarende **R**-kommando. Er begreberne nye, så fold dem ud under **Begreber kort**.
 
 ::: {.callout-note}
 Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskratio`) kommer fra en **pakke**, der skal være installeret på DST; resten er base R (pakken `stats`, altid tilgængelig). Regression og time-to-event uddybes i [Regression](13d_regression.qmd) og [Time-to-event](13e_time-to-event.qmd).
@@ -63,10 +57,24 @@ Parametriske tests regner typisk på **gennemsnit**; nonparametriske tests bruge
 </details>
 
 <details>
-<summary>Uafhængige vs. parrede data</summary>
+<summary>Parret eller uparret data</summary>
 
-- **Uafhængige data:** forskellige, urelaterede personer i hver gruppe (fx én gruppe får diæt 1, en anden diæt 2). At man også registrerer fx køn på hver person gør det ikke til parrede data - køn og udfald er bare to forskellige variable.
-- **Parrede data:** den **samme** enhed måles mere end én gang (fx vægt før og efter en behandling) eller indgår i 1:1-matchede par. Det afgør, om du skal bruge en parret eller uparret test (se tabellerne).
+- **Uparrede eller uafhængige data:** forskellige, urelaterede personer i hver gruppe (fx én gruppe får diæt 1, en anden diæt 2). At man også registrerer fx køn på hver person gør det ikke til parrede data - køn og udfald er bare to forskellige variable.
+- **Parrede/afhængige data:** den **samme** enhed måles mere end én gang (fx vægt før og efter en behandling) eller indgår i 1:1-matchede par. Det afgør, om du skal bruge en parret eller uparret test (se tabellerne).
+
+</details>
+
+<details>
+<summary>Parret og matched er ikke det samme</summary>
+
+Et **1:1-matchet par** (én case + én matchet kontrol) svarer til parrede data og analyseres parret. Men matcher du med **flere kontroller** (fx 1:5 case-control) eller har en **matchet kohorte**, er der matchsæt med mere end to i hver - en parret test kræver par og passer derfor ikke. De analyseres i stedet med **betinget logistisk regression** (`clogit` + `strata()`, se [Regression](13d_regression.qmd)) eller **stratificeret/klynget Cox** (se [Time-to-event](13e_time-to-event.qmd)), som generaliserer paret-idéen til matchsæt af enhver størrelse.
+
+</details>
+
+<details>
+<summary>Parametrisk eller nonparametrisk</summary>
+
+En *parametrisk* test eller model antager en bestemt fordeling - typisk normalfordeling for tests på tal, eller binomialfordelingen for tests på andele. En *nonparametrisk* test antager ingen bestemt fordeling og bygger i stedet på **rangordning** af værdierne (fx Wilcoxon); den er mere robust over for skæve fordelinger og outliers, men har som regel lidt mindre styrke (power). Tommelfingerregel: holder den parametriske tests antagelser (se [Antagelser](#antagelser-detaljer) nederst), så brug den; ellers den nonparametriske.
 
 </details>
 
@@ -214,6 +222,9 @@ Pas på navnene: **Mann-Whitney U** kaldes også Wilcoxon **rank-sum** - det er 
 
 ## Antagelser
 
+<details id="antagelser-detaljer">
+<summary>**Antagelser bag testene** - klik for detaljer</summary>
+
 Hver test bygger på nogle antagelser. Nogle kan du **teste eller inspicere** i data; andre er **designspørgsmål**, du må vurdere ud fra, hvordan data er indsamlet. Her er dem, der nævnes i tabellerne:
 
 **Normalfordeling** (t-tests, lineær regression, ANOVA). At værdierne - eller for regression modellens *residualer* - er nogenlunde normalfordelte. *Tjek:* visuelt med histogram (`hist()`) og Q-Q-plot (`qqnorm()` + `qqline()`); evt. en formel test (`shapiro.test()`), men den er overfølsom ved store stikprøver, så stol mest på det visuelle. Ved store stikprøver er t-test og gennemsnit desuden robuste (den centrale grænseværdisætning).
@@ -237,6 +248,8 @@ Hver test bygger på nogle antagelser. Nogle kan du **teste eller inspicere** i 
 **Uafhængig (højre)censurering** (Kaplan-Meier, log-rank, Cox). At dem, der censureres (fx mistes til opfølgning), ikke systematisk har højere eller lavere risiko end dem, der følges videre. *Kan ikke testes direkte* - argumentér ud fra, hvorfor folk censureres (administrativt opfølgningsstop = typisk uafhængigt; tab til opfølgning knyttet til helbred = problematisk). Evt. følsomhedsanalyser.
 
 **Proportionale hazards** (Cox-regression). At en variabels effekt (hazard ratio) er nogenlunde konstant over tid. *Tjek:* `survival::cox.zph()` (Schoenfeld-residualer) og log-log-overlevelseskurver - se [Time-to-event](13e_time-to-event.qmd).
+
+</details>
 
 ::: {.callout-note}
 Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
