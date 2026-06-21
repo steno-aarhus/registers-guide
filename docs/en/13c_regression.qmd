@@ -19,19 +19,20 @@ The code examples use generic path and variable names. Adapt them to your projec
 ## Starting point
 
 ```r
-library(dplyr)
-library(gtsummary)
+library(dplyr)                         # %>% (pipe)
+library(gtsummary)                     # tbl_regression() for clean output
 
-df <- readRDS("path/to/analysis.rds")
+df <- readRDS("path/to/analysis.rds")  # analysis-ready dataset
 ```
 
 ## Logistic regression (binary outcome)
 
 ```r
-model <- glm(outcome ~ exposure + age + sex, data = df, family = binomial)
+model <- glm(outcome ~ exposure + age + sex,   # outcome explained by exposure + covariates
+             data = df, family = binomial)     # family = binomial -> logistic regression
 
-model %>%
-  tbl_regression(exponentiate = TRUE)   # exponentiate = TRUE gives odds ratios
+model %>%                                # pass the model on to a table
+  tbl_regression(exponentiate = TRUE)    # exponentiate = TRUE -> odds ratios (OR)
 ```
 
 - `family = binomial` makes it logistic regression.
@@ -40,8 +41,8 @@ model %>%
 ## Linear regression (continuous outcome)
 
 ```r
-lm(bmi ~ exposure + age + sex, data = df) %>%
-  tbl_regression()
+lm(bmi ~ exposure + age + sex, data = df) %>%  # linear model for a continuous outcome
+  tbl_regression()                       # coefficients (no exponentiation)
 ```
 
 ## Matched case-control: conditional logistic regression
@@ -49,10 +50,11 @@ lm(bmi ~ exposure + age + sex, data = df) %>%
 When you have matched in a nested case-control design ([Case-control](10b_case-control.qmd)), the analysis must respect the matching with **conditional** logistic regression. Use `clogit()` with a `strata()` term for the matched set.
 
 ```r
-library(survival)
+library(survival)                        # clogit()
 
-clogit(case ~ exposure + age + sex + strata(match_id), data = cc) %>%
-  tbl_regression(exponentiate = TRUE)
+clogit(case ~ exposure + age + sex + strata(match_id),  # strata() = the matched set
+       data = cc) %>%
+  tbl_regression(exponentiate = TRUE)    # -> odds ratios
 ```
 
 - `strata(match_id)` tells the model which rows belong to the same matched set (`case.id` from `incidenceMatch()` or `Set` from `Epi::ccwc()`).
@@ -65,12 +67,13 @@ When the same person appears several times in the dataset - e.g. if the comparis
 For a `glm` model you compute a robust covariance matrix and test the coefficients with it:
 
 ```r
-library(sandwich)
-library(lmtest)
+library(sandwich)                        # vcovCL(): cluster-robust variance
+library(lmtest)                          # coeftest(): test with a chosen variance
 
 model <- glm(outcome ~ exposure + age + sex, data = df, family = binomial)
 
-coeftest(model, vcov = vcovCL(model, cluster = ~ pnr))
+coeftest(model,                          # show the coefficients ...
+         vcov = vcovCL(model, cluster = ~ pnr))  # ... with SEs clustered on person id
 ```
 
 - `vcovCL(model, cluster = ~ pnr)` is the cluster-robust covariance matrix (clustered on `pnr`).

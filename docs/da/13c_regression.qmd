@@ -19,19 +19,20 @@ Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. 
 ## Udgangspunkt
 
 ```r
-library(dplyr)
-library(gtsummary)
+library(dplyr)                         # %>% (rør)
+library(gtsummary)                     # tbl_regression() til pæn output
 
-df <- readRDS("sti/til/analyse.rds")
+df <- readRDS("sti/til/analyse.rds")   # analyseklart datasæt
 ```
 
 ## Logistisk regression (binært udfald)
 
 ```r
-model <- glm(udfald ~ eksponering + alder + koen, data = df, family = binomial)
+model <- glm(udfald ~ eksponering + alder + koen,  # udfald forklaret af eksponering + covariater
+             data = df, family = binomial)         # family = binomial -> logistisk regression
 
-model %>%
-  tbl_regression(exponentiate = TRUE)   # exponentiate = TRUE giver odds ratios
+model %>%                                # send modellen videre til en tabel
+  tbl_regression(exponentiate = TRUE)    # exponentiate = TRUE -> odds ratios (OR)
 ```
 
 - `family = binomial` gør det til logistisk regression.
@@ -40,8 +41,8 @@ model %>%
 ## Lineær regression (kontinuert udfald)
 
 ```r
-lm(bmi ~ eksponering + alder + koen, data = df) %>%
-  tbl_regression()
+lm(bmi ~ eksponering + alder + koen, data = df) %>%  # lineær model for et kontinuert udfald
+  tbl_regression()                       # koefficienter (ingen eksponentiering)
 ```
 
 ## Matchet case-control: betinget logistisk regression
@@ -49,10 +50,11 @@ lm(bmi ~ eksponering + alder + koen, data = df) %>%
 Når du har matchet i et nested case-control-design ([Case-control](10b_case-control.qmd)), skal analysen respektere matchningen med **betinget** logistisk regression. Brug `clogit()` med et `strata()`-led på matchsættet.
 
 ```r
-library(survival)
+library(survival)                        # clogit()
 
-clogit(case ~ eksponering + alder + koen + strata(match_id), data = cc) %>%
-  tbl_regression(exponentiate = TRUE)
+clogit(case ~ eksponering + alder + koen + strata(match_id),  # strata() = matchsættet
+       data = cc) %>%
+  tbl_regression(exponentiate = TRUE)    # -> odds ratios
 ```
 
 - `strata(match_id)` fortæller modellen, hvilke rækker der hører til samme matchsæt (`case.id` fra `incidenceMatch()` eller `Set` fra `Epi::ccwc()`).
@@ -65,12 +67,13 @@ Når den samme person optræder flere gange i datasættet - fx hvis sammenlignin
 For en `glm`-model beregner du en robust kovariansmatrix og tester koefficienterne med den:
 
 ```r
-library(sandwich)
-library(lmtest)
+library(sandwich)                        # vcovCL(): klynge-robust varians
+library(lmtest)                          # coeftest(): test med en valgt varians
 
 model <- glm(udfald ~ eksponering + alder + koen, data = df, family = binomial)
 
-coeftest(model, vcov = vcovCL(model, cluster = ~ pnr))
+coeftest(model,                          # vis koefficienterne ...
+         vcov = vcovCL(model, cluster = ~ pnr))  # ... med standardfejl klynget på person-id
 ```
 
 - `vcovCL(model, cluster = ~ pnr)` er den klynge-robuste kovariansmatrix (klynget på `pnr`).
