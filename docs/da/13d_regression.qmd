@@ -60,15 +60,14 @@ clogit(case ~ eksponering + alder + koen + strata(match_id),  # strata() = match
 - `strata(match_id)` fortæller modellen, hvilke rækker der hører til samme matchsæt (`case.id` fra `incidenceMatch()` eller `Set` fra `Epi::ccwc()`).
 - `case` = 1 for case, 0 for kontrol.
 
-## Robuste (klyngebaserede) standardfejl {#klyngebaserede-standardfejl}
+<details id="klyngebaserede-standardfejl">
+<summary>**Avanceret:** robuste (klyngebaserede) standardfejl - spring over, hvis hver person kun optræder én gang</summary>
 
-Når den samme person optræder flere gange i datasættet - fx hvis sammenligningskohorten er matchet **med replacement**, eller en sammenligningsperson senere selv bliver eksponeret (crossover, se [Sammenligningskohorte](10a_sammenligningskohorte.qmd)) - er rækkerne ikke uafhængige. Ignorerer du det, bliver konfidensintervallerne for snævre. Løsningen er **klyngebaserede (robuste) standardfejl**, hvor du klynger på person-id.
-
-For en `glm`-model beregner du en robust kovariansmatrix og tester koefficienterne med den:
+Når den samme person optræder **flere gange** i datasættet - fx hvis sammenligningskohorten er matchet **med replacement**, eller en sammenligningsperson senere selv bliver eksponeret (crossover, se [Sammenligningskohorte](10a_sammenligningskohorte.qmd)) - er rækkerne ikke uafhængige. Ignorerer du det, bliver konfidensintervallerne for snævre. Løsningen er **klyngebaserede (robuste) standardfejl**: en beregning af usikkerheden, der tager højde for, at rækker fra samme person hænger sammen. (Optræder hver person kun én gang, behøver du ikke det her.)
 
 ```r
-library(sandwich)                        # vcovCL(): klynge-robust varians
-library(lmtest)                          # coeftest(): test med en valgt varians
+library(sandwich)                        # vcovCL(): "sandwich"-estimator af variansen
+library(lmtest)                          # coeftest(): test koefficienterne med en valgt varians
 
 model <- glm(udfald ~ eksponering + alder + koen, data = df, family = binomial)
 
@@ -76,15 +75,19 @@ coeftest(model,                          # vis koefficienterne ...
          vcov = vcovCL(model, cluster = ~ pnr))  # ... med standardfejl klynget på person-id
 ```
 
-- `vcovCL(model, cluster = ~ pnr)` er den klynge-robuste kovariansmatrix (klynget på `pnr`).
-- `coeftest()` viser koefficienterne med de robuste standardfejl.
-- For en Cox-model angives det i stedet direkte med `cluster`-argumentet i `coxph()` (kommer på time-to-event-siden).
+- `vcovCL(model, cluster = ~ pnr)` er den klynge-robuste kovariansmatrix (klynget på `pnr`). "Sandwich" henviser kun til formlens form - pointen er, at den ikke antager uafhængige rækker.
+- For en Cox-model gøres det i stedet med `cluster`-argumentet i `coxph()` (se [Time-to-event](13e_time-to-event.qmd)).
 
-## Tjek modellens antagelser (kort)
+</details>
 
-- **Lineær regression:** `plot(model)` giver de klassiske residual-plots (linearitet, varianshomogenitet, normalfordelte residualer).
-- **Logistisk/betinget logistisk:** kontinuerte variable antages lineært relateret til log-odds. Tjek fx ved at modellere variablen fleksibelt (`splines::ns(alder, 3)`) og sammenligne.
-- **Proportional hazards** (for Cox-modeller) hører til time-to-event-siden (`survival::cox.zph()`).
+<details>
+<summary>**Avanceret:** tjek modellens antagelser</summary>
+
+- **Lineær regression:** `plot(model)` giver de klassiske residual-plots (linearitet, varianshomogenitet, normalfordelte residualer). Ser de skæve ud, kan en transformation af udfaldet eller en anden model være nødvendig.
+- **Logistisk / betinget logistisk:** kontinuerte variable antages at have en lineær sammenhæng med log-odds. Tjek fx ved at lade variablen indgå fleksibelt med splines (`splines::ns(alder, 3)` = en blød kurve i stedet for en ret linje) og se, om billedet ændrer sig.
+- **Proportional hazards** (for Cox-modeller) hører til [Time-to-event](13e_time-to-event.qmd) (`survival::cox.zph()`).
+
+</details>
 
 ::: {.callout-note}
 Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
