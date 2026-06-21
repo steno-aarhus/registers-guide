@@ -62,22 +62,22 @@ Med syntetiske tal ser kurverne sådan ud (her falder de eksponerede hurtigere, 
 ```r
 library(gtsummary)                         # tbl_regression()
 
-cox <- coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,  # model
+# Uden replacement (hver person optræder kun én gang): en helt almindelig Cox-model.
+cox <- coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,
              data = df)
 
 cox %>%                                    # send modellen videre til en pæn tabel
   tbl_regression(exponentiate = TRUE)      # exponentiate = TRUE -> hazard ratios
 ```
 
-Optræder den samme person flere gange (matchet **med replacement** eller crossover), så tilføj klyngebaserede standardfejl med `cluster`-argumentet (samme idé som i [Regression](13d_regression.qmd#klyngebaserede-standardfejl)):
+**Forskellen med replacement.** Er sammenligningskohorten matchet **med replacement** (eller er der crossover), optræder samme person flere gange, og rækkerne er ikke uafhængige. Så tilføjer du **ét eneste argument** - `cluster = pnr` - til præcis samme model. Det ændrer **ikke** hazard ratio-estimatet (HR'en er den samme); det retter kun **standardfejlene og konfidensintervallerne**, som ellers ville blive kunstigt snævre. Samme idé som i [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
 
 ```r
-# Samme model som ovenfor, men med klyngebaserede (robuste) standardfejl.
-# Det er den typiske analyse for en sammenligningskohorte matchet MED replacement.
+# Med replacement (samme person flere gange): ENESTE forskel fra modellen ovenfor er cluster = pnr.
 coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,
       data    = df,
-      cluster = pnr) %>%                   # robust varians klynget på person-id
-  tbl_regression(exponentiate = TRUE)      # HR med robuste konfidensintervaller
+      cluster = pnr) %>%                   # <- den eneste ændring: klynge på person-id
+  tbl_regression(exponentiate = TRUE)      # HR uændret; kun CI'erne bliver korrekte (typisk bredere)
 ```
 
 <details>
