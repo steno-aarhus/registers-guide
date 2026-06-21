@@ -138,6 +138,30 @@ Commands written as `package::function` (e.g. `survival::coxph`, `epitools::risk
 </table>
 </div>
 
+## Assumptions
+
+Every test rests on some assumptions. Some you can **test or inspect** in the data; others are **design questions** you must judge from how the data were collected. Here are the ones named in the tables:
+
+**Normal distribution** (t-tests, linear regression, ANOVA). That the values - or for regression the model's *residuals* - are roughly normally distributed. *Check:* visually with a histogram (`hist()`) and Q-Q plot (`qqnorm()` + `qqline()`); optionally a formal test (`shapiro.test()`), but it is oversensitive in large samples, so trust the visual most. With large samples, t-tests and means are also robust (the central limit theorem).
+
+**Normally distributed paired differences** (paired t-test). It is the *differences* (e.g. before minus after) that should be roughly normal - not each group separately. *Check:* histogram/Q-Q plot of the differences.
+
+**Equal variance (homoscedasticity)** (unpaired t-test, ANOVA, linear regression). The groups (or residuals) have roughly the same spread. *Check:* boxplot per group; `var.test()` (two groups) or `car::leveneTest()` (several groups); for regression a residual plot via `plot(model)`. Note: Welch's t-test (R's default) does *not* assume equal variance, so it is rarely a problem there.
+
+**Independent observations** (almost all tests). Each observation contributes independent information - e.g. not several rows from the same person or other clusters. *Cannot be tested in the data* - it is a design / data-structure question. *Inspect:* do you have repeated rows per person, matched pairs or clusters? Then use a method that accounts for it (paired test, clustered standard errors - see [Regression](13d_regression.qmd#klyngebaserede-standardfejl) - or a mixed model).
+
+**Same distribution shape** (nonparametric tests: Wilcoxon, Mann-Whitney, Kruskal-Wallis). For the comparison to be meaningful, the groups should have roughly the same distribution shape. *Check:* compare density curves/histograms or boxplots per group (hard to test formally, so inspect visually).
+
+**Binomial distribution** (binomial test). A yes/no outcome counted over independent units with the same probability. *Mostly a design question* - judge whether the data fit it (independent people, same outcome definition).
+
+**Adequate expected cell counts** (chi-square). The test is unreliable if the *expected* counts in the cells are too small (rule of thumb: below 5). *Check:* look at the expected counts with `chisq.test(table)$expected`; if some are small, use `fisher.test()` instead.
+
+**Independent pairs** (McNemar). The pairs are matched, and the pairs themselves are independent of each other. *Design question* - follows from how you paired.
+
+**Independent (right) censoring** (Kaplan-Meier, log-rank, Cox). That those who are censored (e.g. lost to follow-up) do not systematically have higher or lower risk than those still followed. *Cannot be tested directly* - argue from why people are censored (administrative end of follow-up = typically independent; loss to follow-up tied to health = problematic). Sensitivity analyses if needed.
+
+**Proportional hazards** (Cox regression). That a variable's effect (hazard ratio) is roughly constant over time. *Check:* `survival::cox.zph()` (Schoenfeld residuals) and log-log survival curves - see [Time-to-event](13e_time-to-event.qmd).
+
 ::: {.callout-note}
 Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
 :::
