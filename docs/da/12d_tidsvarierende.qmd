@@ -1,0 +1,53 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Tidsvarierende variable"
+subtitle: "Variable der ændrer sig over opfølgningen: start/stop-format med tmerge()"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Siden viser et minimalt, verificeret eksempel. Flere detaljer kommer.
+:::
+
+Nogle variable ændrer sig **under opfølgningen** - en blodprøve, BMI, vægt, eller en eksponering der først starter undervejs. De kan ikke stå som én værdi per person. I stedet laver du **start/stop-format**: én række per person-*interval*, hvor variablen er konstant inden for intervallet. Det bygger du med `survival::tmerge()` og analyserer med en Cox-model.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. `survival` skal være installeret i dit R-miljø på DST.
+:::
+
+---
+
+## Fra én række til intervaller
+
+En person med to målinger bliver til to rækker, hver med sit `tstart`/`tstop`-interval og den værdi, der gælder i intervallet:
+
+| pnr | tstart | tstop | maaling | udfald |
+|---|---|---|---|---|
+| 001 | 0 | 180 | 5.2 | 0 |
+| 001 | 180 | 365 | 6.8 | 1 |
+
+## Byg start/stop-data med tmerge()
+
+```r
+library(survival)                          # tmerge(), tdc(), event()
+
+# base      = én række per person: pnr, exit_dag (slut på opfølgning), status (1 = udfald)
+# maalinger = mange rækker per person: pnr, dag (tid for målingen), vaerdi
+
+d <- tmerge(base, base, id = pnr,                 # initialisér start/stop-data fra base
+            udfald = event(exit_dag, status))     # definér hændelsen ved exit-tidspunktet
+
+d <- tmerge(d, maalinger, id = pnr,               # tilføj den tidsvarierende variabel
+            maaling = tdc(dag, vaerdi))           # tdc = time-dependent covariate
+# -> d har nu tstart, tstop, udfald og maaling (én række per interval)
+```
+
+- `event(tid, status)` markerer, hvornår hændelsen sker.
+- `tdc(dag, vaerdi)` lader `maaling` skifte værdi på hver måledag.
+
+## Analysér i en Cox-model
+
+```r
+coxph(Surv(tstart, tstop, udfald) ~ maaling + alder, data = d)  # tidsvarierende Cox-model
+```
+
+Selve time-to-event-analysen (Kaplan-Meier, Cox, antagelser) ligger i [Time-to-event](13e_time-to-event.qmd).

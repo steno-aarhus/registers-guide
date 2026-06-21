@@ -1,0 +1,61 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Manglende data"
+subtitle: "Inspicér missingness og håndtér den: complete-case eller multipel imputation"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Siden viser minimale, verificerede eksempler. Flere detaljer kommer.
+:::
+
+Registerdata har næsten altid manglende værdier. Nogle er **strukturelle** (en variabel blev ikke indsamlet i alle år) - det er ikke tilfældigt, så tænk over *hvorfor* en værdi mangler, før du håndterer den. To gængse tilgange: brug kun komplette rækker (complete-case), eller **multipel imputation**.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. `naniar` og `mice` skal være installeret i dit R-miljø på DST.
+:::
+
+---
+
+## Inspicér missingness
+
+Start med at se, *hvor* og *hvor meget* der mangler.
+
+```r
+library(naniar)                            # overblik over manglende data
+
+df <- readRDS("sti/til/analyse.rds")       # analyseklart datasæt
+
+miss_var_summary(df)                       # tabel: antal og andel manglende per variabel
+gg_miss_var(df)                            # samme som figur
+vis_miss(df)                               # "kort" over hvor i datasættet værdier mangler
+```
+
+## Tilgang 1: complete-case
+
+Mange R-funktioner dropper selv rækker med `NA` (listwise sletning). Det er enkelt, men kan give **bias og tab af styrke**, hvis data ikke mangler helt tilfældigt.
+
+```r
+df_complete <- na.omit(df)                 # behold kun rækker helt uden NA (brug bevidst)
+```
+
+## Tilgang 2: multipel imputation (mice)
+
+Multipel imputation udfylder de manglende værdier **flere gange**, fitter din model på hvert datasæt, og samler resultaterne - så usikkerheden ved selve imputeringen tælles med.
+
+```r
+library(mice)                              # md.pattern(), mice(), with(), pool()
+
+md.pattern(df)                             # vis mønstret af manglende værdier
+
+imp <- mice(df, m = 5, seed = 123)         # lav 5 imputerede datasæt (seed = reproducerbarhed)
+
+fit <- with(imp,                           # fit din model på HVERT af de 5 datasæt
+            glm(udfald ~ eksponering + alder, family = binomial))
+
+pool(fit) %>% summary()                    # saml de 5 estimater til ét resultat (Rubins regler)
+```
+
+- Medtag de variable, der indgår i din analysemodel - **også udfaldet** - i imputeringen.
+- `complete(imp, 1)` giver det første udfyldte datasæt, hvis du vil inspicere det.
+
+Analysen af det imputerede datasæt hører til [Fase 13 - Analyse](13_analyse.qmd).

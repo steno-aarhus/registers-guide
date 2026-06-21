@@ -1,0 +1,53 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Time-varying variables"
+subtitle: "Variables that change during follow-up: start/stop format with tmerge()"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under development.** This page shows a minimal, verified example. More detail is coming.
+:::
+
+Some variables change **during follow-up** - a blood test, BMI, weight, or an exposure that only starts partway through. They cannot be a single value per person. Instead you build **start/stop format**: one row per person-*interval*, where the variable is constant within the interval. You build it with `survival::tmerge()` and analyse it with a Cox model.
+
+::: {.callout-note}
+The code examples use generic path and variable names. Adapt them to your project. `survival` must be installed in your R environment on DST.
+:::
+
+---
+
+## From one row to intervals
+
+A person with two measurements becomes two rows, each with its own `tstart`/`tstop` interval and the value that applies within it:
+
+| pnr | tstart | tstop | measure | outcome |
+|---|---|---|---|---|
+| 001 | 0 | 180 | 5.2 | 0 |
+| 001 | 180 | 365 | 6.8 | 1 |
+
+## Build start/stop data with tmerge()
+
+```r
+library(survival)                          # tmerge(), tdc(), event()
+
+# base         = one row per person: pnr, exit_day (end of follow-up), status (1 = outcome)
+# measurements = many rows per person: pnr, day (time of the measurement), value
+
+d <- tmerge(base, base, id = pnr,                 # initialise start/stop data from base
+            outcome = event(exit_day, status))    # define the event at the exit time
+
+d <- tmerge(d, measurements, id = pnr,            # add the time-varying variable
+            measure = tdc(day, value))            # tdc = time-dependent covariate
+# -> d now has tstart, tstop, outcome and measure (one row per interval)
+```
+
+- `event(time, status)` marks when the event occurs.
+- `tdc(day, value)` lets `measure` change value on each measurement day.
+
+## Analyse in a Cox model
+
+```r
+coxph(Surv(tstart, tstop, outcome) ~ measure + age, data = d)  # time-varying Cox model
+```
+
+The time-to-event analysis itself (Kaplan-Meier, Cox, assumptions) is in [Time-to-event](13e_time-to-event.qmd).
