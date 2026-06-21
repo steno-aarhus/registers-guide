@@ -1,0 +1,89 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Deskriptive tabeller (Table 1)"
+subtitle: "Baseline-karakteristika for din studiepopulation med gtsummary"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Siden viser et minimalt, verificeret eksempel med `gtsummary`. Flere eksempler (undergrupper, flere statistikker) kommer.
+:::
+
+En **"Table 1"** beskriver din studiepopulation: alder, køn og andre baseline-variable, typisk opdelt efter eksponering. Den er næsten altid den første tabel i en registerartikel. Her bruger vi pakken [`gtsummary`](https://www.danieldsjoberg.com/gtsummary/), der laver en publikationsklar tabel med få linjer.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. `gtsummary` (og `huxtable`, hvis du vil eksportere til Excel) skal være installeret i dit R-miljø på DST; er de ikke det, så kontakt din datamanager.
+:::
+
+---
+
+## Udgangspunkt
+
+Du starter fra dit **analyseklare datasæt** med én række per person ([Fase 12](12_data-manipulation.qmd)).
+
+```r
+library(gtsummary)
+
+df <- readRDS("sti/til/analyse.rds")
+```
+
+## Et minimalt eksempel
+
+`tbl_summary()` opsummerer de variable, du peger på. Med `by =` opdeler du tabellen i kolonner efter en gruppe (fx eksponering).
+
+```r
+tabel1 <- df |>
+  tbl_summary(
+    by = eksponering,                       # én kolonne per gruppe (udelad for samlet tabel)
+    include = c(alder, koen, bmi),          # variable der skal med
+    statistic = list(
+      all_continuous()  ~ "{median} ({p25}, {p75})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits  = all_continuous() ~ 1,
+    label   = list(alder ~ "Alder (år)", koen ~ "Køn", bmi ~ "BMI"),
+    missing = "ifany",                       # vis en "ukendt"-række hvis der mangler værdier
+    missing_text = "Mangler"
+  ) |>
+  add_overall() |>                           # tilføj en kolonne med alle samlet
+  bold_labels() |>
+  modify_header(label ~ "**Variabel**")
+
+tabel1
+```
+
+Forklaring på det vigtigste:
+
+- `all_continuous()` / `all_categorical()` vælger alle kontinuerte hhv. kategoriske variable.
+- Statistik-koderne i `{}`: `{median} ({p25}, {p75})` = median og kvartiler (IQR); `{n} ({p}%)` = antal og procent. Vil du i stedet have gennemsnit, kan du skrive `{mean} ({sd})`.
+- `tbl_summary()` vælger selv median/IQR for kontinuerte variable som standard - linjen `statistic =` er kun med for at vise, hvordan du styrer det.
+
+## Skal der p-værdier på?
+
+Du kan tilføje en p-værdi-kolonne med `add_p()`. Vær opmærksom på, at hypotesetests i en ren baseline-tabel ofte frarådes (de tester ikke det, man tror, ved store registerpopulationer). Brug dem kun bevidst.
+
+```r
+tabel1 |> add_p()
+```
+
+## Eksportér tabellen (til outputkontrol)
+
+Alt, der forlader DST, skal gennem outputkontrol. En tabel som denne er aggregeret, men tjek altid for **små celler** før eksport.
+
+```r
+# Direkte til Excel (via huxtable)
+tabel1 |> as_hux_xlsx(file = "tabel1.xlsx")
+
+# Til et Word-dokument
+tabel1 |> as_flex_table()
+
+# Som data.frame, hvis du selv vil arbejde videre med tallene
+tabel1 |> as_tibble()
+```
+
+## Alternativ pakke
+
+`finalfit::summary_factorlist()` laver en lignende baseline-tabel og er populær i epidemiologi. `gtsummary` er valgt her, fordi eksport til Excel og Word er ligetil.
+
+::: {.callout-note}
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+:::

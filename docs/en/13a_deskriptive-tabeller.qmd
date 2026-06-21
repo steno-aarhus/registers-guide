@@ -1,0 +1,89 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Descriptive tables (Table 1)"
+subtitle: "Baseline characteristics of your study population with gtsummary"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under development.** This page shows a minimal, verified example with `gtsummary`. More examples (subgroups, more statistics) are coming.
+:::
+
+A **"Table 1"** describes your study population: age, sex and other baseline variables, usually split by exposure. It is almost always the first table in a register-based paper. Here we use the [`gtsummary`](https://www.danieldsjoberg.com/gtsummary/) package, which builds a publication-ready table in a few lines.
+
+::: {.callout-note}
+The code examples use generic path and variable names. Adapt them to your project. `gtsummary` (and `huxtable`, if you want to export to Excel) must be installed in your R environment on DST; if they are not, contact your data manager.
+:::
+
+---
+
+## Starting point
+
+You start from your **analysis-ready dataset** with one row per person ([Phase 12](12_data-manipulation.qmd)).
+
+```r
+library(gtsummary)
+
+df <- readRDS("path/to/analysis.rds")
+```
+
+## A minimal example
+
+`tbl_summary()` summarises the variables you point it at. With `by =` you split the table into columns by a group (e.g. exposure).
+
+```r
+table1 <- df |>
+  tbl_summary(
+    by = exposure,                          # one column per group (omit for an overall table)
+    include = c(age, sex, bmi),             # variables to include
+    statistic = list(
+      all_continuous()  ~ "{median} ({p25}, {p75})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    digits  = all_continuous() ~ 1,
+    label   = list(age ~ "Age (years)", sex ~ "Sex", bmi ~ "BMI"),
+    missing = "ifany",                       # show an "unknown" row if values are missing
+    missing_text = "Missing"
+  ) |>
+  add_overall() |>                           # add a column with everyone combined
+  bold_labels() |>
+  modify_header(label ~ "**Variable**")
+
+table1
+```
+
+The key parts:
+
+- `all_continuous()` / `all_categorical()` select all continuous resp. categorical variables.
+- The statistic codes in `{}`: `{median} ({p25}, {p75})` = median and quartiles (IQR); `{n} ({p}%)` = count and percentage. If you prefer mean instead, write `{mean} ({sd})`.
+- `tbl_summary()` defaults to median/IQR for continuous variables - the `statistic =` line is only included to show how you control it.
+
+## Should you add p-values?
+
+You can add a p-value column with `add_p()`. Note that hypothesis tests in a plain baseline table are often discouraged (with large register populations they do not test what people assume). Use them deliberately.
+
+```r
+table1 |> add_p()
+```
+
+## Export the table (for output control)
+
+Anything leaving DST must go through output control. A table like this is aggregated, but always check for **small cells** before exporting.
+
+```r
+# Straight to Excel (via huxtable)
+table1 |> as_hux_xlsx(file = "table1.xlsx")
+
+# To a Word document
+table1 |> as_flex_table()
+
+# As a data frame, if you want to work with the numbers yourself
+table1 |> as_tibble()
+```
+
+## Alternative package
+
+`finalfit::summary_factorlist()` builds a similar baseline table and is popular in epidemiology. `gtsummary` is used here because exporting to Excel and Word is straightforward.
+
+::: {.callout-note}
+Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
+:::
