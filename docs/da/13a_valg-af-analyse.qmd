@@ -14,7 +14,7 @@ Hvilken analyse du skal bruge, afhænger især af **datatypen** (numerisk, binæ
 
 **Bemærk: matchet med flere kontroller behandles oftest ikke som parret.** 1:1-matchning svarer til parrede data, men har du matchet **1:n** (fx 1:5 case-control) eller en **matchet kohorte**, er der matchsæt (strata) frem for par. Det analyseres oftest ikke med en parret test, men typisk med **betinget logistisk regression** (`clogit` med `strata()`, se [Regression](13d_regression.qmd)) for matchet case-control, eller **stratificeret/klynget Cox** for en matchet kohorte (se [Time-to-event](13e_time-to-event.qmd)). De hører altså snarere under regression / time-to-event i tabellerne nedenfor.
 
-**Parametrisk eller nonparametrisk?** En *parametrisk* test antager, at data følger en bestemt fordeling (oftest normalfordeling) og regner på fx gennemsnit og spredning. En *nonparametrisk* test antager ingen bestemt fordeling - den bygger på **rangordning** af værdierne i stedet for de rå tal og er derfor mere robust over for skæve fordelinger og outliers, men har typisk lidt mindre styrke (power). Tommelfingerregel: holder den parametriske tests antagelser (se [Antagelser](#antagelser) nederst), så brug den; ellers den nonparametriske.
+**Parametrisk eller nonparametrisk?** En *parametrisk* test eller model antager, at data følger en bestemt fordeling (typisk normalfordeling, eller fx en binomial-antagelse i en regressionsmodel) og regner på fx gennemsnit og spredning. En *nonparametrisk* test antager ingen bestemt fordeling af de underliggende værdier - den bygger typisk på **rangordning** (for tal, fx Wilcoxon) eller på **optælling i kategorier** (for kategoriske data, fx chi-i-anden) og er mere robust over for skæve fordelinger og outliers, men har som regel lidt mindre styrke (power). Tommelfingerregel: holder den parametriske tests antagelser (se [Antagelser](#antagelser) nederst), så brug den; ellers den nonparametriske.
 
 ::: {.callout-note}
 Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskratio`) kommer fra en **pakke**, der skal være installeret på DST; resten er base R (pakken `stats`, altid tilgængelig). Regression og time-to-event uddybes i [Regression](13d_regression.qmd) og [Time-to-event](13e_time-to-event.qmd).
@@ -37,7 +37,7 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <td>Parametrisk</td><td>One-sample t-test</td><td>Normalfordeling; uafhængige</td><td><code>t.test(x, mu = m0)</code></td>
 </tr>
 <tr>
-<td>Nonparametrisk</td><td>Wilcoxon signed-rank</td><td>Uafhængige; samme fordeling</td><td><code>wilcox.test(x, mu = m0)</code></td>
+<td>Nonparametrisk</td><td>Wilcoxon signed-rank</td><td>Symmetrisk fordeling om medianen; uafhængige</td><td><code>wilcox.test(x, mu = m0)</code></td>
 </tr>
 <tr>
 <td rowspan="4">Gennemsnit, to grupper</td>
@@ -54,7 +54,7 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <td>Parametrisk</td><td>Parret t-test</td><td>Normalfordelte parvise forskelle</td><td><code>t.test(x1, x2, paired = TRUE)</code></td>
 </tr>
 <tr>
-<td>Nonparametrisk</td><td>Wilcoxon signed-rank</td><td>Uafhængige parvise forskelle</td><td><code>wilcox.test(x1, x2, paired = TRUE)</code></td>
+<td>Nonparametrisk</td><td>Wilcoxon signed-rank</td><td>Symmetriske parvise forskelle; uafhængige</td><td><code>wilcox.test(x1, x2, paired = TRUE)</code></td>
 </tr>
 <tr>
 <td>Regression</td>
@@ -69,7 +69,7 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <td>Parametrisk</td><td>One-way ANOVA</td><td>Normalfordeling; uafhængige</td><td><code>aov(y ~ gruppe)</code></td>
 </tr>
 <tr>
-<td>Nonparametrisk</td><td>Kruskal-Wallis</td><td>Uafhængige; samme fordeling</td><td><code>kruskal.test(y ~ gruppe)</code></td>
+<td>Nonparametrisk</td><td>Kruskal-Wallis</td><td>Uafhængige; samme fordelingsform</td><td><code>kruskal.test(y ~ gruppe)</code></td>
 </tr>
 </tbody>
 </table>
@@ -87,17 +87,13 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <td>Andel, én gruppe</td>
 <td>Irrelevant</td>
 <td>Sammenlign én gruppe med en hypotetisk værdi</td>
-<td>Parametrisk</td><td>Binomialtest</td><td>Binomialfordeling; uafhængige</td><td><code>binom.test(x, n, p = p0)</code> (eksakt); <code>prop.test(x, n, p = p0)</code> (approks.)</td>
+<td>Nonparametrisk</td><td>Binomialtest</td><td>Binomialfordeling; uafhængige</td><td><code>binom.test(x, n, p = p0)</code> (eksakt); <code>prop.test(x, n, p = p0)</code> (approks.)</td>
 </tr>
 <tr>
-<td rowspan="4">Andel, to grupper</td>
-<td rowspan="3">Uparret</td>
+<td rowspan="3">Andel, to grupper</td>
+<td rowspan="2">Uparret</td>
 <td>Sammenlign to uparrede grupper</td>
-<td>Parametrisk</td><td>Chi-i-anden / Fishers eksakte</td><td>Uafhængige (Fisher ved små tal)</td><td><code>chisq.test(tabel)</code>; <code>fisher.test(tabel)</code></td>
-</tr>
-<tr>
-<td>Beskriv risikoforskel, RR eller OR (med CI)</td>
-<td>Parametrisk</td><td>Beskrivende mål</td><td>Tilstrækkelige celletal (normalapproksimation)</td><td><code>epitools::riskratio()</code>, <code>epitools::oddsratio()</code></td>
+<td>Nonparametrisk</td><td>Chi-i-anden / Fishers eksakte</td><td>Uafhængige (Fisher ved små tal)</td><td><code>chisq.test(tabel)</code>; <code>fisher.test(tabel)</code></td>
 </tr>
 <tr>
 <td>Korrelation / trend</td>
@@ -106,7 +102,7 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <tr>
 <td>Parret</td>
 <td>Sammenlign to parrede grupper</td>
-<td>Parametrisk</td><td>McNemar</td><td>Parrede obs.; uafhængige par</td><td><code>mcnemar.test(tabel)</code></td>
+<td>Nonparametrisk</td><td>McNemar</td><td>Parrede obs.; uafhængige par</td><td><code>mcnemar.test(tabel)</code></td>
 </tr>
 <tr>
 <td>Regression</td>
@@ -117,6 +113,8 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 </tbody>
 </table>
 </div>
+
+*Et effektmål med konfidensinterval på to grupper (risikoforskel, RR, OR) er et beskrivende mål, ikke en hypotesetest - beregn det fx med `epitools::riskratio()` eller `epitools::oddsratio()`.*
 
 *Log-binomial regression i tabellen = en `glm` med log-link, der estimerer **relativ risiko** (RR) i stedet for odds ratio.*
 
@@ -151,6 +149,8 @@ Hver test bygger på nogle antagelser. Nogle kan du **teste eller inspicere** i 
 **Normalfordeling** (t-tests, lineær regression, ANOVA). At værdierne - eller for regression modellens *residualer* - er nogenlunde normalfordelte. *Tjek:* visuelt med histogram (`hist()`) og Q-Q-plot (`qqnorm()` + `qqline()`); evt. en formel test (`shapiro.test()`), men den er overfølsom ved store stikprøver, så stol mest på det visuelle. Ved store stikprøver er t-test og gennemsnit desuden robuste (den centrale grænseværdisætning).
 
 **Normalfordelte parvise forskelle** (parret t-test). Det er *forskellene* (fx før minus efter), der skal være ca. normalfordelte - ikke hver gruppe for sig. *Tjek:* histogram/Q-Q-plot af forskellene.
+
+**Symmetrisk fordeling** (Wilcoxon signed-rank). Testen antager, at fordelingen af værdierne (om medianen) eller af de parvise forskelle er **symmetrisk** - ikke nødvendigvis normal. *Tjek:* histogram af værdierne/forskellene; er fordelingen tydeligt skæv, kan en sign-test være mere passende.
 
 **Ens varians (homoskedasticitet)** (uparret t-test, ANOVA, lineær regression). Grupperne (eller residualerne) har nogenlunde samme spredning. *Tjek:* boxplot per gruppe; `var.test()` (to grupper) eller `car::leveneTest()` (flere grupper); for regression residual-plot via `plot(model)`. Bemærk: Welchs t-test (R's standard) antager *ikke* ens varians, så her er det sjældent et problem.
 
