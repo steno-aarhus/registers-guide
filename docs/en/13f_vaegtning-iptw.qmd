@@ -1,0 +1,66 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Weighting (IPTW)"
+subtitle: "Adjust for confounding in the analysis with inverse-probability weights"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under development.** This page shows a minimal, verified example. More detail is coming.
+:::
+
+**IPTW** (inverse probability of treatment weighting) is a way to handle confounding in the **analysis** rather than by design. Where matching ([Phase 10](10_byg-studiepopulation.qmd)) balances the groups by selecting people, IPTW weights them: each person gets a weight based on their probability of being exposed (the propensity score), so exposed and unexposed become comparable on the measured confounders.
+
+::: {.callout-note}
+The code examples use generic path and variable names. Adapt them to your project. The packages (`WeightIt`, `cobalt`, `sandwich`, `lmtest`) must be installed in your R environment on DST.
+:::
+
+---
+
+## Step 1: estimate the weights
+
+```r
+library(WeightIt)                          # weightit(): computes the weights
+library(cobalt)                            # bal.tab(), love.plot(): check balance
+
+df <- readRDS("path/to/analysis.rds")      # analysis-ready dataset, one row per person
+
+W <- weightit(
+  exposure ~ age + sex + calendar_year + ses,  # treatment ~ confounders (NOT the outcome)
+  data     = df,
+  method   = "glm",                        # propensity score via logistic regression
+  estimand = "ATE"                         # target: average effect in the whole population
+)
+```
+
+- The left side of `~` is the **exposure** (treatment), the right side the **confounders** - never the outcome.
+- `method = "glm"` computes the propensity score with logistic regression.
+- `estimand = "ATE"` weights so both groups come to resemble the whole population.
+
+## Step 2: check balance
+
+The weights are only good if they actually balance the confounders. Check that before looking at the outcome.
+
+```r
+bal.tab(W)                                 # standardised differences (SMD) before and after weighting
+love.plot(W)                               # same as a figure; rule of thumb: |SMD| < 0.1 after weighting
+```
+
+## Step 3: weighted outcome model
+
+Once balance is acceptable, fit the outcome model **with the weights**. Weighting requires **robust standard errors** (same idea as in [Regression](13d_regression.qmd#klyngebaserede-standardfejl)).
+
+```r
+library(sandwich)                          # vcovHC(): robust variance
+library(lmtest)                            # coeftest()
+
+df$w <- W$weights                          # add the weights as a column
+
+model <- glm(outcome ~ exposure,           # weighted model: just the treatment (confounders are "weighted away")
+             data = df, weights = w, family = binomial)
+
+coeftest(model, vcov = vcovHC(model))      # coefficients with robust standard errors
+```
+
+::: {.callout-note}
+Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
+:::
