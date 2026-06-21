@@ -14,11 +14,68 @@ Which analysis you need depends mainly on the **data type** (numeric, binary or 
 
 **Note: matched with several controls is not treated as paired.** 1:1 matching corresponds to paired data, but if you match with **several controls** (1:n, e.g. 1:5 case-control) or have a **matched cohort**, there are matched sets (strata) with more than two members each - so a paired test, which needs pairs, does not fit. Instead it is analysed with **conditional logistic regression** (`clogit` with `strata()`, see [Regression](13d_regression.qmd)) for matched case-control, or **stratified/clustered Cox** for a matched cohort (see [Time-to-event](13e_time-to-event.qmd)) - methods that generalise the pairing idea to matched sets of any size. So they belong under regression / time-to-event in the tables below.
 
-**Parametric or nonparametric?** A *parametric* test or model assumes the data follow a particular distribution (usually the normal, or e.g. a binomial assumption in a regression model) and works with e.g. means and standard deviations. A *nonparametric* test assumes no particular distribution of the underlying values - it works on the **ranks** of the values (for numbers, e.g. Wilcoxon) or on **counts in categories** (for categorical data, e.g. chi-square), so it is more robust to skewed distributions and outliers, but usually has slightly less power. Rule of thumb: if the parametric test's assumptions hold (see [Assumptions](#assumptions) below), use it; otherwise the nonparametric one.
+**Parametric or nonparametric?** A *parametric* test or model assumes the data follow a particular distribution - usually the normal for tests on numbers, or the binomial for tests on proportions. A *nonparametric* test assumes no particular distribution and instead works on the **ranks** of the values (e.g. Wilcoxon); it is more robust to skewed distributions and outliers, but usually has slightly less power. Rule of thumb: if the parametric test's assumptions hold (see [Assumptions](#assumptions) below), use it; otherwise the nonparametric one.
 
 ::: {.callout-note}
 Commands written as `package::function` (e.g. `survival::coxph`, `epitools::riskratio`) come from a **package** that must be installed on DST; the rest are base R (the `stats` package, always available). Regression and time-to-event are expanded in [Regression](13d_regression.qmd) and [Time-to-event](13e_time-to-event.qmd).
 :::
+
+## Concepts in brief (click to expand)
+
+New to statistics? Expand for the concepts the tables build on.
+
+<details>
+<summary>What is a normal distribution?</summary>
+
+A **normal distribution** is bell-shaped: most values lie in the middle, with few very small or very large ones. A **skewed** (or irregular) distribution does not - it may have a long tail to one side.
+
+![Two distributions (synthetic data): a bell-shaped normal distribution and a right-skewed one.](images/distribution_normal_vs_skewed.png)
+
+Most **parametric** tests (e.g. t-test) assume the data are roughly normal; if they are clearly skewed, that points to a **nonparametric** test. Check the shape with a histogram (`hist()`) or a Q-Q plot (`qqnorm()` + `qqline()`).
+
+</details>
+
+<details>
+<summary>Mean or median?</summary>
+
+The **mean** can be pulled by extreme values (outliers), while the **median** (the middle value) is more robust. In a right-skewed distribution the mean therefore sits to the right of the median:
+
+![Right-skewed distribution (synthetic data) with the mean and median marked; the mean lies to the right of the median.](images/mean_vs_median.png)
+
+Parametric tests typically work with the **mean**; nonparametric tests use **ranks/median** and are therefore less sensitive to outliers and skew.
+
+</details>
+
+<details>
+<summary>Dependent vs. independent variable</summary>
+
+- A **dependent variable** is your **outcome** - the result you are studying (e.g. weight loss).
+- An **independent variable** is something you have measured that might affect the outcome (e.g. treatment, sex, age). In a study of two diets, weight loss is the dependent variable and diet an independent variable.
+
+(Don't confuse "independent variable" with "independent data" - see the next box.)
+
+</details>
+
+<details>
+<summary>Independent vs. paired data</summary>
+
+- **Independent data:** different, unrelated people in each group (e.g. one group gets diet 1, another diet 2). Recording e.g. sex on each person does not make it paired - sex and outcome are just two different variables.
+- **Paired data:** the **same** unit is measured more than once (e.g. weight before and after a treatment) or forms 1:1 matched pairs. This decides whether you use a paired or unpaired test (see the tables).
+
+</details>
+
+<details>
+<summary>The nonparametric "twin" of each t-test</summary>
+
+Each t-test has a nonparametric counterpart, used when the normality assumption does not hold:
+
+- **One-sample t-test** → **one-sample Wilcoxon signed-rank** (tests the median against a value)
+- **Unpaired t-test** → **Mann-Whitney U** (= Wilcoxon **rank-sum**; two independent groups)
+- **Paired t-test** → **Wilcoxon signed-rank** (paired measurements)
+
+Mind the names: **Mann-Whitney U** is also called Wilcoxon **rank-sum** - not the same as Wilcoxon **signed-rank** (the paired/one-sample one). In R both are `wilcox.test()`; the difference is `paired =` and whether you give two groups or two measurements.
+
+</details>
 
 ---
 
@@ -87,13 +144,13 @@ Commands written as `package::function` (e.g. `survival::coxph`, `epitools::risk
 <td>Proportion, one group</td>
 <td>Irrelevant</td>
 <td>Compare one group to a hypothetical value</td>
-<td>Nonparametric</td><td>Binomial test</td><td>Binomial distribution; independent</td><td><code>binom.test(x, n, p = p0)</code> (exact); <code>prop.test(x, n, p = p0)</code> (approx.)</td>
+<td>Parametric*</td><td>Binomial test</td><td>Binomial distribution; independent</td><td><code>binom.test(x, n, p = p0)</code> (exact); <code>prop.test(x, n, p = p0)</code> (approx.)</td>
 </tr>
 <tr>
 <td rowspan="3">Proportion, two groups</td>
 <td rowspan="2">Unpaired</td>
 <td>Compare two unpaired groups</td>
-<td>Nonparametric</td><td>Chi-square / Fisher's exact</td><td>Independent (Fisher for small counts)</td><td><code>chisq.test(table)</code>; <code>fisher.test(table)</code></td>
+<td>Parametric*</td><td>Chi-square / Fisher's exact</td><td>Independent (Fisher for small counts)</td><td><code>chisq.test(table)</code>; <code>fisher.test(table)</code></td>
 </tr>
 <tr>
 <td>Correlation / trend</td>
@@ -102,7 +159,7 @@ Commands written as `package::function` (e.g. `survival::coxph`, `epitools::risk
 <tr>
 <td>Paired</td>
 <td>Compare two paired groups</td>
-<td>Nonparametric</td><td>McNemar</td><td>Paired obs.; independent pairs</td><td><code>mcnemar.test(table)</code></td>
+<td>Parametric*</td><td>McNemar</td><td>Paired obs.; independent pairs</td><td><code>mcnemar.test(table)</code></td>
 </tr>
 <tr>
 <td>Regression</td>
@@ -113,6 +170,8 @@ Commands written as `package::function` (e.g. `survival::coxph`, `epitools::risk
 </tbody>
 </table>
 </div>
+
+\* *Chi-square, Fisher's exact, McNemar and the binomial test are called **nonparametric** in many textbooks (they assume no normal distribution). Here **Parner's** scheme is followed, where "parametric" means the test assumes a specific distribution - for these tests the **binomial**.*
 
 *An effect measure with a confidence interval for two groups (risk difference, RR, OR) is a descriptive measure, not a hypothesis test - compute it with e.g. `epitools::riskratio()` or `epitools::oddsratio()`.*
 

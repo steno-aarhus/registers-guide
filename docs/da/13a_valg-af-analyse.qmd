@@ -14,11 +14,68 @@ Hvilken analyse du skal bruge, afhænger især af **datatypen** (numerisk, binæ
 
 **Bemærk: matchet med flere kontroller behandles ikke som parret.** 1:1-matchning svarer til parrede data, men matcher du med **flere kontroller** (1:n, fx 1:5 case-control) eller har en **matchet kohorte**, er der matchsæt (strata) med mere end to i hver - så en parret test, der netop kræver par, passer ikke. Det analyseres i stedet med **betinget logistisk regression** (`clogit` med `strata()`, se [Regression](13d_regression.qmd)) for matchet case-control, eller **stratificeret/klynget Cox** for en matchet kohorte (se [Time-to-event](13e_time-to-event.qmd)) - metoder, der generaliserer paret-idéen til matchsæt af vilkårlig størrelse. De hører altså under regression / time-to-event i tabellerne nedenfor.
 
-**Parametrisk eller nonparametrisk?** En *parametrisk* test eller model antager, at data følger en bestemt fordeling (typisk normalfordeling, eller fx en binomial-antagelse i en regressionsmodel) og regner på fx gennemsnit og spredning. En *nonparametrisk* test antager ingen bestemt fordeling af de underliggende værdier - den bygger typisk på **rangordning** (for tal, fx Wilcoxon) eller på **optælling i kategorier** (for kategoriske data, fx chi-i-anden) og er mere robust over for skæve fordelinger og outliers, men har som regel lidt mindre styrke (power). Tommelfingerregel: holder den parametriske tests antagelser (se [Antagelser](#antagelser) nederst), så brug den; ellers den nonparametriske.
+**Parametrisk eller nonparametrisk?** En *parametrisk* test eller model antager, at data følger en bestemt fordeling - typisk normalfordeling for tests på tal, eller binomialfordelingen for tests på andele. En *nonparametrisk* test antager ingen bestemt fordeling og bygger i stedet på **rangordning** af værdierne (fx Wilcoxon); den er mere robust over for skæve fordelinger og outliers, men har som regel lidt mindre styrke (power). Tommelfingerregel: holder den parametriske tests antagelser (se [Antagelser](#antagelser) nederst), så brug den; ellers den nonparametriske.
 
 ::: {.callout-note}
 Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskratio`) kommer fra en **pakke**, der skal være installeret på DST; resten er base R (pakken `stats`, altid tilgængelig). Regression og time-to-event uddybes i [Regression](13d_regression.qmd) og [Time-to-event](13e_time-to-event.qmd).
 :::
+
+## Begreber kort (klik for forklaring)
+
+Ny til statistik? Fold ud for de begreber, tabellerne bygger på.
+
+<details>
+<summary>Hvad er en normalfordeling?</summary>
+
+En **normalfordeling** har en klokkeform: de fleste værdier ligger i midten, med få meget små og meget store. En **skæv** (eller uregelmæssig) fordeling gør ikke - den kan fx have en lang hale til den ene side.
+
+![To fordelinger (syntetisk data): en klokkeformet normalfordeling og en højreskæv fordeling.](images/fordeling_normal_vs_skaev.png)
+
+De fleste **parametriske** tests (fx t-test) antager, at data er nogenlunde normalfordelte; er de tydeligt skæve, peger det mod en **nonparametrisk** test. Tjek formen med et histogram (`hist()`) eller et Q-Q-plot (`qqnorm()` + `qqline()`).
+
+</details>
+
+<details>
+<summary>Gennemsnit eller median?</summary>
+
+**Gennemsnittet** kan trækkes af ekstreme værdier (outliers), mens **medianen** (den midterste værdi) er mere robust. I en højreskæv fordeling ligger gennemsnittet derfor til højre for medianen:
+
+![Højreskæv fordeling (syntetisk data) med gennemsnit og median markeret; gennemsnittet ligger til højre for medianen.](images/gennemsnit_vs_median.png)
+
+Parametriske tests regner typisk på **gennemsnit**; nonparametriske tests bruger **rang/median** og er derfor mindre følsomme over for outliers og skæve fordelinger.
+
+</details>
+
+<details>
+<summary>Afhængig vs. uafhængig variabel</summary>
+
+- En **afhængig variabel** er dit **udfald** - det resultat, du undersøger (fx vægttab).
+- En **uafhængig variabel** er noget, du har målt, som måske påvirker udfaldet (fx behandling, køn, alder). I et studie med to diæter er vægttabet den afhængige variabel, og diæten en uafhængig variabel.
+
+(Forveksl ikke "uafhængig variabel" med "uafhængige data" - se næste boks.)
+
+</details>
+
+<details>
+<summary>Uafhængige vs. parrede data</summary>
+
+- **Uafhængige data:** forskellige, urelaterede personer i hver gruppe (fx én gruppe får diæt 1, en anden diæt 2). At man også registrerer fx køn på hver person gør det ikke til parrede data - køn og udfald er bare to forskellige variable.
+- **Parrede data:** den **samme** enhed måles mere end én gang (fx vægt før og efter en behandling) eller indgår i 1:1-matchede par. Det afgør, om du skal bruge en parret eller uparret test (se tabellerne).
+
+</details>
+
+<details>
+<summary>Nonparametrisk "tvilling" til hver t-test</summary>
+
+Hver t-test har en nonparametrisk pendant, der bruges, når normalantagelsen ikke holder:
+
+- **One-sample t-test** → **one-sample Wilcoxon signed-rank** (tester medianen mod en værdi)
+- **Uparret t-test** → **Mann-Whitney U** (= Wilcoxon **rank-sum**; to uafhængige grupper)
+- **Parret t-test** → **Wilcoxon signed-rank** (parrede målinger)
+
+Pas på navnene: **Mann-Whitney U** kaldes også Wilcoxon **rank-sum** - det er ikke det samme som Wilcoxon **signed-rank** (den parrede/one-sample). I R er de begge dog `wilcox.test()`; forskellen er `paired =` og om du giver to grupper eller to målinger.
+
+</details>
 
 ---
 
@@ -87,13 +144,13 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <td>Andel, én gruppe</td>
 <td>Irrelevant</td>
 <td>Sammenlign én gruppe med en hypotetisk værdi</td>
-<td>Nonparametrisk</td><td>Binomialtest</td><td>Binomialfordeling; uafhængige</td><td><code>binom.test(x, n, p = p0)</code> (eksakt); <code>prop.test(x, n, p = p0)</code> (approks.)</td>
+<td>Parametrisk*</td><td>Binomialtest</td><td>Binomialfordeling; uafhængige</td><td><code>binom.test(x, n, p = p0)</code> (eksakt); <code>prop.test(x, n, p = p0)</code> (approks.)</td>
 </tr>
 <tr>
 <td rowspan="3">Andel, to grupper</td>
 <td rowspan="2">Uparret</td>
 <td>Sammenlign to uparrede grupper</td>
-<td>Nonparametrisk</td><td>Chi-i-anden / Fishers eksakte</td><td>Uafhængige (Fisher ved små tal)</td><td><code>chisq.test(tabel)</code>; <code>fisher.test(tabel)</code></td>
+<td>Parametrisk*</td><td>Chi-i-anden / Fishers eksakte</td><td>Uafhængige (Fisher ved små tal)</td><td><code>chisq.test(tabel)</code>; <code>fisher.test(tabel)</code></td>
 </tr>
 <tr>
 <td>Korrelation / trend</td>
@@ -102,7 +159,7 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 <tr>
 <td>Parret</td>
 <td>Sammenlign to parrede grupper</td>
-<td>Nonparametrisk</td><td>McNemar</td><td>Parrede obs.; uafhængige par</td><td><code>mcnemar.test(tabel)</code></td>
+<td>Parametrisk*</td><td>McNemar</td><td>Parrede obs.; uafhængige par</td><td><code>mcnemar.test(tabel)</code></td>
 </tr>
 <tr>
 <td>Regression</td>
@@ -113,6 +170,8 @@ Kommandoer skrevet som `pakke::funktion` (fx `survival::coxph`, `epitools::riskr
 </tbody>
 </table>
 </div>
+
+\* *Chi-i-anden, Fishers eksakte, McNemar og binomialtesten kaldes i mange lærebøger **nonparametriske** (de antager ingen normalfordeling). Her følges **Parners** opdeling, hvor "parametrisk" betyder, at testen antager en bestemt fordeling - for disse tests **binomialfordelingen**.*
 
 *Et effektmål med konfidensinterval på to grupper (risikoforskel, RR, OR) er et beskrivende mål, ikke en hypotesetest - beregn det fx med `epitools::riskratio()` eller `epitools::oddsratio()`.*
 
