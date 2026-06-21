@@ -55,6 +55,10 @@ With synthetic numbers the curves look like this (here the exposed drop faster, 
 
 ![Kaplan-Meier curves with synthetic data. `ggsurvplot()` typically also adds a risk table below the figure.](images/km_example.png)
 
+::: {.callout-warning}
+Kaplan-Meier can **overestimate the risk** if a competing event (typically death) can preclude your outcome - see [Competing risks](#konkurrerende-risici) below.
+:::
+
 ## Cox regression (hazard ratio)
 
 `coxph()` gives hazard ratios (HR) adjusted for covariates. `tbl_regression(exponentiate = TRUE)` shows them as HRs instead of log-hazards.
@@ -82,10 +86,9 @@ coxph(Surv(time_days, outcome) ~ exposure + age + sex,
   tbl_regression(exponentiate = TRUE)      # HR unchanged; only the CIs become correct (usually wider)
 ```
 
-<details>
-<summary>**Important!** check the proportional-hazards assumption</summary>
+## Check the assumption: proportional hazards
 
-The Cox model assumes **proportional hazards** (PH): that a variable's effect is constant over time. Test it with `cox.zph()`, which is based on *Schoenfeld residuals* (in short, a measure of whether the effect "drifts" over time).
+The Cox model assumes **proportional hazards** (PH): that a variable's effect is constant over time. If it does not hold, the single hazard ratio is misleading. Always check it with `cox.zph()`, which is based on *Schoenfeld residuals* (in short, a measure of whether the effect "drifts" over time).
 
 ```r
 ph <- cox.zph(cox)                         # formal PH test per variable + global
@@ -94,14 +97,20 @@ plot(ph)                                   # residual curve per variable; a slop
                                            #   indicates a non-proportional hazard
 ```
 
-If a variable violates the assumption, you can e.g. stratify on it (`+ strata(variable)` in the model) or model a time-dependent effect.
+<details>
+<summary>What to do if the assumption is violated</summary>
+
+If a variable violates the assumption, you can e.g. **stratify** on it (`+ strata(variable)` in the model, giving it its own baseline hazard) or **model a time-dependent effect** (let the effect change over follow-up).
 
 </details>
 
-<details id="konkurrerende-risici">
-<summary>**Important!** competing risks</summary>
+## Competing risks {#konkurrerende-risici}
 
-If another event **precludes** your outcome (classically: death before the outcome can occur), it is a *competing risk*. A plain Kaplan-Meier then overestimates the risk, because it treats those who died as merely censored. Use **cumulative incidence** and **Fine-Gray regression** from `tidycmprsk` instead. (Fine-Gray models the "subdistribution hazard" - in short, the risk of the outcome while keeping the competing events in the population rather than censoring them away.)
+::: {.callout-warning}
+If another event can **preclude** your outcome (classically: **death**, before the outcome can occur), it is a *competing risk*. A plain Kaplan-Meier then **overestimates** the risk, because it treats those who died as merely censored. This is the rule rather than the exception in register cohorts with older people or long follow-up.
+:::
+
+Use the **cumulative incidence function** (CIF, also called Aalen-Johansen) to describe the risk over time instead - it allocates people correctly across the competing outcomes.
 
 ```r
 library(tidycmprsk)                        # cuminc(), crr()
@@ -116,12 +125,27 @@ df <- df %>%
     )
   )
 
-# Cumulative incidence per group (+ Gray's test):
+# Cumulative incidence per group (+ Gray's test for a group difference):
 cuminc(Surv(time_days, status) ~ exposure, data = df)
-
-# Fine-Gray regression (subdistribution hazard ratio) for the outcome:
-crr(Surv(time_days, status) ~ exposure + age + sex, data = df)
 ```
+
+**Which model? It depends on your question.** There are two kinds of hazard, answering different things:
+
+- **Cause-specific hazard:** run an ordinary Cox model where the competing event is **censored**. Answers the **etiologic** question - what affects the *rate* of the outcome itself?
+- **Subdistribution hazard** (*Fine-Gray*): the competing events stay in the risk set instead of being censored. Answers the **prognostic** question - how is the *absolute, cumulative risk* affected?
+
+```r
+# Fine-Gray regression (subdistribution hazard ratio) - for absolute/cumulative risk:
+crr(Surv(time_days, status) ~ exposure + age + sex, data = df)
+
+# Cause-specific Cox - for etiology: censor the competing event (keep status == "outcome"):
+coxph(Surv(time_days, status == "outcome") ~ exposure + age + sex, data = df)
+```
+
+<details>
+<summary>Rule of thumb: which one do I pick?</summary>
+
+If you want to **describe or predict risk** (e.g. "what is the 5-year risk of the outcome?"), use CIF + Fine-Gray. If you want to understand a **causal relationship** (e.g. "does the exposure raise the rate of the outcome?"), use the cause-specific Cox. Many studies report both.
 
 </details>
 

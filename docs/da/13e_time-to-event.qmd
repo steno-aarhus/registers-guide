@@ -55,6 +55,10 @@ Med syntetiske tal ser kurverne sådan ud (her falder de eksponerede hurtigere, 
 
 ![Kaplan-Meier-kurver med syntetisk data. `ggsurvplot()` tilføjer typisk også en risikotabel under figuren.](images/km_eksempel.png)
 
+::: {.callout-warning}
+Kaplan-Meier kan **overvurdere risikoen**, hvis en konkurrerende hændelse (typisk død) kan udelukke dit udfald - se [Konkurrerende risici](#konkurrerende-risici) nedenfor.
+:::
+
 ## Cox-regression (hazard ratio)
 
 `coxph()` giver hazard ratios (HR) justeret for covariater. `tbl_regression(exponentiate = TRUE)` viser dem som HR i stedet for log-hazard.
@@ -82,10 +86,9 @@ coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,
   tbl_regression(exponentiate = TRUE)      # HR uændret; kun CI'erne bliver korrekte (typisk bredere)
 ```
 
-<details>
-<summary>**Vigtigt!** tjek antagelsen om proportionale hazards</summary>
+## Tjek antagelsen: proportionale hazards
 
-Cox-modellen antager **proportionale hazards** (PH): at en variabels effekt er konstant over tid. Det tester du med `cox.zph()`, der bygger på *Schoenfeld-residualer* (kort sagt et mål for, om effekten "driver" hen over tid).
+Cox-modellen antager **proportionale hazards** (PH): at en variabels effekt er konstant over tid. Holder det ikke, er den samlede hazard ratio misvisende. Tjek det derfor altid med `cox.zph()`, der bygger på *Schoenfeld-residualer* (kort sagt et mål for, om effekten "driver" hen over tid).
 
 ```r
 ph <- cox.zph(cox)                         # formel test af PH for hver variabel + samlet
@@ -94,14 +97,20 @@ plot(ph)                                   # residual-kurve per variabel; en kur
                                            #   hælder = ikke-proportional hazard
 ```
 
-Bryder en variabel antagelsen, kan du fx stratificere på den (`+ strata(variabel)` i modellen) eller modellere en tidsafhængig effekt.
+<details>
+<summary>Hvad gør du, hvis antagelsen brydes?</summary>
+
+Bryder en variabel antagelsen, kan du fx **stratificere** på den (`+ strata(variabel)` i modellen, så den får sin egen baseline-hazard) eller **modellere en tidsafhængig effekt** (lade effekten ændre sig hen over opfølgningen).
 
 </details>
 
-<details id="konkurrerende-risici">
-<summary>**Vigtigt!** konkurrerende risici (competing risks)</summary>
+## Konkurrerende risici (competing risks) {#konkurrerende-risici}
 
-Hvis en anden hændelse **udelukker** dit udfald (klassisk: død før udfaldet kan nå at ske), er det en *konkurrerende risiko*. En almindelig Kaplan-Meier overvurderer da risikoen, fordi den behandler de døde som blot censurerede. Brug i stedet **kumulativ incidens** og **Fine-Gray-regression** fra `tidycmprsk`. (Fine-Gray modellerer "subdistribution-hazarden" - kort sagt risikoen for udfaldet, hvor de konkurrerende hændelser bliver i populationen i stedet for at blive censureret væk.)
+::: {.callout-warning}
+Hvis en anden hændelse kan **udelukke** dit udfald (klassisk: **død**, før udfaldet kan nå at ske), er det en *konkurrerende risiko*. En almindelig Kaplan-Meier **overvurderer** da risikoen, fordi den behandler de døde som blot censurerede. Det er reglen snarere end undtagelsen i registerkohorter med ældre personer eller lang opfølgning.
+:::
+
+Brug i stedet den **kumulative incidensfunktion** (CIF, også kaldet Aalen-Johansen) til at beskrive risikoen over tid - den fordeler personerne korrekt på de konkurrerende udfald.
 
 ```r
 library(tidycmprsk)                        # cuminc(), crr()
@@ -116,12 +125,27 @@ df <- df %>%
     )
   )
 
-# Kumulativ incidens per gruppe (+ Grays test):
+# Kumulativ incidens per gruppe (+ Grays test for forskel mellem grupper):
 cuminc(Surv(tid_dage, status) ~ eksponering, data = df)
-
-# Fine-Gray-regression (subdistribution hazard ratio) for udfaldet:
-crr(Surv(tid_dage, status) ~ eksponering + alder + koen, data = df)
 ```
+
+**Hvilken model? Det afhænger af dit spørgsmål.** Der er to slags hazard, som svarer på hver sit:
+
+- **Årsagsspecifik hazard** (*cause-specific*): kør en helt almindelig Cox, hvor den konkurrerende hændelse **censureres**. Svarer på det **ætiologiske** spørgsmål - hvad påvirker *raten* af selve udfaldet?
+- **Subdistribution-hazard** (*Fine-Gray*): de konkurrerende hændelser bliver i risikomængden i stedet for at blive censureret. Svarer på det **prognostiske** spørgsmål - hvordan påvirkes den *absolutte, kumulative risiko*?
+
+```r
+# Fine-Gray-regression (subdistribution hazard ratio) - til absolut/kumulativ risiko:
+crr(Surv(tid_dage, status) ~ eksponering + alder + koen, data = df)
+
+# Årsagsspecifik Cox - til ætiologi: censurér den konkurrerende hændelse (behold status == "udfald"):
+coxph(Surv(tid_dage, status == "udfald") ~ eksponering + alder + koen, data = df)
+```
+
+<details>
+<summary>Tommelfingerregel: hvilken vælger jeg?</summary>
+
+Vil du **beskrive eller forudsige risiko** (fx "hvad er 5-års-risikoen for udfaldet?"), så brug CIF + Fine-Gray. Vil du forstå en **årsagssammenhæng** (fx "øger eksponeringen raten af udfaldet?"), så brug den årsagsspecifikke Cox. Mange studier rapporterer begge.
 
 </details>
 
