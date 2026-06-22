@@ -58,6 +58,9 @@ Du scanner det register der definerer din eksponering. **Du har endnu ingen `koh
 `lpr_sksopr` indeholder operationskoden (`c_opr`) + `recnum`, men **ikke** `pnr` eller dato; dem ligger i `lpr_adm`. Derfor joiner du de to på `recnum` for at få person + dato + operation samlet - præcis samme mønster som diagnoser (kontakt- + diagnoseregister), se [Forstå LPR](09a_forstaa_lpr.qmd).
 
 ```r
+#=====================================================
+# Trin 1A: identificér eksponerede via SKS-koder
+#=====================================================
 library(arrow)    # open_dataset
 library(dplyr)    # filter, select, group_by, slice, ungroup, bind_rows, mutate
 
@@ -66,7 +69,9 @@ RYGB     <- c("KJDF10", "KJDF11")                     # Roux-en-Y gastric bypass
 SG       <- c("KJDF40", "KJDF41", "KJDF96", "KJDF97") # sleeve gastrectomy
 BS_KODER <- c(RYGB, SG)                               # samlet vektor
 
-# ── LPR2: indgreb frem til 2018/2019 ────────────────────────────────────
+#-----------------------------------------------------
+# LPR2: indgreb frem til 2018/2019
+#-----------------------------------------------------
 lpr_sksopr <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_sksopr/") %>%
   rename_with(tolower)
 lpr_adm    <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_adm/") %>%
@@ -81,7 +86,9 @@ eksp_lpr2 <- lpr_sksopr %>%
   ) %>%
   collect()
 
-# ── LPR3: indgreb fra 2019 og frem ──────────────────────────────────────
+#-----------------------------------------------------
+# LPR3: indgreb fra 2019 og frem
+#-----------------------------------------------------
 proc_kir <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/procedurer_kirurgi/") %>%
   rename_with(tolower)
 lpr_a_k  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_kontakt/") %>%
@@ -97,7 +104,9 @@ eksp_lpr3 <- proc_kir %>%
   collect() %>%
   mutate(index_date = as.Date(index_date))                  # datetime → dato
 
-# ── Kombinér og tag ét indgreb per person (det første) ──────────────────
+#-----------------------------------------------------
+# Kombinér og tag ét indgreb per person (det første)
+#-----------------------------------------------------
 # Resultatet hedder "eksponerede" - kun den eksponerede gruppe, IKKE den fulde kohorte endnu
 eksponerede <- bind_rows(eksp_lpr2, eksp_lpr3) %>%
   group_by(pnr) %>%                                        # gruppér per person
@@ -119,6 +128,9 @@ nrow(eksponerede)                                           # antal unikke opere
 <summary>Eksempel B: ICD-diagnose som eksponeringskriterium</summary>
 
 ```r
+#=====================================================
+# Trin 1B: identificér eksponerede via ICD-diagnose
+#=====================================================
 # Samme LPR-mønster som Fase 9 - men uden filter(pnr %in% !!kohort_pnrs),
 # da kohorte endnu ikke er bygget. Du søger hele befolkningens data for at finde eksponerede.
 lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_diag/") %>%
@@ -161,6 +173,9 @@ Skal samme tjek bruges flere gange (fx også på en sammenligningsgruppe senere,
 <summary>Vis koden: ekskludér prævalente tilfælde</summary>
 
 ```r
+#=====================================================
+# Trin 2: ekskludér prævalente tilfælde
+#=====================================================
 # diagnoser = dit LPR-udtræk fra Fase 9 (kolonner: pnr, date_contact, icd3)
 OUTCOME_KODER <- c("G30", "F00", "F01", "F02", "F03")   # ICD-10 for dit outcome - tilpas
 

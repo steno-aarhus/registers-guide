@@ -58,6 +58,9 @@ You scan the register that defines your exposure. **You do not yet have a `cohor
 `lpr_sksopr` holds the procedure code (`c_opr`) + `recnum`, but **not** `pnr` or date; those live in `lpr_adm`. So you join the two on `recnum` to get person + date + procedure together - exactly the same pattern as diagnoses (contact + diagnosis register), see [Understand LPR](09a_forstaa_lpr.qmd).
 
 ```r
+#=====================================================
+# Step 1A: identify the exposed via SKS codes
+#=====================================================
 library(arrow)    # open_dataset
 library(dplyr)    # filter, select, group_by, slice, ungroup, bind_rows, mutate
 
@@ -66,7 +69,9 @@ RYGB     <- c("KJDF10", "KJDF11")                     # Roux-en-Y gastric bypass
 SG       <- c("KJDF40", "KJDF41", "KJDF96", "KJDF97") # sleeve gastrectomy
 BS_CODES <- c(RYGB, SG)                               # combined vector
 
-# ── LPR2: procedures up to 2018/2019 ────────────────────────────────────
+#-----------------------------------------------------
+# LPR2: procedures up to 2018/2019
+#-----------------------------------------------------
 lpr_sksopr <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_sksopr/") %>%
   rename_with(tolower)
 lpr_adm    <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_adm/") %>%
@@ -81,7 +86,9 @@ exp_lpr2 <- lpr_sksopr %>%
   ) %>%
   collect()
 
-# ── LPR3: procedures from 2019 onwards ──────────────────────────────────
+#-----------------------------------------------------
+# LPR3: procedures from 2019 onwards
+#-----------------------------------------------------
 proc_kir <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/procedurer_kirurgi/") %>%
   rename_with(tolower)
 lpr_a_k  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/") %>%
@@ -97,7 +104,9 @@ exp_lpr3 <- proc_kir %>%
   collect() %>%
   mutate(index_date = as.Date(index_date))                  # datetime → date
 
-# ── Combine and take one procedure per person (the first) ───────────────
+#-----------------------------------------------------
+# Combine and take one procedure per person (the first)
+#-----------------------------------------------------
 # The result is called "exposed" - only the exposed group, NOT the full cohort yet
 exposed <- bind_rows(exp_lpr2, exp_lpr3) %>%
   group_by(pnr) %>%                                        # group per person
@@ -119,6 +128,9 @@ nrow(exposed)                                              # number of unique op
 <summary>Example B: ICD diagnosis as exposure criterion</summary>
 
 ```r
+#=====================================================
+# Step 1B: identify the exposed via ICD diagnosis
+#=====================================================
 # Same LPR pattern as Phase 9 - but without filter(pnr %in% !!cohort_pnrs),
 # as the cohort does not yet exist. You query the full population to identify the exposed.
 lpr_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_diag/") %>%
@@ -161,6 +173,9 @@ If the same check is needed more than once (e.g. also on a comparison group late
 <summary>Show the code: exclude prevalent cases</summary>
 
 ```r
+#=====================================================
+# Step 2: exclude prevalent cases
+#=====================================================
 # diagnoses = your LPR extract from Phase 9 (columns: pnr, date_contact, icd3)
 OUTCOME_CODES <- c("G30", "F00", "F01", "F02", "F03")   # ICD-10 for your outcome - adapt
 
