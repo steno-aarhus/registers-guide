@@ -47,50 +47,72 @@ Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. `kohort`
 Filtrer på specifikke koder **inden** `collect()`. Eksemplet henter diabetes mellitus (E10–E14) - erstat `KODER_REGEX` med dine egne koder.
 
 ```r
+#=====================================================
+# Udtræk diabetes-diagnoser fra LPR (Tilgang 1)
+#=====================================================
 library(arrow)
 library(dplyr)
 
 kohort_pnrs <- unique(kohort$pnr)
 KODER_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10–E14) - med D-præfiks
 
-# ── LPR2 somatisk ────────────────────────────────────────────────────────
+#-----------------------------------------------------
+# LPR2 (somatisk): lpr_adm + lpr_diag
+#-----------------------------------------------------
 lpr_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
 lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
 
+# Her samler vi LPR2's to tabeller: kontaktregistret lpr_adm (pnr + datoer) og diagnoseregistret
+# lpr_diag (ICD-koden), filtrerer på dine koder/diagnosetyper, og vælger de kolonner du skal bruge.
+# Du kan trække så mange koder ud på én gang, du vil (via KODER_REGEX), og du vælger SELV objektnavnet
+# (her 'lpr2_dm' = LPR2 + diabetes mellitus, fordi eksemplet er diabetes).
 lpr2_dm <- lpr_adm %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
-  select(pnr, recnum, date_contact = d_inddto) %>%
+  filter(pnr %in% !!kohort_pnrs) %>%                 # KUN din kohorte. UDELAD linjen, hvis du vil have HELE befolkningen
+  select(pnr, recnum, date_contact = d_inddto) %>%   # vælg kolonner fra LPR2; d_inddto OMDØBES til date_contact (se noten under koden)
   inner_join(
-    lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B"),
-             grepl(KODER_REGEX, c_diag)) %>%   # filtrer FØR collect - D-præfiks i regex
-      select(recnum, c_diag, c_diagtype),
-    by = "recnum"
+    lpr_diag %>%                                     # diagnoseregistret: har recnum + ICD-kode, men hverken pnr eller dato
+      filter(c_diagtype %in% c("A", "B"),            # A + B = aktions-/bidiagnoser; tilføj "G" (-> c("A","B","G")) hvis du også vil have grundmorbus
+             grepl(KODER_REGEX, c_diag)) %>%          # behold kun dine koder - filtrér FØR collect (husk D-præfiks i regex)
+      select(recnum, c_diag, c_diagtype),            # de diagnose-kolonner vi skal bruge
+    by = "recnum"                                    # recnum = nøglen, der binder kontakt og diagnose sammen i LPR2
   ) %>%
-  collect() %>%
-  mutate(icd3 = substr(c_diag, 2, 4))
+  collect() %>%                                       # FØRST her hentes data i RAM (alt ovenfor kører i databasen)
+  mutate(icd3 = substr(c_diag, 2, 4))                 # strip D-præfikset: "DE11" -> "E11"
 
-# ── LPR3 ─────────────────────────────────────────────────────────────────
+#-----------------------------------------------------
+# LPR3: lpr_a_kontakt + lpr_a_diagnose
+#-----------------------------------------------------
 lpr3_k <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
 lpr3_d <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
 
-lpr3_dm <- lpr3_k %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
-  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
+lpr3_dm <- lpr3_k %>%                                 # samme mønster som LPR2 - men LPR3-tabeller og andre kolonnenavne
+  filter(pnr %in% !!kohort_pnrs) %>%                  # KUN din kohorte. UDELAD linjen for HELE befolkningen
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%  # LPR3's datokolonne omdøbes til SAMME navn: date_contact
   inner_join(
     lpr3_d %>%
-      filter(diag_kode_type %in% c("A", "B"),
-             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",
-             grepl(KODER_REGEX, diag_kode)) %>%
-      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
-    by = "dw_ek_kontakt"
+      filter(diag_kode_type %in% c("A", "B"),         # som LPR2: tilføj "G" hvis du også vil have grundmorbus
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # drop tilbagekaldte diagnoser (findes kun i LPR3)
+             grepl(KODER_REGEX, diag_kode)) %>%        # samme koder; filtrér FØR collect
+      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),  # omdøb LPR3-navne -> samme navne som LPR2
+    by = "dw_ek_kontakt"                               # LPR3's kontakt-nøgle (IKKE recnum som i LPR2)
   ) %>%
   collect() %>%
-  mutate(date_contact = as.Date(date_contact), icd3 = substr(c_diag, 2, 4))
+  mutate(date_contact = as.Date(date_contact),         # LPR3-datoen er datetime -> gør den til en ren dato
+         icd3 = substr(c_diag, 2, 4))                  # strip D-præfiks
 
-dm_dx <- bind_rows(lpr2_dm, lpr3_dm)
+#-----------------------------------------------------
+# Kombinér LPR2 + LPR3 til ét samlet udtræk
+#-----------------------------------------------------
+# Virker, fordi vi gav de to udtræk SAMME kolonnenavne ovenfor (date_contact, c_diag, ...):
+dm_dx <- bind_rows(lpr2_dm, lpr3_dm)                   # ét samlet udtræk (LPR2 + LPR3)
 # Kolonner: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
+
+::: {.callout-note}
+**Hvad er `date_contact = d_inddto`? (hvorfor farves `date_contact`?)** Inde i `select()` betyder `nyt_navn = gammelt_navn`, at du **omdøber** en kolonne. `d_inddto` er LPR2's faktiske datokolonne, og `date_contact` er et navn, **du selv vælger** - editoren farver det som et argument, men det er bare det nye kolonnenavn (ikke et funktionsargument). Vi omdøber, fordi LPR3 har en *anden* datokolonne (`kont_starttidspunkt`); ved at give begge navnet `date_contact` får de to udtræk ens kolonnenavne, så `bind_rows()` kan stable dem.
+
+**Skal vs. valg:** registernavnene (`pnr`, `recnum`, `d_inddto`, `c_diag`, `c_diagtype`, `dw_ek_kontakt`, `kont_starttidspunkt`, `diag_kode` ...) **skal** staves præcis som i registret. De nye navne (`date_contact`, `icd3`) og objektnavnet (`lpr2_dm`) **vælger du selv** - bare hold de harmoniserede navne ens på tværs af LPR2 og LPR3.
+:::
 
 ::: {.callout-tip}
 **Mange specifikke koder?** Byg regex programmatisk:
