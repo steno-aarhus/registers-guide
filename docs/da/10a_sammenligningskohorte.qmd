@@ -239,14 +239,20 @@ library(arrow); library(dplyr)
 udfald <- diagnoser %>%
   filter(icd3 %in% OUTCOME_KODER) %>%                # samme outcome-koder som i Trin 2
   group_by(pnr) %>%
-  summarise(first_outcome_date = min(date_contact), .groups = "drop")  # tidligste outcome per person
+  arrange(date_contact) %>%
+  slice(1) %>%                                       # tidligste outcome-kontakt per person
+  ungroup() %>%
+  select(pnr, first_outcome_date = date_contact)     # samme idiom som Fase 9 (arrange + slice)
 
 # --- Første eksponeringsdato for ALLE ---
 # Samme kilde som da du DEFINEREDE eksponeringen i Trin 1, men uden at begrænse til de
 # eksponerede - også fremtidigt eksponerede (crossover) skal have en dato.
 eksp_dt <- eksponering_raw %>%                        # dit eksponerings-udtræk, én række per eksponeringshændelse
   group_by(pnr) %>%
-  summarise(exposure_date = min(exposure_date), .groups = "drop")      # første eksponering per person
+  arrange(exposure_date) %>%
+  slice(1) %>%                                        # første eksponering per person
+  ungroup() %>%
+  select(pnr, exposure_date)
 
 # --- Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE ---
 # Samme mønstre som i Fase 12 - bemærk: INGEN filter(pnr %in% eksponerede$pnr).

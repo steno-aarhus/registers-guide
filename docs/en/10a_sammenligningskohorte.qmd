@@ -239,14 +239,20 @@ library(arrow); library(dplyr)
 outcome <- diagnoses %>%
   filter(icd3 %in% OUTCOME_CODES) %>%                # same outcome codes as in Step 2
   group_by(pnr) %>%
-  summarise(first_outcome_date = min(date_contact), .groups = "drop")  # earliest outcome per person
+  arrange(date_contact) %>%
+  slice(1) %>%                                       # earliest outcome contact per person
+  ungroup() %>%
+  select(pnr, first_outcome_date = date_contact)     # same idiom as Phase 9 (arrange + slice)
 
 # --- First exposure date for EVERYONE ---
 # Same source you used to DEFINE exposure in Step 1, but without restricting to the exposed -
 # future-exposed people (crossover) also need a date.
 exp_dt <- exposure_raw %>%                            # your exposure extract, one row per exposure event
   group_by(pnr) %>%
-  summarise(exposure_date = min(exposure_date), .groups = "drop")      # first exposure per person
+  arrange(exposure_date) %>%
+  slice(1) %>%                                        # first exposure per person
+  ungroup() %>%
+  select(pnr, exposure_date)
 
 # --- Date of death (DODSAARS) and emigration date (VNDS) for EVERYONE ---
 # Same patterns as in Phase 12 - note: NO filter(pnr %in% exposed$pnr).
