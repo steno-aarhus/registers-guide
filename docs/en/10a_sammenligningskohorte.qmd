@@ -129,9 +129,14 @@ The same principle applies to other derived measures, e.g. BMI from height and w
 <summary>Show the code: prepare the exposed for matching</summary>
 
 ```r
+#=====================================================
+# Step 3: prepare the exposed for matching
+#=====================================================
 library(arrow); library(dplyr); library(lubridate)
 
-# --- Constants (what WE choose and can change) ---
+#-----------------------------------------------------
+# Constants (what we choose and can change)
+#-----------------------------------------------------
 RATIO     <- 5L        # comparison persons per exposed
 YEAR_FROM <- 2005L     # study window: FIRST BEF year. Must reach at least 5 years before your earliest index (see fold-out)
 YEAR_TO   <- 2022L     # study window: last BEF year
@@ -140,7 +145,9 @@ YEAR_TO   <- 2022L     # study window: last BEF year
 bef <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>%
   rename_with(tolower)                          # column names to lower case
 
-# --- Pull BEF person-years ONCE and reuse it (for both the exposed AND the pool in Step 4) ---
+#-----------------------------------------------------
+# Pull BEF person-years ONCE (reused for the pool in Step 4)
+#-----------------------------------------------------
 bef_py <- bef %>%
   filter(year >= YEAR_FROM, year <= YEAR_TO) %>%  # study window only
   select(pnr, foed_dag, koen, year) %>%           # only the columns we need
@@ -162,13 +169,17 @@ earliest_bef <- bef_py %>%
   group_by(pnr) %>%                             # one group per person
   summarise(earliest_bef_year = min(year), .groups = "drop")  # first year the person appears in BEF
 
-# --- Attach to the exposed (comes from Phase 10: identified + prevalent cases excluded) ---
+#-----------------------------------------------------
+# Attach demographics to the exposed (from Phase 10: identified + prevalent cases excluded)
+#-----------------------------------------------------
 exposed <- exposed %>%
   left_join(demographics, by = "pnr") %>%       # add sex, birth date, birth year
   left_join(earliest_bef, by = "pnr") %>%       # add earliest BEF year
   mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)  # derived: age at index in years
 
-# --- Inclusion criteria (the SAME are applied to the pool in Step 4) - count the attrition ---
+#-----------------------------------------------------
+# Inclusion criteria (the SAME are applied to the pool in Step 4)
+#-----------------------------------------------------
 n_before <- nrow(exposed)                       # nrow() = number of rows (here: persons) before exclusion
 exposed <- exposed %>%
   filter(age_at_index >= 18) %>%                          # e.g. adults only - adapt
@@ -239,9 +250,14 @@ Each date table ends up as **one row per person** (just the date eligibility dep
 **The only difference from 9b:** you omit `filter(pnr %in% kohort_pnrs)`, so you keep the WHOLE population - not just the exposed. (So the join keys `recnum`/`dw_ek_kontakt` belong to the LPR extract itself in 9b; here in the pool join the key is `pnr`, because the tables are now one row per person.)
 
 ```r
+#=====================================================
+# Extract eligibility dates for the WHOLE population
+#=====================================================
 library(arrow); library(dplyr)
 
-# --- First outcome date for EVERYONE ---
+#-----------------------------------------------------
+# First outcome date for EVERYONE
+#-----------------------------------------------------
 # 'diagnoses' is the COMBINED LPR diagnosis table from Phase 9 (see the note above) - not a raw table.
 # Filter on the outcome codes -> all persons with the diagnosis, regardless of exposure.
 # (In Step 2 we joined to the exposed; here we aggregate for everyone.)
@@ -253,7 +269,9 @@ outcome <- diagnoses %>%
   ungroup() %>%
   select(pnr, first_outcome_date = date_contact)     # same idiom as Phase 9 (arrange + slice)
 
-# --- First exposure date for EVERYONE ---
+#-----------------------------------------------------
+# First exposure date for EVERYONE
+#-----------------------------------------------------
 # Same source you used to DEFINE exposure in Step 1, but without restricting to the exposed -
 # future-exposed people (crossover) also need a date.
 exp_dt <- exposure_raw %>%                            # your exposure extract, one row per exposure event
@@ -263,7 +281,9 @@ exp_dt <- exposure_raw %>%                            # your exposure extract, o
   ungroup() %>%
   select(pnr, exposure_date)
 
-# --- Date of death (DODSAARS) and emigration date (VNDS) for EVERYONE ---
+#-----------------------------------------------------
+# Date of death (DODSAARS) and emigration date (VNDS) for EVERYONE
+#-----------------------------------------------------
 # Same patterns as in Phase 12 - note: NO filter(pnr %in% exposed$pnr).
 death <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/") %>%
   rename_with(tolower) %>%
@@ -277,7 +297,9 @@ emig <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers
   collect() %>%
   group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()  # first emigration per person
 
-# Save them as .rds so they can be reused later - exactly the files the code block below can load again:
+#-----------------------------------------------------
+# Save as .rds (can be reused in Step 2 and Step 4)
+#-----------------------------------------------------
 saveRDS(outcome, "path/to/outcome_dates.rds")     # first outcome per person
 saveRDS(exp_dt,  "path/to/exposure_dates.rds")    # first exposure per person
 saveRDS(death,   "path/to/death_dates.rds")       # date of death
@@ -292,6 +314,9 @@ saveRDS(emig,    "path/to/emigration.rds")        # emigration date
 <summary>Show the code: build the pool</summary>
 
 ```r
+#=====================================================
+# Build the comparison pool (demographics + the dates)
+#=====================================================
 # death, emig, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
 # (or loaded with readRDS if you saved them). Each is one row per person.
 
@@ -331,6 +356,9 @@ First we combine the exposed and the pool into ONE table (`all_persons`) in the 
 <summary>Show the code (Route A): match with exposureMatch()</summary>
 
 ```r
+#=====================================================
+# Step 5 (Route A): match with exposureMatch()
+#=====================================================
 library(heaven)   # exposureMatch
 STUDY_END <- as.Date("2022-12-31")   # we choose: last day of the study
 
@@ -357,6 +385,9 @@ all_persons <- bind_rows(
 ) %>%
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' MUST be factor/character
 
+#-----------------------------------------------------
+# The matching itself: call exposureMatch()
+#-----------------------------------------------------
 # In the call below: the name LEFT of = is the function's ARGUMENT (fixed, defined by exposureMatch);
 # the value on the RIGHT is what WE set it to (usually the name of a column in 'all_persons', in quotes).
 matched <- exposureMatch(
@@ -397,6 +428,9 @@ For standard register matching (sex, birth year, calendar time, alive/resident/o
 **Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. Without replacement, the order also ensures each person is still at risk when used, and that the sampling is reproducible.
 
 ```r
+#=====================================================
+# Step 5 (Route B): manual risk-set loop
+#=====================================================
 set.seed(20260620)                                       # fixed seed => reproducible sampling
 exp_sorted  <- exposed %>% arrange(index_date)           # earliest exposed first (chronological)
 used        <- character(0)                              # empty list of already-used pnr (without replacement)

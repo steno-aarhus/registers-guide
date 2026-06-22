@@ -129,9 +129,14 @@ Samme princip for andre afledte mål, fx BMI fra højde og vægt: `mutate(bmi = 
 <summary>Vis koden: klargør de eksponerede til matching</summary>
 
 ```r
+#=====================================================
+# Trin 3: klargør de eksponerede til matching
+#=====================================================
 library(arrow); library(dplyr); library(lubridate)
 
-# --- Konstanter (det vi SELV vælger og kan ændre) ---
+#-----------------------------------------------------
+# Konstanter (det vi selv vælger og kan ændre)
+#-----------------------------------------------------
 RATIO   <- 5L        # antal sammenligningspersoner per eksponeret
 AAR_FRA <- 2005L     # studievindue: FØRSTE BEF-år. Skal nå mindst 5 år før din tidligste index-dato (se fold-ud)
 AAR_TIL <- 2022L     # studievindue: sidste BEF-år
@@ -140,7 +145,9 @@ AAR_TIL <- 2022L     # studievindue: sidste BEF-år
 bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
   rename_with(tolower)                          # kolonnenavne til små bogstaver
 
-# --- Hent BEF person-år ÉN gang og genbrug det (både til eksponerede OG poolen i Trin 4) ---
+#-----------------------------------------------------
+# Hent BEF person-år ÉN gang (genbruges til poolen i Trin 4)
+#-----------------------------------------------------
 bef_py <- bef %>%
   filter(year >= AAR_FRA, year <= AAR_TIL) %>%  # kun studievinduet
   select(pnr, foed_dag, koen, year) %>%         # kun de kolonner vi skal bruge
@@ -162,13 +169,17 @@ earliest_bef <- bef_py %>%
   group_by(pnr) %>%                             # én gruppe per person
   summarise(earliest_bef_year = min(year), .groups = "drop")  # første år personen ses i BEF
 
-# --- Tilknyt til de eksponerede (kommer fra Fase 10: identificeret + prævalente ekskluderet) ---
+#-----------------------------------------------------
+# Tilknyt demografi til de eksponerede (fra Fase 10: identificeret + prævalente ekskluderet)
+#-----------------------------------------------------
 eksponerede <- eksponerede %>%
   left_join(demografi,    by = "pnr") %>%       # tilføj køn, fødselsdato, fødselsår
   left_join(earliest_bef, by = "pnr") %>%       # tilføj tidligste BEF-år
   mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)  # afledt: alder ved index i år
 
-# --- Inklusionskriterier (de SAMME anvendes på poolen i Trin 4) - tæl frafaldet ---
+#-----------------------------------------------------
+# Inklusionskriterier (de SAMME anvendes på poolen i Trin 4)
+#-----------------------------------------------------
 n_before <- nrow(eksponerede)                   # nrow() = antal rækker (her: personer) før eksklusion
 eksponerede <- eksponerede %>%
   filter(age_at_index >= 18) %>%                          # fx kun voksne - tilpas
@@ -239,9 +250,14 @@ Hver dato-tabel ender som **én række per person** (kun den dato, eligibilitet 
 **Eneste forskel fra 9b:** du udelader `filter(pnr %in% kohort_pnrs)`, så du beholder HELE befolkningen - ikke kun de eksponerede. (Join-nøglerne `recnum`/`dw_ek_kontakt` hører altså til selve LPR-udtrækket i 9b; her i pool-joinet er nøglen `pnr`, fordi tabellerne nu er én række per person.)
 
 ```r
+#=====================================================
+# Udtræk eligibilitets-datoer for HELE befolkningen
+#=====================================================
 library(arrow); library(dplyr)
 
-# --- Første outcome-dato for ALLE ---
+#-----------------------------------------------------
+# Første outcome-dato for ALLE
+#-----------------------------------------------------
 # 'diagnoser' er den SAMLEDE LPR-diagnosetabel fra Fase 9 (se noten ovenfor) - ikke en rå tabel.
 # Filtrér på outcome-koderne -> alle personer med diagnosen, uanset eksponering.
 # (I Trin 2 joinede vi til de eksponerede; her aggregerer vi for alle.)
@@ -253,7 +269,9 @@ udfald <- diagnoser %>%
   ungroup() %>%
   select(pnr, first_outcome_date = date_contact)     # samme idiom som Fase 9 (arrange + slice)
 
-# --- Første eksponeringsdato for ALLE ---
+#-----------------------------------------------------
+# Første eksponeringsdato for ALLE
+#-----------------------------------------------------
 # Samme kilde som da du DEFINEREDE eksponeringen i Trin 1, men uden at begrænse til de
 # eksponerede - også fremtidigt eksponerede (crossover) skal have en dato.
 eksp_dt <- eksponering_raw %>%                        # dit eksponerings-udtræk, én række per eksponeringshændelse
@@ -263,7 +281,9 @@ eksp_dt <- eksponering_raw %>%                        # dit eksponerings-udtræk
   ungroup() %>%
   select(pnr, exposure_date)
 
-# --- Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE ---
+#-----------------------------------------------------
+# Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE
+#-----------------------------------------------------
 # Samme mønstre som i Fase 12 - bemærk: INGEN filter(pnr %in% eksponerede$pnr).
 doed <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
   rename_with(tolower) %>%
@@ -277,7 +297,9 @@ udv <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/
   collect() %>%
   group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()  # første udvandring per person
 
-# Gem dem som .rds, så de kan genbruges senere - præcis de filer, kodeblokken nedenfor kan indlæse igen:
+#-----------------------------------------------------
+# Gem som .rds (kan genbruges i Trin 2 og Trin 4)
+#-----------------------------------------------------
 saveRDS(udfald,  "sti/til/outcome_dates.rds")     # første outcome per person
 saveRDS(eksp_dt, "sti/til/exposure_dates.rds")    # første eksponering per person
 saveRDS(doed,    "sti/til/doedsdatoer.rds")       # dødsdato
@@ -292,6 +314,9 @@ saveRDS(udv,     "sti/til/udvandring.rds")        # udvandringsdato
 <summary>Vis koden: byg sammenligningspoolen</summary>
 
 ```r
+#=====================================================
+# Byg sammenligningspoolen (demografi + datoerne)
+#=====================================================
 # doed, udv, udfald, eksp_dt: udtrukket for HELE befolkningen i fold-ud'en ovenfor
 # (eller indlæst med readRDS, hvis du gemte dem). Hver er én række per person.
 
@@ -331,6 +356,9 @@ Først samler vi de eksponerede og poolen til ÉN tabel (`alle`) i det format, `
 <summary>Vis koden (Vej A): match med exposureMatch()</summary>
 
 ```r
+#=====================================================
+# Trin 5 (Vej A): match med exposureMatch()
+#=====================================================
 library(heaven)   # exposureMatch
 STUDIE_SLUT <- as.Date("2022-12-31")   # vi selv vælger: sidste dag i studiet
 
@@ -357,6 +385,9 @@ alle <- bind_rows(
 ) %>%
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' SKAL være factor/character
 
+#-----------------------------------------------------
+# Selve matchingen: kald exposureMatch()
+#-----------------------------------------------------
 # I kaldet nedenfor: navnet til VENSTRE for = er funktionens ARGUMENT (fast, defineret af exposureMatch);
 # værdien til HØJRE er det, VI sætter det til (typisk navnet på en kolonne i 'alle', i anførselstegn).
 matched <- exposureMatch(
@@ -397,6 +428,9 @@ Til standard register-matching (køn, fødselsår, kalendertid, i live/bosat/out
 **Kronologisk rækkefølge:** vi sorterer de eksponerede efter index-dato (`arrange(index_date)`), så den tidligst eksponerede får sammenligningspersoner først. Det afspejler den virkelige tidsrækkefølge: hver eksponeret matches mod dem, der var i risiko netop på dens index-dato. Uden replacement sikrer rækkefølgen også, at hver person stadig er i risiko, når de bruges, og at samplingen er reproducerbar.
 
 ```r
+#=====================================================
+# Trin 5 (Vej B): manuel risk-set-løkke
+#=====================================================
 set.seed(20260620)                                          # fast seed => reproducerbar sampling
 eksp_sorteret <- eksponerede %>% arrange(index_date)        # tidligst eksponerede først (kronologisk)
 brugte        <- character(0)                                # tom liste over brugte pnr (uden replacement)
