@@ -290,7 +290,9 @@ library(fakeregs)   # synthetic DST register data
 library(dplyr)      # filter, select, mutate, inner_join, bind_rows
 library(arrow)      # open_dataset, write_parquet
 
-# ── Preparation: generate synthetic data and save as parquet (done only once) ────
+#=====================================================
+# Preparation: generate synthetic data (run only once)
+#=====================================================
 bp             <- generate_background_pop()
 lpr_adm_synth  <- generate_lpr_adm(background_df = bp)
 lpr_diag_synth <- generate_lpr_diag(background_df = lpr_adm_synth)
@@ -313,10 +315,15 @@ If you have already run the preparation block in [Phase 6](06_foerste-udtraek.qm
 :::
 
 ```r
+#=====================================================
+# Extract CVD diagnoses (same pattern as Approach 1)
+#=====================================================
 # The ICD codes we are looking for - change these to your own outcome
 CVD_CODES <- c("I20", "I21", "I22", "I23", "I24", "I25")   # ischaemic heart disease
 
-# ── LPR2 somatic (up to March 2019) ──────────────────────────────────────
+#-----------------------------------------------------
+# LPR2 somatic (up to March 2019)
+#-----------------------------------------------------
 lpr_adm  <- open_dataset("synth_data/lpr_adm/")  %>% rename_with(tolower)   # LPR2 contact table - synthetic
 lpr_diag <- open_dataset("synth_data/lpr_diag/") %>% rename_with(tolower)   # LPR2 diagnosis table - synthetic
 
@@ -332,7 +339,9 @@ lpr2_cvd <- lpr_adm %>%
   collect() %>%                                              # HERE data is fetched into R
   mutate(icd3 = substr(c_diag, 2, 4))                        # save cleaned code as new column
 
-# ── LPR3 (March 2019 and onwards) ─────────────────────────────────────────
+#-----------------------------------------------------
+# LPR3 (March 2019 and onwards)
+#-----------------------------------------------------
 lpr3_k <- open_dataset("synth_data/lpr_a_kontakt/")  %>% rename_with(tolower)   # LPR3 contact table - synthetic
 lpr3_d <- open_dataset("synth_data/lpr_a_diagnose/") %>% rename_with(tolower)   # LPR3 diagnosis table - synthetic
 
@@ -352,7 +361,9 @@ lpr3_cvd <- lpr3_k %>%
     icd3         = substr(c_diag, 2, 4)                      # strip D-prefix: "DI21" → "I21"
   )
 
-# ── Combine and save ────────────────────────────────────────────────────────
+#-----------------------------------------------------
+# Combine and save
+#-----------------------------------------------------
 alle_cvd <- bind_rows(lpr2_cvd, lpr3_cvd)                   # stack LPR2 and LPR3
 
 nrow(alle_cvd)                                               # check: number of diagnosis rows
@@ -386,6 +397,9 @@ If you extract diagnoses for several outcomes, it pays off to encapsulate the Ap
 library(arrow)
 library(dplyr)
 
+#=====================================================
+# Function: get_lpr_diagnoses() - reusable LPR extract
+#=====================================================
 get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_only = FALSE) {
   base <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"
 
