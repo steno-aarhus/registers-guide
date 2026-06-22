@@ -22,13 +22,13 @@ New to the project? Start with the general guide and return here:
 
 ::: {.callout-tip}
 **Practical introduction from the project itself**
-In Luke's folder on the server you will find a thorough guide to working with data on DST written specifically for this project:
+The project has a thorough onboarding guide (a Quarto/`.qmd` file) written specifically for DARTER. Note that the package and the onboarding file live in **two different places**:
 
-```
-E:/workdata/708421/workspaces/luke/dstDataPrep/
-```
+- **The `dstDataPrep` package** (with `load_database()`) is in Luke's folder:
+  `E:/workdata/708421/workspaces/luke/dstDataPrep/`
+- **The onboarding `.qmd` file** is in the project's **onboarding folder** (i.e. *not* in the `dstDataPrep` folder above).
 
-Find the `.qmd` file in this folder - it walks through `dstDataPrep`, `load_database()` and the practical workflow on DARTER step by step with real examples from the project. Good supplementary reading to this guide.
+The onboarding document walks through `dstDataPrep`, `load_database()` and the practical workflow step by step with real examples from the project. Good supplementary reading to this guide.
 :::
 
 ### In this section
@@ -60,12 +60,13 @@ Do it again if `library(dstDataPrep)` reports `Error: there is no package called
 :::
 
 ::: {.callout-important}
-**Step 2 - Reinstall `duckplyr` at the start of each session**
+**Step 2 - Install the latest `duckplyr` at the start of each session**
 
-`duckplyr` provides the DuckDB engine behind `compute()` (see the [Large registers](#store-registre) section below). DST resets installed packages at logout, so it must be reinstalled at the start of each session:
+DST has `duckplyr` **pre-installed, but in an old version** that is missing functionality - several of the patterns in this guide will not work with it. So get the latest version from CRAN, and **repeat after every log-out / server reset** (the reset reverts the package to the old, pre-installed version). `duckplyr` provides the DuckDB engine behind `compute()` (see [Large registers](#store-registre) below).
 
 ```r
-install.packages("duckplyr")   # run before library() - resets at logout
+install.packages("duckplyr")   # get the latest CRAN version - run before library()
+packageVersion("duckplyr")     # check the version in your session; >= 1.1 is fine
 ```
 :::
 
@@ -112,7 +113,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 somatic
   lpr2_dx <- lpr_adm %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust against Arrow/DuckDB - see note
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -123,7 +124,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 psychiatric
   lpr2_psyk_dx <- psyk_adm %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust against Arrow/DuckDB - see note
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -134,7 +135,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR3
   lpr3_dx <- lpr3_k %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust against Arrow/DuckDB - see note
     select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
     inner_join(
       lpr3_d %>%
@@ -152,6 +153,10 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 ```
 
 </details>
+
+::: {.callout-note}
+**Why `semi_join(tibble(...))` and not `filter(pnr %in% pnr_vector)`?** A large `%in%` filter with an R vector can fail or be rejected by Arrow/DuckDB (especially with an old `duckplyr` - see Step 2). A `semi_join` against a small `tibble` of pnr's does the same thing - keeps only the cohort's rows - but is pushed down into the database efficiently and reliably. The general [Extract from LPR](../09b_udtraek_fra_lpr.qmd) uses `filter(pnr %in% !!cohort_pnrs)`; if that does not work in your session, use the `semi_join` variant here.
+:::
 
 <details>
 <summary>Use the function - one call per extraction, only change <code>CODES</code></summary>

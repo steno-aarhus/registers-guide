@@ -22,13 +22,13 @@ Ny på projektet? Start med den generelle vejledning og vend tilbage hertil:
 
 ::: {.callout-tip}
 **Praktisk introduktion fra projektet selv**
-I Lukes mappe på serveren finder du en grundig vejledning til at arbejde med data på DST skrevet specifikt til dette projekt:
+Projektet har en grundig onboarding-vejledning (en Quarto-/`.qmd`-fil) skrevet specifikt til DARTER. Bemærk, at pakken og onboarding-filen ligger **to forskellige steder**:
 
-```
-E:/workdata/708421/workspaces/luke/dstDataPrep/
-```
+- **`dstDataPrep`-pakken** (med `load_database()`) ligger i Lukes mappe:
+  `E:/workdata/708421/workspaces/luke/dstDataPrep/`
+- **Onboarding-`.qmd`-filen** ligger i projektets **onboarding-mappe** (altså *ikke* i `dstDataPrep`-mappen ovenfor).
 
-Find `.qmd`-filen i denne mappe - den gennemgår `dstDataPrep`, `load_database()` og det praktiske workflow på DARTER trin for trin med rigtige eksempler fra projektet. God supplerende læsning til denne vejledning.
+Onboarding-dokumentet gennemgår `dstDataPrep`, `load_database()` og det praktiske workflow trin for trin med rigtige eksempler fra projektet. God supplerende læsning til denne vejledning.
 :::
 
 ### I denne sektion
@@ -60,12 +60,13 @@ Gør det igen hvis `library(dstDataPrep)` melder `Error: there is no package cal
 :::
 
 ::: {.callout-important}
-**Trin 2 - Geninstaller `duckplyr` i starten af hver session**
+**Trin 2 - Installér nyeste `duckplyr` i starten af hver session**
 
-`duckplyr` leverer DuckDB-motoren bag `compute()` (se afsnittet [Store registre](#store-registre) nedenfor). DST nulstiller installerede pakker ved logout, så den skal geninstalleres i starten af hver session:
+DST har `duckplyr` **forudinstalleret, men i en gammel version**, der mangler funktionalitet - flere af mønstrene i denne vejledning virker ikke med den. Hent derfor den nyeste version fra CRAN, og **gentag efter hvert logout / server-reset** (resettet sætter pakken tilbage til den gamle, forudinstallerede version). `duckplyr` leverer DuckDB-motoren bag `compute()` (se [Store registre](#store-registre) nedenfor).
 
 ```r
-install.packages("duckplyr")   # kør inden library() - nulstilles ved logout
+install.packages("duckplyr")   # hent nyeste CRAN-version - kør inden library()
+packageVersion("duckplyr")     # tjek versionen i din session; >= 1.1 er fin
 ```
 :::
 
@@ -112,7 +113,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 somatisk
   lpr2_dx <- lpr_adm %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust mod Arrow/DuckDB - se note
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -123,7 +124,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 psykiatrisk
   lpr2_psyk_dx <- psyk_adm %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust mod Arrow/DuckDB - se note
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -134,7 +135,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR3
   lpr3_dx <- lpr3_k %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust mod Arrow/DuckDB - se note
     select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
     inner_join(
       lpr3_d %>%
@@ -152,6 +153,10 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 ```
 
 </details>
+
+::: {.callout-note}
+**Hvorfor `semi_join(tibble(...))` og ikke `filter(pnr %in% pnr_vector)`?** Et stort `%in%`-filter med en R-vektor kan fejle eller blive afvist af Arrow/DuckDB (især med en gammel `duckplyr` - se Trin 2). At `semi_join`'e mod en lille `tibble` af pnr'er gør det samme - beholder kun kohortens rækker - men skubbes effektivt og pålideligt ned i databasen. Den generelle [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd) bruger `filter(pnr %in% !!kohort_pnrs)`; virker det ikke i din session, så brug `semi_join`-varianten her.
+:::
 
 <details>
 <summary>Brug funktionen - ét kald pr. udtræk, skift kun <code>KODER</code></summary>
