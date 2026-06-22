@@ -221,7 +221,7 @@ cohort_with_emigration <- kohort %>%
 
 ---
 
-## Calculate follow-up time and event variable
+## Calculate follow-up time and event variable {#opfoelgningstid}
 
 Before you can analyse, each cohort member needs a **censoring date** (when follow-up ends) and an **event variable** (did they experience the outcome?).
 
@@ -248,6 +248,20 @@ kohort <- kohort %>%
 ::: {.callout-note}
 `pmin()` compares vectors position by position and returns the smallest value per person - it is the vectorised version of `min()`. `na.rm = TRUE` ensures that a missing death date (= alive) does not make the censoring date `NA`.
 :::
+
+**Competing risks?** If a competing event (typically death) must be handled separately (see [Time-to-event](13e_time-to-event.qmd#konkurrerende-risici)), then instead of a binary `event` (0/1) build a **status with three values** - what happened *first*:
+
+```r
+kohort <- kohort %>%
+  mutate(
+    # status_code: which date "won" the pmin() above?
+    status_code = case_when(
+      !is.na(event_date) & event_date <= censor_date ~ 1,   # outcome first
+      !is.na(death_date) & death_date <= censor_date ~ 2,   # death first (competing risk)
+      TRUE                                           ~ 0     # otherwise censored (emigration/study end)
+    )
+  )
+```
 
 ---
 
