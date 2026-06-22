@@ -179,6 +179,9 @@ Columns missing in one table (e.g. a column that only exists in LPR3) are automa
 **Date of death (DODSAARS)**
 
 ```r
+#=====================================================
+# Attach date of death (DODSAARS) to the cohort
+#=====================================================
 # Cohort data (one row per person):
 kohort <- readRDS("sti/til/full_cohort.rds")
 
@@ -200,6 +203,9 @@ Emigration censors just like death - the person leaves the study on the day they
 VNDS contains one row per migration event; use only `"U"` (emigration) and take the first date per person.
 
 ```r
+#=====================================================
+# Attach emigration date (VNDS) to the cohort
+#=====================================================
 # Emigration dates from VNDS:
 vnds <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/") %>%
   rename_with(tolower) %>%                       # standardise column names
@@ -228,6 +234,9 @@ Before you can analyse, each cohort member needs a **censoring date** (when foll
 The censoring date is the *earliest* of: event date, date of death, emigration date and end of study period.
 
 ```r
+#=====================================================
+# Calculate follow-up time and event variable
+#=====================================================
 study_end <- as.Date("2024-12-31")   # replace with your actual study end date
                                       # format: "yyyy-mm-dd" (ISO 8601 - R's standard)
 
@@ -252,6 +261,9 @@ kohort <- kohort %>%
 **Competing risks?** If a competing event (typically death) must be handled separately (see [Time-to-event](13e_time-to-event.qmd#konkurrerende-risici)), then instead of a binary `event` (0/1) build a **status with three values** - what happened *first*:
 
 ```r
+#=====================================================
+# Competing risks: a status with three values
+#=====================================================
 kohort <- kohort %>%
   mutate(
     # status_code: which date "won" the pmin() above?
@@ -295,19 +307,29 @@ The actual **cohort building and matching** with `heaven::riskSetMatch()` - incl
 <summary>Complete recipe - from cohort to analysis-ready dataset</summary>
 
 ```r
-# Complete recipe: all steps in order
+#=====================================================
+# Complete recipe: cohort -> analysis-ready dataset
+#=====================================================
 
-# 0. Load your cohort (pnr + index_date, built in Phase 6/9)
+#-----------------------------------------------------
+# 0. Load your cohort (pnr + index_date, from Phase 6/9)
+#-----------------------------------------------------
 kohort <- readRDS("sti/til/full_cohort.rds")   # one row per person
 
-# 1. Exclude prevalent cases BEFORE outcome extraction (see Phase 9)
+#-----------------------------------------------------
+# 1. Exclude prevalent cases (see Phase 9)
+#-----------------------------------------------------
 # ... cohort_clean <- kohort %>% anti_join(prevalent, by = "pnr")
 
-# 2. Link outcome (e.g. first dementia diagnosis after index date)
+#-----------------------------------------------------
+# 2. Link outcome (e.g. first dementia diagnosis after index)
+#-----------------------------------------------------
 outcome  <- readRDS("sti/til/extract_dementia.rds")   # pnr + event_date (NA = no event)
 kohort <- kohort_clean %>% left_join(outcome, by = "pnr")
 
+#-----------------------------------------------------
 # 3. Link censoring: death date and emigration
+#-----------------------------------------------------
 deaths <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/") %>%
   rename_with(tolower) %>%
   filter(pnr %in% !!kohort$pnr) %>%
@@ -323,7 +345,9 @@ kohort <- kohort %>%
   left_join(deaths,    by = "pnr") %>%
   left_join(vnds_data, by = "pnr")
 
+#-----------------------------------------------------
 # 4. Calculate follow-up time and event variable
+#-----------------------------------------------------
 study_end <- as.Date("2024-12-31")
 kohort <- kohort %>%
   mutate(
@@ -332,7 +356,9 @@ kohort <- kohort %>%
     event          = as.integer(!is.na(event_date) & event_date <= censor_date)
   )
 
+#-----------------------------------------------------
 # 5. Link covariates (demographic, SES, comorbidity)
+#-----------------------------------------------------
 bef_data <- readRDS("sti/til/extract_bef.rds")    # age, sex from BEF
 ses_data <- readRDS("sti/til/extract_ses.rds")    # education, income, employment
 nmi_data <- readRDS("sti/til/extract_nmi.rds")    # NMI score
@@ -342,7 +368,9 @@ kohort <- kohort %>%
   left_join(ses_data, by = "pnr") %>%
   left_join(nmi_data, by = "pnr")
 
+#-----------------------------------------------------
 # 6. Keep ONLY the columns the analysis requires
+#-----------------------------------------------------
 cohort_final <- kohort %>%
   select(pnr, index_date, censor_date, followup_years, event,
          alder, koen, nmi_score, occupation_cat, education_cat, income_cat)

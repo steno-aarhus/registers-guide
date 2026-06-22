@@ -179,6 +179,9 @@ Kolonner der mangler i den ene tabel (fx en kolonne der kun findes i LPR3) fylde
 **Dødsdato (DODSAARS)**
 
 ```r
+#=====================================================
+# Kobl dødsdato (DODSAARS) til kohorten
+#=====================================================
 # Kohort-data (én række per person):
 kohort <- readRDS("sti/til/full_cohort.rds")
 
@@ -200,6 +203,9 @@ Emigration censurerer ligesom død - personen forlader studiet den dag de udvand
 VNDS indeholder én række per migrationsbegivenhed; brug kun `"U"` (udvandring) og tag den første dato per person.
 
 ```r
+#=====================================================
+# Kobl emigrationsdato (VNDS) til kohorten
+#=====================================================
 # Emigrationsdatoer fra VNDS:
 vnds <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
   rename_with(tolower) %>%                       # standardisér kolonnenavne
@@ -228,6 +234,9 @@ Inden du kan analysere, skal hvert kohortemedlem have en **censureringsdato** (h
 Censureringsdatoen er den *tidligste* af: hændelses-dato, dødsdato, emigrationsdato og studieslutningstidspunkt.
 
 ```r
+#=====================================================
+# Beregn opfølgningstid og hændelsesvariabel
+#=====================================================
 studie_slut <- as.Date("2024-12-31")   # erstat med din faktiske studieslutningstidspunkt
                                         # format: "åååå-mm-dd" (ISO 8601 - R's standard)
 
@@ -252,6 +261,9 @@ kohort <- kohort %>%
 **Konkurrerende risici?** Skal en konkurrerende hændelse (typisk død) håndteres særskilt (se [Time-to-event](13e_time-to-event.qmd#konkurrerende-risici)), så lav i stedet for `event` (0/1) en **status med tre værdier** - hvad der skete *først*:
 
 ```r
+#=====================================================
+# Konkurrerende risici: status med tre værdier
+#=====================================================
 kohort <- kohort %>%
   mutate(
     # status_kode: hvilken dato "vandt" pmin() ovenfor?
@@ -295,19 +307,29 @@ Selve **kohorteopbygningen og matchingen** med `heaven::riskSetMatch()` - inkl. 
 <summary>Komplet opskrift - fra kohort til analyseklart datasæt</summary>
 
 ```r
-# Komplet opskrift: alle trin i rækkefølge
+#=====================================================
+# Komplet opskrift: kohort -> analyseklart datasæt
+#=====================================================
 
-# 0. Indlæs din kohorte (pnr + index_date, opbygget i Fase 6/9)
+#-----------------------------------------------------
+# 0. Indlæs din kohorte (pnr + index_date, fra Fase 6/9)
+#-----------------------------------------------------
 kohort <- readRDS("sti/til/full_cohort.rds")   # én række per person
 
-# 1. Ekskluder prævalente tilfælde FØR udfaldsudtrækket (se Fase 9)
+#-----------------------------------------------------
+# 1. Ekskludér prævalente tilfælde (se Fase 9)
+#-----------------------------------------------------
 # ... kohort_renset <- kohort %>% anti_join(praevalente, by = "pnr")
 
-# 2. Kobl udfald (fx første demensdiagnose efter index-dato)
+#-----------------------------------------------------
+# 2. Kobl udfald (fx første demensdiagnose efter index)
+#-----------------------------------------------------
 udfald  <- readRDS("sti/til/extract_demens.rds")   # pnr + event_date (NA = ingen hændelse)
 kohort <- kohort_renset %>% left_join(udfald, by = "pnr")
 
+#-----------------------------------------------------
 # 3. Kobl censurering: dødsdato og emigration
+#-----------------------------------------------------
 deaths <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
   rename_with(tolower) %>%
   filter(pnr %in% !!kohort$pnr) %>%
@@ -323,7 +345,9 @@ kohort <- kohort %>%
   left_join(deaths,    by = "pnr") %>%
   left_join(vnds_data, by = "pnr")
 
+#-----------------------------------------------------
 # 4. Beregn opfølgningstid og hændelsesvariabel
+#-----------------------------------------------------
 studie_slut <- as.Date("2024-12-31")
 kohort <- kohort %>%
   mutate(
@@ -332,7 +356,9 @@ kohort <- kohort %>%
     event          = as.integer(!is.na(event_date) & event_date <= censor_date)
   )
 
-# 5. Kobl kovariater (demografiske, SES, komorbiditet)
+#-----------------------------------------------------
+# 5. Kobl kovariater (demografi, SES, komorbiditet)
+#-----------------------------------------------------
 bef_data <- readRDS("sti/til/extract_bef.rds")    # alder, køn fra BEF
 ses_data <- readRDS("sti/til/extract_ses.rds")    # uddannelse, indkomst, beskæftigelse
 nmi_data <- readRDS("sti/til/extract_nmi.rds")    # NMI-score
@@ -342,7 +368,9 @@ kohort <- kohort %>%
   left_join(ses_data, by = "pnr") %>%
   left_join(nmi_data, by = "pnr")
 
+#-----------------------------------------------------
 # 6. Behold KUN de kolonner analysen kræver
+#-----------------------------------------------------
 kohort_final <- kohort %>%
   select(pnr, index_date, censor_date, followup_years, event,
          alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
