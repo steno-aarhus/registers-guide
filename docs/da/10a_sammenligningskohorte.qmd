@@ -227,15 +227,17 @@ Tilknyt hver persons FØRSTE eksponeringsdato til poolen, og afgør eligibilitet
 <details>
 <summary>Vis koden: udtræk datoerne for HELE befolkningen</summary>
 
-Det er **samme slags udtræk som i Trin 2 / [Fase 9](09b_udtraek_fra_lpr.qmd)** - eneste forskel er, at du **ikke** begrænser til de eksponeredes `pnr`: du beholder alle, fordi en sammenligningsperson kan være hvem som helst. Hver tabel ender som én række per person (kun den dato, eligibilitet afhænger af).
+Hver dato-tabel ender som **én række per person** (kun den dato, eligibilitet afhænger af) - derfor kobler pool-joinet nedenfor på `pnr`. Udtrækket er **samme slags som i [Fase 9](09b_udtraek_fra_lpr.qmd)**; eneste forskel er, at du **ikke** begrænser til de eksponeredes `pnr`: du beholder alle, fordi en sammenligningsperson kan være hvem som helst.
+
+**Vigtigt om `diagnoser`:** det er den **samlede, harmoniserede** LPR-diagnosetabel fra Fase 9 - ikke en rå tabel. Den bygges der ved at joine `lpr_adm`+`lpr_diag` på `recnum` (LPR2) og `lpr_a_kontakt`+`lpr_a_diagnose` på `dw_ek_kontakt` (LPR3), kombinere psykiatri og somatik, og harmonisere datokolonnen til `date_contact` (omdøbt fra `d_inddto` hhv. `kont_starttidspunkt`). For hele befolkningen kører du nøjagtig det [9b-udtræk](09b_udtraek_fra_lpr.qmd), bare **uden** `filter(pnr %in% kohort_pnrs)`. De egentlige join-nøgler ligger altså i 9b (`recnum`/`dw_ek_kontakt`); her i pool-joinet er nøglen `pnr`, fordi tabellerne nu er én række per person.
 
 ```r
 library(arrow); library(dplyr)
 
 # --- Første outcome-dato for ALLE ---
-# 'diagnoser' er dit LPR-diagnoseudtræk (pnr, date_contact, icd3) fra Fase 9.
-# Henter du på outcome-koderne, får du ALLE personer med diagnosen - uanset eksponering.
-# (I Trin 2 joinede vi til de eksponerede; her aggregerer vi bare for alle.)
+# 'diagnoser' er den SAMLEDE LPR-diagnosetabel fra Fase 9 (se noten ovenfor) - ikke en rå tabel.
+# Filtrér på outcome-koderne -> alle personer med diagnosen, uanset eksponering.
+# (I Trin 2 joinede vi til de eksponerede; her aggregerer vi for alle.)
 udfald <- diagnoser %>%
   filter(icd3 %in% OUTCOME_KODER) %>%                # samme outcome-koder som i Trin 2
   group_by(pnr) %>%
