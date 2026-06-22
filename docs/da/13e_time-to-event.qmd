@@ -110,36 +110,61 @@ Bryder en variabel antagelsen, kan du fx **stratificere** på den (`+ strata(var
 Hvis en anden hændelse kan **udelukke** dit udfald (klassisk: **død**, før udfaldet kan nå at ske), er det en *konkurrerende risiko*. En almindelig Kaplan-Meier **overvurderer** da risikoen, fordi den behandler de døde som blot censurerede. Det er reglen snarere end undtagelsen i registerkohorter med ældre personer eller lang opfølgning.
 :::
 
-Brug derfor **i stedet for Kaplan-Meier** den **kumulative incidensfunktion** (CIF, også kaldet Aalen-Johansen) til at beskrive risikoen over tid - den fordeler personerne korrekt på de konkurrerende udfald. (Det handler om *kurven*, ikke om regressionen: Cox kan sagtens bruges ved konkurrerende risici, se nedenfor.)
+Idéen er enkel: hver person ender ét af tre steder, og kun det **første**, der sker, tæller - (1) de når aldrig en hændelse i opfølgningen (*censureret*), (2) de får dit **udfald**, eller (3) de rammes af den **konkurrerende hændelse** (fx død). En person, der dør først, kan aldrig nå udfaldet, og det skal analysen afspejle.
+
+### 1. Sæt data op
+
+Du skal bruge de samme to variable som ved almindelig Cox - men statusvariablen får nu **tre værdier** i stedet for to:
+
+- `tid_dage` - tiden fra index til det **første**, der sker (udfald, død eller opfølgningens slut).
+- `status` - **hvad** der skete: censureret, udfald eller død.
+
+`status` skal være en **faktor**, og `tidycmprsk` kræver, at **"censureret" er det første niveau**. Rækkefølgen af niveauerne er samtidig dér, du fortæller R, hvad der er dit udfald, og hvad der er den konkurrerende risiko:
 
 ```r
 library(tidycmprsk)                        # cuminc(), crr()
 
-# Statusvariablen skal være en FAKTOR, hvor 1. niveau er "censureret":
 df <- df %>%
   mutate(
     status = factor(
-      status_kode,                         # fx 0 = censureret, 1 = udfald, 2 = død
-      levels = c(0, 1, 2),
-      labels = c("censureret", "udfald", "doed")
+      status_kode,                         # din rå kode, én værdi per person (fx 0/1/2)
+      levels = c(0, 1, 2),                 # rækkefølgen bestemmer betydningen:
+      labels = c("censureret",             #   1. niveau = censureret (SKAL stå først)
+                 "udfald",                 #   2. niveau = dit udfald (det crr modellerer)
+                 "doed")                   #   3. niveau = den konkurrerende risiko
     )
   )
-
-# Kumulativ incidens per gruppe (+ Grays test for forskel mellem grupper):
-cuminc(Surv(tid_dage, status) ~ eksponering, data = df)
 ```
 
-**Hvilken model? Det afhænger af dit spørgsmål.** Der er to slags hazard, som svarer på hver sit:
+Har du i forvejen separate 0/1-variable for udfald og død, så byg `status_kode` med `case_when()` (se [Fase 12](12_data-manipulation.qmd)): 0 hvis ingen af delene, 1 hvis udfald, 2 hvis personen døde først.
 
-- **Årsagsspecifik hazard** (*cause-specific*): kør en helt almindelig Cox, hvor den konkurrerende hændelse **censureres**. Svarer på det **ætiologiske** spørgsmål - hvad påvirker *raten* af selve udfaldet?
-- **Subdistribution-hazard** (*Fine-Gray*): de konkurrerende hændelser bliver i risikomængden i stedet for at blive censureret. Svarer på det **prognostiske** spørgsmål - hvordan påvirkes den *absolutte, kumulative risiko*?
+### 2. Beskriv risikoen over tid (CIF)
+
+Brug **i stedet for Kaplan-Meier** den **kumulative incidensfunktion** (CIF, også kaldet Aalen-Johansen). Den fordeler personerne korrekt på de konkurrerende udfald, så død ikke "stjæler" risiko fra udfaldet. (Det handler om *kurven*; selve regressionen klares stadig med Cox, se trin 3.)
 
 ```r
-# Fine-Gray-regression (subdistribution hazard ratio) - til absolut/kumulativ risiko:
-crr(Surv(tid_dage, status) ~ eksponering + alder + koen, data = df)
+# Surv(tid, status) med faktor-status -> kumulativ incidens for HVER hændelsestype:
+cuminc(Surv(tid_dage, status) ~ eksponering,   # én kurve per eksponeringsgruppe
+       data = df)                               # giver også Grays test for forskel mellem grupper
+```
 
-# Årsagsspecifik Cox - til ætiologi: censurér den konkurrerende hændelse (behold status == "udfald"):
-coxph(Surv(tid_dage, status == "udfald") ~ eksponering + alder + koen, data = df)
+### 3. Regression: vælg model efter dit spørgsmål
+
+Cox kan sagtens bruges - du skal bare vide, hvilket af to spørgsmål du stiller:
+
+- **Ætiologi (raten af udfaldet):** kør en **helt almindelig Cox**, men **censurér** den konkurrerende hændelse. Det gør du ved at sætte hændelsen til `status == "udfald"`: så bliver både censurerede og døde til "ingen hændelse". Det er den *årsagsspecifikke* hazard.
+- **Absolut/kumulativ risiko:** brug **Fine-Gray** (`crr`), hvor de døde **bliver** i risikomængden. `crr` modellerer som standard den første hændelsestype efter "censureret" (her "udfald") og behandler resten ("doed") som konkurrerende. Det er *subdistribution*-hazarden.
+
+```r
+# Ætiologi - årsagsspecifik Cox: status == "udfald" gør død (og censureret) til "ingen hændelse"
+coxph(Surv(tid_dage, status == "udfald") ~ eksponering + alder + koen,
+      data = df) %>%
+  tbl_regression(exponentiate = TRUE)          # -> årsagsspecifik hazard ratio
+
+# Absolut risiko - Fine-Gray: bruger faktor-statussen direkte (udfald vs. konkurrerende)
+crr(Surv(tid_dage, status) ~ eksponering + alder + koen,
+    data = df) %>%
+  tbl_regression(exponentiate = TRUE)          # -> subdistribution hazard ratio
 ```
 
 <details>

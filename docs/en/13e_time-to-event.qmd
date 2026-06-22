@@ -110,36 +110,61 @@ If a variable violates the assumption, you can e.g. **stratify** on it (`+ strat
 If another event can **preclude** your outcome (classically: **death**, before the outcome can occur), it is a *competing risk*. A plain Kaplan-Meier then **overestimates** the risk, because it treats those who died as merely censored. This is the rule rather than the exception in register cohorts with older people or long follow-up.
 :::
 
-So **instead of Kaplan-Meier**, use the **cumulative incidence function** (CIF, also called Aalen-Johansen) to describe the risk over time - it allocates people correctly across the competing outcomes. (This is about the *curve*, not the regression: Cox can absolutely be used under competing risks, see below.)
+The idea is simple: each person ends up in one of three places, and only the **first** thing that happens counts - (1) they never reach an event during follow-up (*censored*), (2) they get your **outcome**, or (3) they are hit by the **competing event** (e.g. death). Someone who dies first can never reach the outcome, and the analysis must reflect that.
+
+### 1. Set up the data
+
+You need the same two variables as for an ordinary Cox model - but the status variable now takes **three values** instead of two:
+
+- `time_days` - the time from index to the **first** thing that happens (outcome, death or end of follow-up).
+- `status` - **what** happened: censored, outcome or death.
+
+`status` must be a **factor**, and `tidycmprsk` requires **"censored" to be the first level**. The order of the levels is also where you tell R which level is your outcome and which is the competing risk:
 
 ```r
 library(tidycmprsk)                        # cuminc(), crr()
 
-# The status variable must be a FACTOR whose 1st level is "censored":
 df <- df %>%
   mutate(
     status = factor(
-      status_code,                         # e.g. 0 = censored, 1 = outcome, 2 = death
-      levels = c(0, 1, 2),
-      labels = c("censored", "outcome", "death")
+      status_code,                         # your raw code, one value per person (e.g. 0/1/2)
+      levels = c(0, 1, 2),                 # the order sets the meaning:
+      labels = c("censored",               #   1st level = censored (MUST be first)
+                 "outcome",                #   2nd level = your outcome (the one crr models)
+                 "death")                  #   3rd level = the competing risk
     )
   )
-
-# Cumulative incidence per group (+ Gray's test for a group difference):
-cuminc(Surv(time_days, status) ~ exposure, data = df)
 ```
 
-**Which model? It depends on your question.** There are two kinds of hazard, answering different things:
+If you already have separate 0/1 variables for the outcome and death, build `status_code` with `case_when()` (see [Phase 12](12_data-manipulation.qmd)): 0 if neither, 1 if outcome, 2 if the person died first.
 
-- **Cause-specific hazard:** run an ordinary Cox model where the competing event is **censored**. Answers the **etiologic** question - what affects the *rate* of the outcome itself?
-- **Subdistribution hazard** (*Fine-Gray*): the competing events stay in the risk set instead of being censored. Answers the **prognostic** question - how is the *absolute, cumulative risk* affected?
+### 2. Describe the risk over time (CIF)
+
+**Instead of Kaplan-Meier**, use the **cumulative incidence function** (CIF, also called Aalen-Johansen). It allocates people correctly across the competing outcomes, so death no longer "steals" risk from the outcome. (This is about the *curve*; the regression itself is still done with Cox, see step 3.)
 
 ```r
-# Fine-Gray regression (subdistribution hazard ratio) - for absolute/cumulative risk:
-crr(Surv(time_days, status) ~ exposure + age + sex, data = df)
+# Surv(time, status) with the factor status -> cumulative incidence for EACH event type:
+cuminc(Surv(time_days, status) ~ exposure,   # one curve per exposure group
+       data = df)                             # also gives Gray's test for a group difference
+```
 
-# Cause-specific Cox - for etiology: censor the competing event (keep status == "outcome"):
-coxph(Surv(time_days, status == "outcome") ~ exposure + age + sex, data = df)
+### 3. Regression: pick the model to match your question
+
+Cox can absolutely be used - you just need to know which of two questions you are asking:
+
+- **Etiology (the rate of the outcome):** run an **ordinary Cox**, but **censor** the competing event. You do that by setting the event to `status == "outcome"`: both censored and dead people then become "no event". This is the *cause-specific* hazard.
+- **Absolute/cumulative risk:** use **Fine-Gray** (`crr`), where the dead **stay** in the risk set. `crr` by default models the first event type after "censored" (here "outcome") and treats the rest ("death") as competing. This is the *subdistribution* hazard.
+
+```r
+# Etiology - cause-specific Cox: status == "outcome" turns death (and censored) into "no event"
+coxph(Surv(time_days, status == "outcome") ~ exposure + age + sex,
+      data = df) %>%
+  tbl_regression(exponentiate = TRUE)          # -> cause-specific hazard ratio
+
+# Absolute risk - Fine-Gray: uses the factor status directly (outcome vs. competing)
+crr(Surv(time_days, status) ~ exposure + age + sex,
+    data = df) %>%
+  tbl_regression(exponentiate = TRUE)          # -> subdistribution hazard ratio
 ```
 
 <details>
