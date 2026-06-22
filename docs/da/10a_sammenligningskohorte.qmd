@@ -225,14 +225,54 @@ Tilknyt hver persons FØRSTE eksponeringsdato til poolen, og afgør eligibilitet
 :::
 
 <details>
+<summary>Vis koden: udtræk datoerne for HELE befolkningen</summary>
+
+Det er **samme slags udtræk som i Trin 2 / [Fase 9](09b_udtraek_fra_lpr.qmd)** - eneste forskel er, at du **ikke** begrænser til de eksponeredes `pnr`: du beholder alle, fordi en sammenligningsperson kan være hvem som helst. Hver tabel ender som én række per person (kun den dato, eligibilitet afhænger af).
+
+```r
+library(arrow); library(dplyr)
+
+# --- Første outcome-dato for ALLE ---
+# 'diagnoser' er dit LPR-diagnoseudtræk (pnr, date_contact, icd3) fra Fase 9.
+# Henter du på outcome-koderne, får du ALLE personer med diagnosen - uanset eksponering.
+# (I Trin 2 joinede vi til de eksponerede; her aggregerer vi bare for alle.)
+udfald <- diagnoser %>%
+  filter(icd3 %in% OUTCOME_KODER) %>%                # samme outcome-koder som i Trin 2
+  group_by(pnr) %>%
+  summarise(first_outcome_date = min(date_contact), .groups = "drop")  # tidligste outcome per person
+
+# --- Første eksponeringsdato for ALLE ---
+# Samme kilde som da du DEFINEREDE eksponeringen i Trin 1, men uden at begrænse til de
+# eksponerede - også fremtidigt eksponerede (crossover) skal have en dato.
+eksp_dt <- eksponering_raw %>%                        # dit eksponerings-udtræk, én række per eksponeringshændelse
+  group_by(pnr) %>%
+  summarise(exposure_date = min(exposure_date), .groups = "drop")      # første eksponering per person
+
+# --- Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE ---
+# Samme mønstre som i Fase 12 - bemærk: INGEN filter(pnr %in% eksponerede$pnr).
+doed <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
+  rename_with(tolower) %>%
+  select(pnr, death_date = d_dodsdto) %>%            # eksakt dødsdato
+  collect()
+
+udv <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
+  rename_with(tolower) %>%
+  filter(indud_kode == "U") %>%                      # U = udvandring
+  select(pnr, emigration_date = haend_dato) %>%
+  collect() %>%
+  group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()  # første udvandring per person
+```
+
+**Tip:** udtræk gerne disse datoer ÉN gang for hele befolkningen og genbrug dem til både Trin 2 (afgrænset til de eksponerede) og Trin 4 (poolen) - så forespørger du ikke registrene to gange.
+
+</details>
+
+<details>
 <summary>Vis kode</summary>
 
 ```r
-# Datoer udtrukket direkte for befolkningen (samme mønstre som Fase 9; her som færdige tabeller)
-doed    <- readRDS("sti/til/doedsdatoer.rds")     # pnr, death_date         (DODSAARS, eksakt dødsdato)
-udv     <- readRDS("sti/til/udvandring.rds")      # pnr, emigration_date    (VNDS, udvandringsdato)
-udfald  <- readRDS("sti/til/outcome_dates.rds")   # pnr, first_outcome_date (FØRSTE outcome nogensinde)
-eksp_dt <- readRDS("sti/til/exposure_dates.rds")  # pnr, exposure_date      (FØRSTE eksponering, også fremtidig)
+# doed, udv, udfald, eksp_dt: udtrukket for HELE befolkningen i fold-ud'en ovenfor
+# (eller indlæst med readRDS, hvis du gemte dem). Hver er én række per person.
 
 # Poolen GENBRUGER demografi + earliest_bef fra Trin 3 (vi henter IKKE BEF igen) og tilføjer datoerne.
 # demografi har allerede én række per person (pnr, foed_dag, birth_year, sex).

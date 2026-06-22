@@ -225,14 +225,54 @@ Attach each person's FIRST exposure date to the pool, and decide eligibility at 
 :::
 
 <details>
+<summary>Show the code: extract the dates for the WHOLE population</summary>
+
+This is the **same kind of extract as in Step 2 / [Phase 9](09b_udtraek_fra_lpr.qmd)** - the only difference is that you do **not** restrict to the exposed persons' `pnr`: you keep everyone, because a comparison person can be anyone. Each table ends up as one row per person (just the date eligibility depends on).
+
+```r
+library(arrow); library(dplyr)
+
+# --- First outcome date for EVERYONE ---
+# 'diagnoses' is your LPR diagnosis extract (pnr, date_contact, icd3) from Phase 9.
+# Querying on the outcome codes returns ALL persons with the diagnosis - regardless of exposure.
+# (In Step 2 we joined to the exposed; here we simply aggregate for everyone.)
+outcome <- diagnoses %>%
+  filter(icd3 %in% OUTCOME_CODES) %>%                # same outcome codes as in Step 2
+  group_by(pnr) %>%
+  summarise(first_outcome_date = min(date_contact), .groups = "drop")  # earliest outcome per person
+
+# --- First exposure date for EVERYONE ---
+# Same source you used to DEFINE exposure in Step 1, but without restricting to the exposed -
+# future-exposed people (crossover) also need a date.
+exp_dt <- exposure_raw %>%                            # your exposure extract, one row per exposure event
+  group_by(pnr) %>%
+  summarise(exposure_date = min(exposure_date), .groups = "drop")      # first exposure per person
+
+# --- Date of death (DODSAARS) and emigration date (VNDS) for EVERYONE ---
+# Same patterns as in Phase 12 - note: NO filter(pnr %in% exposed$pnr).
+death <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/") %>%
+  rename_with(tolower) %>%
+  select(pnr, death_date = d_dodsdto) %>%            # exact date of death
+  collect()
+
+emig <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/") %>%
+  rename_with(tolower) %>%
+  filter(indud_kode == "U") %>%                      # U = emigration
+  select(pnr, emigration_date = haend_dato) %>%
+  collect() %>%
+  group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()  # first emigration per person
+```
+
+**Tip:** extract these dates ONCE for the whole population and reuse them for both Step 2 (restricted to the exposed) and Step 4 (the pool) - so you don't query the registers twice.
+
+</details>
+
+<details>
 <summary>Show code</summary>
 
 ```r
-# Dates extracted directly for the population (same patterns as Phase 9; here as finished tables)
-death   <- readRDS("path/to/death_dates.rds")     # pnr, death_date         (DODSAARS, exact date of death)
-emig    <- readRDS("path/to/emigration.rds")      # pnr, emigration_date    (VNDS, emigration date)
-outcome <- readRDS("path/to/outcome_dates.rds")   # pnr, first_outcome_date (FIRST outcome ever)
-exp_dt  <- readRDS("path/to/exposure_dates.rds")  # pnr, exposure_date      (FIRST exposure, also future)
+# death, emig, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
+# (or loaded with readRDS if you saved them). Each is one row per person.
 
 # The pool REUSES demographics + earliest_bef from Step 3 (we do NOT pull BEF again) and adds the dates.
 # demographics already has one row per person (pnr, foed_dag, birth_year, sex).
