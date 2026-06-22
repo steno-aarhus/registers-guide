@@ -227,9 +227,16 @@ Tilknyt hver persons FØRSTE eksponeringsdato til poolen, og afgør eligibilitet
 <details>
 <summary>Vis koden: udtræk datoerne for HELE befolkningen</summary>
 
-Hver dato-tabel ender som **én række per person** (kun den dato, eligibilitet afhænger af) - derfor kobler pool-joinet nedenfor på `pnr`. Udtrækket er **samme slags som i [Fase 9](09b_udtraek_fra_lpr.qmd)**; eneste forskel er, at du **ikke** begrænser til de eksponeredes `pnr`: du beholder alle, fordi en sammenligningsperson kan være hvem som helst.
+Hver dato-tabel ender som **én række per person** (kun den dato, eligibilitet afhænger af), så pool-joinet nedenfor kobler på `pnr`.
 
-**Vigtigt om `diagnoser`:** det er den **samlede, harmoniserede** LPR-diagnosetabel fra Fase 9 - ikke en rå tabel. Den bygges der ved at joine `lpr_adm`+`lpr_diag` på `recnum` (LPR2) og `lpr_a_kontakt`+`lpr_a_diagnose` på `dw_ek_kontakt` (LPR3), kombinere psykiatri og somatik, og harmonisere datokolonnen til `date_contact` (omdøbt fra `d_inddto` hhv. `kont_starttidspunkt`). For hele befolkningen kører du nøjagtig det [9b-udtræk](09b_udtraek_fra_lpr.qmd), bare **uden** `filter(pnr %in% kohort_pnrs)`. De egentlige join-nøgler ligger altså i 9b (`recnum`/`dw_ek_kontakt`); her i pool-joinet er nøglen `pnr`, fordi tabellerne nu er én række per person.
+**Du skal først bygge `diagnoser` (og eksponerings-kilden) som i [Udtræk fra LPR (9b)](09b_udtraek_fra_lpr.qmd) - det er ikke en rå tabel.** Diagnoseregistrene (`lpr_diag`, `lpr_a_diagnose`) har hverken `pnr` eller dato, så du kan ikke bare åbne dem og filtrere. Du udtrækker **ét register ad gangen** og **kombinerer** dem til sidst, præcis som i 9b:
+
+1. **LPR2:** `lpr_adm` + `lpr_diag` joinet på `recnum`.
+2. **LPR3:** `lpr_a_kontakt` + `lpr_a_diagnose` joinet på `dw_ek_kontakt`.
+3. Evt. **psykiatri** (LPR2-psyk) på samme måde.
+4. Harmonisér datoen til `date_contact` (fra `d_inddto` hhv. `kont_starttidspunkt`), strip D-præfikset til `icd3`, og saml registrene med `bind_rows()` til én tabel = `diagnoser`.
+
+**Eneste forskel fra 9b:** du udelader `filter(pnr %in% kohort_pnrs)`, så du beholder HELE befolkningen - ikke kun de eksponerede. (Join-nøglerne `recnum`/`dw_ek_kontakt` hører altså til selve LPR-udtrækket i 9b; her i pool-joinet er nøglen `pnr`, fordi tabellerne nu er én række per person.)
 
 ```r
 library(arrow); library(dplyr)

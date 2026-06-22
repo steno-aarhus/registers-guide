@@ -227,9 +227,16 @@ Attach each person's FIRST exposure date to the pool, and decide eligibility at 
 <details>
 <summary>Show the code: extract the dates for the WHOLE population</summary>
 
-Each date table ends up as **one row per person** (just the date eligibility depends on) - which is why the pool join below keys on `pnr`. The extract is the **same kind as in [Phase 9](09b_udtraek_fra_lpr.qmd)**; the only difference is that you do **not** restrict to the exposed persons' `pnr`: you keep everyone, because a comparison person can be anyone.
+Each date table ends up as **one row per person** (just the date eligibility depends on), so the pool join below keys on `pnr`.
 
-**Important about `diagnoses`:** it is the **combined, harmonized** LPR diagnosis table from Phase 9 - not a raw table. It is built there by joining `lpr_adm`+`lpr_diag` on `recnum` (LPR2) and `lpr_a_kontakt`+`lpr_a_diagnose` on `dw_ek_kontakt` (LPR3), combining psychiatry and somatics, and harmonizing the date column to `date_contact` (renamed from `d_inddto` / `kont_starttidspunkt`). For the whole population you run exactly that [9b extract](09b_udtraek_fra_lpr.qmd), just **without** `filter(pnr %in% kohort_pnrs)`. So the real join keys live in 9b (`recnum`/`dw_ek_kontakt`); here in the pool join the key is `pnr`, because the tables are now one row per person.
+**You must first build `diagnoses` (and the exposure source) as shown in [Extract from LPR (9b)](09b_udtraek_fra_lpr.qmd) - it is not a raw table.** The diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, so you cannot just open them and filter. You extract **one register at a time** and **combine** them at the end, exactly as in 9b:
+
+1. **LPR2:** `lpr_adm` + `lpr_diag` joined on `recnum`.
+2. **LPR3:** `lpr_a_kontakt` + `lpr_a_diagnose` joined on `dw_ek_kontakt`.
+3. Optionally **psychiatry** (LPR2 psych) the same way.
+4. Harmonize the date to `date_contact` (from `d_inddto` / `kont_starttidspunkt`), strip the D-prefix to `icd3`, and bind the registers together with `bind_rows()` into one table = `diagnoses`.
+
+**The only difference from 9b:** you omit `filter(pnr %in% kohort_pnrs)`, so you keep the WHOLE population - not just the exposed. (So the join keys `recnum`/`dw_ek_kontakt` belong to the LPR extract itself in 9b; here in the pool join the key is `pnr`, because the tables are now one row per person.)
 
 ```r
 library(arrow); library(dplyr)
