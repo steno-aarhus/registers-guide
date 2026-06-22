@@ -50,7 +50,7 @@ ncol(bef_data)         # number of columns only
 names(bef_data)        # column names as a vector
 ```
 
-`names()` also works on a lazy Arrow object before `collect()` - e.g. `names(bef)` if you want to check which columns the register has before deciding what to `select()`.
+To check the column names on a **lazy** object before `collect()`, use `colnames(bef)` - it works on both Arrow- and DuckDB-based lazy objects. (`names()` works on a data frame after `collect()`, but does not necessarily return the columns on a lazy DuckDB/`load_database()` object - use `colnames()` to be safe.)
 
 <details>
 <summary>Example with simple data</summary>
@@ -126,7 +126,7 @@ bef <- bef %>% filter(year == 2015) %>% select(pnr, koen, alder) %>% collect()
 
 (If you want to keep the lazy connection, give the fetched data a new name instead: `bef_2015 <- bef %>% filter(year == 2015) %>% collect()`.)
 
-`names()`, `glimpse()`, `head()` and dplyr verbs (`count()`, `filter()`, `select()`) do work fine on the lazy connection, though. So peek lazily, `filter()`/`select()` it down, and `collect()` a small slice before you dig into the values.
+`colnames()`, `glimpse()`, `head()` and dplyr verbs (`count()`, `filter()`, `select()`) do work fine on the lazy connection, though. So peek lazily, `filter()`/`select()` it down, and `collect()` a small slice before you dig into the values.
 :::
 
 As noted at the top of the page, `$` is R's way of saying "this column in this table": `data$koen` is the column `koen` in the table `data`.
@@ -218,6 +218,10 @@ colSums(is.na(bef_data))     # number of NAs per column - gives an overview of t
 ```
 
 Here `foed_dag` is missing for 3 - everything else is complete. A column with `0` has no NAs at all.
+
+::: {.callout-warning}
+**`colSums(is.na())` counts only *true* `NA`.** In register data, "missing" is often stored as an **empty or blank string** (whitespace) or a sentinel code - not as `NA`. A column can therefore show `0` NAs and *still* be full of empty values: e.g. a fixed-width key field filled with blanks (a 13-character field that *looks* empty but is 13 spaces, not `NA`). So also check for blank values - e.g. `sum(trimws(bef_data$dw_ek_forloeb) == "")` - and look at `nchar()`/`unique()` on a slice. This matters most for **join keys**: a blank-but-not-`NA` key causes silent join errors (rows that look filled but don't match).
+:::
 
 ---
 

@@ -50,7 +50,7 @@ ncol(bef_data)         # kun antal kolonner
 names(bef_data)        # kolonnenavne som en vektor
 ```
 
-`names()` virker også på et dovent Arrow-objekt inden `collect()` - fx `names(bef)` hvis du vil tjekke, hvilke kolonner registret har, inden du beslutter hvad du vil `select()`.
+Vil du tjekke kolonnenavnene på et **dovent** objekt inden `collect()`, så brug `colnames(bef)` - det virker både på Arrow- og DuckDB-baserede dovne objekter. (`names()` virker på en data.frame efter `collect()`, men returnerer ikke nødvendigvis kolonnerne på et dovent DuckDB-/`load_database()`-objekt - brug `colnames()` for at være sikker.)
 
 <details>
 <summary>Eksempel med simpel data</summary>
@@ -126,7 +126,7 @@ bef <- bef %>% filter(year == 2015) %>% select(pnr, koen, alder) %>% collect()
 
 (Vil du beholde den dovne forbindelse, så giv det hentede data et nyt navn i stedet: `bef_2015 <- bef %>% filter(year == 2015) %>% collect()`.)
 
-`names()`, `glimpse()`, `head()` og dplyr-verber (`count()`, `filter()`, `select()`) virker dog fint på den dovne forbindelse. Så peg lazily, `filter()`/`select()` ned, og `collect()` et lille udsnit, før du graver i værdierne.
+`colnames()`, `glimpse()`, `head()` og dplyr-verber (`count()`, `filter()`, `select()`) virker dog fint på den dovne forbindelse. Så peg lazily, `filter()`/`select()` ned, og `collect()` et lille udsnit, før du graver i værdierne.
 :::
 
 Som nævnt øverst på siden er `$`-tegnet R's måde at sige "denne kolonne i denne tabel": `data$koen` er kolonnen `koen` i tabellen `data`.
@@ -218,6 +218,10 @@ colSums(is.na(bef_data))     # antal NA'er per kolonne - giver overblik over hel
 ```
 
 Her er `foed_dag` manglende for 3 - alt andet er komplet. En kolonne med `0` er helt uden NA'er.
+
+::: {.callout-warning}
+**`colSums(is.na())` tæller kun *ægte* `NA`.** I registerdata er "manglende" ofte gemt som en **tom eller blank streng** (whitespace) eller en sentinel-kode - ikke som `NA`. En kolonne kan derfor vise `0` NA'er og *alligevel* være fuld af tomme værdier: fx et fast-bredde nøglefelt fyldt med blanktegn (et 13-tegns felt der *ser* tomt ud, men er 13 mellemrum, ikke `NA`). Tjek derfor også for blanke værdier - fx `sum(trimws(bef_data$dw_ek_forloeb) == "")` - og kig på `nchar()`/`unique()` på et udsnit. Det er især vigtigt for **join-nøgler**: en blank-men-ikke-`NA` nøgle giver tavse fejl i joins (rækker, der ser udfyldte ud, men ikke matcher).
+:::
 
 ---
 
