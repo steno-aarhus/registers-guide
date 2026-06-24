@@ -13,21 +13,32 @@ The last point - **lazy vs. full loading** - is the most important distinction o
 
 ## What a project folder looks like
 
-A typical project on the DST server is organised roughly like this. You work mostly in `R/`, `datasets/` and `output/` - the registers themselves live under `cleaned-data/`:
+A typical project on the DST server is organised roughly like this. The registers live under `cleaned-data/`; your own scripts and results sit under `workspace/[your-name]/`:
 
 ```
-E:/workdata/[projectnumber]/
-├── rawdata/                     # raw register data from DST (often SAS)
+E:/rawdata/[projectnumber]/
+├── Grunddata/                     # raw register data from DST (often SAS) - read-only
 │   └── bef/  lpr_adm/  lpr_diag/  …
+└── Eksterne data/
+│   └── project-specific extracts etc/  …
+
+E:/workdata/[projectnumber]/
 ├── cleaned-data/
 │   └── parquet-registers/       # registers converted to parquet
 │       └── bef/  lpr_adm/  lpr_a_kontakt/  …
-├── R/                           # your analysis scripts (01_, 02_, …)
-├── datasets/                    # your own intermediate results (.rds)
-└── output/                      # tables, figures and logs
+└── workspaces/
+    └── [your-name]/             # your own working area
+        ├── R/                   # your analysis scripts (01_, 02_, …)
+        ├── datasets/            # your own intermediate results (.rds)
+        └── output/              # tables, figures and logs
 ```
 
-The paths in the code examples (`E:/workdata/[projectnumber]/cleaned-data/parquet-registers/…`) follow this structure. Your actual folder may look different - check with File Explorer. How to name the scripts in `R/` is covered in [Good code practice](god-kode-praksis.qmd).
+The paths in the code examples follow this structure, but **your own folder names may well differ** - check with File Explorer. Two things are worth knowing:
+
+- **`rawdata/` is read-only.** You cannot edit or write to the raw register data DST delivers. You work in `workspace/`, where each project member typically has their own subfolder (`[your-name]/`) for scripts, intermediate results and output.
+- **Almost all the code in this guide assumes the registers are in parquet.** If your project only has raw SAS files, converting them to parquet - and setting up a sensible folder structure for the project - is the first job. See [Convert SAS files to Parquet](#convert-sas-to-parquet) below.
+
+How to name the scripts in `R/` is covered in [Good code practice](god-kode-praksis.qmd).
 
 ---
 
@@ -152,14 +163,62 @@ Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you ca
 | Requires package | `haven` | `arrow` |
 | Lazy evaluation | No - all into RAM | Yes - filter BEFORE collect |
 
-**The conversion is done once:**
+### Recommended: convert with `fastreg`
+
+The simplest way to convert is the [`fastreg`](https://dp-next.github.io/fastreg/) package (dp-next, on CRAN). It converts SAS registers to Parquet, partitions them by year, and reads them back as lazy connections - all by register **name**, so you never retype long paths. It can also run the conversion in parallel across several cores.
+
+```r
+install.packages("fastreg")   # once - fastreg is on CRAN
+
+library(tidyverse)   # general data wrangling (dplyr, purrr, …)
+library(furrr)       # run the conversion across several cores
+library(fastreg)
+
+# 1. Set the raw-data and output locations ONCE, at the top of the script.
+#    After this you refer to registers by name - no full path in every call.
+options(
+  fastreg.project_rawdata_dir  = "E:/rawdata/[projectnumber]/rawdata/",
+  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"
+)
+
+rawdata_dir  <- getOption("fastreg.project_rawdata_dir")    # raw SAS files
+workdata_dir <- getOption("fastreg.project_workdata_dir")   # parquet output
+
+# 2. Convert in parallel - use several cores at once:
+plan(multisession)
+
+# 3. See which SAS registers are in rawdata:
+sas_files <- fastreg::list_sas_files()
+sas_files
+
+# 4. Convert to Parquet (partitioned by year). The locations come from the
+#    options above, so you don't have to retype the full path:
+fastreg::convert(path = sas_files[1], output_dir = workdata_dir)
+
+# 5. Read a register back - a lazy connection; filter BEFORE collect():
+bef <- read_register("bef") %>% rename_with(tolower)
+bef %>% filter(koen == 2) %>% collect()
+```
+
+::: {.callout-note}
+**`read_register()` reads all years at once.** A register is stored as one subfolder per year (`year=2015/`, `year=2016/` …). `read_register("bef")` reads the **whole partitioned folder as one combined dataset** - you don't merge the yearly files yourself. Pick years by filtering on the `year` column *in the data*, e.g. `filter(year == 2015)`, before `collect()`.
+:::
+
+::: {.callout-tip}
+**Set it up once with a template.** `fastreg::use_template()` copies a [`targets`](https://books.ropensci.org/targets/) pipeline that converts your whole workspace in one go - convenient when you have many registers. fastreg can also **re-run the conversion when a register is updated** with new data, so you don't rebuild everything by hand.
+:::
+
+<details>
+<summary>If fastreg is not available on your project: convert manually with haven + arrow</summary>
+
+If you cannot install fastreg, you can convert a single register yourself. This is essentially what fastreg does under the hood:
 
 ```r
 library(haven)    # read SAS file
 library(arrow)    # write Parquet
 
-sas_file  <- "E:/workdata/[projectnumber]/raw/my_register.sas7bdat"
-parq_path <- "E:/workdata/[projectnumber]/cleaned-data/parquet-external/my_register/"
+sas_file  <- "E:/rawdata/[projectnumber]/rawdata/my_register.sas7bdat"
+parq_path <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/my_register/"
 
 # 1. Read the SAS file into R
 df <- read_sas(sas_file)            # reads the entire file into RAM - we call it "df", but you can use any name
@@ -171,7 +230,7 @@ df <- df %>% rename_with(tolower)
 dir.create(parq_path, recursive = TRUE, showWarnings = FALSE)
 write_parquet(df, file.path(parq_path, "my_register.parquet"))
 
-# 4. Verify
+# 4. Verify - open it lazily like any other register
 open_dataset(parq_path) %>% glimpse()
 ```
 
@@ -185,10 +244,4 @@ open_dataset(parq_path) %>% glimpse()
 You can also convert to Parquet (or `.dta`) in **StatTransfer**, available on every server in the shared environment.
 :::
 
-After conversion you can use the register lazily with `open_dataset()` like any other:
-
-```r
-my_reg <- open_dataset(parq_path) %>% rename_with(tolower)
-```
-
-**Alternative:** [`fastreg`](https://github.com/dp-next/fastreg) (dp-next, MIT licence) provides a more structured pipeline for converting entire DST workspaces from SAS to Parquet with `convert()` and a targets-based template. Relevant if you want to build a complete parquet workspace from scratch.
+</details>

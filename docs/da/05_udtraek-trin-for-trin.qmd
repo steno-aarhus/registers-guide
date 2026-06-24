@@ -58,29 +58,29 @@ Rå kolonnenavne i DST-registre har inkonsistent store/små bogstaver - `PNR`, `
 ```r
 # RIGTIGT - filtrér og vælg kolonner FØR collect
 resultat <- stort_register %>%
-  filter(pnr %in% !!kohort_pnrs) %>%   # behold kun de rigtige rækker
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # behold kun de rigtige rækker
   select(pnr, dato, vaerdi) %>%          # behold kun de kolonner du bruger
   collect()
 
 # FORKERT - henter millioner af rækker og alle kolonner ind i RAM
 resultat <- stort_register %>%
   collect() %>%
-  filter(pnr %in% kohort_pnrs)
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr")
 ```
 
 BEF har millioner af rækker; LMDB har hundredvis af millioner.
-At kalde `collect()` før `filter()` kan crashe din session - og fordi alle deler serverens RAM, gør det serveren langsom for **alle andre** samtidig. Jo mere du har filtreret og valgt kolonner på forhånd, jo hurtigere og mere stabilt kører det.
+At kalde `collect()` før du har begrænset rækkerne kan crashe din session - og fordi alle deler serverens RAM, gør det serveren langsom for **alle andre** samtidig. Jo mere du har filtreret og valgt kolonner på forhånd, jo hurtigere og mere stabilt kører det.
 
 ::: {.callout-tip}
-**Tommelfingerregel:** `filter()` begrænser rækker. `select()` begrænser kolonner. Brug begge *inden* `collect()`.
+**Tommelfingerregel:** `semi_join()` (mod kohorten) og `filter()` (alle andre betingelser: koder, datoer, køn …) begrænser rækker. `select()` begrænser kolonner. Brug dem alle *inden* `collect()`. `semi_join` erstatter altså ikke `filter` - den erstatter kun `filter(pnr %in% !!kohort_pnrs)`; resten af dine betingelser skriver du stadig med `filter()`.
 :::
 
 ---
 
 <details>
-<summary>Dybde: hvad !! betyder, og hvorfor det er nødvendigt</summary>
+<summary>Dybde: hvad !! betyder, og hvornår du har brug for det</summary>
 
-Lagde du mærke til `!!` i eksemplet ovenfor - `filter(pnr %in% !!kohort_pnrs)`?
+I eksemplet ovenfor filtrerede vi kohorten med `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")` - den anbefalede måde at beholde kohortens rækker på. Den kræver *ikke* `!!`, fordi `semi_join` tager en almindelig lokal tabel som argument.
 
 **Hvad er `kohort_pnrs`?**
 Det er en vektor (en liste) med de personnumre der skal indgå i dit studie - fx alle der har fået en bestemt operation eller diagnose. Du har bygget den fra et register ved at filtrere på en SKS- eller ICD-kode. Den ser fx sådan ud i R:
@@ -93,18 +93,17 @@ kohort_pnrs <- unique(kohort$pnr)   # trukket fra dit kohorte-datasæt
 **Du må aldrig skrive reelle personnumre (pnr) i din kode** - kun variabelnavne og vektorer. At skrive faktiske CPR-numre direkte i et script er en overtrædelse af DST's regler for håndtering af mikrodata.
 :::
 
-**Tilbage til `!!`:** Den dovne forespørgsel udføres ikke af R, men af databasemotoren (Arrow/DuckDB), som kører *adskilt* fra R og ikke kender dine lokale variabler.
+**Hvornår skal du så bruge `!!`?** Når du sender en *anden* lokal R-vektor ind i et `filter()` på et dovent objekt - typisk en kode- eller år-liste:
 
 ```r
-filter(pnr %in% !!kohort_pnrs)
+mine_koder <- c("DE10", "DE11", "DE14")   # lokal R-vektor
+register %>% filter(c_diag %in% !!mine_koder)
 ```
 
-Uden `!!` ville motoren lede efter en *kolonne* ved navn `kohort_pnrs` inde i registret. Den findes ikke - `kohort_pnrs` er en R-vektor, du har lavet lokalt. `!!` betyder: *"dette er et R-objekt, ikke et kolonnenavn - slå dets værdier op i R og brug dem i forespørgslen."*
-
-Du vil se `!!` foran næsten enhver lokal variabel, der bruges inde i et `filter()` på et dovent objekt.
+Den dovne forespørgsel udføres ikke af R, men af databasemotoren (Arrow/DuckDB), som kører *adskilt* fra R og ikke kender dine lokale variabler. Uden `!!` ville motoren lede efter en *kolonne* ved navn `mine_koder` inde i registret. Den findes ikke - `mine_koder` er en R-vektor, du har lavet lokalt. `!!` betyder: *"dette er et R-objekt, ikke et kolonnenavn - slå dets værdier op i R og brug dem i forespørgslen."*
 
 ::: {.callout-tip}
-Tommelfingerregel: refererer du til en **kolonne** i registret, skriver du navnet direkte. Refererer du til en **R-variabel** du selv har lavet, sætter du `!!` foran.
+Tommelfingerregel: refererer du til en **kolonne** i registret, skriver du navnet direkte. Refererer du til en **R-variabel** du selv har lavet, sætter du `!!` foran. Skal du filtrere på **pnr** mod kohorten, så brug `semi_join` - så slipper du for `!!`.
 :::
 
 </details>
@@ -191,16 +190,24 @@ På DARTER-projektet (708421) er de fleste SAS-datasæt allerede konverteret til
 
 </details>
 
+[]{#arrow-vs-duckdb}
+
 <details>
 <summary>Mere teknisk: Arrow vs. DuckDB - hvornår bruges hvad?</summary>
 
-Begge pakker bruger doven evaluering og `collect()`.
+Begge motorer bruger doven evaluering og `collect()`.
 
-**Arrow** er hurtig til at læse parquet, men understøtter ikke alle dplyr-funktioner.
+**Arrow** er hurtig til at læse parquet, men understøtter ikke alle dplyr-funktioner. `open_dataset()` giver dig en Arrow-forbindelse.
 
-**DuckDB (via duckplyr)** understøtter næsten alle dplyr-funktioner og falder automatisk tilbage til R's motor for de få, den ikke kan.
+**DuckDB** understøtter næsten alle dplyr-funktioner og er også lynhurtig. For at flytte en Arrow-forbindelse over til DuckDB sender du den gennem `to_duckdb()` (fra `arrow`-pakken):
 
-Støder du på en fejl om *"unsupported function"*, er du sandsynligvis ved at bruge en funktion DuckDB ikke understøtter. Løsning: `collect()` data ind i R først, og udfør operationen derefter.
+```r
+bef <- open_dataset("sti/til/bef/") %>% to_duckdb()   # forespørges nu af DuckDB
+```
+
+`load_database()` (dstDataPrep) og `read_register()` (fastreg) giver dig allerede en DuckDB-forbindelse, så dette trin er indbygget - du kalder ikke selv `to_duckdb()`.
+
+Støder du på en fejl om *"unsupported function"* i Arrow, så skift til DuckDB med `to_duckdb()`, eller `collect()` data ind i R først og udfør operationen derefter.
 
 </details>
 

@@ -67,7 +67,7 @@ Det vigtigste symbol i al koden er `%>%`, "the pipe".
 
 ```r
 lpr_adm %>%
-  filter(pnr %in% !!mine_pnrs) %>%
+  semi_join(tibble(pnr = mine_pnrs), by = "pnr") %>%
   select(pnr, recnum) %>%
   collect()
 ```
@@ -78,11 +78,11 @@ lpr_adm %>%
 
 ```r
 # Uden røret - indefra og ud, som russiske dukker:
-collect(select(filter(lpr_adm, pnr %in% !!mine_pnrs), pnr, recnum))
+collect(select(semi_join(lpr_adm, tibble(pnr = mine_pnrs), by = "pnr"), pnr, recnum))
 
 # Med røret - oppefra og ned, som en opskrift:
 lpr_adm %>%
-  filter(pnr %in% !!mine_pnrs) %>%
+  semi_join(tibble(pnr = mine_pnrs), by = "pnr") %>%
   select(pnr, recnum) %>%
   collect()
 ```
@@ -165,6 +165,19 @@ Bruges til alle registre der er gemt som parquet-filer:
 `bef`, `lpr_adm`, `lpr_diag`, `lmdb`, `dodsaars`, `vnds`, `udda`, `faik`, `akm`,
 `t_psyk_adm`, `t_psyk_diag`, `lpr_a_kontakt`, `lpr_a_diagnose` med flere.
 
+::: {.callout-note}
+**Arrow eller DuckDB?** `open_dataset()` giver dig en **Arrow**-forbindelse. Arrow er hurtig, men understøtter ikke alle dplyr-funktioner: fejler et trin med en *"unsupported function"*-fejl, løser det sig som regel ved at skifte til **DuckDB**, der understøtter næsten alle dplyr-verber. Send data gennem `to_duckdb()`:
+
+```r
+library(arrow)   # open_dataset, to_duckdb
+bef <- open_dataset("sti/til/bef/") %>%
+  to_duckdb() %>%          # giv data videre til DuckDB
+  rename_with(tolower)
+```
+
+Det skal du ikke med `load_database()` (dstDataPrep) eller `read_register()` (fastreg) - de giver dig allerede en DuckDB-forbindelse, så `to_duckdb()`-konverteringen er indbygget. Hvornår du bruger hvad, kan du læse i [Fase 5 - Arrow vs. DuckDB](05_udtraek-trin-for-trin.qmd#arrow-vs-duckdb).
+:::
+
 ---
 
 ### `collect()`
@@ -176,7 +189,7 @@ Kald det sent - efter alle `filter()` og `select()` trin - så kun de nødvendig
 
 ```r
 resultat <- stort_register %>%
-  filter(pnr %in% !!kohort_pnrs) %>%   # kun kohortens pnr'er
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # kun kohortens pnr'er
   select(pnr, d_inddto) %>%            # kun de to kolonner vi bruger
   collect()                             # data trækkes ind i R-hukommelsen
 ```
@@ -274,7 +287,7 @@ bef <- open_dataset("sti/til/bef") %>% rename_with(tolower)   # alle kolonner bl
 ```
 
 **Vigtigt:** kald det altid på samme linje som `open_dataset()` (eller `load_database()` i DARTER).
-Glemmer du det, vil `filter(pnr %in% ...)` fejle, fordi kolonnen måske hedder `PNR`.
+Glemmer du det, vil `semi_join(..., by = "pnr")` fejle, fordi kolonnen måske hedder `PNR`.
 
 ---
 
@@ -484,7 +497,7 @@ Bruges to steder:
 **Faldgrube - bland aldrig OG og ELLER uden parenteser.** `&` binder før `|`, så `filter(alder > 50 | alder < 18 & koen == 2)` læses som `alder > 50 | (alder < 18 & koen == 2)`. Mener du "(over 50 eller under 18) *og* kvinde", skal du sætte parenteser: `filter((alder > 50 | alder < 18) & koen == 2)`.
 
 ```r
-filter(pnr %in% !!kohort_pnrs)               # kun kohortmedlemmer
+filter(c_diagtype %in% c("A", "B"))          # kun aktions- og bidiagnoser
 filter(date_contact >= surgery_date)          # kun post-operative kontakter
 filter(icd3 %in% c("G30", "F00", "F03"))     # kun demenskoder
 ```
@@ -496,15 +509,21 @@ filter(icd3 %in% c("G30", "F00", "F03"))     # kun demenskoder
 **Hvad det gør:** tjekker om hvert element på venstre side optræder i vektoren på højre side.
 Returnerer `TRUE` eller `FALSE` for hvert element.
 
+`%in%` er valgfrit: det er blot ét af `filter()`'s sammenligningstegn (ved siden af `==`, `>`, `<` osv.). Du bruger det kun, når du vil matche mod en *liste* af værdier i stedet for en enkelt værdi - fx en kodeliste. Skal du matche pnr mod kohorten, så brug `semi_join` (se ovenfor).
+
 **Anekdote:** Forestil dig en gæsteliste til en fest.
-`pnr %in% !!mine_pnrs` er som at stille sig ved indgangen og tjekke: "er dette CPR-nummer på listen?"
+`icd3 %in% c("G30", "F00", "F03")` er som at stille sig ved indgangen og tjekke: "er denne diagnosekode på listen?"
 
 ```r
 icd3 %in% c("G30", "F00", "F03")   # TRUE for disse tre koder, FALSE for alt andet
-pnr  %in% !!mine_pnrs              # TRUE for alle pnr'er i kohorten
+atc  %in% !!mine_atc               # TRUE for alle ATC-koder på din lokale liste (!! - se nedenfor)
 ```
 
 Du vil se `%in%` i næsten alle `filter()`-kald i projektet.
+
+::: {.callout-note}
+Skal du filtrere på **pnr** mod hele kohorten, så brug `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")` i stedet for `filter(pnr %in% ...)` - det skubbes mere effektivt ned i databasen og kræver ikke `!!`.
+:::
 
 ---
 
@@ -611,7 +630,18 @@ inner_join(bs_kohort %>% select(pnr, surgery_date), by = "pnr")   # kun kontakte
 
 ---
 
-### `left_join(y, by = "nøgle")`
+### `semi_join(y, by = "nøgle")`
+
+**Hvad det gør:** beholder de rækker fra den venstre tabel, der har en match i `y` - men tilføjer **ingen** kolonner fra `y`. Det er altså et *filter*, hvor listen af tilladte værdier ligger i en anden tabel.
+
+**Anekdote:** Du har hele LPR og en liste over din kohorte. `semi_join` beholder kun de LPR-rækker, hvis `pnr` står på kohorte-listen - samme resultat som `filter(pnr %in% ...)`, men hurtigere og mere pålideligt på dovne (Arrow/DuckDB) tabeller.
+
+```r
+lpr_adm %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr")   # behold kun kohortens rækker
+```
+
+**Hvor ligger den lokale liste?** Selve listen er den `tibble`, du sender som andet argument (`y`); `by = "pnr"` siger kun, *hvilken kolonne* der skal matches på - ikke hvor listen er. Fordi `y` er en almindelig tabel, behøver du **ikke** `!!`. Det er forskellen fra `filter(pnr %in% !!kohort_pnrs)`, hvor vektoren står direkte i betingelsen og `!!` er det, der injicerer den. Brug `semi_join` til at filtrere et register ned til kohorten.
 
 **Hvad det gør:** beholder **alle** rækker fra den venstre tabel.
 Rækker uden match i den højre tabel får `NA` for de kolonner, der kom fra højre.
@@ -658,16 +688,20 @@ Bruges i udtræk af vægt- og insulinudkomme.
 
 **Hvad det gør:** injicerer en lokal R-variabel ind i en DuckDB/dplyr-forespørgsel.
 
-**Anekdote:** Forestil dig at du beder en assistent om at finde alle patienter på en liste.
-Hvis du siger "find alle patienter på listen `mine_pnrs`", vil assistenten kigge efter en kolonne i databasen med det navn - og den eksisterer ikke.
-Du skal sige: "find alle patienter på *denne* liste" og holde listen frem.
+**Anekdote:** Forestil dig at du beder en assistent om at finde alle rækker med en kode fra en liste.
+Hvis du siger "find alle med en kode fra listen `mine_atc`", vil assistenten kigge efter en kolonne i databasen med det navn - og den eksisterer ikke.
+Du skal sige: "find alle med en kode fra *denne* liste" og holde listen frem.
 `!!` er det, der svarer til at holde listen frem.
 
 ```r
-filter(pnr %in% !!mine_pnrs)   # !! siger: "mine_pnrs er en R-vektor, ikke et kolonnenavn"
+filter(atc %in% !!mine_atc)   # !! siger: "mine_atc er en R-vektor, ikke et kolonnenavn"
 ```
 
-Du vil se `!!` foran næsten alle lokale R-variabler inde i `filter()`-kald.
+Du vil se `!!` foran lokale R-variabler (typisk kode- og år-lister) inde i `filter()`-kald.
+
+::: {.callout-note}
+Til **pnr**-filtrering mod kohorten bruger du `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")`, som tager den lokale tabel direkte og ikke kræver `!!`.
+:::
 
 ---
 
@@ -975,7 +1009,8 @@ Se [Register-overblik](register_reference.qmd) for bekræftede kolonnenavne på 
 
 | Pakke | Hvad den leverer |
 |---|---|
-| `dstDataPrep` | `load_database()` - DST-specifik parquet-forbinder *(kun DARTER-projektet)* |
+| `dstDataPrep` | `load_database()` - DST-specifik parquet-forbinder *(kun DARTER-projektet; den generelle CRAN-ækvivalent er `fastreg::read_register()`)* |
+| `fastreg` | `convert()`, `read_register()` - SAS → parquet, og læs derefter registre via navn *(CRAN)* |
 | `dplyr` | `%>%`, `filter`, `select`, `mutate`, `join`, `group_by`, `arrange`, osv. |
 | `tidyr` | `pivot_wider()` - omformning fra langt til bredt format |
 | `lubridate` | `year()`, `as.Date()`, datoberegninger |

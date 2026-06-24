@@ -188,7 +188,7 @@ kohort <- readRDS("sti/til/full_cohort.rds")
 # Dødsdatoer fra DODSAARS:
 dodsaars <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
   rename_with(tolower) %>%               # standardisér kolonnenavne
-  filter(pnr %in% !!kohort$pnr) %>%     # kun kohortens pnr'er
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # kun kohortens pnr'er
   select(pnr, death_date = d_dodsdto) %>%   # omdøb d_dodsdto til death_date
   collect()                              # hent ind i R
 
@@ -209,8 +209,8 @@ VNDS indeholder én række per migrationsbegivenhed; brug kun `"U"` (udvandring)
 # Emigrationsdatoer fra VNDS:
 vnds <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
   rename_with(tolower) %>%                       # standardisér kolonnenavne
-  filter(pnr %in% !!kohort$pnr,
-         indud_kode == "U") %>%                  # kun udvandringshændelser
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # kun kohortens pnr'er
+  filter(indud_kode == "U") %>%                  # "U" = udvandring (VNDS har både ind- og udvandring)
   select(pnr, emigration_date = haend_dato) %>%  # omdøb haend_dato til emigration_date
   collect() %>%                                  # hent ind i R
   group_by(pnr) %>%                              # gruppér for at finde første udvandring
@@ -332,12 +332,13 @@ kohort <- kohort_renset %>% left_join(udfald, by = "pnr")
 #-----------------------------------------------------
 deaths <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
   rename_with(tolower) %>%
-  filter(pnr %in% !!kohort$pnr) %>%
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%
   select(pnr, death_date = d_dodsdto) %>% collect()
 
 vnds_data <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
   rename_with(tolower) %>%
-  filter(pnr %in% !!kohort$pnr, indud_kode == "U") %>%
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%
+  filter(indud_kode == "U") %>%
   select(pnr, emigration_date = haend_dato) %>% collect() %>%
   group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()
 

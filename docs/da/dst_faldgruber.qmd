@@ -32,7 +32,7 @@ Der er to registre med lignende navne:
 dod <- open_dataset("sti/til/dodsaars/") %>%
   rename_with(tolower)                       # kontrollér dækning i din projektvejledning
 dod_person <- dod %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # kun kohortens pnr'er
   select(pnr, death_date = d_dodsdto) %>%   # d_dodsdto er den bekræftede kolonne
   collect()
 
@@ -54,7 +54,8 @@ lmdb <- open_dataset("sti/til/lmdb/") %>%
   rename_with(tolower)                  # doven forbindelse - ingen RAM brugt endnu
 
 result <- lmdb %>%
-  filter(pnr %in% !!kohort_pnrs, substr(atc, 1, 4) == "N06D") %>%   # filtrer inden collect
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # kun kohortens pnr'er
+  filter(substr(atc, 1, 4) == "N06D") %>%                            # filtrer inden collect
   select(pnr, atc, eksd) %>%
   collect()                                                            # kun nu flyttes data til R
 
@@ -72,7 +73,7 @@ Flere praktiske vaner (gem ofte, delvis indlæsning, Task Manager) i [Pas på RA
 ## 3. `rename_with(tolower)` skal kaldes på hvert register
 
 Rå kolonnenavne varierer efter register og år: `PNR`, `pnr`, `Pnr`, `V_CPR`.
-Glemmer du det, fejler `filter(pnr %in% ...)` stille med "Column `pnr` not found" - selvom kolonnen er der.
+Glemmer du det, fejler `semi_join(..., by = "pnr")` stille med "Column `pnr` not found" - selvom kolonnen er der.
 
 **Reglen:** hvert `open_dataset()`- eller `load_database()`-kald ender med `%>% rename_with(tolower)` som det første trin i din pipe.
 Se [Udtræk trin for trin](05_udtraek-trin-for-trin.qmd) for forklaring og eksempel.
@@ -125,7 +126,7 @@ bef_2020 <- bef %>%
 # KORREKT: kombiner med dodsaars for at ekskludere dødsfald
 deaths <- open_dataset("sti/til/dodsaars/") %>%   # DARTER: load_database("dodsaars")
   rename_with(tolower) %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
   select(pnr, d_dodsdto) %>%
   collect()
 
@@ -173,18 +174,20 @@ Når du filtrerer med en lokal R-vektor inde i en DuckDB-forespørgsel, skal du 
 Uden det leder DuckDB efter en kolonne med det navn - og fejler stille eller med en forvirrende besked.
 
 ```r
-min_pnr_liste <- c("001", "002", "003")   # lokal R-vektor
+# Eksempel: en år-liste mod bef (princippet gælder enhver lokal R-vektor)
+mine_aar <- c(2018, 2019, 2020)   # lokal R-vektor (år, her som eksempel)
 
-# FORKERT - DuckDB leder efter en kolonne kaldet "min_pnr_liste"
-bef %>% filter(pnr %in% min_pnr_liste)   # fejl eller forkert resultat
+# FORKERT - DuckDB leder efter en kolonne kaldet "mine_aar"
+bef %>% filter(aar %in% mine_aar)   # fejl eller forkert resultat
 
 # KORREKT - !! fortæller DuckDB: "brug den lokale R-vektor"
-bef %>% filter(pnr %in% !!min_pnr_liste)
+bef %>% filter(aar %in% !!mine_aar)
 ```
 
 ::: {.callout-note}
 `!!` er nødvendigt for **alle** lokale R-objekter brugt inde i `filter()`, `mutate()` mv.
-på dovne DuckDB-forbindelser. Se [Funktionsguiden](guide_til_funktioner.qmd#bang-bang-to-udråbstegn) for fuld forklaring.
+på dovne DuckDB-forbindelser - typisk kode- eller år-lister (`%in% !!koder`, `>= !!min_dato`).
+Filtrerer du derimod på **pnr** mod hele kohorten, så brug `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")`: den tager en lokal tabel direkte og kræver ikke `!!`. Se [Funktionsguiden](guide_til_funktioner.qmd#bang-bang-to-udråbstegn) for fuld forklaring.
 :::
 
 ---
@@ -209,7 +212,7 @@ R's fejlbeskeder er korte og tekniske - her er de du oftest møder i et DST-work
 | Fejlbesked | Typisk årsag | Løsning |
 |---|---|---|
 | `Error: Column 'pnr' not found` | `rename_with(tolower)` mangler | Tilføj `%>% rename_with(tolower)` direkte efter `load_database()` - se [faldgrube 3](#3-rename_withtolower-skal-kaldes-på-hvert-register) |
-| `Error: object 'min_liste' not found` | `!!` mangler i `filter()` på en doven forbindelse | Skriv `filter(pnr %in% !!min_liste)` - se [faldgrube 8](#8-bang-bang-glemmes-i-lazy-evaluering) |
+| `Error: object 'min_liste' not found` | `!!` mangler i `filter()` på en doven forbindelse | Skriv `filter(aar %in% !!min_liste)` - se [faldgrube 8](#8-bang-bang-glemmes-i-lazy-evaluering) |
 | `Error: could not find function "load_database"` | `library(dstDataPrep)` mangler *(kun DARTER)* | Tilføj `library(dstDataPrep)` øverst i scriptet - kun relevant på DARTER/projekt 708421 |
 | `non-numeric argument to binary operator` | Datokolonne er `character`, ikke `Date` | `mutate(dato = as.Date(dato))` - se [faldgrube 4](#4-datokolonner-er-ikke-altid-i-date-format) |
 | `Error in filter.default(...)` | Filtrering på et dovent objekt uden `%>%` | Skift til `%>%` - se [røret](guide_til_funktioner.qmd#røret) |

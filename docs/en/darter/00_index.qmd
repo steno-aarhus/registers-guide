@@ -113,7 +113,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 somatic
   lpr2_dx <- lpr_adm %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust against Arrow/DuckDB - see note
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # only the cohort - see Extract from LPR
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -124,7 +124,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 psychiatric
   lpr2_psyk_dx <- psyk_adm %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust against Arrow/DuckDB - see note
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # only the cohort - see Extract from LPR
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -135,7 +135,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR3
   lpr3_dx <- lpr3_k %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust against Arrow/DuckDB - see note
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # only the cohort - see Extract from LPR
     select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
     inner_join(
       lpr3_d %>%
@@ -153,10 +153,6 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 ```
 
 </details>
-
-::: {.callout-note}
-**Why `semi_join(tibble(...))` and not `filter(pnr %in% pnr_vector)`?** A large `%in%` filter with an R vector can fail or be rejected by Arrow/DuckDB (especially with an old `duckplyr` - see Step 2). A `semi_join` against a small `tibble` of pnr's does the same thing - keeps only the cohort's rows - but is pushed down into the database efficiently and reliably. The general [Extract from LPR](../09b_udtraek_fra_lpr.qmd) uses `filter(pnr %in% !!cohort_pnrs)`; if that does not work in your session, use the `semi_join` variant here.
-:::
 
 <details>
 <summary>Use the function - one call per extraction, only change <code>CODES</code></summary>
@@ -205,11 +201,11 @@ This is the DARTER variant (using `load_database()` and the confirmed register n
 
 ```r
 lmdb <- load_database("lmdb") %>%
-  filter(pnr %in% !!kohort$pnr) %>%   # filter in Arrow BEFORE compute - reduce data
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # filter in Arrow BEFORE compute - reduce data
   compute()                             # materialise as DuckDB - not in R yet
 ```
 
-Always reduce data with `filter()`/`select()` before `compute()`. The `!!` sign before an R variable is explained in [Phase 5 - The most important rule](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent). See [osdc documentation](https://steno-aarhus.github.io/osdc/) for DuckDB configuration and memory limits.
+Always reduce data with `semi_join()`/`filter()`/`select()` before `compute()`. If you filter on a local code or year list (not pnr), put `!!` before the R variable - explained in [Phase 5 - The most important rule](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent). See [osdc documentation](https://steno-aarhus.github.io/osdc/) for DuckDB configuration and memory limits.
 
 ---
 

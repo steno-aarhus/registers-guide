@@ -58,29 +58,29 @@ Raw column names in DST registers have inconsistent capitalisation - `PNR`, `pnr
 ```r
 # CORRECT - filter and select columns BEFORE collect
 result <- large_register %>%
-  filter(pnr %in% !!cohort_pnrs) %>%   # keep only the relevant rows
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%   # keep only the relevant rows
   select(pnr, date, value) %>%          # keep only the columns you use
   collect()
 
 # WRONG - fetches millions of rows and all columns into RAM
 result <- large_register %>%
   collect() %>%
-  filter(pnr %in% cohort_pnrs)
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr")
 ```
 
 BEF has millions of rows; LMDB has hundreds of millions.
-Calling `collect()` before `filter()` can crash your session - and because everyone shares the server's RAM, it makes the server slow for **everyone else** at the same time. The more you have filtered and selected columns in advance, the faster and more stably it runs.
+Calling `collect()` before you have narrowed the rows can crash your session - and because everyone shares the server's RAM, it makes the server slow for **everyone else** at the same time. The more you have filtered and selected columns in advance, the faster and more stably it runs.
 
 ::: {.callout-tip}
-**Rule of thumb:** `filter()` limits rows. `select()` limits columns. Use both *before* `collect()`.
+**Rule of thumb:** `semi_join()` (against your cohort) and `filter()` (every other condition: codes, dates, sex …) limit rows. `select()` limits columns. Use them all *before* `collect()`. So `semi_join` does not replace `filter` - it only replaces `filter(pnr %in% !!cohort_pnrs)`; all your other conditions are still written with `filter()`.
 :::
 
 ---
 
 <details>
-<summary>In depth: what !! means, and why it is necessary</summary>
+<summary>In depth: what !! means, and when you need it</summary>
 
-Did you notice `!!` in the example above - `filter(pnr %in% !!cohort_pnrs)`?
+In the example above we filtered the cohort with `semi_join(tibble(pnr = cohort_pnrs), by = "pnr")` - the recommended way to keep the cohort's rows. It does *not* need `!!`, because `semi_join` takes an ordinary local table as its argument.
 
 **What is `cohort_pnrs`?**
 It is a vector (a list) of the personal identifiers that should be included in your study - e.g. all those who received a particular surgery or diagnosis. You built it from a register by filtering on a procedure or ICD code. It looks like this in R:
@@ -93,18 +93,17 @@ cohort_pnrs <- unique(cohort$pnr)   # extracted from your cohort dataset
 **You must never write actual personal identifiers (pnr) in your code** - only variable names and vectors. Writing actual CPR numbers directly in a script is a violation of DST's rules for handling microdata.
 :::
 
-**Back to `!!`:** The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs *separately* from R and does not know your local variables.
+**So when do you need `!!`?** When you pass a *different* local R vector into a `filter()` on a lazy object - typically a code or year list:
 
 ```r
-filter(pnr %in% !!cohort_pnrs)
+my_codes <- c("DE10", "DE11", "DE14")   # local R vector
+register %>% filter(c_diag %in% !!my_codes)
 ```
 
-Without `!!`, the engine would look for a *column* called `cohort_pnrs` inside the register. It does not exist - `cohort_pnrs` is an R vector you created locally. `!!` means: *"this is an R object, not a column name - look up its values in R and use them in the query."*
-
-You will see `!!` in front of almost any local variable used inside a `filter()` on a lazy object.
+The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs *separately* from R and does not know your local variables. Without `!!`, the engine would look for a *column* called `my_codes` inside the register. It does not exist - `my_codes` is an R vector you created locally. `!!` means: *"this is an R object, not a column name - look up its values in R and use them in the query."*
 
 ::: {.callout-tip}
-Rule of thumb: if you are referring to a **column** in the register, write the name directly. If you are referring to an **R variable** you created yourself, put `!!` in front of it.
+Rule of thumb: if you are referring to a **column** in the register, write the name directly. If you are referring to an **R variable** you created yourself, put `!!` in front of it. To filter on **pnr** against the cohort, use `semi_join` - then you avoid `!!` entirely.
 :::
 
 </details>
@@ -191,16 +190,24 @@ On the DARTER project (708421) most SAS datasets are already converted to parque
 
 </details>
 
+[]{#arrow-vs-duckdb}
+
 <details>
 <summary>More technical: Arrow vs. DuckDB - when is which used?</summary>
 
-Both packages use lazy evaluation and `collect()`.
+Both engines use lazy evaluation and `collect()`.
 
-**Arrow** is fast at reading parquet, but does not support all dplyr functions.
+**Arrow** is fast at reading parquet, but does not support all dplyr functions. `open_dataset()` gives you an Arrow connection.
 
-**DuckDB (via duckplyr)** supports almost all dplyr functions and falls back automatically to R's engine for the few it cannot handle.
+**DuckDB** supports almost all dplyr functions and is also very fast. To move an Arrow connection over to DuckDB, pipe through `to_duckdb()` (from the `arrow` package):
 
-If you encounter an error about *"unsupported function"*, you are probably using a function DuckDB does not support. Solution: `collect()` data into R first, and perform the operation after that.
+```r
+bef <- open_dataset("path/to/bef/") %>% to_duckdb()   # now queried by DuckDB
+```
+
+`load_database()` (dstDataPrep) and `read_register()` (fastreg) return a DuckDB connection already, so this step is built in - you do not call `to_duckdb()` yourself.
+
+If you encounter an error about *"unsupported function"* in Arrow, switch to DuckDB with `to_duckdb()`, or `collect()` the data into R first and perform the operation after that.
 
 </details>
 

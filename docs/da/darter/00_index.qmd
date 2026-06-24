@@ -113,7 +113,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 somatisk
   lpr2_dx <- lpr_adm %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust mod Arrow/DuckDB - se note
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Udtræk fra LPR
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -124,7 +124,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 psykiatrisk
   lpr2_psyk_dx <- psyk_adm %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust mod Arrow/DuckDB - se note
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Udtræk fra LPR
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -135,7 +135,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR3
   lpr3_dx <- lpr3_k %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # robust mod Arrow/DuckDB - se note
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Udtræk fra LPR
     select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
     inner_join(
       lpr3_d %>%
@@ -153,10 +153,6 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 ```
 
 </details>
-
-::: {.callout-note}
-**Hvorfor `semi_join(tibble(...))` og ikke `filter(pnr %in% pnr_vector)`?** Et stort `%in%`-filter med en R-vektor kan fejle eller blive afvist af Arrow/DuckDB (især med en gammel `duckplyr` - se Trin 2). At `semi_join`'e mod en lille `tibble` af pnr'er gør det samme - beholder kun kohortens rækker - men skubbes effektivt og pålideligt ned i databasen. Den generelle [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd) bruger `filter(pnr %in% !!kohort_pnrs)`; virker det ikke i din session, så brug `semi_join`-varianten her.
-:::
 
 <details>
 <summary>Brug funktionen - ét kald pr. udtræk, skift kun <code>KODER</code></summary>
@@ -205,11 +201,11 @@ Dette er DARTER-varianten (med `load_database()` og de bekræftede registernavne
 
 ```r
 lmdb <- load_database("lmdb") %>%
-  filter(pnr %in% !!kohort$pnr) %>%   # filtrer i Arrow FØR compute - reducer data
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # filtrer i Arrow FØR compute - reducer data
   compute()                             # materialisér som DuckDB - endnu ikke i R
 ```
 
-Reducer altid data med `filter()`/`select()` inden `compute()`. Tegnet `!!` foran en R-variabel er forklaret i [Fase 5 - Den vigtigste regel](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent). Se [osdc-dokumentationen](https://steno-aarhus.github.io/osdc/) for DuckDB-konfiguration og memory limits.
+Reducer altid data med `semi_join()`/`filter()`/`select()` inden `compute()`. Filtrerer du på en lokal kode- eller år-liste (ikke pnr), sætter du `!!` foran R-variablen - forklaret i [Fase 5 - Den vigtigste regel](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent). Se [osdc-dokumentationen](https://steno-aarhus.github.io/osdc/) for DuckDB-konfiguration og memory limits.
 
 ---
 

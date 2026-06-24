@@ -41,6 +41,10 @@ Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. `kohort`
 **Tilpas stien** i `open_dataset(...)` til dit projekts datamappe (eksemplernes `E:/workdata/[projektnummer]/...` er projektspecifik). **OBS:** LPR er et af de største registre, så data **skal** ligge i parquet. Så kan Arrow/DuckDB filtrere før indlæsning og kun hente de rækker du beder om; læser du LPR direkte fra fx SAS, hentes hele registret i RAM. Konverter SAS til parquet først: [Fase 4 - SAS til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
 :::
 
+::: {.callout-tip}
+**Hvorfor `semi_join(tibble(pnr = ...))` og ikke `filter(pnr %in% ...)`?** Begge beholder kun kohortens rækker, men `semi_join` mod en lille `tibble` af pnr'er skubbes mere effektivt og pålideligt ned i Arrow/DuckDB. Et stort `%in%`-filter med en R-vektor kan blive langsomt eller helt afvist (især med en ældre `duckplyr`). Du slipper samtidig for `!!`: `semi_join` tager en almindelig lokal tabel som argument. `!!` skal du stadig bruge, når du sender en lokal R-vektor ind i et `filter()`, fx en kodeliste (`substr(c_diag, 2, 4) %in% !!KODER`).
+:::
+
 <details>
 <summary>Tilgang 1 - hent bestemte diagnoser direkte (start her ved ét udfald)</summary>
 
@@ -67,7 +71,7 @@ lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-regis
 # Du kan trække så mange koder ud på én gang, du vil (via KODER_REGEX), og du vælger SELV objektnavnet
 # (her 'lpr2_dm' = LPR2 + diabetes mellitus, fordi eksemplet er diabetes).
 lpr2_dm <- lpr_adm %>%
-  filter(pnr %in% !!kohort_pnrs) %>%                 # KUN din kohorte. UDELAD linjen, hvis du vil have HELE befolkningen
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # KUN din kohorte. UDELAD linjen, hvis du vil have HELE befolkningen
   select(pnr, recnum, date_contact = d_inddto) %>%   # vælg kolonner fra LPR2; d_inddto OMDØBES til date_contact (se noten under koden)
   inner_join(
     lpr_diag %>%                                     # diagnoseregistret: har recnum + ICD-kode, men hverken pnr eller dato
@@ -86,7 +90,7 @@ lpr3_k <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registe
 lpr3_d <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
 
 lpr3_dm <- lpr3_k %>%                                 # samme mønster som LPR2 - men LPR3-tabeller og andre kolonnenavne
-  filter(pnr %in% !!kohort_pnrs) %>%                  # KUN din kohorte. UDELAD linjen for HELE befolkningen
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # KUN din kohorte. UDELAD linjen for HELE befolkningen
   select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%  # LPR3's datokolonne omdøbes til SAMME navn: date_contact
   inner_join(
     lpr3_d %>%
@@ -172,7 +176,7 @@ lpr_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-regis
 lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
 
 lpr2_dx <- lpr_adm %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
   select(pnr, recnum, date_contact = d_inddto) %>%
   inner_join(
     lpr_diag %>%
@@ -190,7 +194,7 @@ lpr3_k <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registe
 lpr3_d <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
 
 lpr3_dx <- lpr3_k %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
   select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
   inner_join(
     lpr3_d %>%
@@ -219,7 +223,7 @@ psyk_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-regi
   rename_with(tolower) %>% rename(recnum = v_recnum)
 
 lpr2_psyk_dx <- psyk_adm %>%
-  filter(pnr %in% !!kohort_pnrs) %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
   select(pnr, recnum, date_contact = d_inddto) %>%
   inner_join(psyk_diag %>% filter(c_diagtype %in% c("A", "B")) %>%
                select(recnum, c_diag, c_diagtype), by = "recnum") %>%
@@ -422,7 +426,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 somatisk
   lpr2_dx <- lpr_adm %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -433,7 +437,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR2 psykiatrisk
   lpr2_psyk_dx <- psyk_adm %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
       psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
@@ -444,7 +448,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # LPR3
   lpr3_dx <- lpr3_k %>%
-    filter(pnr %in% !!pnr_vector) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%
     select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
     inner_join(
       lpr3_d %>%
