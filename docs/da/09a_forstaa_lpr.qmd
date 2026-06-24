@@ -60,9 +60,25 @@ gantt
     lpr_a_kontakt + lpr_a_diagnose   :active, 2019, 2027
 ```
 
-::: {.callout-note}
-**LPR3 leveres som `lpr_a_*`-filer (LPR_A-format).** Der kan ligge ældre LPR_F-versioner af de samme data i din mappe - vær opmærksom på filvalget, så du ikke får duplikater. Se [LPR3 findes i to filformater](09b_udtraek_fra_lpr.qmd#lpr-a-format).
+LPR3 dækker hospitalskontakter fra marts 2019 og frem, og du tilgår dem via LPR_A-filerne (`lpr_a_kontakt`, `lpr_a_diagnose`). Vær opmærksom på, at LPR_A også indeholder ambulante data tilbage fra omkring 2017, hvoraf noget allerede ligger i LPR2 - det skal derfor renses for dubletter (se faldgruben nedenfor).
+
+
+::: {.callout-important}
+**Ny forsker/nyt projekt? Brug kun LPR_A-filerne.** LPR3 er blevet leveret i to formater: det ældre **LPR_F** (`kontakter`, `diagnoser`, `forloeb`) og det nuværende **LPR_A** (`lpr_a_kontakt`, `lpr_a_diagnose`). For nye projekter er **LPR_F reelt dødt - brug LPR_A**. Begge kan ligge i din mappe og dække de samme år, så hvis du også indlæser LPR_F (eller blander de to), får du **duplikerede rækker**. Alle eksempler på dette site bruger `lpr_a_*`.
 :::
+
+::: {.callout-warning}
+**Faldgrube: overlappende data.** Nogle projekter har ældre kontakter (allerede dækket af LPR2) liggende inde i LPR3-tabellerne (`lpr_a_kontakt`). Fjern dem ved at filtrere `lprindberetningssystem == "LPR3"`, så den samme kontakt ikke tælles to gange på tværs af LPR2 og LPR3. Det er projektspecifikt - på DARTER er det [faldgrube 5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem); ellers tjek med din datamanager.
+:::
+
+<details>
+<summary>Baggrund: LPR_F vs LPR_A (kan springes over)</summary>
+
+Da LPR3 blev lanceret i marts 2019, blev forskningsdata først distribueret i **LPR_F**-modellen: et forløbsorienteret (`forloeb`) format med separate `kontakter`-, `diagnoser`- og `forloeb`-tabeller. Forskerservice gik senere over til den kontaktbaserede **LPR_A**-model (`lpr_a_kontakt`, `lpr_a_diagnose`), som er den, projekter modtager i dag. De to repræsenterer de samme underliggende kontakter forskelligt, så de er **ikke** tænkt til at blive kombineret - vælg LPR_A.
+
+Den officielle LPR_F-datamodel er dokumenteret i [Vejledning til LPR3_F](https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf) (og de øvrige links nederst på siden).
+Dokumentationen for LPR_A er endnu ufuldstændig.
+</details>
 
 ---
 
@@ -84,7 +100,7 @@ mutate(icd4 = substr(c_diag, 2, 5))   # "DI219" → "I219" (4-tegns kode)
 
 ---
 
-## Diagnosetyper: A, B og G
+## Diagnosetyper: A, B og G {#diagtype}
 
 | Kode | Betydning | Hvornår inkluderes den |
 |---|---|---|
@@ -100,6 +116,10 @@ filter(c_diagtype %in% c("A", "B"))
 filter(c_diagtype %in% c("A", "B", "G"))
 ```
 
+::: {.callout-tip}
+**Behold type-kolonnen i dit udtræk.** Tag `c_diagtype` (i LPR3: `diag_kode_type`) med i dit output, ikke kun diagnosekoden. Det koster én kolonne og lader dig senere variere case-definitionen - fx hovedanalyse på A + B, sensitivitetsanalyse på kun A (aktionsdiagnose) eller inklusive G - uden at forespørge LPR igen.
+:::
+
 ---
 
 ## Tilbagekaldte diagnoser i LPR3 (`senere_afkraeftet`)
@@ -111,6 +131,35 @@ filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
 ```
 
 `is.na()`-delen er bevidst. R's standardadfærd er: `NA != "Ja"` returnerer `NA` - ikke `TRUE`. Et filter betragter `NA` som `FALSE` og *dropper* rækken. `filter(senere_afkraeftet != "Ja")` *alene* ville derfor fjerne alle diagnoser der slet ikke har en tilbagekaldelsesmarkering (dvs. `NA`-felter) - selvom de bestemt ikke er tilbagekaldt. `is.na(...)` retter det: "behold rækken hvis feltet er `NA` ELLER hvis det ikke er `"Ja"`". Filtret beholder dermed ukategoriserede diagnoser, hvilket er den sikreste antagelse.
+
+---
+
+## Udfordring med LPR_A: diagnose-spike omkring 2019-2020 {#lpr3-spike}
+
+Overgangen til LPR3's kontaktbaserede model ændrede også **hvordan ambulante diagnoser registreres**, og det kan forvrænge antallet af diagnoser hen over overgangen.
+
+I LPR2 blev et forløb af ambulante besøg typisk opsummeret med **én** (aktions)diagnose for hele forløbet. I LPR3 kan **hver kontakt** bære sine egne diagnoser. Så en patient med 10 ambulante besøg for depression, der gav **én** diagnoserække i LPR2, kan give **ti** rækker i LPR3 - samme sygdom, langt flere registreringer.
+
+Den synlige effekt er et **spike i antallet af diagnoser omkring 2019-2020**, til stede for de fleste diagnoser, og synligt selv hvis du kun ser på primærdiagnosen (aktionsdiagnosen). Det kompliceres yderligere af et overlap med **COVID-19** i 2020 og gør perioden endnu sværere at tolke.
+
+::: {.callout-warning}
+**Der findes ingen samlet, vedtaget løsning.** Det er et reelt problem i registerforskning, især for analyser der **kun** bygger på hospitalsdiagnoser.
+
+**Vi opfordrer derfor til at visualisere antallet af de diagnoser der bruges i jeres studie på tværs af kalenderår**
+
+```r
+library(lubridate)
+alle_dx %>%
+  mutate(year = year(date_contact)) %>%   # date_contact fra dit LPR-udtræk
+  count(year) %>%
+  arrange(year)
+# plot n mod year og kig efter et spring omkring 2019-2020
+```
+
+De fleste diagnoser viser spiket. Nogle få er stabile hen over overgangen (fx type 1-diabetes) og er et nyttigt sanity check: springer selv en stabil diagnose i dine data, er der noget andet galt.
+:::
+
+Til inspiration og evaluering af diagnostisk stabilitet hen over overgangen, se [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3) (metodisk inspiration, ikke kode til genbrug).
 
 ---
 

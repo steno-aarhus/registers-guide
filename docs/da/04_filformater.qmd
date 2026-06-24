@@ -42,6 +42,25 @@ Hvordan du selv navngiver scripts i `R/`, gennemgås i [God kode-praksis](god-ko
 
 ---
 
+## Doven vs. fuld indlæsning - hvad er forskellen i praksis?
+
+Det er den vigtigste skelnen på siden, så vi tager den først. Hver filtype nedenfor falder i én af to indlæsningsmåder:
+
+**Fuld indlæsning** (`readRDS`, `read_sas`, `read_csv`, `read_xlsx`)
+Hele filen læses ind i RAM med det samme. For dine egne mellemresultater er det fint - de er relativt små. Men det ville crashe din session, hvis du prøvede det på et helt register.
+
+**Doven indlæsning** (parquet via `open_dataset()`)
+Filen åbnes som en *forbindelse*, ikke som data. Du kan filtrere og vælge kolonner, og **først når du kalder `collect()`** flyttes de udvalgte rækker ind i RAM. Det er sådan du arbejder med registre på millioner af rækker uden at løbe tør for hukommelse.
+
+::: {.callout-important}
+**SAS-filer er også store - og deles med alle på serveren.**
+På DST deler alle brugere serverens RAM. `read_sas()` på en stor SAS-fil belaster serveren for alle på samme tid. DST **lukker automatisk processer** (RStudio-sessioner, jobs m.m.) når RAM'en er ved at være fyldt - så et for stort udtræk kan koste dig dit ulagrede arbejde. Hvis du bruger en SAS-fil gentagne gange, er det værd at konvertere den til parquet én gang - det sparer markant RAM og gør indlæsning meget hurtigere.
+Se [Konvertér SAS til parquet](#konvertér-sas-til-parquet) nedenfor for fremgangsmåden, og [Pas på RAM i det fælles miljø](god-kode-praksis.qmd#pas-på-ram) for de praktiske vaner.
+DST's officielle råd er samlet i [DST-vejledning: Reduktion af RAM-forbrug i det fælles miljø (PDF)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
+:::
+
+---
+
 ## Oversigt - filtype, pakke, funktion
 
 | Filtype | Pakke | Funktion | Indlæsning |
@@ -52,12 +71,21 @@ Hvordan du selv navngiver scripts i `R/`, gennemgås i [God kode-praksis](god-ko
 | `.csv` | `readr` | `read_csv("sti/til/fil.csv")` | **Fuld** - hele filen ind i RAM |
 | `.xlsx` | `readxl` | `read_xlsx("sti/til/fil.xlsx")` | **Fuld** - hele filen ind i RAM |
 
+Den sidste kolonne er doven/fuld-skelnen fra ovenfor: parquet er det eneste dovne format, alt andet læses fuldt ind i RAM.
+
 **Hvad skriver du i parenteserne?**
 Du skriver stien til den parquet-mappe der indeholder registret - fx `open_dataset("sti/til/bef/")`. Hvilken sti det konkret er, afhænger af dit projekt og din server. Kolonnenavne for hvert register finder du i [Register-overblik](register_reference.qmd).
 
 ::: {.callout-note}
 **Et register kommer ofte som mange årlige filer** (fx `bef2015.parquet`, `bef2016.parquet` … i samme mappe). `open_dataset("sti/til/bef/")` læser **hele mappen som ét samlet datasæt** - du skal hverken samle filerne manuelt eller læse årstallet ud af filnavnet. Vælg år ved at filtrere på årskolonnen *i dataene*, fx `filter(year == 2015)` (nogle registre bruger `aar`).
 :::
+
+**RDS er det format du selv skriver mest.** Du gemmer mellemresultater fra ét script og genindlæser dem i det næste:
+
+```r
+saveRDS(kohort, "sti/til/full_cohort.rds")   # gem et R-objekt til disk
+kohort <- readRDS("sti/til/full_cohort.rds")   # læs det ind igen i næste script
+```
 
 <details>
 <summary>Sjældnere formater (Stata, SPSS, Feather, RData)</summary>
@@ -75,11 +103,10 @@ Disse møder du sjældent i et typisk DST-kohortestudie, men her er de for fulds
 
 </details>
 
----
+<details>
+<summary>Hvornår bruger du hvad? (Parquet, RDS, SAS, CSV)</summary>
 
-## Hvornår bruger du hvad?
-
-De tre du faktisk arbejder med i hverdagen:
+De tre formater du faktisk arbejder med i hverdagen:
 
 | Filtype | Bruges til |
 |---|---|
@@ -87,19 +114,7 @@ De tre du faktisk arbejder med i hverdagen:
 | **RDS** | Dine egne mellemresultater - datasæt du gemmer fra ét script og genindlæser i det næste. |
 | **SAS** | Formateringstabeller og rå registerdata, der endnu ikke er konverteret til parquet. |
 
-### RDS - det format du selv skriver mest
-
-RDS er R's eget format. Det er hurtigt, kompakt og bevarer alle R-egenskaber (datatyper, faktorniveauer, kolonnenavne) perfekt.
-
-Arbejder du med en pipeline af scripts - fx et script der bygger din kohorte og et andet der trækker diagnoser - gemmer du resultatet fra script 1 som `.rds`, så script 2 kan læse det ind og fortsætte derfra, uden at du behøver køre alt om igen.
-
-```r
-saveRDS(kohort, "sti/til/full_cohort.rds")   # gem et R-objekt til disk
-kohort <- readRDS("sti/til/full_cohort.rds")   # læs det ind igen i næste script
-```
-
-<details>
-<summary>Kodeeksempler: SAS og CSV</summary>
+**RDS** er R's eget format. Det er hurtigt, kompakt og bevarer alle R-egenskaber (datatyper, faktorniveauer, kolonnenavne) perfekt. Arbejder du med en pipeline af scripts - fx et script der bygger din kohorte og et andet der trækker diagnoser - gemmer du resultatet fra script 1 som `.rds`, så script 2 kan læse det ind og fortsætte derfra, uden at køre alt om igen.
 
 **SAS** - til formateringstabeller og ikke-konverteret registerdata:
 
@@ -123,29 +138,6 @@ Gem **aldrig** rå registerdata som CSV - kun aggregerede resultater. Se [Fase 1
 
 ---
 
-## Doven vs. fuld indlæsning - hvad er forskellen i praksis?
-
-Læg mærke til den sidste kolonne i oversigtstabellen. Den deler alt i to:
-
-**Fuld indlæsning** (`readRDS`, `read_sas`, `read_csv`, `read_xlsx`)
-Hele filen læses ind i RAM med det samme. For dine egne mellemresultater er det fint - de er relativt små. Men det ville crashe din session, hvis du prøvede det på et helt register.
-
-**Doven indlæsning** (parquet via `open_dataset()`)
-Filen åbnes som en *forbindelse*, ikke som data. Du kan filtrere og vælge kolonner, og **først når du kalder `collect()`** flyttes de udvalgte rækker ind i RAM. Det er sådan du arbejder med registre på millioner af rækker uden at løbe tør for hukommelse.
-
-::: {.callout-important}
-**SAS-filer er også store - og deles med alle på serveren.**
-På DST deler alle brugere serverens RAM. `read_sas()` på en stor SAS-fil belaster serveren for alle på samme tid. DST **lukker automatisk processer** (RStudio-sessioner, jobs m.m.) når RAM'en er ved at være fyldt - så et for stort udtræk kan koste dig dit ulagrede arbejde. Hvis du bruger en SAS-fil gentagne gange, er det værd at konvertere den til parquet én gang - det sparer markant RAM og gør indlæsning meget hurtigere.
-Se [Konvertér SAS til parquet](#konvertér-sas-til-parquet) nedenfor for fremgangsmåden, og [Pas på RAM i det fælles miljø](god-kode-praksis.qmd#pas-på-ram) for de praktiske vaner.
-DST's officielle råd er samlet i [DST-vejledning: Reduktion af RAM-forbrug i det fælles miljø (PDF)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
-:::
-
-Hvorfor doven indlæsning fungerer, og hvordan `collect()` virker, er emnet for næste fase.
-
-→ [Fase 5 - Udtræk trin for trin](05_udtraek-trin-for-trin.qmd)
-
----
-
 ## Konvertér SAS-filer til Parquet {#konvertér-sas-til-parquet}
 
 De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden du kan bruge dem med `open_dataset()` og doven evaluering, skal de konverteres til Parquet **én enkelt gang**. Derefter bruger du dem præcis som alle andre registre.
@@ -154,7 +146,8 @@ De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden
 **Relevant for de fleste uden for DARTER.** Arbejder du på et projekt hvor registrene ikke allerede er konverteret til parquet, er dette trin nødvendigt inden du kan køre udtræk. Gøres én gang per register - herefter gælder det normale udtræksmønster.
 :::
 
-**Hvorfor Parquet er det værd:**
+<details>
+<summary>Hvorfor Parquet er det værd (SAS vs Parquet)</summary>
 
 | | SAS (.sas7bdat) | Parquet |
 |---|---|---|
@@ -162,6 +155,8 @@ De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden
 | Diskplads | Stor | 50–75 % mindre |
 | Kræver pakke | `haven` | `arrow` |
 | Doven evaluering | Nej - alt ind i RAM | Ja - filter FØR collect |
+
+</details>
 
 ### Anbefalet: konvertér med `fastreg`
 
@@ -245,3 +240,11 @@ Du kan også konvertere til Parquet (eller `.dta`) i **StatTransfer**, som finde
 :::
 
 </details>
+
+---
+
+## Næste skridt
+
+Hvorfor doven indlæsning fungerer, og hvordan `collect()` virker, er emnet for næste fase.
+
+→ [Fase 5 - Udtræk trin for trin](05_udtraek-trin-for-trin.qmd)

@@ -56,55 +56,52 @@ Rå kolonnenavne i DST-registre har inkonsistent store/små bogstaver - `PNR`, `
 ## Den vigtigste regel: filtrér og vælg kolonner FØR du henter {#filtrer-foer-hent}
 
 ```r
-# RIGTIGT - filtrér og vælg kolonner FØR collect
+# RIGTIGT - filtrér rækker og vælg kolonner FØR collect
 resultat <- stort_register %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # behold kun de rigtige rækker
-  select(pnr, dato, vaerdi) %>%          # behold kun de kolonner du bruger
-  collect()
+  filter(aar == 2020) %>%          # behold kun de rækker du har brug for
+  select(pnr, koen, foed_dag) %>%  # behold kun de kolonner du bruger
+  collect()                        # først nu flyttes data ind i R
 
-# FORKERT - henter millioner af rækker og alle kolonner ind i RAM
+# FORKERT - henter alle rækker og alle kolonner ind i RAM først, og filtrerer bagefter
 resultat <- stort_register %>%
-  collect() %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr")
+  collect() %>%                    # alt ind i RAM - kan crashe din session
+  filter(aar == 2020)
 ```
 
 BEF har millioner af rækker; LMDB har hundredvis af millioner.
 At kalde `collect()` før du har begrænset rækkerne kan crashe din session - og fordi alle deler serverens RAM, gør det serveren langsom for **alle andre** samtidig. Jo mere du har filtreret og valgt kolonner på forhånd, jo hurtigere og mere stabilt kører det.
 
 ::: {.callout-tip}
-**Tommelfingerregel:** `semi_join()` (mod kohorten) og `filter()` (alle andre betingelser: koder, datoer, køn …) begrænser rækker. `select()` begrænser kolonner. Brug dem alle *inden* `collect()`. `semi_join` erstatter altså ikke `filter` - den erstatter kun `filter(pnr %in% !!kohort_pnrs)`; resten af dine betingelser skriver du stadig med `filter()`.
+**Tommelfingerregel:** `filter()` begrænser rækker. `select()` begrænser kolonner. Brug begge *inden* `collect()`, aldrig efter.
+:::
+
+::: {.callout-note}
+**Senere: behold kun din kohorte.** Når du har bygget en studiepopulation, vil du som regel kun beholde *din kohortes* personer i et register. Det gøres med `semi_join` mod din kohortes `pnr` - introduceret når du trækker fra LPR ([Fase 9b](09b_udtraek_fra_lpr.qmd)), når kohorten selv er bygget ([Fase 10](10_byg-studiepopulation.qmd)). Det har du ikke brug for endnu.
+:::
+
+::: {.callout-warning}
+**Skriv aldrig reelle CPR-numre (pnr) i din kode** - kun variabelnavne og vektorer. At skrive faktiske CPR-numre direkte i et script er en overtrædelse af DST's regler for håndtering af mikrodata.
 :::
 
 ---
 
 <details>
-<summary>Dybde: hvad !! betyder, og hvornår du har brug for det</summary>
+<summary>Dybde: hvad `!!` betyder, og hvornår du har brug for det (spring over for nu, hvis det er nyt)</summary>
 
-I eksemplet ovenfor filtrerede vi kohorten med `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")` - den anbefalede måde at beholde kohortens rækker på. Den kræver *ikke* `!!`, fordi `semi_join` tager en almindelig lokal tabel som argument.
-
-**Hvad er `kohort_pnrs`?**
-Det er en vektor (en liste) med de personnumre der skal indgå i dit studie - fx alle der har fået en bestemt operation eller diagnose. Du har bygget den fra et register ved at filtrere på en SKS- eller ICD-kode. Den ser fx sådan ud i R:
+Nogle gange filtrerer du på en **liste du selv har defineret i R** - typisk et sæt ICD- eller års-koder:
 
 ```r
-kohort_pnrs <- unique(kohort$pnr)   # trukket fra dit kohorte-datasæt
-```
-
-::: {.callout-warning}
-**Du må aldrig skrive reelle personnumre (pnr) i din kode** - kun variabelnavne og vektorer. At skrive faktiske CPR-numre direkte i et script er en overtrædelse af DST's regler for håndtering af mikrodata.
-:::
-
-**Hvornår skal du så bruge `!!`?** Når du sender en *anden* lokal R-vektor ind i et `filter()` på et dovent objekt - typisk en kode- eller år-liste:
-
-```r
-mine_koder <- c("DE10", "DE11", "DE14")   # lokal R-vektor
+mine_koder <- c("DE10", "DE11", "DE14")   # lokal R-vektor du selv har lavet
 register %>% filter(c_diag %in% !!mine_koder)
 ```
 
 Den dovne forespørgsel udføres ikke af R, men af databasemotoren (Arrow/DuckDB), som kører *adskilt* fra R og ikke kender dine lokale variabler. Uden `!!` ville motoren lede efter en *kolonne* ved navn `mine_koder` inde i registret. Den findes ikke - `mine_koder` er en R-vektor, du har lavet lokalt. `!!` betyder: *"dette er et R-objekt, ikke et kolonnenavn - slå dets værdier op i R og brug dem i forespørgslen."*
 
 ::: {.callout-tip}
-Tommelfingerregel: refererer du til en **kolonne** i registret, skriver du navnet direkte. Refererer du til en **R-variabel** du selv har lavet, sætter du `!!` foran. Skal du filtrere på **pnr** mod kohorten, så brug `semi_join` - så slipper du for `!!`.
+Tommelfingerregel: refererer du til en **kolonne** i registret, skriver du navnet direkte. Refererer du til en **R-variabel** du selv har lavet, sætter du `!!` foran.
 :::
+
+Det andet sted, det dukker op, er når du afgrænser et register til din kohortes `pnr` - men der bruger du `semi_join`, som tager en almindelig lokal tabel og helt undgår `!!`. Se [Fase 9b](09b_udtraek_fra_lpr.qmd).
 
 </details>
 

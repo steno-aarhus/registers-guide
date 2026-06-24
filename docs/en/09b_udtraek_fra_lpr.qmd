@@ -16,7 +16,8 @@ You use the same extraction pattern as in [Phase 5](05_udtraek-trin-for-trin.qmd
 **LPR3 files and column names - check before you load.**
 
 - **Use the LPR_A files consistently.** DST has switched LPR3 from the old **LPR_F** format (`kontakter`, `diagnoser`, `forloeb`) to the new **LPR_A** format (`lpr_a_kontakt`, `lpr_a_diagnose`). Both versions may sit in your folder and cover the same years - loading both (or mixing old and new) gives you **duplicated rows**. Use `lpr_a_*` as in the examples here, and leave the LPR_F files alone. Some projects also have older data *inside* `lpr_a_kontakt` that is already in LPR2; filter it out with `lprindberetningssystem == "LPR3"`. This is project-specific - on **DARTER** it is handled in [pitfall 5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem); otherwise check with your data manager.
-- **Verify column names.** The switch to LPR_A changed a number of variable names (often opaque Danish abbreviations). The examples use the names the registers typically have, but always check with `colnames(your_data)` and look them up in [Overview of registers](register_reference.qmd) before relying on a column name.
+- **Verify column names.** The switch to LPR_A changed a number of variable names (often opaque Danish abbreviations). The examples use the names the registers typically have, but always check before relying on a column name. On a lazy `open_dataset()` object use `arrow::schema(your_data)` - it lists the column names **and their types** without reading data into RAM; `colnames(your_data)` also works (and is what you use for the DuckDB-backed objects from `load_database()`/`read_register()`). Look names up in [Overview of registers](register_reference.qmd).
+- **Mind the 2019-2020 diagnosis spike.** The LPR3 contact model registers far more outpatient diagnoses than LPR2 did, producing a spike in diagnosis counts around 2019-2020 that matters for any count- or trend-based analysis. See [the diagnosis spike](09a_forstaa_lpr.qmd#lpr3-spike).
 :::
 
 ---
@@ -383,7 +384,7 @@ saveRDS(alle_cvd, "sti/til/extract_cvd.rds")                # save - change path
 
 ## Wrap the pattern in a reusable function (for multiple outcomes)
 
-If you extract diagnoses for several outcomes, it pays off to encapsulate the Approach 2 pattern in one reusable function rather than copying ~40 lines for each new outcome. Define it at the top of your script or in a separate `functions.R` file.
+If you extract diagnoses for several outcomes, it pays off to encapsulate the Approach 2 pattern in one reusable function rather than copying ~40 lines for each new outcome. Define it at the top of your script or in a separate `functions.R` file. The function keeps the diagnosis-type column (`c_diagtype`) in its output, so you can later restrict the case definition for a sensitivity analysis (see [Diagnosis types](09a_forstaa_lpr.qmd#diagtype)) without re-querying LPR.
 
 **Advantages:**
 - One place to fix if something changes (e.g. a new register or a new column)
@@ -429,7 +430,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
     semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
-      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
       by = "recnum"
     ) %>%
     collect() %>%
@@ -440,7 +441,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
     semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
-      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
       by = "recnum"
     ) %>%
     collect() %>%
@@ -454,7 +455,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
       lpr3_d %>%
         filter(diag_kode_type %in% !!diagtypes,
                is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
-        select(dw_ek_kontakt, c_diag = diag_kode),
+        select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
       by = "dw_ek_kontakt"
     ) %>%
     collect() %>%
@@ -477,7 +478,7 @@ alle_dx <- get_lpr_diagnoses(
   diagtypes     = c("A", "B"),
   inpatient_only = FALSE
 )
-# Returns: pnr | date_contact | c_diag | icd3
+# Returns: pnr | date_contact | c_diag | c_diagtype | icd3
 
 # Extract one outcome - only change CODES (Phase 2)
 CODES <- c("F00", "F01", "F02", "F03", "G30", "G31")   # dementia

@@ -56,55 +56,52 @@ Raw column names in DST registers have inconsistent capitalisation - `PNR`, `pnr
 ## The most important rule: filter and select columns BEFORE fetching {#filtrer-foer-hent}
 
 ```r
-# CORRECT - filter and select columns BEFORE collect
+# CORRECT - filter rows and select columns BEFORE collect
 result <- large_register %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%   # keep only the relevant rows
-  select(pnr, date, value) %>%          # keep only the columns you use
-  collect()
+  filter(aar == 2020) %>%          # keep only the rows you need
+  select(pnr, koen, foed_dag) %>%  # keep only the columns you use
+  collect()                        # only now is data moved into R
 
-# WRONG - fetches millions of rows and all columns into RAM
+# WRONG - fetches all rows and all columns into RAM first, then filters
 result <- large_register %>%
-  collect() %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr")
+  collect() %>%                    # everything into RAM - can crash the session
+  filter(aar == 2020)
 ```
 
 BEF has millions of rows; LMDB has hundreds of millions.
 Calling `collect()` before you have narrowed the rows can crash your session - and because everyone shares the server's RAM, it makes the server slow for **everyone else** at the same time. The more you have filtered and selected columns in advance, the faster and more stably it runs.
 
 ::: {.callout-tip}
-**Rule of thumb:** `semi_join()` (against your cohort) and `filter()` (every other condition: codes, dates, sex …) limit rows. `select()` limits columns. Use them all *before* `collect()`. So `semi_join` does not replace `filter` - it only replaces `filter(pnr %in% !!cohort_pnrs)`; all your other conditions are still written with `filter()`.
+**Rule of thumb:** `filter()` limits rows. `select()` limits columns. Use both *before* `collect()`, never after.
+:::
+
+::: {.callout-note}
+**Later: keeping just your cohort.** Once you have built a study population, you will usually want to keep only *your cohort's* people in a register. That is done with `semi_join` against your cohort's `pnr` - introduced when you extract from LPR ([Phase 9b](09b_udtraek_fra_lpr.qmd)), once the cohort itself is built ([Phase 10](10_byg-studiepopulation.qmd)). You don't need it yet.
+:::
+
+::: {.callout-warning}
+**Never write actual CPR numbers (pnr) in your code** - only variable names and vectors. Hardcoding real CPR numbers in a script violates DST's rules for handling microdata.
 :::
 
 ---
 
 <details>
-<summary>In depth: what !! means, and when you need it</summary>
+<summary>In depth: what `!!` means, and when you need it (skip for now if this is new)</summary>
 
-In the example above we filtered the cohort with `semi_join(tibble(pnr = cohort_pnrs), by = "pnr")` - the recommended way to keep the cohort's rows. It does *not* need `!!`, because `semi_join` takes an ordinary local table as its argument.
-
-**What is `cohort_pnrs`?**
-It is a vector (a list) of the personal identifiers that should be included in your study - e.g. all those who received a particular surgery or diagnosis. You built it from a register by filtering on a procedure or ICD code. It looks like this in R:
+Sometimes you filter on a **list you defined in R yourself** - typically a set of ICD or year codes:
 
 ```r
-cohort_pnrs <- unique(cohort$pnr)   # extracted from your cohort dataset
-```
-
-::: {.callout-warning}
-**You must never write actual personal identifiers (pnr) in your code** - only variable names and vectors. Writing actual CPR numbers directly in a script is a violation of DST's rules for handling microdata.
-:::
-
-**So when do you need `!!`?** When you pass a *different* local R vector into a `filter()` on a lazy object - typically a code or year list:
-
-```r
-my_codes <- c("DE10", "DE11", "DE14")   # local R vector
+my_codes <- c("DE10", "DE11", "DE14")   # local R vector you created
 register %>% filter(c_diag %in% !!my_codes)
 ```
 
 The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs *separately* from R and does not know your local variables. Without `!!`, the engine would look for a *column* called `my_codes` inside the register. It does not exist - `my_codes` is an R vector you created locally. `!!` means: *"this is an R object, not a column name - look up its values in R and use them in the query."*
 
 ::: {.callout-tip}
-Rule of thumb: if you are referring to a **column** in the register, write the name directly. If you are referring to an **R variable** you created yourself, put `!!` in front of it. To filter on **pnr** against the cohort, use `semi_join` - then you avoid `!!` entirely.
+Rule of thumb: if you refer to a **column** in the register, write the name directly. If you refer to an **R variable** you created yourself, put `!!` in front of it.
 :::
+
+The other place this comes up is subsetting a register to your cohort's `pnr` - but there you will use `semi_join`, which takes an ordinary local table and avoids `!!` entirely. See [Phase 9b](09b_udtraek_fra_lpr.qmd).
 
 </details>
 
