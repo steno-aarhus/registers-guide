@@ -160,13 +160,13 @@ De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden
 
 ### Anbefalet: konvertér med `fastreg`
 
-Den nemmeste måde at konvertere på er pakken [`fastreg`](https://dp-next.github.io/fastreg/) (dp-next, på CRAN). Den konverterer SAS-registre til Parquet, partitionerer dem efter år og læser dem ind igen som dovne forbindelser - alt sammen via registrets **navn**, så du aldrig skal skrive lange stier igen. Den kan også køre konverteringen parallelt på flere kerner.
+Den nemmeste måde at konvertere på er pakken [`fastreg`](https://dp-next.github.io/fastreg/) (dp-next, på CRAN). Den konverterer SAS-registre til Parquet, partitionerer dem efter år og læser dem ind igen som dovne forbindelser - alt sammen via registrets **navn**, så du aldrig skal skrive lange stier igen. Den kan også køre konverteringen parallelt på flere "cores".
 
 ```r
 install.packages("fastreg")   # én gang - fastreg er på CRAN
 
 library(tidyverse)   # generel databehandling (dplyr, purrr, …)
-library(furrr)       # kør konverteringen på flere kerner
+library(furrr)       # kør konverteringen på flere cores
 library(fastreg)
 
 # 1. Sæt placeringen af rådata og output ÉN gang, øverst i scriptet.
@@ -179,7 +179,7 @@ options(
 rawdata_dir  <- getOption("fastreg.project_rawdata_dir")    # rå SAS-filer
 workdata_dir <- getOption("fastreg.project_workdata_dir")   # parquet-output
 
-# 2. Konvertér parallelt - brug flere kerner på én gang:
+# 2. Konvertér parallelt - brug flere cores på én gang:
 plan(multisession)
 
 # 3. Se hvilke SAS-registre der ligger i rawdata:
@@ -194,6 +194,10 @@ fastreg::convert(path = sas_files[1], output_dir = workdata_dir)
 bef <- read_register("bef") %>% rename_with(tolower)
 bef %>% filter(koen == 2) %>% collect()
 ```
+
+::: {.callout-note}
+**Hvad er "cores" / at køre "parallelt"?** Din computers processor (CPU) har flere **cores** - uafhængige arbejdere. Som standard bruger R kun én. `plan(multisession)` (fra `furrr`) lader fastreg konvertere flere registre **på én gang**, én per core, så et helt workspace bliver færdigt meget hurtigere. Det er valgfrit - undlad det, og alt kører stadig, bare ét register ad gangen. (Hver core kører sin egen R-session, så det bruger også mere hukommelse; fint til en engangskonvertering.)
+:::
 
 ::: {.callout-note}
 **`read_register()` læser alle år på én gang.** Et register er gemt som én undermappe per år (`year=2015/`, `year=2016/` …). `read_register("bef")` læser **hele den partitionerede mappe som ét samlet datasæt** - du skal ikke selv samle de årlige filer. Vælg år ved at filtrere på `year`-kolonnen *i dataene*, fx `filter(year == 2015)`, før `collect()`.
@@ -234,7 +238,6 @@ open_dataset(parq_sti) %>% glimpse()
 
 - `read_sas()` (`haven`) tager `col_select = c(pnr, alder, civst)` (vælg kolonner), `n_max = 10000` (kun de første rækker - godt til test) og `skip =`.
 - `heaven::import_SAS()` (forudinstalleret på DST) er endnu mere effektiv til store filer og kan filtrere på værdier - fx `keep = c("pnr","atc")`, `where = "..."` (filtrér rækker) eller `obs = 1000`.
-- Når registret er i parquet, filtrerer du på en liste af fx CPR-numre med `%in%` eller `semi_join()` i `open_dataset()`-pipelinen, før du kalder `collect()`.
 
 Du kan også konvertere til Parquet (eller `.dta`) i **StatTransfer**, som findes på alle servere i det fælles miljø.
 :::
