@@ -160,52 +160,66 @@ Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you ca
 
 ### Recommended: convert with `fastreg`
 
-The simplest way to convert is the [`fastreg`](https://dp-next.github.io/fastreg/) package (dp-next, on CRAN). It converts SAS registers to Parquet, partitions them by year, and reads them back as lazy connections - all by register **name**, so you never retype long paths. It can also run the conversion in parallel across several cores.
+The recommended way to convert is the [`fastreg`](https://dp-next.github.io/fastreg/) package (dp-next, on CRAN). It converts SAS registers to Parquet (partitioned by year) and reads them back by **name**, so you never retype long paths. The fastreg team recommends running the conversion through its **`targets` pipeline**: it converts your whole workspace in parallel, is reproducible, and re-runs cleanly when registers are updated.
+
+Set your project's locations once, then `use_template()` copies a ready-to-run pipeline into your project:
 
 ```r
 install.packages("fastreg")   # once - fastreg is on CRAN
-
-library(tidyverse)   # general data wrangling (dplyr, purrr, …)
-library(furrr)       # run the conversion across several cores
 library(fastreg)
 
-# 1. Set the raw-data and output locations ONCE, at the top of the script.
-#    After this you refer to registers by name - no full path in every call.
+# Tell fastreg where raw data lives and where the parquet output should go (once):
 options(
   fastreg.project_rawdata_dir  = "E:/rawdata/[projectnumber]/rawdata/",
   fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"
 )
 
-rawdata_dir  <- getOption("fastreg.project_rawdata_dir")    # raw SAS files
-workdata_dir <- getOption("fastreg.project_workdata_dir")   # parquet output
+# Copy fastreg's targets pipeline into your project, then follow the vignette to run it:
+fastreg::use_template()
+```
 
-# 2. Convert in parallel - use several cores at once:
-plan(multisession)
+::: {.callout-important}
+**Follow fastreg's own guide for the conversion itself.** The full, parallel `targets` pipeline is documented in fastreg's [Getting started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html), under [Converting multiple registers in parallel](https://dp-next.github.io/fastreg/articles/fastreg.html#converting-multiple-registers-in-parallel). It is maintained by the fastreg team and updated when the package changes, so it is always the most current reference - prefer it over copying conversion code from here.
+:::
 
-# 3. See which SAS registers are in rawdata:
-sas_files <- fastreg::list_sas_files()
-sas_files
+Once your registers are converted, read one back by name - a lazy connection you filter before `collect()`:
 
-# 4. Convert to Parquet (partitioned by year). The locations come from the
-#    options above, so you don't have to retype the full path:
-fastreg::convert(path = sas_files[1], output_dir = workdata_dir)
-
-# 5. Read a register back - a lazy connection; filter BEFORE collect():
+```r
 bef <- read_register("bef") %>% rename_with(tolower)
 bef %>% filter(koen == 2) %>% collect()
 ```
 
 ::: {.callout-note}
-**What are "cores" / running "in parallel"?** Your computer's processor (CPU) has several **cores** - independent workers. By default R uses only one. `plan(multisession)` (from `furrr`) lets fastreg convert several registers **at the same time**, one per core, so a whole workspace finishes much faster. It is optional - leave it out and everything still runs, just one register at a time. (Each core runs its own R session, so it also uses more memory; fine for a one-off conversion.)
-:::
-
-::: {.callout-note}
 **`read_register()` reads all years at once.** A register is stored as one subfolder per year (`year=2015/`, `year=2016/` …). `read_register("bef")` reads the **whole partitioned folder as one combined dataset** - you don't merge the yearly files yourself. Pick years by filtering on the `year` column *in the data*, e.g. `filter(year == 2015)`, before `collect()`.
 :::
 
-::: {.callout-tip}
-**Set it up once with a template.** `fastreg::use_template()` copies a [`targets`](https://books.ropensci.org/targets/) pipeline that converts your whole workspace in one go - convenient when you have many registers. fastreg can also **re-run the conversion when a register is updated** with new data, so you don't rebuild everything by hand.
+::: {.callout-note}
+**"In parallel" / "cores"?** The pipeline converts several registers **at the same time**, one per **core** (your CPU's independent workers), so a whole workspace finishes much faster. Each core runs its own R session, so it also uses more memory - fine for a one-off conversion.
 :::
+
+<details>
+<summary>Only converting a single file? Use `fastreg::convert()` directly</summary>
+
+For a one-off - a single SAS file rather than a whole workspace - you do not need the `targets` pipeline. `convert()` converts one file to Parquet (partitioned by year):
+
+```r
+library(fastreg)
+
+fastreg::convert(
+  path       = "E:/rawdata/[projectnumber]/rawdata/my_register.sas7bdat",   # the SAS file to convert
+  output_dir = "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/" # where the parquet folder goes
+)
+```
+
+Then read it back - either with `read_register("my_register")` (if you have set `options(fastreg.project_workdata_dir = ...)` as above), or directly by path:
+
+```r
+library(arrow)
+my_reg <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/my_register/") %>%
+  rename_with(tolower)
+```
+
+</details>
 
 <details>
 <summary>If fastreg is not available on your project: convert manually with haven + arrow</summary>
