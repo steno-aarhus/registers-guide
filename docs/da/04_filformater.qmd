@@ -65,7 +65,7 @@ DST's officielle råd er samlet i [DST-vejledning: Reduktion af RAM-forbrug i de
 
 | Filtype | Pakke | Funktion | Indlæsning |
 |---|---|---|---|
-| `.parquet` / parquet-mappe | `arrow` | `open_dataset("sti/til/mappe/")` | **Doven** - intet i RAM før `collect()` |
+| `.parquet` / parquet-mappe | `arrow` eller `fastreg` | `open_dataset("sti/til/mappe/")` eller `read_register("navn")` | **Doven** - intet i RAM før `collect()` |
 | `.rds` | base R | `readRDS("sti/til/fil.rds")` | **Fuld** - hele filen ind i RAM |
 | `.sas7bdat` | `haven` | `read_sas("sti/til/fil.sas7bdat")` | **Fuld** - hele filen ind i RAM |
 | `.csv` | `readr` | `read_csv("sti/til/fil.csv")` | **Fuld** - hele filen ind i RAM |
@@ -74,10 +74,18 @@ DST's officielle råd er samlet i [DST-vejledning: Reduktion af RAM-forbrug i de
 Den sidste kolonne er doven/fuld-skelnen fra ovenfor: parquet er det eneste dovne format, alt andet læses fuldt ind i RAM.
 
 **Hvad skriver du i parenteserne?**
-Du skriver stien til den parquet-mappe der indeholder registret - fx `open_dataset("sti/til/bef/")`. Hvilken sti det konkret er, afhænger af dit projekt og din server. Kolonnenavne for hvert register finder du i [Register-overblik](register_reference.qmd).
+
+- Med `open_dataset()` (arrow) skriver du **stien** til parquet-mappen - fx `open_dataset("sti/til/bef/")`. Den virker på alle parquet-filer, på alle projekter.
+- Med `read_register()` (fastreg) skriver du bare registrets **navn** - fx `read_register("bef")` - fordi fastreg allerede ved, hvor dine parquet-data ligger (sat én gang under konverteringen). Den giver dig desuden en DuckDB-forbindelse, så flere dplyr-funktioner virker uden et ekstra `to_duckdb()`-trin. Den kræver, at registrene er sat op med fastreg.
+
+Hvilken sti det konkret er, afhænger af dit projekt og din server. Kolonnenavne for hvert register finder du i [Register-overblik](register_reference.qmd).
 
 ::: {.callout-note}
-**Et register kommer ofte som mange årlige filer** (fx `bef2015.parquet`, `bef2016.parquet` … i samme mappe). `open_dataset("sti/til/bef/")` læser **hele mappen som ét samlet datasæt** - du skal hverken samle filerne manuelt eller læse årstallet ud af filnavnet. Vælg år ved at filtrere på årskolonnen *i dataene*, fx `filter(year == 2015)` (nogle registre bruger `aar`).
+**Har du ikke selv konverteret dataene?** Det behøver du ikke. Hvis en kollega allerede har konverteret registrene med fastreg, peger du bare fastreg på den mappe én gang per script - sæt `options(fastreg.project_workdata_dir = "...")` til den konverterede mappe (spørg den der satte det op om den præcise sti, typisk `cleaned-data/parquet-registers/`). Derefter virker `read_register("bef")` via navn, uden konvertering og uden en sti i hvert kald. [Getting started-vignetten](https://dp-next.github.io/fastreg/articles/fastreg.html) viser optionen.
+:::
+
+::: {.callout-note}
+**Et register kommer ofte som mange årlige filer** (fx `bef2015.parquet`, `bef2016.parquet` … i samme mappe, nogle gange én undermappe per år). Både `open_dataset("sti/til/bef/")` og fastregs `read_register("bef")` læser **hele mappen (inkl. eventuelle års-undermapper) som ét samlet datasæt**. Vælg år ved at filtrere på årskolonnen *i dataene*, fx `filter(year == 2015)` (nogle registre bruger `aar`).
 :::
 
 **RDS er det format du selv skriver mest.** Du gemmer mellemresultater fra ét script og genindlæser dem i det næste:

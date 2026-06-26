@@ -65,7 +65,7 @@ DST's official advice is collected in [DST guide: Reducing RAM use in the shared
 
 | File type | Package | Function | Loading |
 |---|---|---|---|
-| `.parquet` / parquet folder | `arrow` | `open_dataset("path/to/folder/")` | **Lazy** - nothing in RAM until `collect()` |
+| `.parquet` / parquet folder | `arrow` or `fastreg` | `open_dataset("path/to/folder/")` or `read_register("name")` | **Lazy** - nothing in RAM until `collect()` |
 | `.rds` | base R | `readRDS("path/to/file.rds")` | **Full** - entire file into RAM |
 | `.sas7bdat` | `haven` | `read_sas("path/to/file.sas7bdat")` | **Full** - entire file into RAM |
 | `.csv` | `readr` | `read_csv("path/to/file.csv")` | **Full** - entire file into RAM |
@@ -74,10 +74,18 @@ DST's official advice is collected in [DST guide: Reducing RAM use in the shared
 The last column is the lazy/full distinction from above: parquet is the only lazy format, everything else loads fully into RAM.
 
 **What do you write in the parentheses?**
-You write the path to the parquet folder containing the register - e.g. `open_dataset("path/to/bef/")`. The exact path depends on your project and server. Column names for each register are in [Overview of registers](register_reference.qmd).
+
+- With `open_dataset()` (arrow) you write the **path** to the parquet folder - e.g. `open_dataset("path/to/bef/")`. It works on any parquet, on any project.
+- With `read_register()` (fastreg) you write just the register **name** - e.g. `read_register("bef")` - because fastreg already knows where your parquet lives (you set that once during conversion). It also hands you a DuckDB connection, so more dplyr functions work without an extra `to_duckdb()` step. It requires that the registers were set up with fastreg.
+
+The exact path depends on your project and server. Column names for each register are in [Overview of registers](register_reference.qmd).
 
 ::: {.callout-note}
-**A register often arrives as many yearly files** (e.g. `bef2015.parquet`, `bef2016.parquet` … in the same folder). `open_dataset("path/to/bef/")` reads the **whole folder as one combined dataset** - you don't need to merge the files manually or parse the year out of the filename. Pick years by filtering on the year column *in the data*, e.g. `filter(year == 2015)` (some registers use `aar`).
+**Didn't convert the data yourself?** You don't need to. If a colleague already converted the registers with fastreg, you only point fastreg at that folder once per script - set `options(fastreg.project_workdata_dir = "...")` to the converted folder (ask whoever set it up for the exact path, typically `cleaned-data/parquet-registers/`). After that, `read_register("bef")` works by name, with no conversion and no path in each call. The [Getting started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) shows the option.
+:::
+
+::: {.callout-note}
+**A register often arrives as many yearly files** (e.g. `bef2015.parquet`, `bef2016.parquet` … in the same folder, sometimes one subfolder per year). Both `open_dataset("path/to/bef/")` and fastreg's `read_register("bef")` read the **whole folder (including any per-year subfolders) as one combined dataset**. Pick years by filtering on the year column *in the data*, e.g. `filter(year == 2015)` (some registers use `aar`).
 :::
 
 **RDS is the format you write yourself most.** You save intermediate results from one script and reload them in the next:
