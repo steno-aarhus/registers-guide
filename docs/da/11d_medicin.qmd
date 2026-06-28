@@ -1,0 +1,86 @@
+---
+title: "![](images/icons/icon_11.png){.title-icon} Medicin (ATC)"
+subtitle: "Udtræk lægemiddeleksponering fra LMDB - filtreret til din kohorte"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Strukturel skitse - udbygges. Mønstret er det samme som i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): åbn registret, filtrér til kohorten, behold dine koder, reducér til én række per person.
+:::
+
+Receptordineret medicin ligger i **LMDB** (Lægemiddelstatistikregistret). Registret har **én række per ekspederet recept**, så samme person kan have hundredvis af rækker. De to kolonner du næsten altid bruger, er:
+
+- **`atc`:** lægemidlets ATC-kode (Anatomical Therapeutic Chemical), fx `"A10BA02"` for metformin.
+- **`eksd`:** ekspeditionsdatoen (hvornår recepten blev hentet) - brug den som receptdato, på samme måde som `date_contact` i LPR.
+
+Den fulde, bekræftede kolonneliste står i [Register-overblik](register_reference.qmd#7-lmdb-lægemiddelstatistikregistret).
+
+## Eksponering, udfald eller kovariat? Samme udtræk
+
+Medicin kan være alle tre ting. Det løses **præcis som for diagnoser** ([Udtræk fra LPR](09b_udtraek_fra_lpr.qmd)): du laver **ét udtræk** af dispenseringerne, og **rollen afgøres af, hvornår `eksd` falder i forhold til `index_date`** - ikke af en særskilt side per rolle:
+
+| Rolle | Hvornår | Hvad du gør | Side |
+|---|---|---|---|
+| **Eksponering** | Den dato eksponeringen starter | Første `eksd` = personens index-dato | [Fase 10](10_byg-studiepopulation.qmd) |
+| **Kovariat** (komedicin ved baseline) | `eksd < index_date` (fx 6-12 mdr. før) | Ever/never eller antal i et vindue før index | [Komorbiditet](11c_komorbiditet.qmd) |
+| **Udfald** (ny behandling) | `eksd > index_date` | Første `eksd` efter index | [Udfald](11a_udfald.qmd) |
+| **Tidsvarierende** (i/ude af behandling) | Ændrer sig undervejs | Start/stop-format | [Tidsvarierende](12d_tidsvarierende.qmd) |
+
+Du skriver altså ikke tre forskellige medicin-udtræk. Du laver ét, og **datofilteret relativt til index** bestemmer rollen.
+
+## Mønstret
+
+ATC-koder har **intet D-præfiks** (modsat ICD i LPR, se [Forstå LPR](09a_forstaa_lpr.qmd#icd-koder-og-d-præfikset)), så du matcher direkte på begyndelsen af koden:
+
+```r
+library(arrow); library(dplyr)
+
+kohort_pnrs <- unique(readRDS("sti/til/full_cohort.rds")$pnr)   # din kohorte fra Fase 10
+
+medicin <- open_dataset("sti/til/lmdb/") %>%
+  rename_with(tolower) %>%
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # KUN din kohorte
+  filter(substr(atc, 1, 5) == "A10BJ") %>%               # GLP-1-analoger - filtrér FØR collect
+  select(pnr, atc, eksd, vnr) %>%
+  collect() %>%                                          # FØRST her hentes data i RAM
+  group_by(pnr) %>% arrange(eksd) %>% slice(1) %>% ungroup()   # første dispensering per person
+
+saveRDS(medicin, "sti/til/extract_medicin.rds")
+```
+
+`substr(atc, 1, 5) == "A10BJ"` matcher hele ATC-niveauet (alle GLP-1-analoger). Vil du have flere grupper på én gang, så brug regex som i LPR: `grepl("^A10BJ|^A10BA", atc)`. Mønstret for kode-matching (regex, `%in%` med en kodeliste, `!!`) er forklaret i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og [Guide til funktioner](guide_til_funktioner.qmd#filtrer-betingelser). Reduktionen til **én række per person** er forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd) - her `slice(1)` for første dispensering, men det kan også være ever/never eller et antal i et vindue (se rolletabellen ovenfor).
+
+## ATC er ikke nok: samme stof, forskelligt produkt
+
+ATC klassificerer efter **aktivt stof**, ikke efter produkt eller indikation. To brands med samme stof får derfor **samme ATC** - og kan ikke skelnes på `atc` alene:
+
+- **Ozempic** (semaglutid, type 2-diabetes) og **Wegovy** (semaglutid, vægttab) har **begge ATC `A10BJ06`**. Filtrerer du kun på ATC, blander du diabetesbehandling og vægttabsbehandling sammen.
+
+To kolonner skelner dem:
+
+- **`vnr` (varenummer):** den unikke nøgle til det faktiske præparat (pakning). Det er den eneste sikre måde at isolere ét bestemt produkt på. `vnr`-til-produkt-opslaget kommer fra lægemiddeltaksonomien (KAT / Sundhedsdatastyrelsen); `name`/`packtext` indeholder produktteksten, hvis du vil genkende det med det blotte øje.
+- **`indo` (indikationskode):** en *kodet* indikation (fra Medicinpriser-kataloget, LMS 25), ikke fritekst. Koden registreres **kun**, når ordinatoren vælger en indikation fra rullemenuen i den elektroniske recept. **Skriver lægen i stedet indikationen som fritekst, overføres den ikke til registret**, og `indo` står tom. Den kan derfor i princippet adskille samme stof på forskellige indikationer, men er **ofte tom**. Brug `vnr` som primær produktnøgle og `indo` som et støttesignal, ikke et rent filter.
+
+```r
+# Isolér ét produkt/indikation INDEN du definerer eksponering:
+medicin %>%
+  filter(atc == "A10BJ06") %>%        # semaglutid (Ozempic OG Wegovy)
+  filter(vnr %in% !!ozempic_vnr)      # ozempic_vnr = din opslåede liste af varenumre for Ozempic
+```
+
+::: {.callout-note}
+**Hvilke `vnr` der hører til hvilket produkt** afhænger af pakning og styrke (ét produkt har flere varenumre). Slå dem op i lægemiddeltaksonomien for netop din studieperiode frem for at antage, og dokumentér listen i din kode. For `indo` fandt [Harbi & Pottegård 2024](https://pubmed.ncbi.nlm.nih.gov/37889961/) en indikationskode på 82 % af recepterne (ca. 88 % korrigeret) og næsten 100 % korrekt, når den fandtes - men manglen er klart større før 1. oktober 2017 (hvor elektronisk ordination blev lovpligtig) og varierer med lægemiddelgruppe (ca. 8 % manglende for systemiske antiinfektiva mod 28 % for blodrelaterede midler). 5,6-36 % af koderne er **uspecifikke** (fx "for hjertet" for betablokkere); om en uspecifik kode er brugbar afhænger af dit spørgsmål. Værdisættet er Sundhedsdatastyrelsens [klassifikation af lægemidler](https://sundhedsdatastyrelsen.dk/indberetning/klassifikationer/klassifikation-af-laegemidler) (Medicinpriser). Som sidenote: at en kode er *gyldigt registreret* betyder ikke, at lægen valgte den *rigtige* indikation - rullemenuer gør fejlvalg lette, så koden er ikke nødvendigvis den kliniske sandhed.
+:::
+
+::: {.callout-warning}
+**En ekspedering er ikke det samme som indtag.** `eksd` fortæller, at recepten blev *hentet på apoteket*, ikke at patienten tog medicinen, og slet ikke hvor længe. Til en eksponering der varer over tid (behandlingsepisoder, grace-perioder, adherence som PDC/MPR) skal du bygge **eksponeringsvinduer** fra mængde og styrke (`apk`, `packsize`, `strnum`) - ikke bare tælle dispenseringer. Bemærk at selve doseringsfeltet (`doso`) stort set er tomt (registreret for ~0,06 % af recepterne i samme validering), så dosis må udledes af pakningsoplysningerne. Færdige værktøjer til det ligger i [`heaven`](pakker-oversigt.qmd) (drug exposure-vinduer fra LMDB). Lader medicinen samtidig din index-dato afhænge af fremtidig behandling, så pas på [immortal time bias](dst_faldgruber.qmd#immortal-time-bias).
+:::
+
+## Se også
+
+- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): kode-matching i detaljer (regex, kodelister, `!!`) - samme teknik uden D-præfiks
+- [Udfald](11a_udfald.qmd#hvor-kommer-din-kodeliste-fra): hvor en kodeliste kommer fra (gælder også ATC)
+- [Register-overblik](register_reference.qmd#7-lmdb-lægemiddelstatistikregistret): alle bekræftede LMDB-kolonner
+- [Algoritmer & specialpakker](pakker-oversigt.qmd): `heaven` til eksponeringsvinduer; OSDC og NMI bruger allerede ATC-koder
+- [Tidsvarierende variable](12d_tidsvarierende.qmd): i/ude af behandling over tid
+- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): join medicin-udtrækket på kohorten
