@@ -1,6 +1,6 @@
 ---
 title: "![](images/icons/icon_15.png){.title-icon} DST pitfalls"
-subtitle: "9 errors that cost time and produce uninformative error messages"
+subtitle: "10 errors that cost time and produce uninformative or no error messages"
 date: last-modified
 ---
 
@@ -205,7 +205,32 @@ If you use `nmi_count` in your regression model instead of `nmi_score`, you are 
 
 ---
 
-## 10. The most common error messages and what they mean {#the-most-common-error-messages-and-what-they-mean}
+## 10. Immortal time bias - exposure defined using the future {#immortal-time-bias}
+
+No error message, no warning - just an effect estimate that looks too good. **Immortal time bias** arises when a person is given follow-up time during which they could not, by construction, have had the outcome. It is the classic register mistake, because register data let you define groups *retrospectively*, looking back at what eventually happened.
+
+**A concrete example.** Question: does bariatric surgery lower mortality in people with type 2 diabetes? You take everyone diagnosed with T2D in 2010, split them into a **surgery** group (had surgery at some point during follow-up) and a **no-surgery** group, and start counting follow-up for everyone at the *diagnosis* date.
+
+The trap: to land in the surgery group, a person had to **survive long enough to be operated**. Say the average wait from diagnosis to surgery is 2 years. Those 2 years are *immortal*: anyone who died in that window never reached surgery and so fell into the no-surgery group instead. You have handed the surgery group ~2 years of guaranteed-alive person-time and labelled it "surgery" time.
+
+| Group | Deaths | Person-years | Rate (per 1000 py) |
+|---|---|---|---|
+| Surgery (immortal time counted as surgery time) | 30 | 12,000 | 2.5 |
+| Surgery (time correctly aligned) | 30 | 8,000 | 3.8 |
+| No surgery | 50 | 13,000 | 3.8 |
+
+The true rates are identical (3.8) - surgery does nothing. But counting the 4,000 immortal person-years as surgery time drops its rate to 2.5 and makes surgery look **34% protective**. The "effect" is an artefact of the misaligned time zero, not of surgery.
+
+**The fix: align time zero.** Eligibility, exposure assignment and start of follow-up must coincide.
+
+- **Risk-set (incidence-density) matching:** start each person's follow-up at the moment they become exposed, and assign each comparator the *same* index date (the core rule in [Comparison cohort](10a_sammenligningskohorte.qmd)).
+- **Treat exposure as time-varying:** the person contributes *unexposed* person-time until surgery, then *exposed* time after - never exposed time before they were exposed (see [Time-varying variables](12d_tidsvarierende.qmd)).
+
+Related: defining a *baseline covariate* from post-index information is the same error in disguise (e.g. the OSDC diabetes type, see [OSDC](osdc.qmd)). Whenever a variable is built from the future, ask whether you are conditioning on the person having survived to see it. Background: [Hernán & Robins, *What If*, §3.6](https://miguelhernan.org/whatifbook) (target trial, time zero).
+
+---
+
+## 11. The most common error messages and what they mean {#the-most-common-error-messages-and-what-they-mean}
 
 R's error messages are short and technical - here are the ones you most often encounter in a DST workflow, translated into what they actually mean:
 

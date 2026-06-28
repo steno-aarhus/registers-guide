@@ -104,6 +104,26 @@ Ask yourself:
 | When does it end? | Diagnosis, death, emigration, or end of study period |
 | Which confounders should be adjusted for? | Age, sex, comorbidity, SES |
 
+::: {.callout-tip}
+**If your question is causal, you can sketch a target trial.** When you ask whether an exposure *changes* an outcome, it often helps to picture the randomised trial you would run if you could (the *target trial*) and to treat your register study as an attempt to **emulate** it. The rows above are roughly that trial's protocol. Thinking this way early helps you settle **time zero**: the point where eligibility, exposure assignment and start of follow-up should coincide. When they drift apart, you can get [immortal time bias](dst_faldgruber.qmd#immortal-time-bias). (The framing fits effect questions, not purely descriptive or prediction studies.)
+:::
+
+<details>
+<summary>The seven things a target trial pins down (and where they live in this guide)</summary>
+
+Spell each one out the way a trial protocol would:
+
+- **Eligibility:** who can enter, judged *only* on information available at time zero (nothing from the future).
+- **Treatment strategies:** the exposure and its comparator, each defined clearly enough that a person could in principle be assigned either ([Comparison cohort](10a_sammenligningskohorte.qmd)).
+- **Assignment:** a real trial randomises; a register study instead *adjusts* for the confounders that decided who got exposed (your [DAG](#kovariater-dag)).
+- **Outcome:** defined the same way in both groups.
+- **Time zero:** where eligibility, assignment and follow-up start together (see the immortal-time warning above).
+- **Causal contrast (estimand):** which effect you want, e.g. *intention-to-treat* (effect of being assigned a strategy) vs *per-protocol* (effect of actually following it).
+- **Analysis plan:** model and adjustment set, fixed before you see results ([§6](#write-an-analysis-plan)).
+
+Background: Hernán & Robins, *Causal Inference: What If* (free PDF), §3.6 and ch. 22; and Hernán MA, Robins JM (2016), "Using Big Data to Emulate a Target Trial When a Randomized Trial Is Not Available", *Am J Epidemiol* 183(8):758-764.
+</details>
+
 ---
 
 ## 2. Which registers cover what?
@@ -136,6 +156,9 @@ Rules of thumb:
 - **Adjust for confounders:** variables that affect both exposure and outcome (e.g. age, comorbidity).
 - **Do NOT adjust for mediators:** variables that lie *on* the causal pathway between exposure and outcome (this removes part of the effect you want to measure).
 - **Do NOT adjust for colliders:** common effects of two variables (this opens a spurious association).
+- **You also "condition" by selection, not just by adjusting:** restricting your population by a variable, or losing people through it, counts too. Building a cohort of only hospitalised patients, or analysing only those with complete follow-up, can open the same spurious path a collider would. That is *selection bias*; the censoring and dropout version is handled by [IPCW](13f_vaegtning-iptw.qmd).
+
+What [dagitty.net](https://dagitty.net/) computes for you is the **backdoor paths**: the indirect routes from exposure to outcome that run "against the arrows" through a common cause. Confounding is an open backdoor path, and the minimal adjustment set is the smallest group of variables that blocks all of them without opening a new one through a collider. One case the simple rules do not cover: a confounder that is itself affected by past exposure (*treatment-confounder feedback*) cannot be handled by ordinary adjustment at all, see [Time-varying variables](12d_tidsvarierende.qmd#feedback).
 
 <details>
 <summary>Example: surgery and dementia - a DAG with confounder, mediator and collider</summary>
@@ -177,6 +200,18 @@ For this DAG the minimal adjustment set is **{Age}** - you only need to adjust f
 - [Causal Diagrams: Draw Your Assumptions Before Your Conclusions](https://pll.harvard.edu/course/causal-diagrams-draw-your-assumptions-your-conclusions): free HarvardX course by Miguel Hernán on exactly this.
 - Background: [Hernán & Robins, *Causal Inference: What If*](https://miguelhernan.org/whatifbook) (free PDF) - also in [Learning resources](laeringsressourcer.qmd).
 :::
+
+<details>
+<summary>A DAG tells you *what* to adjust for - three conditions decide whether adjustment can recover a causal effect at all</summary>
+
+Choosing the right covariates is necessary but not sufficient. For an adjusted estimate to carry a causal meaning, three conditions must hold ([Hernán & Robins, *What If*, ch. 3](https://miguelhernan.org/whatifbook)). They underlie **every** method in this guide (regression, Cox, [IP weighting](13f_vaegtning-iptw.qmd)), not just the advanced ones:
+
+- **Exchangeability (no unmeasured confounding):** once you adjust for the covariates in your DAG, the *assumption* is that the exposed and unexposed are comparable. This is an assumption you can never fully verify.
+- **Positivity (overlap):** within every combination of those covariates, both exposure and non-exposure actually occur. If some people could *never* be exposed (or never unexposed), there is no one to compare them with. Very large IP weights are the practical warning sign.
+- **Consistency (a well-defined exposure):** the exposure corresponds to a clear enough intervention that a "what if everyone were / were not exposed" world is meaningful. A concrete exposure ("this surgery on this date") satisfies it far better than a vague one ("obesity").
+
+These are the same three conditions restated for weighting on the [IP weighting](13f_vaegtning-iptw.qmd) page.
+</details>
 
 ---
 
