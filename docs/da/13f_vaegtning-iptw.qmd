@@ -1,26 +1,39 @@
 ---
-title: "![](images/icons/icon_14.png){.title-icon} Vægtning (IPTW)"
-subtitle: "Justér for confounding i analysen med inverse-probability-vægte"
+title: "![](images/icons/icon_14.png){.title-icon} IP-vægtning (IPTW og IPCW)"
+subtitle: "Justér for confounding eller for censurering/manglende udfald med inverse-probability-vægte"
 date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under udvikling.** Siden viser et minimalt, verificeret eksempel. Flere detaljer kommer.
+**Under udvikling.** Siden viser minimale, verificerede eksempler. Flere detaljer kommer.
 :::
 
-**IPTW** (inverse probability of treatment weighting) er en måde at håndtere confounding på i **analysen** i stedet for ved design. Hvor matching ([Fase 10](10_byg-studiepopulation.qmd)) balancerer grupperne ved at udvælge personer, vægter IPTW dem: hver person får en vægt ud fra sin sandsynlighed for at blive eksponeret (propensity score), så eksponerede og ueksponerede bliver sammenlignelige på de målte confoundere.
+**IP-vægtning** (inverse probability weighting) er én teknik med to anvendelser. Du modellerer sandsynligheden for det, der skævvrider sammenligningen, og vægter hver person med den **inverse** sandsynlighed. Det skaber en **pseudo-population**, hvor skævheden er væk:
+
+- **IPTW** (treatment weighting) mod **confounding**: vægt efter sandsynligheden for at blive *eksponeret*.
+- **IPCW** (censoring weighting) mod **selektionsbias** fra censurering, dropout eller manglende udfald: vægt efter sandsynligheden for at være *observeret*.
+
+Begge dele håndteres i **analysen** i stedet for ved design.
 
 ::: {.callout-note}
 Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. Pakkerne (`WeightIt`, `cobalt`, `sandwich`, `lmtest`) skal være installeret i dit R-miljø på DST.
 :::
 
-::: {.callout-note}
-**To forudsætninger for at IPTW virker:** (1) du har målt og medtaget de vigtigste confoundere (ingen væsentlig *uobserveret* confounding), og (2) **overlap (positivitet)** - i hver kombination af confoundere skal både eksponerede og ueksponerede kunne forekomme. Meget store vægte er et faresignal om dårligt overlap.
-:::
-
 ---
 
-## Trin 1: estimér vægtene
+## Del 1: IPTW - vægt mod confounding
+
+Hvor matching ([Fase 10](10_byg-studiepopulation.qmd)) balancerer grupperne ved at *udvælge* personer, vægter IPTW dem: hver person får en vægt ud fra sin sandsynlighed for at blive eksponeret (propensity score), så eksponerede og ueksponerede bliver sammenlignelige på de målte confoundere.
+
+::: {.callout-note}
+**Tre forudsætninger for at IPTW virker:**
+
+1. **Exchangeability** - du har målt og medtaget de vigtigste confoundere (ingen væsentlig *uobserveret* confounding).
+2. **Positivitet (overlap)** - i hver kombination af confoundere skal både eksponerede og ueksponerede kunne forekomme. Meget store vægte er et faresignal om dårligt overlap.
+3. **Consistency** - eksponeringen skal være en veldefineret intervention, så en "hvad nu hvis alle var/ikke var eksponeret"-verden giver mening.
+:::
+
+### Trin 1: estimér vægtene
 
 ```r
 library(WeightIt)                          # weightit(): beregner vægtene
@@ -40,7 +53,7 @@ W <- weightit(
 - `method = "glm"` beregner propensity scoren med logistisk regression.
 - `estimand = "ATE"` vægter, så begge grupper kommer til at ligne hele populationen.
 
-## Trin 2: tjek balancen
+### Trin 2: tjek balancen
 
 Vægtene er kun gode, hvis de faktisk balancerer confounderne. Det tjekker du, før du ser på udfaldet.
 
@@ -51,7 +64,7 @@ love.plot(W)                               # samme som figur; tommelfingerregel:
 
 `bal.tab()` / `love.plot()` viser, hvor langt hver confounder er fra at være balanceret (SMD = standardiseret forskel mellem grupperne) - før og efter vægtning. Målet er, at alle ligger tæt på 0 efter vægtning. Er nogle stadig skæve, eller er enkelte vægte meget store, så genovervej modellen (flere/andre confoundere) eller overvej at stabilisere/trimme vægtene.
 
-## Trin 3: vægtet udfaldsmodel
+### Trin 3: vægtet udfaldsmodel
 
 Når balancen er i orden, fitter du udfaldsmodellen **med vægtene**. Vægtning kræver **robuste standardfejl** (samme idé som i [Regression](13d_regression.qmd#klyngebaserede-standardfejl)).
 
@@ -68,8 +81,56 @@ coeftest(model, vcov = vcovHC(model))      # koefficienter med robuste standardf
 ```
 
 ::: {.callout-tip}
-**Forventet warning.** Med vægte, der ikke er hele tal, giver `glm(..., family = binomial)` advarslen *"non-integer #successes in a binomial glm"*. Den er **harmløs** her og kan ignoreres: estimaterne er korrekte, og de robuste standardfejl er netop dem, der retter usikkerheden. (Skift ikke til `family = quasibinomial` for at fjerne den - det ændrer modellens varians-antagelse.)
+**Forventet warning.** Med vægte, der ikke er hele tal, giver `glm(..., family = binomial)` advarslen *"non-integer #successes in a binomial glm"*. Den er **harmløs** her og kan ignoreres: estimaterne er korrekte, og de robuste standardfejl er netop dem, der retter usikkerheden. (Skift ikke til `family = quasibinomial` for at fjerne den - det ændrer modellens varians-antagelse.) De robuste standardfejl behandler vægtene som faste; vil du være helt stringent, kan du bootstrappe hele proceduren.
 :::
+
+---
+
+## Del 2: IPCW - vægt mod censurering og manglende udfald
+
+Det samme maskineri kan rette en anden skævhed: **selektionsbias** fra censurering, dropout eller manglende udfald. Tænk på censurering som en **"anden behandling"**: i stedet for at spørge "hvad er effekten af eksponeringen?" (kræver komplette data) spørger du "hvad ville effekten være, *hvis ingen var blevet censureret?*". Det oversætter selektionsbias til et confounding-problem for censureringen, og confounding kan vægtes væk.
+
+Hver observeret person vægtes med 1/Pr(observeret), så de står i stedet for de tilsvarende personer, der faldt fra. Det genopbygger den fulde population.
+
+**Eksempel** (fra [Hernán & Robins, *What If*, kapitel 8](https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/)): et randomiseret forsøg med wasabi og død. Dropout er størst blandt netop de eksponerede og de syge, så censureringen bliver **skæv**:
+
+| Kun completers | N | Døde | Risiko |
+|---|---|---|---|
+| Eksponeret | 9 | 4 | 44 % |
+| Kontrol | 22 | 11 | 50 % |
+
+Completer-analysen giver RR = 0.89 - wasabi ser *beskyttende* ud. Men det er en illusion skabt af det skæve frafald: de eksponerede, der blev tilbage, er systematisk raskere. Vægtet tilbage til den fulde population bliver risikoen 57 % i begge grupper, RR = 1.00 - ingen effekt.
+
+```r
+library(sandwich)                          # vcovHC(): robust varians
+library(lmtest)                            # coeftest()
+
+df$observeret <- as.integer(!is.na(df$udfald))  # 1 = udfald observeret, 0 = censureret/manglende
+
+# modellér HVEM der observeres, ud fra prædiktorer for både frafald OG udfald
+cens <- glm(observeret ~ eksponering + alder + koen + ses,
+            data = df, family = binomial)
+
+df$p_obs  <- predict(cens, type = "response") # Pr(observeret | prædiktorer)
+df$w_cens <- 1 / df$p_obs                      # censurerings-vægt = 1 / Pr(observeret)
+
+# fit udfaldsmodellen KUN på de observerede, vægtet (robuste SE som ved IPTW)
+fit <- glm(udfald ~ eksponering,
+           data = subset(df, observeret == 1),
+           weights = w_cens, family = binomial)
+
+coeftest(fit, vcov = vcovHC(fit))           # samme harmløse non-integer-warning som ovenfor
+```
+
+::: {.callout-important}
+**De tre antagelser gælder også her** (Hernán & Robins, kap. 8):
+
+- **Exchangeability** - den, der oftest svigter. Prædiktorerne i vægtmodellen skal indeholde *alt*, der både forudsiger frafald OG udfald. Vi kender sjældent de sande grunde til, at folk falder fra, og der findes ingen test for, om vi har ramt dem alle - kun fagligt skøn.
+- **Positivitet** - alle skal kunne forblive observeret: Pr(observeret) > 0 i hver gruppe. Er en gruppe sikker på at falde fra, er der ingen at vægte op fra.
+- **Consistency** - en "ingen-censurering"-verden skal give mening. Fint ved loss to follow-up. Ikke fint ved **konkurrerende hændelser** (fx død af anden årsag), hvor man ikke kan fjerne én årsag uden at røre de andre.
+:::
+
+Ved manglende udfald er IPCW et alternativ til multipel imputation, se [Manglende data](12c_manglende-data.qmd).
 
 ::: {.callout-note}
 Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).

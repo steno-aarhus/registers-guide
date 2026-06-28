@@ -1,26 +1,39 @@
 ---
-title: "![](images/icons/icon_14.png){.title-icon} Weighting (IPTW)"
-subtitle: "Adjust for confounding in the analysis with inverse-probability weights"
+title: "![](images/icons/icon_14.png){.title-icon} IP weighting (IPTW and IPCW)"
+subtitle: "Adjust for confounding or for censoring/missing outcomes with inverse-probability weights"
 date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under development.** This page shows a minimal, verified example. More detail is coming.
+**Under development.** This page shows minimal, verified examples. More detail is coming.
 :::
 
-**IPTW** (inverse probability of treatment weighting) is a way to handle confounding in the **analysis** rather than by design. Where matching ([Phase 10](10_byg-studiepopulation.qmd)) balances the groups by selecting people, IPTW weights them: each person gets a weight based on their probability of being exposed (the propensity score), so exposed and unexposed become comparable on the measured confounders.
+**IP weighting** (inverse probability weighting) is one technique with two applications. You model the probability of whatever skews the comparison and weight each person by its **inverse**. This creates a **pseudo-population** in which the skew is gone:
+
+- **IPTW** (treatment weighting) against **confounding**: weight by the probability of being *exposed*.
+- **IPCW** (censoring weighting) against **selection bias** from censoring, dropout or missing outcomes: weight by the probability of being *observed*.
+
+Both are handled in the **analysis** rather than by design.
 
 ::: {.callout-note}
 The code examples use generic path and variable names. Adapt them to your project. The packages (`WeightIt`, `cobalt`, `sandwich`, `lmtest`) must be installed in your R environment on DST.
 :::
 
-::: {.callout-note}
-**Two assumptions for IPTW to work:** (1) you have measured and included the main confounders (no substantial *unmeasured* confounding), and (2) **overlap (positivity)** - within each combination of confounders, both exposed and unexposed must be possible. Very large weights are a warning sign of poor overlap.
-:::
-
 ---
 
-## Step 1: estimate the weights
+## Part 1: IPTW - weighting against confounding
+
+Where matching ([Phase 10](10_byg-studiepopulation.qmd)) balances the groups by *selecting* people, IPTW weights them: each person gets a weight based on their probability of being exposed (the propensity score), so exposed and unexposed become comparable on the measured confounders.
+
+::: {.callout-note}
+**Three assumptions for IPTW to work:**
+
+1. **Exchangeability** - you have measured and included the main confounders (no substantial *unmeasured* confounding).
+2. **Positivity (overlap)** - within each combination of confounders, both exposed and unexposed must be possible. Very large weights are a warning sign of poor overlap.
+3. **Consistency** - the exposure must be a well-defined intervention, so a "what if everyone were / were not exposed" world makes sense.
+:::
+
+### Step 1: estimate the weights
 
 ```r
 library(WeightIt)                          # weightit(): computes the weights
@@ -40,7 +53,7 @@ W <- weightit(
 - `method = "glm"` computes the propensity score with logistic regression.
 - `estimand = "ATE"` weights so both groups come to resemble the whole population.
 
-## Step 2: check balance
+### Step 2: check balance
 
 The weights are only good if they actually balance the confounders. Check that before looking at the outcome.
 
@@ -51,7 +64,7 @@ love.plot(W)                               # same as a figure; rule of thumb: |S
 
 `bal.tab()` / `love.plot()` show how far each confounder is from being balanced (SMD = standardised difference between the groups) - before and after weighting. The goal is for all of them to sit close to 0 after weighting. If some are still skewed, or a few weights are very large, reconsider the model (more/other confounders) or consider stabilising/trimming the weights.
 
-## Step 3: weighted outcome model
+### Step 3: weighted outcome model
 
 Once balance is acceptable, fit the outcome model **with the weights**. Weighting requires **robust standard errors** (same idea as in [Regression](13d_regression.qmd#klyngebaserede-standardfejl)).
 
@@ -68,8 +81,56 @@ coeftest(model, vcov = vcovHC(model))      # coefficients with robust standard e
 ```
 
 ::: {.callout-tip}
-**Expected warning.** With non-integer weights, `glm(..., family = binomial)` prints the warning *"non-integer #successes in a binomial glm"*. It is **harmless** here and can be ignored: the estimates are correct, and the robust standard errors are exactly what fixes the uncertainty. (Don't switch to `family = quasibinomial` to remove it - that changes the model's variance assumption.)
+**Expected warning.** With non-integer weights, `glm(..., family = binomial)` prints the warning *"non-integer #successes in a binomial glm"*. It is **harmless** here and can be ignored: the estimates are correct, and the robust standard errors are exactly what fixes the uncertainty. (Don't switch to `family = quasibinomial` to remove it - that changes the model's variance assumption.) The robust standard errors treat the weights as fixed; to be fully rigorous you can bootstrap the whole procedure.
 :::
+
+---
+
+## Part 2: IPCW - weighting against censoring and missing outcomes
+
+The same machinery can fix a different skew: **selection bias** from censoring, dropout or missing outcomes. Think of censoring as a **"second treatment"**: instead of asking "what is the effect of the exposure?" (which requires complete data) you ask "what would the effect be *if nobody had been censored?*". This converts selection bias into a confounding problem for censoring, and confounding can be weighted away.
+
+Each observed person is weighted by 1/Pr(observed), so they stand in for the similar people who dropped out. This rebuilds the full population.
+
+**Example** (from [Hernán & Robins, *What If*, chapter 8](https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/)): a randomised trial of wasabi and death. Dropout is highest among precisely the exposed and the sick, so censoring becomes **uneven**:
+
+| Completers only | N | Deaths | Risk |
+|---|---|---|---|
+| Exposed | 9 | 4 | 44% |
+| Control | 22 | 11 | 50% |
+
+The completer analysis gives RR = 0.89 - wasabi looks *protective*. But that is an illusion created by the uneven dropout: the exposed who stayed are systematically healthier. Weighted back to the full population, the risk is 57% in both groups, RR = 1.00 - no effect.
+
+```r
+library(sandwich)                          # vcovHC(): robust variance
+library(lmtest)                            # coeftest()
+
+df$observed <- as.integer(!is.na(df$outcome))   # 1 = outcome observed, 0 = censored/missing
+
+# model WHO is observed, from predictors of both dropout AND outcome
+cens <- glm(observed ~ exposure + age + sex + ses,
+            data = df, family = binomial)
+
+df$p_obs  <- predict(cens, type = "response") # Pr(observed | predictors)
+df$w_cens <- 1 / df$p_obs                      # censoring weight = 1 / Pr(observed)
+
+# fit the outcome model on the observed ONLY, weighted (robust SE as for IPTW)
+fit <- glm(outcome ~ exposure,
+           data = subset(df, observed == 1),
+           weights = w_cens, family = binomial)
+
+coeftest(fit, vcov = vcovHC(fit))           # same harmless non-integer warning as above
+```
+
+::: {.callout-important}
+**The three assumptions apply here too** (Hernán & Robins, ch. 8):
+
+- **Exchangeability** - the one that fails most often. The predictors in the weight model must contain *everything* that predicts both dropout AND outcome. We rarely know the true reasons people drop out, and there is no test for whether we caught them all - only substantive judgement.
+- **Positivity** - everyone must be able to stay observed: Pr(observed) > 0 in every group. If a group is certain to drop out, there is no one left to weight up from.
+- **Consistency** - a "no censoring" world must be coherent. Fine for loss to follow-up. Not fine for **competing events** (for example death from another cause), where you cannot remove one cause without touching the others.
+:::
+
+For missing outcomes, IPCW is an alternative to multiple imputation, see [Missing data](12c_manglende-data.qmd).
 
 ::: {.callout-note}
 Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
