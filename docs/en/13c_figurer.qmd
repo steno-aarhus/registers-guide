@@ -5,7 +5,7 @@ date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under development.** This page shows a minimal, verified `ggplot2` example. More figure types are coming.
+**Under development.** This page shows a few `ggplot2` examples. More figure types are coming.
 :::
 
 Figures in R are often made with [`ggplot2`](https://ggplot2.tidyverse.org/). The key point on DST is that **a figure is data**: it must be **aggregated** before it can go through output control. A scatterplot with one point per person will never pass - show counts, proportions, rates or curves instead.
@@ -74,6 +74,57 @@ Each line is one layer, and the order does not matter. A few typical moves:
 - **Layout:** `coord_flip()` makes the bars horizontal (good for many categories); `facet_wrap(~ variable)` makes one panel per group.
 
 Each function has many more arguments - look them up with e.g. `?labs` or `?scale_fill_manual`.
+
+## Figure with error bars (proportion and 95% CI)
+
+The bar chart above shows raw counts. In registry work you will often rather show a **proportion or rate with a confidence interval**, so the figure also conveys the uncertainty. Error bars (`geom_errorbar()`) draw the interval on top of each bar or point.
+
+Aggregate first again: one row per group with count, proportion and interval. Here we assume `outcome` is coded 0/1.
+
+```r
+library(ggplot2)                       # ggplot(), geom_col(), geom_errorbar()
+library(dplyr)                         # %>%, group_by(), summarise()
+
+df <- readRDS("path/to/analysis.rds")  # analysis-ready dataset; outcome is 0/1
+
+# Aggregate to one row per group: count, proportion with outcome and a 95% CI
+props <- df %>%
+  group_by(exposure) %>%                           # one group per exposure level
+  summarise(
+    n    = n(),                                    # number of people in the group
+    x    = sum(outcome),                           # number with outcome (outcome coded 0/1)
+    prop = x / n,                                  # proportion with outcome
+    se   = sqrt(prop * (1 - prop) / n),            # standard error of the proportion
+    .groups = "drop"
+  ) %>%
+  mutate(
+    lower = prop - 1.96 * se,                      # lower bound of the 95% CI
+    upper = prop + 1.96 * se                       # upper bound of the 95% CI
+  )
+
+p2 <- ggplot(props, aes(x = exposure, y = prop)) +        # proportion on the y-axis
+  geom_col(fill = "steelblue") +                          # bar for the proportion
+  geom_errorbar(aes(ymin = lower, ymax = upper),          # error bars = 95% CI
+                width = 0.2) +                            # width of the "cap" on the bar
+  scale_y_continuous(labels = scales::percent) +          # show the y-axis as percentages
+  labs(
+    title = "Proportion with outcome by exposure",
+    x = "Exposure", y = "Proportion with outcome (95% CI)"
+  ) +
+  theme_minimal()
+
+p2                                     # print the figure
+```
+
+With synthetic numbers the figure looks like this:
+
+![Bar chart with 95% confidence intervals as error bars, produced by the code above. The numbers are synthetic.](images/figure_example_errorbar.png)
+
+The key parts:
+
+- `geom_errorbar()` needs `ymin` and `ymax`; we computed them as `prop ± 1.96 · se` and put them in the dataset beforehand.
+- The interval here is a simple **Wald interval**. It is fine for the large groups output control requires anyway, but becomes unreliable with few people or proportions close to 0 or 100 %. Use a better interval then, e.g. `prop.test()` or the `binom` package.
+- **Same pattern for means:** to show a mean of a continuous variable per group (e.g. age at index), replace `prop` with `mean(variable)` and `se` with `sd(variable) / sqrt(n)`. The rest of the figure is the same.
 
 ## Save the figure
 

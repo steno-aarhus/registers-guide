@@ -5,7 +5,7 @@ date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under udvikling.** Siden viser et minimalt, verificeret `ggplot2`-eksempel. Flere figurtyper kommer.
+**Under udvikling.** Siden viser nogle `ggplot2`-eksempler. Flere figurtyper kommer.
 :::
 
 Figurer i R laves ofte med [`ggplot2`](https://ggplot2.tidyverse.org/). Det vigtige på DST er, at **en figur er data**: den skal være **aggregeret**, før den kan sendes til outputkontrol. Et scatterplot med ét punkt per person slipper aldrig igennem - vis i stedet antal, andele, rater eller kurver.
@@ -74,6 +74,57 @@ Hver linje er ét lag, og rækkefølgen betyder ikke noget. Et par typiske greb:
 - **Layout:** `coord_flip()` vender søjlerne vandret (godt til mange kategorier); `facet_wrap(~ variabel)` laver ét panel per gruppe.
 
 Hver funktion har mange flere argumenter - slå dem op med fx `?labs` eller `?scale_fill_manual`.
+
+## Figur med fejllinjer (andel og 95% CI)
+
+Søjlediagrammet ovenfor viser rå antal. I registerarbejde vil du ofte hellere vise en **andel eller rate med et konfidensinterval**, så figuren også fortæller om usikkerheden. Fejllinjer (`geom_errorbar()`) tegner intervallet oven på hver søjle eller hvert punkt.
+
+Aggreger igen først: én række per gruppe med antal, andel og interval. Her antager vi, at `udfald` er kodet 0/1.
+
+```r
+library(ggplot2)                       # ggplot(), geom_col(), geom_errorbar()
+library(dplyr)                         # %>%, group_by(), summarise()
+
+df <- readRDS("sti/til/analyse.rds")   # analyseklart datasæt; udfald er 0/1
+
+# Aggreger til én række per gruppe: antal, andel med udfald og et 95% CI
+andele <- df %>%
+  group_by(eksponering) %>%                        # én gruppe per eksponeringsniveau
+  summarise(
+    n     = n(),                                   # antal personer i gruppen
+    x     = sum(udfald),                           # antal med udfald (udfald kodet 0/1)
+    andel = x / n,                                 # andel med udfald
+    se    = sqrt(andel * (1 - andel) / n),         # standardfejl på andelen
+    .groups = "drop"
+  ) %>%
+  mutate(
+    nedre = andel - 1.96 * se,                     # nedre grænse for 95% CI
+    oevre = andel + 1.96 * se                      # øvre grænse for 95% CI
+  )
+
+p2 <- ggplot(andele, aes(x = eksponering, y = andel)) +   # andel på y-aksen
+  geom_col(fill = "steelblue") +                          # søjle for andelen
+  geom_errorbar(aes(ymin = nedre, ymax = oevre),          # fejllinjer = 95% CI
+                width = 0.2) +                            # bredde på "hatten" på linjen
+  scale_y_continuous(labels = scales::percent) +          # vis y-aksen i procent
+  labs(
+    title = "Andel med udfald efter eksponering",
+    x = "Eksponering", y = "Andel med udfald (95% CI)"
+  ) +
+  theme_minimal()
+
+p2                                     # skriv figuren ud
+```
+
+Med syntetiske tal ser figuren sådan ud:
+
+![Søjlediagram med 95% konfidensinterval som fejllinjer, lavet med koden ovenfor. Tallene er syntetiske.](images/figur_eksempel_fejllinjer.png)
+
+Det vigtigste:
+
+- `geom_errorbar()` skal bruge `ymin` og `ymax`; vi har regnet dem som `andel ± 1.96 · se` og lægger dem i datasættet på forhånd.
+- Intervallet her er et simpelt **Wald-interval**. Det er fint for de store grupper, outputkontrol alligevel kræver, men bliver upålideligt ved få personer eller andele tæt på 0 eller 100 %. Brug da et bedre interval, fx `prop.test()` eller `binom`-pakken.
+- **Samme mønster til gennemsnit:** vil du vise et gennemsnit af en kontinuert variabel per gruppe (fx alder ved index), så erstat `andel` med `mean(variabel)` og `se` med `sd(variabel) / sqrt(n)`. Resten af figuren er den samme.
 
 ## Gem figuren
 
