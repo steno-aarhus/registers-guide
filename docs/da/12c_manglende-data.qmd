@@ -47,29 +47,35 @@ library(mice)                              # md.pattern(), mice(), with(), pool(
 
 md.pattern(df)                             # hvilke variable mangler SAMMEN? (mønstre), ikke kun hvor meget
 
-# m = antal imputerede datasæt. Du vælger det selv.
-# Tommelfingerregel: mindst lige så mange som procenten af rækker med mindst ét hul
-# (er fx 30 % af rækkerne ufuldstændige => sæt m omkring 30). m = 5 er en gammel
-# standard; i dag bruges ofte 20-50. Flere m => mere stabilt, men langsommere.
-# Som udgangspunkt bruger mice ALLE kolonner i df til at forudsige hver variabel.
-imp <- mice(df, m = 5, seed = 123)         # seed = fast tal => reproducerbart (samme idé som matching, se 10a)
+# --- TRIN 1: udfyld hullerne (imputér) ---
+# mice() bygger IMPUTERINGSmodellen og laver m komplette datasæt. Som udgangspunkt
+# bruger den ALLE kolonner i df til at forudsige hver variabel med huller. Dette er
+# IKKE din analyse - det fylder kun de manglende værdier ud.
+# m = antal imputerede datasæt. Du vælger det selv. Tommelfingerregel: mindst lige
+# så mange som procenten af rækker med mindst ét hul (er fx 30 % af rækkerne
+# ufuldstændige => sæt m omkring 30). I dag bruges typisk 20-50; flere m => mere
+# stabilt, men langsommere.
+imp <- mice(df, m = 20, seed = 123)        # seed = fast tal => reproducerbart (samme idé som matching, se 10a)
 
-# Her vælger DU analysemodellen: hvilke variable der indgår, står i glm() - ikke i mice().
-fit <- with(imp,                           # fit din model på HVERT af de 5 datasæt
+# --- TRIN 2: kør DIN analyse på hvert udfyldt datasæt ---
+# Her vælger DU ANALYSEmodellen (dit forskningsspørgsmål): hvilke variable der indgår,
+# står i glm() - ikke i mice(). with() kører den samme glm() på HVERT af de 20 datasæt.
+fit <- with(imp,
             glm(udfald ~ eksponering + alder, family = binomial))
 
-pool(fit) %>% summary()                    # saml de 5 estimater til ét resultat (Rubins regler, se nedenfor)
+# --- TRIN 3: saml resultaterne til ét ---
+pool(fit) %>% summary()                    # saml de 20 estimater til ét resultat (Rubins regler, se nedenfor)
 
 complete(imp, 1)                           # det første udfyldte datasæt, hvis du vil inspicere det
 ```
 
 ### Hvordan finder den værdierne?
 
-For hver variabel med manglende værdier bygger `mice` en regressionsmodel, der forudsiger variablen ud fra de øvrige variable. Den manglende værdi udfyldes ikke med ét "bedste gæt", men med en **tilfældig trækning** fra den forudsagte fordeling. Derfor bliver de fem datasæt forskellige.
+For hver variabel med manglende værdier bygger `mice` en regressionsmodel, der forudsiger variablen ud fra de øvrige variable. Den manglende værdi udfyldes ikke med ét "bedste gæt", men med en **tilfældig trækning** fra den forudsagte fordeling. Derfor bliver de 20 datasæt forskellige.
 
 "Chained equations" beskriver, *hvordan* mice klarer flere variable med huller på én gang: den tager dem én ad gangen, imputerer den første ud fra de øvrige, går videre til den næste og bruger nu den netop udfyldte første variabel med, og så videre. Den kører flere runder igennem (kæden), indtil variablene er imputeret konsistent ud fra hinanden.
 
-Imputation påvirker **både estimatet og konfidensintervallet**. Estimatet er gennemsnittet på tværs af de fem datasæt. Konfidensintervallet bygger på **Rubins regler** - standardmetoden til at kombinere resultater fra flere imputerede datasæt ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)): den lægger *spredningen mellem datasættene* oven i modellens egen usikkerhed. Jo mere de imputerede værdier er uenige fra datasæt til datasæt, jo større bliver det bidrag, og jo bredere bliver konfidensintervallet. Det er netop pointen: er der lidt i de observerede data at imputere ud fra, skal usikkerheden afspejle det.
+Imputation påvirker **både estimatet og konfidensintervallet**. Estimatet er gennemsnittet på tværs af de 20 datasæt. Konfidensintervallet bygger på **Rubins regler** - standardmetoden til at kombinere resultater fra flere imputerede datasæt ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)): den lægger *spredningen mellem datasættene* oven i modellens egen usikkerhed. Jo mere de imputerede værdier er uenige fra datasæt til datasæt, jo større bliver det bidrag, og jo bredere bliver konfidensintervallet. Det er netop pointen: er der lidt i de observerede data at imputere ud fra, skal usikkerheden afspejle det.
 
 ### Hvornår kan man bruge det?
 

@@ -47,29 +47,35 @@ library(mice)                              # md.pattern(), mice(), with(), pool(
 
 md.pattern(df)                             # which variables are missing TOGETHER? (patterns), not just how much
 
-# m = number of imputed datasets. You choose it yourself.
-# Rule of thumb: at least as many as the percentage of rows with at least one gap
-# (if e.g. 30% of rows are incomplete => set m around 30). m = 5 is an old default;
-# today 20-50 is common. More m => more stable, but slower.
-# By default mice uses ALL columns in df to predict each variable.
-imp <- mice(df, m = 5, seed = 123)         # seed = fixed number => reproducible (same idea as matching, see 10a)
+# --- STEP 1: fill in the gaps (impute) ---
+# mice() builds the IMPUTATION model and makes m complete datasets. By default it uses
+# ALL columns in df to predict each variable with gaps. This is NOT your analysis - it
+# only fills in the missing values.
+# m = number of imputed datasets. You choose it yourself. Rule of thumb: at least as
+# many as the percentage of rows with at least one gap (if e.g. 30% of rows are
+# incomplete => set m around 30). Today 20-50 is typical; more m => more stable, but
+# slower.
+imp <- mice(df, m = 20, seed = 123)        # seed = fixed number => reproducible (same idea as matching, see 10a)
 
-# Here YOU choose the analysis model: which variables go in is set in glm() - not in mice().
-fit <- with(imp,                           # fit your model on EACH of the 5 datasets
+# --- STEP 2: run YOUR analysis on each completed dataset ---
+# Here YOU choose the ANALYSIS model (your research question): which variables go in is
+# set in glm() - not in mice(). with() runs the same glm() on EACH of the 20 datasets.
+fit <- with(imp,
             glm(outcome ~ exposure + age, family = binomial))
 
-pool(fit) %>% summary()                    # combine the 5 estimates into one result (Rubin's rules, see below)
+# --- STEP 3: combine the results into one ---
+pool(fit) %>% summary()                    # combine the 20 estimates into one result (Rubin's rules, see below)
 
 complete(imp, 1)                           # the first completed dataset, if you want to inspect it
 ```
 
 ### How does it find the values?
 
-For each variable with missing values, `mice` builds a regression model that predicts the variable from the other variables. A missing value is not filled in with a single "best guess", but with a **random draw** from the predicted distribution. That is why the five datasets differ.
+For each variable with missing values, `mice` builds a regression model that predicts the variable from the other variables. A missing value is not filled in with a single "best guess", but with a **random draw** from the predicted distribution. That is why the 20 datasets differ.
 
 "Chained equations" describes *how* mice handles several variables with gaps at once: it takes them one at a time, imputes the first from the others, moves on to the next and now uses the just-filled first variable as well, and so on. It runs several rounds through (the chain) until the variables are imputed consistently from one another.
 
-Imputation affects **both the estimate and the confidence interval**. The estimate is the average across the five datasets. The confidence interval is built on **Rubin's rules**, the standard method for combining results from several imputed datasets ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)): it adds the *spread between the datasets* on top of the model's own uncertainty. The more the imputed values disagree from dataset to dataset, the larger that contribution, and the wider the confidence interval. That is exactly the point: if there is little in the observed data to impute from, the uncertainty should reflect it.
+Imputation affects **both the estimate and the confidence interval**. The estimate is the average across the 20 datasets. The confidence interval is built on **Rubin's rules**, the standard method for combining results from several imputed datasets ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)): it adds the *spread between the datasets* on top of the model's own uncertainty. The more the imputed values disagree from dataset to dataset, the larger that contribution, and the wider the confidence interval. That is exactly the point: if there is little in the observed data to impute from, the uncertainty should reflect it.
 
 ### When can you use it?
 
