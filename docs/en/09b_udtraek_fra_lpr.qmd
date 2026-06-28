@@ -422,8 +422,8 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
   # Filter on admission type if desired
   if (inpatient_only) {
-    lpr_adm <- lpr_adm %>% filter(c_pattype == "0")          # "0" = inpatient in LPR2
-    lpr3_k  <- lpr3_k  %>% filter(kont_type == "ALCA00")     # "ALCA00" = inpatient in LPR3
+    lpr_adm <- lpr_adm %>% filter(c_pattype == "0")          # "0" = inpatient (full-day) in LPR2
+    lpr3_k  <- lpr3_k  %>% filter(kont_type == "ALCA00")     # ALCA00 = physical attendance (NOT = inpatient) - see "Classify patient type" below
   }
 
   # LPR2 somatic
@@ -496,6 +496,71 @@ saveRDS(result, "sti/til/extract_dementia.rds")
 ```
 
 </details>
+
+---
+
+## Classify patient type: inpatient, outpatient or emergency {#patienttype}
+
+Many studies need to tell **inpatient** contacts apart from **outpatient** visits and **emergency-room** visits (e.g. only admissions as an outcome, or acute contacts as a marker). There is no single shared field across LPR2 and LPR3 - you derive the type.
+
+::: {.callout-warning}
+**Column names and codes must be verified against your own extract.** The logic itself is durable (the codes `ALCA00` and `ATA1` are confirmed LPR3 values as of 2025), but the exact column names in LPR_A may differ from the example. Check with `arrow::schema()`/`colnames()` and look them up in [Overview of registers](register_reference.qmd). The pattern is adapted from [the Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview).
+:::
+
+**LPR2 (up to March 2019).** Patient type lives in `c_pattype`, but the emergency-room coding changed around 2014:
+
+```r
+lpr2_type <- lpr_adm %>%                        # lpr_adm from the extract above
+  mutate(patienttype = case_when(
+    c_pattype %in% c("0", "1", "4", "5") ~ "inpatient",    # full-day/part-day/day/night
+    c_pattype == "3"                     ~ "emergency",    # explicit ER (mostly pre-2014)
+    c_pattype == "2" & c_indm == "1"     ~ "emergency",    # from ~2014: acute admission mode = ER
+    c_pattype == "2"                     ~ "outpatient",
+    TRUE                                 ~ NA_character_
+  ))
+```
+
+**LPR3 (March 2019 and onwards).** There is no direct `c_pattype`. The `kont_type` code `ALCA00` means **physical attendance** (not admission), and the `prioritet` code `ATA1` means **acute**. A common research approach derives patient type from the contact's **duration** plus an ER/acute marker:
+
+```r
+lpr3_type <- lpr3_k %>%                          # lpr3_k from the extract above
+  filter(kont_type == "ALCA00") %>%              # keep physical attendances; drop phone/video
+  mutate(
+    duration_hours = as.numeric(
+      difftime(kont_sluttidspunkt, kont_starttidspunkt, units = "hours")  # verify the end-time column name
+    ),
+    patienttype = case_when(
+      duration_hours >= 8                                  ~ "inpatient",    # >= 8 hours ~ admission
+      enhedstype_ans == "skadestue" & prioritet == "ATA1"  ~ "emergency",    # acute ER
+      TRUE                                                 ~ "outpatient"
+    )
+  )
+```
+
+::: {.callout-note}
+**The 8-hour cut-off is a heuristic, not an official definition** - LPR3 has no "inpatient" field. Pick and document your own threshold, and clarify with your data manager. The column names for start/end time and unit type vary between deliveries; verify them before use.
+:::
+
+---
+
+## Remove unwanted diagnoses {#rens-diagnoser}
+
+A few codes are **administrative artefacts** rather than the patient's own disease, and should typically be removed from both outcomes and comorbidity:
+
+- **"Healthy companion"** (someone admitted as a companion to another patient, e.g. a parent): ICD-10 `DZ763`. Related contact/observation codes with no disease: `DZ032`, `DZ038`, `DZ039`.
+- **"Diagnosis not found"/unspecified** from the ICD-8 era: `Y719`.
+
+```r
+alle_dx <- alle_dx %>%
+  filter(
+    !substr(toupper(c_diag), 1, 5) %in% c("DZ763", "DZ032", "DZ038", "DZ039"),
+    substr(toupper(c_diag), 1, 4) != "Y719"
+  )
+```
+
+::: {.callout-note}
+What to remove depends on project and question - `DZ03*` (observation for suspected disease) is for instance relevant in some studies and should be kept there. The pattern is adapted from [the Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview); verify against your own data.
+:::
 
 ---
 
