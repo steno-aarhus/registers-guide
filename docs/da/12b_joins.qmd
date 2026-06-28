@@ -22,7 +22,7 @@ Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts
 I registerbaseret forskning arbejder du næsten altid med data fra **to eller flere tabeller**, der skal kobles sammen.
 Alle joins i `dplyr` tager to tabeller og én nøgle-kolonne, de deler (fx `pnr`).
 
-Dine udtræk deler typisk alle `pnr` som nøgle - det er den, du kobler på. Et simpelt ER-diagram over nøglerne:
+Når du kobler dine **færdige person-niveau udtræk på kohorten**, er nøglen som regel `pnr`. Inde i et register er det andre nøgler: kobler du fx kontakt og diagnose i LPR, sker det på `recnum` eller `dw_ek_kontakt`, ikke `pnr` (se [oversigten over join-nøgler i LPR](09a_forstaa_lpr.qmd)). ER-diagrammet nedenfor viser den almindelige kobling på `pnr` - udtræk koblet på kohorten:
 
 ```{mermaid}
 erDiagram
@@ -49,7 +49,9 @@ erDiagram
     }
 ```
 
-`pnr` er primærnøgle (PK) i kohorten og fremmednøgle (FK) i hvert udtræk. `||--o|` betyder: hver person i kohorten har nul eller én matchende række i udtrækket.
+`pnr` er primærnøgle (PK) i kohorten og fremmednøgle (FK) i hvert udtræk. Symbolet `||--o|` er standard ER-notation ("crow's foot"): `||` = præcis én, `o|` = nul eller én. Linjen læses altså: hver person i kohorten matcher **nul eller én** række i udtrækket.
+
+Det beskriver den **form, du selv skal sikre inden join** - ikke noget `left_join()` tjekker eller retter. Har et udtræk flere rækker per `pnr`, kobler `left_join()` glad videre og duplikerer kohorte-rækkerne (række-eksplosion). Derfor callout'en ovenfor om at få hvert udtræk ned til én række per person *først*, og derfor tjek 1 i [Validér dit join](#valider-dit-join) bagefter (steg rækketallet?).
 
 ### De joins du vil bruge
 
@@ -98,17 +100,21 @@ bef_ikke_i_kohort <- bef %>%
 
 ### Join med flere nøgler
 
-Når to tabeller deler mere end én kolonne som nøgle:
+Flere nøgler bliver kun relevant, når **mindst én af tabellerne har flere rækker per person** - ellers er `pnr` alene nok. Med flere nøgler skal **alle** de angivne kolonner stemme overens, før to rækker tælles som et match (`pnr` *og* `aar`, ikke `pnr` *eller* `aar`).
+
+Det typiske tilfælde er **panel-data: registre med én række per person per år**. BEF, AKM, FAIK osv. har en `pnr`-række for hvert kalenderår. Kobler du to af dem på `pnr` alene, parres hver af personens rækker med *alle* personens rækker i den anden tabel: har personen 5 år i BEF og 5 år i AKM, får du alle kombinationer, 5 × 5 = 25 rækker i stedet for 5. Tilføjer du året som ekstra nøgle, filtreres de 25 ned til de 5, hvor året også stemmer - 2018 mod 2018:
 
 ```r
-# Join på pnr OG år
+# Join på pnr OG år: en række matcher kun når BEGGE kolonner er ens
 bef_akm <- bef %>%
-  left_join(akm, by = c("pnr", "aar"))
+  left_join(akm, by = c("pnr", "aar"))   # 2018-BEF kobles kun til 2018-AKM
 ```
+
+Kobler du derimod to udtræk der hver har **én række per person** (fx færdige person-niveau udtræk på kohorten), er `pnr` alene nok - der er ingen ekstra dimension at holde styr på.
 
 ---
 
-## Validér dit join
+## Validér dit join {#valider-dit-join}
 
 Joins fejler sjældent med en fejlbesked - men de kan give stille forkerte resultater.
 Tjek altid disse tre ting efter et `left_join()`:

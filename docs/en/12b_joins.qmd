@@ -22,7 +22,7 @@ The code examples use generic paths and variable names. Adapt to your project's 
 In register-based research you almost always work with data from **two or more tables** that need to be linked.
 All joins in `dplyr` take two tables and one key column they share (e.g. `pnr`).
 
-Your extracts typically all share `pnr` as the key - that is what you join on. A simple ER diagram of the keys:
+When you join your **finished person-level extracts onto the cohort**, the key is usually `pnr`. Inside a register it is other keys: joining contact and diagnosis in LPR, for instance, happens on `recnum` or `dw_ek_kontakt`, not `pnr` (see [the overview of LPR join keys](09a_forstaa_lpr.qmd)). The ER diagram below shows the common join on `pnr` - extracts joined onto the cohort:
 
 ```{mermaid}
 erDiagram
@@ -49,7 +49,9 @@ erDiagram
     }
 ```
 
-`pnr` is the primary key (PK) in the cohort and a foreign key (FK) in each extract. `||--o|` means: each person in the cohort has zero or one matching row in the extract.
+`pnr` is the primary key (PK) in the cohort and a foreign key (FK) in each extract. The symbol `||--o|` is standard ER notation ("crow's foot"): `||` = exactly one, `o|` = zero or one. So the line reads: each person in the cohort matches **zero or one** row in the extract.
+
+This describes the **shape you must ensure before the join** - not something `left_join()` checks or fixes. If an extract has several rows per `pnr`, `left_join()` happily proceeds and duplicates the cohort rows (row explosion). That is why the callout above tells you to get each extract down to one row per person *first*, and why check 1 in [Validate your join](#validate-your-join) afterwards (did the row count grow?).
 
 ### The joins you will use
 
@@ -98,17 +100,21 @@ bef_not_in_cohort <- bef %>%
 
 ### Join with multiple keys
 
-When two tables share more than one column as key:
+Multiple keys only become relevant when **at least one of the tables has several rows per person** - otherwise `pnr` alone is enough. With multiple keys **all** the listed columns must agree before two rows count as a match (`pnr` *and* `aar`, not `pnr` *or* `aar`).
+
+The typical case is **panel data: registers with one row per person per year**. BEF, AKM, FAIK and so on have a `pnr` row for every calendar year. Join two of them on `pnr` alone and each of the person's rows is paired with *all* of the person's rows in the other table: with 5 years in BEF and 5 in AKM you get every combination, 5 × 5 = 25 rows instead of 5. Add the year as an extra key and those 25 are filtered down to the 5 where the year also matches - 2018 against 2018:
 
 ```r
-# Join on pnr AND year
+# Join on pnr AND year: a row matches only when BOTH columns are equal
 bef_akm <- bef %>%
-  left_join(akm, by = c("pnr", "aar"))
+  left_join(akm, by = c("pnr", "aar"))   # 2018 BEF joins only to 2018 AKM
 ```
+
+If instead you join two extracts that each have **one row per person** (e.g. finished person-level extracts onto the cohort), `pnr` alone is enough - there is no extra dimension to keep track of.
 
 ---
 
-## Validate your join
+## Validate your join {#validate-your-join}
 
 Joins rarely fail with an error message - but they can produce silently wrong results.
 Always check these three things after a `left_join()`:
