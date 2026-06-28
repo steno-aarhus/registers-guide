@@ -25,14 +25,15 @@ library(survival)                          # Surv(), survfit(), coxph(), cox.zph
 
 df <- readRDS("sti/til/analyse.rds")       # analyseklart datasæt, én række per person
 
-# Surv() samler tid + status i ét "overlevelsesobjekt", som modellerne bruger:
+# Surv() samler tid + status i ét "overlevelsesobjekt", som alle modellerne bruger:
 #   tid_dage = dage fra index til hændelse ELLER censurering (det der kommer først)
 #   udfald   = 1 hvis hændelsen indtraf, 0 hvis personen blev censureret
-sobj <- Surv(time = df$tid_dage, event = df$udfald)
-sobj                                       # vis objektet: et "+" markerer en censureret person (fx 12+)
+# Vi laver objektet her ALENE for at se, hvad Surv() producerer:
+overlevelse <- Surv(time = df$tid_dage, event = df$udfald)
+overlevelse                                # vis objektet: et "+" markerer en censureret person (fx 12+)
 
-# Bemærk: i modellerne nedenfor skriver du Surv() direkte i formlen,
-# så du behøver ikke gemme sobj på forhånd.
+# I praksis behøver du ikke gemme objektet: i modellerne nedenfor skriver du
+# Surv(...) direkte i formlen. Det er kun vist her for forståelsens skyld.
 ```
 
 ## Kaplan-Meier-kurver
@@ -89,6 +90,8 @@ coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,
       cluster = pnr) %>%                   # <- den eneste ændring: klynge på person-id
   tbl_regression(exponentiate = TRUE)      # HR uændret; kun CI'erne bliver korrekte (typisk bredere)
 ```
+
+Bemærk skrivemåden: `coxph()` tager klyngevariablen som et **argument** uden tilde (`cluster = pnr`), mens `sandwich::vcovCL()` på [Regression](13d_regression.qmd#klyngebaserede-standardfejl) bruger en **formel** med tilde (`cluster = ~ pnr`). Det er samme idé (klynge på person-id), kun to funktioners forskellige måder at modtage variablen på.
 
 ## Tjek antagelsen: proportionale hazards
 
