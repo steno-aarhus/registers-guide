@@ -1,22 +1,45 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Time-varying variables"
-subtitle: "Variables that change during follow-up: start/stop format with tmerge()"
+subtitle: "Variables that change during follow-up: what can vary, when baseline is enough, and where it gets hard"
 date: last-modified
 ---
 
-::: {.callout-warning}
-**Under development.** This page shows a minimal, verified example. More detail is coming.
+::: {.callout-important}
+**This is a hard topic, and this page is only a short orientation.**
+Time-varying analysis ranges from a simple reshaping of the data (what we show here) to the entire causal machinery behind *time-varying treatments*, which has its own textbook part. This page gives the overview: what can vary, when your ordinary baseline setup is enough, and where the boundary lies to methods that fall outside this guide. For the heavy end: read [What If, Part III](https://miguelhernan.org/whatifbook) and involve a biostatistician.
 :::
 
-Some variables change **during follow-up** - a blood test, BMI, weight, or an exposure that only starts partway through. They cannot be a single value per person. Instead you build **start/stop format**: one row per person-*interval*, where the variable is constant within the interval. You build it with `survival::tmerge()` and analyse it with a Cox model.
+Almost everything else in this guide builds on **one row per person** with variables measured at index (baseline). But some things change **during follow-up**, and then that shape does not always hold. This page helps you decide when that is a problem, and what to do about it.
 
 ::: {.callout-note}
-The code examples use generic path and variable names. Adapt them to your project. `survival` must be installed in your R environment on DST.
+The code example uses generic path and variable names. Adapt it to your project. `survival` must be installed in your R environment on DST.
 :::
 
 ---
 
-## From one row to intervals
+## What can vary?
+
+Three different things can vary over time, and they call for very different answers:
+
+- **Time-varying covariate / confounder** - a background variable that changes (BMI, a blood test, a medication status, marital status). It cannot be a single value per person if it changes along the way.
+- **Time-varying exposure / treatment** - the exposure itself starts, stops or switches during follow-up (a treatment the person goes on and off). This is where it gets causally hard, see [the feedback section below](#feedback).
+- **Censoring is also time-varying** - people leave follow-up at different times (emigration, death, loss to follow-up). This is already handled in your follow-up time and time-to-event setup, see [Time-to-event](13e_time-to-event.qmd).
+
+---
+
+## When is the baseline setup enough?
+
+**Often.** If your **exposure is fixed at index** (e.g. a diagnosis or a surgery on a given date) and you adjust for **confounders measured at baseline**, then the ordinary setup from [Phase 10-12](12_data-manipulation.qmd) - one row per person, covariates frozen at index, one follow-up interval - is the right one. You do **not** need time-varying analysis just because the data span time. Only consider it when a variable that *matters for the analysis* actually changes value after index.
+
+::: {.callout-tip}
+Rule of thumb: ask whether the extra complexity changes the answer. If a covariate drifts a little but is not a strong confounder, its baseline value is usually fine. If the exposure itself changes, or a strong confounder changes systematically with the exposure, read on.
+:::
+
+---
+
+## The tractable case: a time-varying covariate
+
+If you have a covariate that changes along the way (and that is **not** caught in feedback with the exposure, see the next section), the fix is mechanical: you build **start/stop format** (also called counting-process format). Instead of one row per person you get **one row per person-*interval***, where the variable is constant within the interval. You build it with `survival::tmerge()` and analyse it with an ordinary Cox model.
 
 A person with two measurements becomes two rows, each with its own `tstart`/`tstop` interval and the value that applies within it:
 
@@ -25,7 +48,7 @@ A person with two measurements becomes two rows, each with its own `tstart`/`tst
 | 001 | 0 | 180 | 5.2 | 0 |
 | 001 | 180 | 365 | 6.8 | 1 |
 
-## Build start/stop data with tmerge()
+### Build start/stop data with tmerge()
 
 ```r
 library(survival)                          # tmerge(), tdc(), event()
@@ -44,10 +67,43 @@ d <- tmerge(d, measurements, id = pnr,            # add the time-varying variabl
 - `event(time, status)` marks when the event occurs.
 - `tdc(day, value)` lets `measure` change value on each measurement day.
 
-## Analyse in a Cox model
+### Analyse in a Cox model
 
 ```r
 coxph(Surv(tstart, tstop, outcome) ~ measure + age, data = d)  # time-varying Cox model
 ```
 
-The time-to-event analysis itself (Kaplan-Meier, Cox, assumptions) is in [Time-to-event](13e_time-to-event.qmd).
+The time-to-event analysis itself (Kaplan-Meier, Cox, assumptions) is in [Time-to-event](13e_time-to-event.qmd). The detailed recipe for `tmerge()` and time-dependent effects is in [the survival package vignette (CRAN PDF)](https://cran.r-project.org/web/packages/survival/vignettes/timedep.pdf).
+
+---
+
+## Where it gets hard: treatment-confounder feedback {#feedback}
+
+::: {.callout-warning}
+**The start/stop Cox above is not always enough - and can even be wrong.**
+The most important trap in time-varying analysis is *treatment-confounder feedback*: when a time-varying variable is **both** a confounder for the exposure **and** itself affected by past exposure.
+:::
+
+Classic example: a treatment (exposure) affects a biomarker, the biomarker affects whether the person gets more treatment, and the biomarker also affects the outcome. The variable is at once a confounder (you *must* adjust for it) and a mediator on the path from past treatment to outcome (adjust for it and you **block** part of the effect you want to measure, introducing bias).
+
+In that situation you **cannot** simply put the variable into an ordinary Cox model, the way we did above. Adjusting and not adjusting both give a wrong answer. The solution is a whole different family of methods, **g-methods**:
+
+- **the g-formula** (standardisation step by step over time)
+- **IP weighting / marginal structural models** - the most accessible g-method. The guide introduces the weighting idea for a fixed exposure in [Weighting (IPTW)](13f_vaegtning-iptw.qmd); marginal structural models extend it to a time-varying exposure
+- **g-estimation** of structural models
+
+This falls **outside this guide**. If you suspect feedback, stop here, read up, and involve a biostatistician before you analyse.
+
+---
+
+## See also
+
+- [What If (Hernán & Robins), Part III - Causal inference for time-varying treatments](https://miguelhernan.org/whatifbook) (free PDF) - the standard reference. Ch. 19 (time-varying treatments), ch. 20 (treatment-confounder feedback), ch. 21 (g-methods) and ch. 22 (target trial emulation).
+- [survival package vignette: Time Dependent Covariates (CRAN PDF)](https://cran.r-project.org/web/packages/survival/vignettes/timedep.pdf) - the technical recipe for `tmerge()` and start/stop data.
+- [Weighting (IPTW)](13f_vaegtning-iptw.qmd) - the guide's introduction to IP weighting (fixed exposure), the foundation under marginal structural models.
+- [Time-to-event](13e_time-to-event.qmd) - Kaplan-Meier, Cox and assumptions.
+- [Link your extracts](12b_joins.qmd#opfoelgningstid) - building follow-up time in the baseline setup.
+
+::: {.callout-note}
+Remember: anything that leaves DST must pass **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
+:::
