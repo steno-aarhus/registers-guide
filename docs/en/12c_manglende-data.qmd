@@ -45,46 +45,60 @@ df_complete <- na.omit(df)                 # keep only rows with no NA at all (u
 ```r
 library(mice)                              # md.pattern(), mice(), with(), pool()
 
-md.pattern(df)                             # show the pattern of missing values
+md.pattern(df)                             # which variables are missing TOGETHER? (patterns), not just how much
 
-imp <- mice(df, m = 5, seed = 123)         # create 5 imputed datasets (seed = reproducibility)
+# m = number of imputed datasets. You choose it yourself.
+# Rule of thumb: at least as many as the percentage of rows with at least one gap
+# (if e.g. 30% of rows are incomplete => set m around 30). m = 5 is an old default;
+# today 20-50 is common. More m => more stable, but slower.
+# By default mice uses ALL columns in df to predict each variable.
+imp <- mice(df, m = 5, seed = 123)         # seed = fixed number => reproducible (same idea as matching, see 10a)
 
+# Here YOU choose the analysis model: which variables go in is set in glm() - not in mice().
 fit <- with(imp,                           # fit your model on EACH of the 5 datasets
             glm(outcome ~ exposure + age, family = binomial))
 
-pool(fit) %>% summary()                    # combine the 5 estimates into one result (Rubin's rules)
+pool(fit) %>% summary()                    # combine the 5 estimates into one result (Rubin's rules, see below)
 
 complete(imp, 1)                           # the first completed dataset, if you want to inspect it
 ```
 
 ### How does it find the values?
 
-For each variable with missing values, `mice` builds a regression model that predicts the variable from the other variables. A missing value is not filled in with a single "best guess", but with a **random draw** from the predicted distribution. That is why the five datasets differ. "Chained equations" means it goes variable by variable and repeats the process over several rounds, so the variables are imputed from one another.
+For each variable with missing values, `mice` builds a regression model that predicts the variable from the other variables. A missing value is not filled in with a single "best guess", but with a **random draw** from the predicted distribution. That is why the five datasets differ.
 
-This affects **both the estimate and the confidence interval**. The estimate is the average across the five datasets, and the variance (Rubin's rules) adds the *spread between the datasets* on top of the model's own uncertainty. The more the imputed values disagree from dataset to dataset, the larger that contribution, and the wider the confidence interval. That is exactly the point: if there is little in the observed data to impute from, the uncertainty should reflect it.
+"Chained equations" describes *how* mice handles several variables with gaps at once: it takes them one at a time, imputes the first from the others, moves on to the next and now uses the just-filled first variable as well, and so on. It runs several rounds through (the chain) until the variables are imputed consistently from one another.
+
+Imputation affects **both the estimate and the confidence interval**. The estimate is the average across the five datasets. The confidence interval is built on **Rubin's rules**, the standard method for combining results from several imputed datasets ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)): it adds the *spread between the datasets* on top of the model's own uncertainty. The more the imputed values disagree from dataset to dataset, the larger that contribution, and the wider the confidence interval. That is exactly the point: if there is little in the observed data to impute from, the uncertainty should reflect it.
 
 ### When can you use it?
 
-mice rests on the **MAR** assumption (*missing at random*): that the probability of a value being missing can be explained by the *observed* data, not by the missing value itself. This assumption cannot be tested in the data, only judged on substantive grounds.
+Imputation makes most sense when a non-trivial share of the data is missing *and* complete-case would either be biased or waste too many rows. If complete-case is already unbiased (see the regression case below), the main gain from imputation is power, not correctness.
+
+mice rests on the **MAR** assumption (*missing at random*). MAR does not mean the gaps are pure chance. It means that the *reason* a value is missing lies in something you **have** measured, not in the missing value itself.
+
+Analogy: suppose older patients more often skip a question. As long as you have age recorded, this is no problem - within each age group, those missing the answer resemble those who answered, and mice can fill in from the observed ones. The gap is due to age (which you have), not the missing answer itself. The assumption cannot be tested in the data, only judged on substantive grounds.
 
 - **Missing covariates:** the classic use. Here, include the **outcome** in the imputation model. It sounds backwards, but it is necessary: leave the outcome out and you pull the covariate-outcome association artificially toward null. Including the outcome adds no extra assumption, it simply respects the association you will later estimate.
-- **Missing exposure:** can in principle be imputed the same way, but it is more fragile and requires strong predictors of the exposure. Proceed with caution.
-- **Missing outcome:** here imputation gains least. If you impute *only* the outcome from the same variables already in the analysis model, you typically end up with the same result as complete-case. A real gain requires extra auxiliary variables that predict the outcome. An alternative for missing outcomes is **inverse probability weighting (IPW)**.
+- **Missing exposure:** here it is more uncertain. In principle exposure can be imputed like any other variable, but it is more fragile, and whether it is defensible at all depends heavily on the situation and on how well the exposure can be predicted from the other data. Seek specific guidance before doing it.
+- **Missing outcome:** here imputation gains least. If you impute *only* the outcome from the same variables already in the analysis model, you typically end up with the same result as complete-case. A real gain requires extra auxiliary variables that predict the outcome.
 
 ::: {.callout-important}
-**The MAR assumption is what matters, not the percentage.** mice only corrects bias if missingness is **MAR**: that *why* a value is missing can be explained by the observed data. If a variable is missing precisely because of the value that is missing (for example, the sickest patients never get it measured), the data are **MNAR**, and then mice can introduce its own bias and give false precision. MAR cannot be tested in the data, only judged on substantive grounds.
+**The MAR assumption is what matters, not the percentage.** mice only corrects bias if missingness is **MAR**: that the *reason* a value is missing lies in the observed data. If a variable is missing precisely because of the value that is missing (for example, the sickest patients never get it measured), the data are **MNAR** (*missing not at random*), and then mice can introduce its own bias and give false precision. MAR cannot be tested in the data, only judged on substantive grounds.
 
 This is why imputation is not automatically better than just accepting some missing:
 
-- Under **MCAR** (completely at random) complete-case is already unbiased, just less efficient.
+- Under **MCAR** (*missing completely at random*) complete-case is already unbiased, just less efficient.
 - In a regression model, complete-case is in fact unbiased when missingness does not depend on the **outcome** given the covariates, even when it is not MCAR.
-- mice is "garbage in, garbage out": a wrong imputation model gives biased results.
+- mice is only as good as the imputation model you give it. Pick the wrong variables to predict the missing values, and the filled-in values, and hence your result, will be wrong too. mice invents no information; it only exploits the associations that are already in the data.
+:::
 
+::: {.callout-important}
 **How much missing is okay?** There is no real percentage threshold (5% / 10% / 40% are rules of thumb with no foundation). What matters is the mechanism and how well the missing values can be predicted from the rest. In practice: always report how much is missing per variable (STROBE), treat results with high missingness (roughly >40-50% on a key variable) as sensitivity / hypothesis-generating, and **run complete-case and mice side by side** as a sensitivity analysis. If they point the same way, you stand on firmer ground.
 :::
 
-::: {.callout-tip}
-**This is not a textbook on imputation.** The page shows how to run `mice` in practice, not when it is substantively defensible. Learn the underlying theory (MAR/MCAR/MNAR, choosing the imputation model, number of imputations, diagnostics) elsewhere, for example:
+::: {.callout-warning}
+**This is only a very short introduction to imputation.** The page shows how to run `mice` in practice, not when it is substantively defensible. Learn the underlying theory (MAR/MCAR/MNAR, choosing the imputation model, number of imputations, diagnostics) elsewhere, for example:
 
 - [*Flexible Imputation of Missing Data*](https://stefvanbuuren.name/fimd/) - free online book by the `mice` author, Stef van Buuren.
 - [Sterne et al. (2009), BMJ](https://www.bmj.com/content/338/bmj.b2393) - "Multiple imputation for missing data in epidemiological and clinical research: potential and pitfalls".

@@ -1,0 +1,76 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Vægtning (IPTW)"
+subtitle: "Justér for confounding i analysen med inverse-probability-vægte"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Siden viser et minimalt, verificeret eksempel. Flere detaljer kommer.
+:::
+
+**IPTW** (inverse probability of treatment weighting) er en måde at håndtere confounding på i **analysen** i stedet for ved design. Hvor matching ([Fase 10](10_byg-studiepopulation.qmd)) balancerer grupperne ved at udvælge personer, vægter IPTW dem: hver person får en vægt ud fra sin sandsynlighed for at blive eksponeret (propensity score), så eksponerede og ueksponerede bliver sammenlignelige på de målte confoundere.
+
+::: {.callout-note}
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. Pakkerne (`WeightIt`, `cobalt`, `sandwich`, `lmtest`) skal være installeret i dit R-miljø på DST.
+:::
+
+::: {.callout-note}
+**To forudsætninger for at IPTW virker:** (1) du har målt og medtaget de vigtigste confoundere (ingen væsentlig *uobserveret* confounding), og (2) **overlap (positivitet)** - i hver kombination af confoundere skal både eksponerede og ueksponerede kunne forekomme. Meget store vægte er et faresignal om dårligt overlap.
+:::
+
+---
+
+## Trin 1: estimér vægtene
+
+```r
+library(WeightIt)                          # weightit(): beregner vægtene
+library(cobalt)                            # bal.tab(), love.plot(): tjekker balance
+
+df <- readRDS("sti/til/analyse.rds")       # analyseklart datasæt, én række per person
+
+W <- weightit(
+  eksponering ~ alder + koen + kalenderaar + ses,  # behandling ~ confoundere (IKKE udfaldet)
+  data     = df,
+  method   = "glm",                        # propensity score via logistisk regression
+  estimand = "ATE"                         # mål: gennemsnitlig effekt i hele populationen
+)
+```
+
+- Venstre side af `~` er **eksponeringen** (behandlingen), højre side er **confounderne** - aldrig udfaldet.
+- `method = "glm"` beregner propensity scoren med logistisk regression.
+- `estimand = "ATE"` vægter, så begge grupper kommer til at ligne hele populationen.
+
+## Trin 2: tjek balancen
+
+Vægtene er kun gode, hvis de faktisk balancerer confounderne. Det tjekker du, før du ser på udfaldet.
+
+```r
+bal.tab(W)                                 # standardiserede forskelle (SMD) før og efter vægtning
+love.plot(W)                               # samme som figur; tommelfingerregel: |SMD| < 0.1 efter vægtning
+```
+
+`bal.tab()` / `love.plot()` viser, hvor langt hver confounder er fra at være balanceret (SMD = standardiseret forskel mellem grupperne) - før og efter vægtning. Målet er, at alle ligger tæt på 0 efter vægtning. Er nogle stadig skæve, eller er enkelte vægte meget store, så genovervej modellen (flere/andre confoundere) eller overvej at stabilisere/trimme vægtene.
+
+## Trin 3: vægtet udfaldsmodel
+
+Når balancen er i orden, fitter du udfaldsmodellen **med vægtene**. Vægtning kræver **robuste standardfejl** (samme idé som i [Regression](13d_regression.qmd#klyngebaserede-standardfejl)).
+
+```r
+library(sandwich)                          # vcovHC(): robust varians
+library(lmtest)                            # coeftest()
+
+df$w <- W$weights                          # læg vægtene ind som en kolonne
+
+model <- glm(udfald ~ eksponering,         # vægtet model: kun behandlingen (confounderne er "vægtet væk")
+             data = df, weights = w, family = binomial)
+
+coeftest(model, vcov = vcovHC(model))      # koefficienter med robuste standardfejl
+```
+
+::: {.callout-tip}
+**Forventet warning.** Med vægte, der ikke er hele tal, giver `glm(..., family = binomial)` advarslen *"non-integer #successes in a binomial glm"*. Den er **harmløs** her og kan ignoreres: estimaterne er korrekte, og de robuste standardfejl er netop dem, der retter usikkerheden. (Skift ikke til `family = quasibinomial` for at fjerne den - det ændrer modellens varians-antagelse.)
+:::
+
+::: {.callout-note}
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+:::

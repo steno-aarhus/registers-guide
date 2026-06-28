@@ -45,46 +45,60 @@ df_complete <- na.omit(df)                 # behold kun rækker helt uden NA (br
 ```r
 library(mice)                              # md.pattern(), mice(), with(), pool()
 
-md.pattern(df)                             # vis mønstret af manglende værdier
+md.pattern(df)                             # hvilke variable mangler SAMMEN? (mønstre), ikke kun hvor meget
 
-imp <- mice(df, m = 5, seed = 123)         # lav 5 imputerede datasæt (seed = reproducerbarhed)
+# m = antal imputerede datasæt. Du vælger det selv.
+# Tommelfingerregel: mindst lige så mange som procenten af rækker med mindst ét hul
+# (er fx 30 % af rækkerne ufuldstændige => sæt m omkring 30). m = 5 er en gammel
+# standard; i dag bruges ofte 20-50. Flere m => mere stabilt, men langsommere.
+# Som udgangspunkt bruger mice ALLE kolonner i df til at forudsige hver variabel.
+imp <- mice(df, m = 5, seed = 123)         # seed = fast tal => reproducerbart (samme idé som matching, se 10a)
 
+# Her vælger DU analysemodellen: hvilke variable der indgår, står i glm() - ikke i mice().
 fit <- with(imp,                           # fit din model på HVERT af de 5 datasæt
             glm(udfald ~ eksponering + alder, family = binomial))
 
-pool(fit) %>% summary()                    # saml de 5 estimater til ét resultat (Rubins regler)
+pool(fit) %>% summary()                    # saml de 5 estimater til ét resultat (Rubins regler, se nedenfor)
 
 complete(imp, 1)                           # det første udfyldte datasæt, hvis du vil inspicere det
 ```
 
 ### Hvordan finder den værdierne?
 
-For hver variabel med manglende værdier bygger `mice` en regressionsmodel, der forudsiger variablen ud fra de øvrige variable. Den manglende værdi udfyldes ikke med ét "bedste gæt", men med en **tilfældig trækning** fra den forudsagte fordeling. Derfor bliver de fem datasæt forskellige. "Chained equations" betyder, at den går variabel for variabel og gentager processen i flere runder, så variablene imputeres ud fra hinanden.
+For hver variabel med manglende værdier bygger `mice` en regressionsmodel, der forudsiger variablen ud fra de øvrige variable. Den manglende værdi udfyldes ikke med ét "bedste gæt", men med en **tilfældig trækning** fra den forudsagte fordeling. Derfor bliver de fem datasæt forskellige.
 
-Det påvirker **både estimatet og konfidensintervallet**. Estimatet er gennemsnittet på tværs af de fem datasæt, og variansen (Rubins regler) lægger *spredningen mellem datasættene* oven i modellens egen usikkerhed. Jo mere de imputerede værdier er uenige fra datasæt til datasæt, jo større bliver det bidrag, og jo bredere bliver konfidensintervallet. Det er netop pointen: er der lidt i de observerede data at imputere ud fra, skal usikkerheden afspejle det.
+"Chained equations" beskriver, *hvordan* mice klarer flere variable med huller på én gang: den tager dem én ad gangen, imputerer den første ud fra de øvrige, går videre til den næste og bruger nu den netop udfyldte første variabel med, og så videre. Den kører flere runder igennem (kæden), indtil variablene er imputeret konsistent ud fra hinanden.
+
+Imputation påvirker **både estimatet og konfidensintervallet**. Estimatet er gennemsnittet på tværs af de fem datasæt. Konfidensintervallet bygger på **Rubins regler** - standardmetoden til at kombinere resultater fra flere imputerede datasæt ([Rubin 1987](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316696)): den lægger *spredningen mellem datasættene* oven i modellens egen usikkerhed. Jo mere de imputerede værdier er uenige fra datasæt til datasæt, jo større bliver det bidrag, og jo bredere bliver konfidensintervallet. Det er netop pointen: er der lidt i de observerede data at imputere ud fra, skal usikkerheden afspejle det.
 
 ### Hvornår kan man bruge det?
 
-mice hviler på antagelsen **MAR** (*missing at random*): at sandsynligheden for, at en værdi mangler, kan forklares af de *observerede* data, ikke af den manglende værdi selv. Den antagelse kan ikke testes i data, kun vurderes fagligt.
+Imputation giver mest mening, når en ikke-ubetydelig del af data mangler, *og* complete-case enten ville være biased eller spilde for mange rækker. Er complete-case allerede unbiased (se regressionstilfældet nedenfor), er den vigtigste gevinst ved imputation styrke, ikke korrekthed.
+
+mice hviler på antagelsen **MAR** (*missing at random*). MAR betyder ikke, at hullerne er rene tilfældigheder. Det betyder, at *årsagen* til, at en værdi mangler, ligger i noget, du **har** målt, ikke i den manglende værdi selv.
+
+Analogi: antag at ældre patienter oftere springer et spørgsmål over. Så længe du har alderen registreret, er det uproblematisk - inden for hver aldersgruppe ligner dem, der mangler svaret, dem der svarede, og mice kan udfylde ud fra de observerede. Hullet skyldes alderen (som du har), ikke selve det manglende svar. Antagelsen kan ikke testes i data, kun vurderes fagligt.
 
 - **Manglende covariater:** den klassiske brug. Medtag her **udfaldet** i imputeringsmodellen. Det lyder bagvendt, men er nødvendigt: udelader du udfaldet, trækker du sammenhængen mellem covariat og udfald kunstigt mod nul. At medtage udfaldet tilføjer ikke en ekstra antagelse, det respekterer bare den sammenhæng, du senere vil estimere.
-- **Manglende eksponering:** kan i princippet imputeres på samme måde, men det er mere skrøbeligt og kræver stærke prædiktorer for eksponeringen. Vær varsom.
-- **Manglende udfald:** her giver imputation mindst. Imputerer du *kun* udfaldet ud fra de samme variable, som allerede er i analysemodellen, ender du typisk med samme resultat som complete-case. Reel gevinst kræver ekstra hjælpevariable (auxiliary), der forudsiger udfaldet. Et alternativ ved manglende udfald er **inverse probability weighting (IPW)**.
+- **Manglende eksponering:** her er det mere usikkert. I princippet kan eksponering imputeres som enhver anden variabel, men det er mere skrøbeligt, og om det overhovedet er forsvarligt afhænger meget af situationen og af, hvor godt eksponeringen kan forudsiges af de øvrige data. Søg specifik vejledning, før du gør det.
+- **Manglende udfald:** her giver imputation mindst. Imputerer du *kun* udfaldet ud fra de samme variable, som allerede er i analysemodellen, ender du typisk med samme resultat som complete-case. Reel gevinst kræver ekstra hjælpevariable (auxiliary), der forudsiger udfaldet.
 
 ::: {.callout-important}
-**MAR-antagelsen er det afgørende, ikke procenten.** mice retter kun op på bias, hvis missingness er **MAR**: at *hvorfor* en værdi mangler kan forklares af de observerede data. Mangler en variabel netop pga. den værdi, der mangler (fx at de sygeste ikke får målt den), er data **MNAR**, og så kan mice indføre sin egen bias og give falsk præcision. MAR kan ikke testes i data, kun vurderes fagligt.
+**MAR-antagelsen er det afgørende, ikke procenten.** mice retter kun op på bias, hvis missingness er **MAR**: at *årsagen* til, at en værdi mangler, ligger i de observerede data. Mangler en variabel netop pga. den værdi, der mangler (fx at de sygeste aldrig får den målt), er data **MNAR** (*missing not at random*), og så kan mice indføre sin egen bias og give falsk præcision. MAR kan ikke testes i data, kun vurderes fagligt.
 
 Derfor er imputation ikke automatisk bedre end blot at acceptere noget missing:
 
-- Under **MCAR** (helt tilfældigt) er complete-case allerede ubiased, bare mindre effektivt.
-- I en regressionsmodel er complete-case faktisk ubiased, når missingness ikke afhænger af **udfaldet** givet covariaterne, også selv om det ikke er MCAR.
-- mice er "garbage in, garbage out": en forkert imputeringsmodel giver biased resultater.
+- Under **MCAR** (*missing completely at random*, helt tilfældigt) er complete-case allerede unbiased, bare mindre effektivt.
+- I en regressionsmodel er complete-case faktisk unbiased, når missingness ikke afhænger af **udfaldet** givet covariaterne, også selv om det ikke er MCAR.
+- mice er kun så god som den imputeringsmodel, du giver den. Vælger du de forkerte variable til at forudsige de manglende værdier, bliver de udfyldte værdier, og dermed dit resultat, også forkerte. mice opfinder ikke information; den udnytter kun de sammenhænge, der allerede ligger i data.
+:::
 
+::: {.callout-important}
 **Hvor meget missing er okay?** Der er ingen reel procent-grænse (5 % / 10 % / 40 % er tommelfingerregler uden fundament). Det afgørende er mekanismen og hvor godt det manglende kan forudsiges af resten. I praksis: rapportér altid hvor meget der mangler per variabel (STROBE), behandl resultater med høj missingness (groft >40-50 % på en nøglevariabel) som sensitivitets-/hypotesegenererende, og **kør complete-case og mice side om side** som sensitivitetsanalyse. Peger de samme vej, står du stærkere.
 :::
 
-::: {.callout-tip}
-**Dette er ikke en lærebog i imputation.** Siden viser, hvordan du kører `mice` i praksis, ikke hvornår det er fagligt forsvarligt. Sæt dig ind i den grundlæggende teori (MAR/MCAR/MNAR, valg af imputeringsmodel, antal imputationer, diagnostik) andetsteds, fx:
+::: {.callout-warning}
+**Det her er kun en meget kort introduktion til imputation.** Siden viser, hvordan du kører `mice` i praksis, ikke hvornår det er fagligt forsvarligt. Sæt dig ind i den grundlæggende teori (MAR/MCAR/MNAR, valg af imputeringsmodel, antal imputationer, diagnostik) andetsteds, fx:
 
 - [*Flexible Imputation of Missing Data*](https://stefvanbuuren.name/fimd/) - gratis onlinebog af `mice`-forfatteren Stef van Buuren.
 - [Sterne et al. (2009), BMJ](https://www.bmj.com/content/338/bmj.b2393) - "Multiple imputation for missing data in epidemiological and clinical research: potential and pitfalls".
