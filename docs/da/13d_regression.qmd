@@ -15,10 +15,11 @@ Udfaldet kaldes også den **afhængige** variabel og de forklarende variable de 
 - **Lineær regression** (`lm`): når udfaldet er **kontinuert** (fx BMI eller blodtryk). Giver forskelle i gennemsnit.
 - **Logistisk regression** (`glm` med `family = binomial`): når udfaldet er **binært** (ja/nej, fx om en person fik en diagnose). Giver **odds ratios**.
 - **Betinget logistisk regression** (`survival::clogit()`): til **matchede** data (fx matchet case-control), hvor analysen skal respektere matchsættene.
+- **Cox-regression** (`survival::coxph()`): når udfaldet er **time-to-event** (tid indtil en hændelse, med censurering). Den modellerer *raten* og giver **hazard ratios**. Cox er også en regression, men hører under [Time-to-event](13e_time-to-event.qmd), fordi den kræver et `Surv(tid, event)`-objekt og bygger på censurerings- og overlevelsesbegreberne derfra. Den bruges *ikke* på et almindeligt kontinuert eller binært udfald uden tid.
 
 `glm` står for *generalized linear model*: én funktion, der via `family`-argumentet kan fitte flere modeltyper (her `binomial` = logistisk). `clogit()` er en "betinget" udgave af logistisk regression, der tager højde for matchingen. `gtsummary::tbl_regression()` viser resultatet som en publikationsklar tabel.
 
-Hver model bygger desuden på nogle **antagelser** (fx at en kontinuert variabel hænger lineært sammen med udfaldet, og at observationerne er uafhængige). Holder de ikke, kan estimaterne blive misvisende - se fold-ud om antagelser nederst.
+Hver model bygger desuden på nogle **antagelser**. De er noteret ved hver model nedenfor sammen med, hvordan du tjekker dem; holder de ikke, kan estimaterne blive misvisende.
 
 ::: {.callout-tip}
 **Ny til regression?** Denne side viser, *hvordan* du kører modellerne i R - ikke teorien bag. Til en grundig indføring (modeltyper, antagelser, fortolkning) se [Epidemiologist R Handbook](https://www.epirhandbook.com/en/) og [R for Data Science](https://r4ds.hadley.nz/), eller [Læringsressourcer](laeringsressourcer.qmd).
@@ -52,12 +53,16 @@ model %>%                                # send modellen videre til en tabel
 - `family = binomial` gør det til logistisk regression.
 - `exponentiate = TRUE` viser **odds ratios** (OR) i stedet for log-odds-koefficienter.
 
+**Antagelser:** observationerne er uafhængige (én række per person - ellers brug robuste standardfejl, se nedenfor), og kontinuerte variable hænger lineært sammen med **log-odds**. Tjek lineariteten ved fx at lade variablen indgå fleksibelt med splines (`splines::ns(alder, 3)` = en blød kurve i stedet for en ret linje) og se, om billedet ændrer sig.
+
 ## Lineær regression (kontinuert udfald)
 
 ```r
 lm(bmi ~ eksponering + alder + koen, data = df) %>%  # lineær model for et kontinuert udfald
   tbl_regression()                       # koefficienter (ingen eksponentiering)
 ```
+
+**Antagelser:** lineær sammenhæng, ens varians (homoskedasticitet), nogenlunde normalfordelte residualer og uafhængige observationer. Gem modellen i en variabel og tjek med `plot(model)`, der giver de klassiske residual-plots; ser de skæve ud, kan en transformation af udfaldet eller en anden model være nødvendig.
 
 ## Matchet case-control: betinget logistisk regression
 
@@ -73,6 +78,8 @@ clogit(case ~ eksponering + alder + koen + strata(match_id),  # strata() = match
 
 - `strata(match_id)` fortæller modellen, hvilke rækker der hører til samme matchsæt (`case.id` fra `incidenceMatch()` eller `Set` fra `Epi::ccwc()`).
 - `case` = 1 for case, 0 for kontrol.
+
+**Antagelser:** som logistisk regression (kontinuerte variable lineære med log-odds; matchsættene indbyrdes uafhængige). Selve matchningen håndteres af `strata()`.
 
 ## Sådan læser du dit resultat {#laes-resultat}
 
@@ -99,15 +106,6 @@ coeftest(model,                          # vis koefficienterne ...
 
 - `vcovCL(model, cluster = ~ pnr)` er den klynge-robuste kovariansmatrix (klynget på `pnr`). "Sandwich" henviser kun til formlens form - pointen er, at den ikke antager uafhængige rækker.
 - For en Cox-model gøres det i stedet med `cluster`-argumentet i `coxph()` (se [Time-to-event](13e_time-to-event.qmd)).
-
-</details>
-
-<details>
-<summary>**Vigtigt!** tjek modellens antagelser</summary>
-
-- **Lineær regression:** `plot(model)` giver de klassiske residual-plots (linearitet, varianshomogenitet, normalfordelte residualer). Ser de skæve ud, kan en transformation af udfaldet eller en anden model være nødvendig.
-- **Logistisk / betinget logistisk:** kontinuerte variable antages at have en lineær sammenhæng med log-odds. Tjek fx ved at lade variablen indgå fleksibelt med splines (`splines::ns(alder, 3)` = en blød kurve i stedet for en ret linje) og se, om billedet ændrer sig.
-- **Proportional hazards** (for Cox-modeller) hører til [Time-to-event](13e_time-to-event.qmd) (`survival::cox.zph()`).
 
 </details>
 

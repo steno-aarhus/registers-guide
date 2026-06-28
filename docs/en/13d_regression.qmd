@@ -15,10 +15,11 @@ The outcome is also called the **dependent** variable and the explanatory variab
 - **Linear regression** (`lm`): when the outcome is **continuous** (e.g. BMI or blood pressure). Gives differences in means.
 - **Logistic regression** (`glm` with `family = binomial`): when the outcome is **binary** (yes/no, e.g. whether a person got a diagnosis). Gives **odds ratios**.
 - **Conditional logistic regression** (`survival::clogit()`): for **matched** data (e.g. matched case-control), where the analysis must respect the matched sets.
+- **Cox regression** (`survival::coxph()`): when the outcome is **time-to-event** (time until an event, with censoring). It models the *rate* and gives **hazard ratios**. Cox is also a regression, but it lives under [Time-to-event](13e_time-to-event.qmd) because it needs a `Surv(time, event)` object and builds on the censoring and survival concepts there. It is *not* used on a plain continuous or binary outcome without time.
 
 `glm` stands for *generalized linear model*: one function that, via the `family` argument, can fit several model types (here `binomial` = logistic). `clogit()` is a "conditional" version of logistic regression that accounts for the matching. `gtsummary::tbl_regression()` shows the result as a publication-ready table.
 
-Each model also rests on some **assumptions** (e.g. that a continuous variable is linearly related to the outcome, and that observations are independent). If they do not hold, the estimates can be misleading - see the assumptions fold-out at the bottom.
+Each model also rests on some **assumptions**. They are noted with each model below, together with how to check them; if they do not hold, the estimates can be misleading.
 
 ::: {.callout-tip}
 **New to regression?** This page shows *how* to run the models in R - not the theory behind them. For a thorough introduction (model types, assumptions, interpretation) see the [Epidemiologist R Handbook](https://www.epirhandbook.com/en/) and [R for Data Science](https://r4ds.hadley.nz/), or [Learning resources](laeringsressourcer.qmd).
@@ -52,12 +53,16 @@ model %>%                                # pass the model on to a table
 - `family = binomial` makes it logistic regression.
 - `exponentiate = TRUE` shows **odds ratios** (OR) instead of log-odds coefficients.
 
+**Assumptions:** the observations are independent (one row per person - otherwise use robust standard errors, see below), and continuous variables are linearly related to the **log-odds**. Check linearity by, for example, letting the variable enter flexibly with splines (`splines::ns(age, 3)` = a smooth curve instead of a straight line) and seeing whether the picture changes.
+
 ## Linear regression (continuous outcome)
 
 ```r
 lm(bmi ~ exposure + age + sex, data = df) %>%  # linear model for a continuous outcome
   tbl_regression()                       # coefficients (no exponentiation)
 ```
+
+**Assumptions:** a linear relationship, constant variance (homoscedasticity), roughly normal residuals and independent observations. Save the model to a variable and check with `plot(model)`, which gives the classic residual plots; if they look skewed, a transformation of the outcome or a different model may be needed.
 
 ## Matched case-control: conditional logistic regression
 
@@ -73,6 +78,8 @@ clogit(case ~ exposure + age + sex + strata(match_id),  # strata() = the matched
 
 - `strata(match_id)` tells the model which rows belong to the same matched set (`case.id` from `incidenceMatch()` or `Set` from `Epi::ccwc()`).
 - `case` = 1 for a case, 0 for a control.
+
+**Assumptions:** as for logistic regression (continuous variables linear with the log-odds; the matched sets independent of one another). The matching itself is handled by `strata()`.
 
 ## Reading your result {#laes-resultat}
 
@@ -99,15 +106,6 @@ coeftest(model,                          # show the coefficients ...
 
 - `vcovCL(model, cluster = ~ pnr)` is the cluster-robust covariance matrix (clustered on `pnr`). "Sandwich" only refers to the shape of the formula - the point is that it does not assume independent rows.
 - For a Cox model you do it with the `cluster` argument in `coxph()` instead (see [Time-to-event](13e_time-to-event.qmd)).
-
-</details>
-
-<details>
-<summary>**Important!** check the model's assumptions</summary>
-
-- **Linear regression:** `plot(model)` gives the classic residual plots (linearity, homoscedasticity, normality of residuals). If they look skewed, a transformation of the outcome or a different model may be needed.
-- **Logistic / conditional logistic:** continuous variables are assumed to have a linear relationship with the log-odds. Check e.g. by letting the variable enter flexibly with splines (`splines::ns(age, 3)` = a smooth curve instead of a straight line) and seeing whether the picture changes.
-- **Proportional hazards** (for Cox models) belongs on [Time-to-event](13e_time-to-event.qmd) (`survival::cox.zph()`).
 
 </details>
 
