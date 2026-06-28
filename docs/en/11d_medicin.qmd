@@ -22,7 +22,7 @@ Medication can be all three. It is solved **exactly as for diagnoses** ([Extract
 | Role | When | What you do | Page |
 |---|---|---|---|
 | **Exposure** | The date exposure starts | First `eksd` = the person's index date | [Phase 10](10_byg-studiepopulation.qmd) |
-| **Covariate** (comedication at baseline) | `eksd < index_date` (e.g. 6-12 months before) | Ever/never or a count in a window before index | [Comorbidity](11c_komorbiditet.qmd) |
+| **Covariate** (medication at baseline) | `eksd < index_date` (e.g. 6-12 months before) | Ever/never or a count in a window before index | [Comorbidity](11c_komorbiditet.qmd) |
 | **Outcome** (new treatment) | `eksd > index_date` | First `eksd` after index | [Outcomes](11a_udfald.qmd) |
 | **Time-varying** (on/off treatment) | Changes during follow-up | Start/stop format | [Time-varying](12d_tidsvarierende.qmd) |
 
@@ -48,7 +48,7 @@ medication <- open_dataset("path/to/lmdb/") %>%
 saveRDS(medication, "path/to/extract_medication.rds")
 ```
 
-`substr(atc, 1, 5) == "A10BJ"` matches the whole ATC level (all GLP-1 analogues). For several groups at once, use regex as in LPR: `grepl("^A10BJ|^A10BA", atc)`. The code-matching pattern (regex, `%in%` with a code list, `!!`) is explained in [Extract from LPR](09b_udtraek_fra_lpr.qmd) and [Function guide](guide_til_funktioner.qmd#filtrer-betingelser). Reducing to **one row per person** is explained in [Long ↔ wide format](12a_langt-bredt.qmd) - here `slice(1)` for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).
+`substr(atc, 1, 5) == "A10BJ"` matches the whole ATC level (all GLP-1 analogues). For several groups at once, use [regex](09b_udtraek_fra_lpr.qmd) as in LPR: `grepl("^A10BJ|^A10BA", atc)`. The code-matching pattern (regex, `%in%` with a code list, `!!`) is explained in [Extract from LPR](09b_udtraek_fra_lpr.qmd) and [Function guide](guide_til_funktioner.qmd#filtrer-betingelser). Reducing to **one row per person** is explained in [Long ↔ wide format](12a_langt-bredt.qmd) - here `slice(1)` for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).
 
 ## ATC is not enough: same substance, different product
 
@@ -62,18 +62,24 @@ Two columns separate them:
 - **`indo` (indication code):** a *coded* indication (from the Medicinpriser catalogue, LMS 25), not free text. The code is recorded **only** when the prescriber picks an indication from the drop-down menu in the electronic prescription. **If the doctor types the indication as free text instead, it is not transferred to the register** and `indo` is left blank. So it can in principle separate the same substance across indications, but it is **often empty**. Use `vnr` as the primary product key and `indo` as a supporting signal, not a clean filter.
 
 ```r
-# Isolate one product/indication BEFORE you define exposure:
+# 1. Build your own list of the varenumbers that belong to the product
+#    (look them up in the medicine taxonomy - one product has several varenumbers):
+ozempic_vnr <- c("xxxxxx", "yyyyyy")   # placeholders - replace with your looked-up numbers
+
+# 2. Keep only the dispensings whose vnr is on your list:
 medication %>%
-  filter(atc == "A10BJ06") %>%        # semaglutide (Ozempic AND Wegovy)
-  filter(vnr %in% !!ozempic_vnr)      # ozempic_vnr = your looked-up list of varenumbers for Ozempic
+  filter(atc == "A10BJ06") %>%         # semaglutide (Ozempic AND Wegovy)
+  filter(vnr %in% !!ozempic_vnr)       # keep only rows with a vnr from your list
 ```
+
+Keep the two names in the last line apart: **`vnr`** (on its own) is the register's *column* holding the varenummer - the product's ID, just as `pnr` is the person's ID. **`ozempic_vnr`** is your *own* R vector of the varenumbers you looked up for Ozempic; you choose the name yourself (same pattern as the code list in [Extracting data step by step](05_udtraek-trin-for-trin.qmd)). `%in%` keeps the rows where `vnr` is found in your list, and `!!` sends your local list into the lazy query (explained in [Extract from LPR](09b_udtraek_fra_lpr.qmd) and [Function guide](guide_til_funktioner.qmd#filtrer-betingelser)).
 
 ::: {.callout-note}
 **Which `vnr` belongs to which product** depends on package and strength (one product has several varenumbers). Look them up in the medicine taxonomy for your exact study period rather than assuming, and document the list in your code. For `indo`, [Harbi & Pottegård 2024](https://pubmed.ncbi.nlm.nih.gov/37889961/) found a recorded indication code on 82% of prescriptions (about 88% corrected) and almost 100% correct when present - but missingness is markedly higher before 1 October 2017 (when electronic prescribing became mandatory) and varies by drug class (about 8% missing for systemic anti-infectives versus 28% for blood-related agents). 5.6-36% of codes are **nonspecific** (e.g. "for the heart" for beta-blockers); whether a nonspecific code is usable depends on your question. The value set is the Danish Health Data Authority's [drug classification](https://sundhedsdatastyrelsen.dk/indberetning/klassifikationer/klassifikation-af-laegemidler) (Medicinpriser). As a side note: a *validly recorded* code does not mean the prescriber chose the *correct* indication - drop-down menus make wrong choices easy, so the code is not necessarily the clinical truth.
 :::
 
 ::: {.callout-warning}
-**A dispensing is not the same as intake.** `eksd` tells you the prescription was *collected at the pharmacy*, not that the patient took the drug, and certainly not for how long. For an exposure that lasts over time (treatment episodes, grace periods, adherence such as PDC/MPR) you must build **exposure windows** from quantity and strength (`apk`, `packsize`, `strnum`) - not just count dispensings. Note that the dosage field itself (`doso`) is essentially empty (recorded for ~0.06% of prescriptions in the same validation), so dose must be derived from the package fields. Ready-made tools for this are in [`heaven`](pakker-oversigt.qmd) (drug exposure windows from LMDB). If medication also makes your index date depend on future treatment, watch out for [immortal time bias](dst_faldgruber.qmd#immortal-time-bias).
+**A dispensing is not the same as intake.** `eksd` tells you the prescription was *collected at the pharmacy*, not that the patient took the drug, and certainly not for how long. For an exposure that lasts over time - treatment episodes, *grace periods* (the allowed gap between two prescriptions before a person counts as having stopped) and adherence measures such as **PDC** (*proportion of days covered*: the share of follow-up time covered by medicine) or **MPR** (*medication possession ratio*: amount dispensed divided by the length of the period) - you must build **exposure windows** from quantity and strength, not just count dispensings. The relevant LMDB fields are `apk` (number of packages), `packsize` (pack size, i.e. units per package) and `strnum` (the numeric strength; the unit is in `strunit`). Note that the dosage field itself (`doso`) is essentially empty (recorded for ~0.06% of prescriptions in the same validation), so dose must be derived from these package fields. Ready-made tools for this are in [`heaven`](pakker-oversigt.qmd) (drug exposure windows from LMDB). If your index date or exposure status depends on *future* medication, you get [immortal time bias](dst_faldgruber.qmd#immortal-time-bias): if you require a person to fill the prescription (or two prescriptions) *after* index to count as exposed, then by construction they survived until that date - and the "immortal" time between index and the first fill makes the exposure look artificially protective. Instead, start follow-up for the exposed at the *first* dispensing, or treat medication as a [time-varying](12d_tidsvarierende.qmd) exposure.
 :::
 
 ## See also

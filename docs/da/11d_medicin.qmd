@@ -22,7 +22,7 @@ Medicin kan være alle tre ting. Det løses **præcis som for diagnoser** ([Udtr
 | Rolle | Hvornår | Hvad du gør | Side |
 |---|---|---|---|
 | **Eksponering** | Den dato eksponeringen starter | Første `eksd` = personens index-dato | [Fase 10](10_byg-studiepopulation.qmd) |
-| **Kovariat** (komedicin ved baseline) | `eksd < index_date` (fx 6-12 mdr. før) | Ever/never eller antal i et vindue før index | [Komorbiditet](11c_komorbiditet.qmd) |
+| **Kovariat** (medicin ved baseline) | `eksd < index_date` (fx 6-12 mdr. før) | Ever/never eller antal i et vindue før index | [Komorbiditet](11c_komorbiditet.qmd) |
 | **Udfald** (ny behandling) | `eksd > index_date` | Første `eksd` efter index | [Udfald](11a_udfald.qmd) |
 | **Tidsvarierende** (i/ude af behandling) | Ændrer sig undervejs | Start/stop-format | [Tidsvarierende](12d_tidsvarierende.qmd) |
 
@@ -48,7 +48,7 @@ medicin <- open_dataset("sti/til/lmdb/") %>%
 saveRDS(medicin, "sti/til/extract_medicin.rds")
 ```
 
-`substr(atc, 1, 5) == "A10BJ"` matcher hele ATC-niveauet (alle GLP-1-analoger). Vil du have flere grupper på én gang, så brug regex som i LPR: `grepl("^A10BJ|^A10BA", atc)`. Mønstret for kode-matching (regex, `%in%` med en kodeliste, `!!`) er forklaret i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og [Guide til funktioner](guide_til_funktioner.qmd#filtrer-betingelser). Reduktionen til **én række per person** er forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd) - her `slice(1)` for første dispensering, men det kan også være ever/never eller et antal i et vindue (se rolletabellen ovenfor).
+`substr(atc, 1, 5) == "A10BJ"` matcher hele ATC-niveauet (alle GLP-1-analoger). Vil du have flere grupper på én gang, så brug [regex](09b_udtraek_fra_lpr.qmd) som i LPR: `grepl("^A10BJ|^A10BA", atc)`. Mønstret for kode-matching (regex, `%in%` med en kodeliste, `!!`) er forklaret i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og [Guide til funktioner](guide_til_funktioner.qmd#filtrer-betingelser). Reduktionen til **én række per person** er forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd) - her `slice(1)` for første dispensering, men det kan også være ever/never eller et antal i et vindue (se rolletabellen ovenfor).
 
 ## ATC er ikke nok: samme stof, forskelligt produkt
 
@@ -62,18 +62,24 @@ To kolonner skelner dem:
 - **`indo` (indikationskode):** en *kodet* indikation (fra Medicinpriser-kataloget, LMS 25), ikke fritekst. Koden registreres **kun**, når ordinatoren vælger en indikation fra rullemenuen i den elektroniske recept. **Skriver lægen i stedet indikationen som fritekst, overføres den ikke til registret**, og `indo` står tom. Den kan derfor i princippet adskille samme stof på forskellige indikationer, men er **ofte tom**. Brug `vnr` som primær produktnøgle og `indo` som et støttesignal, ikke et rent filter.
 
 ```r
-# Isolér ét produkt/indikation INDEN du definerer eksponering:
+# 1. Lav din egen liste over de varenumre, der hører til produktet
+#    (slå dem op i lægemiddeltaksonomien - ét produkt har flere varenumre):
+ozempic_vnr <- c("xxxxxx", "yyyyyy")   # pladsholdere - erstat med dine opslåede numre
+
+# 2. Behold kun de dispenseringer, hvis vnr står på din liste:
 medicin %>%
-  filter(atc == "A10BJ06") %>%        # semaglutid (Ozempic OG Wegovy)
-  filter(vnr %in% !!ozempic_vnr)      # ozempic_vnr = din opslåede liste af varenumre for Ozempic
+  filter(atc == "A10BJ06") %>%         # semaglutid (Ozempic OG Wegovy)
+  filter(vnr %in% !!ozempic_vnr)       # behold kun rækker med et vnr fra din liste
 ```
+
+Hold de to navne i sidste linje adskilt: **`vnr`** (alene) er registrets *kolonne* med varenummeret - produktets ID, på samme måde som `pnr` er personens ID. **`ozempic_vnr`** er din *egen* R-vektor med de varenumre, du har slået op for Ozempic; navnet vælger du selv (samme mønster som kodelisten i [Udtræk trin for trin](05_udtraek-trin-for-trin.qmd)). `%in%` beholder de rækker, hvor `vnr` findes i din liste, og `!!` sender din lokale liste ind i den dovne forespørgsel (uddybet i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og [Guide til funktioner](guide_til_funktioner.qmd#filtrer-betingelser)).
 
 ::: {.callout-note}
 **Hvilke `vnr` der hører til hvilket produkt** afhænger af pakning og styrke (ét produkt har flere varenumre). Slå dem op i lægemiddeltaksonomien for netop din studieperiode frem for at antage, og dokumentér listen i din kode. For `indo` fandt [Harbi & Pottegård 2024](https://pubmed.ncbi.nlm.nih.gov/37889961/) en indikationskode på 82 % af recepterne (ca. 88 % korrigeret) og næsten 100 % korrekt, når den fandtes - men manglen er klart større før 1. oktober 2017 (hvor elektronisk ordination blev lovpligtig) og varierer med lægemiddelgruppe (ca. 8 % manglende for systemiske antiinfektiva mod 28 % for blodrelaterede midler). 5,6-36 % af koderne er **uspecifikke** (fx "for hjertet" for betablokkere); om en uspecifik kode er brugbar afhænger af dit spørgsmål. Værdisættet er Sundhedsdatastyrelsens [klassifikation af lægemidler](https://sundhedsdatastyrelsen.dk/indberetning/klassifikationer/klassifikation-af-laegemidler) (Medicinpriser). Som sidenote: at en kode er *gyldigt registreret* betyder ikke, at lægen valgte den *rigtige* indikation - rullemenuer gør fejlvalg lette, så koden er ikke nødvendigvis den kliniske sandhed.
 :::
 
 ::: {.callout-warning}
-**En ekspedering er ikke det samme som indtag.** `eksd` fortæller, at recepten blev *hentet på apoteket*, ikke at patienten tog medicinen, og slet ikke hvor længe. Til en eksponering der varer over tid (behandlingsepisoder, grace-perioder, adherence som PDC/MPR) skal du bygge **eksponeringsvinduer** fra mængde og styrke (`apk`, `packsize`, `strnum`) - ikke bare tælle dispenseringer. Bemærk at selve doseringsfeltet (`doso`) stort set er tomt (registreret for ~0,06 % af recepterne i samme validering), så dosis må udledes af pakningsoplysningerne. Færdige værktøjer til det ligger i [`heaven`](pakker-oversigt.qmd) (drug exposure-vinduer fra LMDB). Lader medicinen samtidig din index-dato afhænge af fremtidig behandling, så pas på [immortal time bias](dst_faldgruber.qmd#immortal-time-bias).
+**En ekspedering er ikke det samme som indtag.** `eksd` fortæller, at recepten blev *hentet på apoteket*, ikke at patienten tog medicinen, og slet ikke hvor længe. Til en eksponering der varer over tid - behandlingsepisoder, *grace-perioder* (det tilladte ophold mellem to recepter, før man regnes som stoppet) og adherence-mål (efterlevelse) som **PDC** (*proportion of days covered*: andel af opfølgningstiden dækket af medicin) eller **MPR** (*medication possession ratio*: udleveret mængde delt med periodens længde) - skal du bygge **eksponeringsvinduer** ud fra mængde og styrke, ikke bare tælle dispenseringer. De relevante LMDB-felter er `apk` (antal pakninger), `packsize` (pakningsstørrelse, dvs. antal enheder per pakning) og `strnum` (styrkens talværdi; enheden står i `strunit`). Bemærk at selve doseringsfeltet `doso` stort set er tomt (registreret for ~0,06 % af recepterne i samme validering), så dosis må udledes af disse pakningsfelter. Færdige værktøjer til det ligger i [`heaven`](pakker-oversigt.qmd) (drug exposure-vinduer fra LMDB). Afhænger din index-dato eller eksponeringsstatus af *fremtidig* medicin, opstår [immortal time bias](dst_faldgruber.qmd#immortal-time-bias): kræver du fx, at en person skal indløse recepten (eller to recepter) *efter* index for at tælle som eksponeret, så har de pr. konstruktion overlevet frem til den dato - og den "udødelige" tid mellem index og første recept får eksponeringen til at se kunstigt beskyttende ud. Lad i stedet opfølgningen for de eksponerede starte ved *første* dispensering, eller behandl medicin som en [tidsvarierende](12d_tidsvarierende.qmd) eksponering.
 :::
 
 ## Se også
