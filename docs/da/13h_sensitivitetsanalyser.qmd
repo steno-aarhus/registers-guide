@@ -1,0 +1,89 @@
+---
+title: "![](images/icons/icon_14.png){.title-icon} Sensitivitetsanalyser"
+subtitle: "Hvor robust er dit estimat? Variér antagelserne, og afdæk uobserveret confounding"
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Siden viser minimale, verificerede eksempler. Flere detaljer kommer.
+:::
+
+Registerdata mangler vigtige variable om livsstil (rygning, BMI, alkohol, kost). Derfor vil reviewere næsten altid spørge: **hvor robust er dit resultat?** En **sensitivitetsanalyse** gentager hovedanalysen under en anden, men rimelig, antagelse og tjekker, om konklusionen holder. Holder den, står resultatet stærkere; vælter den, ved du, at en bestemt antagelse bærer resultatet, og det skal du så være ærlig om.
+
+To principper: **forudregistrér** dine sensitivitetsanalyser i analyseplanen (ellers ligner de fisketure efter et pænt tal), og **rapportér dem ved siden af** hovedestimatet, ikke i stedet for.
+
+::: {.callout-note}
+Eksemplerne bruger generiske variabelnavne. Du behøver sjældent nye pakker: en sensitivitetsanalyse er som regel din **hovedmodel kørt igen** med ét ændret valg.
+:::
+
+---
+
+## Variér dine valg (robusthedstjek)
+
+De fleste sensitivitetsanalyser består i at **skifte ét valg ad gangen** og se, om konklusionen flytter sig:
+
+<div class="table-responsive">
+<table class="table">
+<thead>
+<tr><th>Hvad du varierer</th><th>Hvorfor</th><th>Eksempel</th></tr>
+</thead>
+<tbody>
+<tr><td>Eksponeringsdefinition</td><td>Fanger du reel brug eller bare ét tilfældigt køb?</td><td>Krav om <strong>2 indløste recepter</strong> i stedet for 1</td></tr>
+<tr><td>Udfaldsdefinition</td><td>Streng vs. bred fangst af udfaldet</td><td>Kun <strong>aktionsdiagnose</strong> (hoveddiagnosen for kontakten) vs. også bidiagnoser (sekundære diagnoser)</td></tr>
+<tr><td>Justeringssæt</td><td>Bærer en enkelt usikker covariat resultatet?</td><td>Minimal vs. fuld justering; med/uden en variabel du er i tvivl om er confounder eller mediator</td></tr>
+<tr><td>Restriktion / lag-tid</td><td>Mindsk omvendt kausalitet (sygdommen var der før eksponeringen)</td><td>Udeluk hændelser i de første <strong>6-12 måneder</strong> efter index (induktionsperiode)</td></tr>
+<tr><td>Manglende data</td><td>Holder estimatet uden imputeringens antagelser?</td><td><strong>Complete-case</strong> vs. <strong>multipel imputation</strong> (se <a href="12c_manglende-data.qmd">Manglende data</a>)</td></tr>
+<tr><td>Censurering / opfølgning</td><td>Er frafald informativt?</td><td>Alternativ censureringsregel, eller <strong>IPCW</strong> (vægtning mod skævt frafald, se <a href="13g_vaegtning-iptw.qmd">IP-vægtning</a>)</td></tr>
+</tbody>
+</table>
+</div>
+
+Konklusionen behøver ikke være *talidentisk* på tværs af analyserne - den skal bare **pege samme vej**. Ændrer en hazard ratio sig fra 1,8 til 1,6, er det robust; skifter den fra 1,8 til 0,9, bærer det ændrede valg resultatet.
+
+---
+
+## Afdæk uobserveret confounding
+
+Tjekkene ovenfor varierer dine **valg**. Men registerdata mangler også variable, du **slet ikke har** (rygning, BMI osv.). To designgreb, begge standard i dansk registerforskning, afslører eller mindsker den slags uobserveret confounding.
+
+### Negativt kontroludfald
+
+**Idé:** vælg et ekstra udfald, som eksponeringen **umuligt kan forårsage**, men som rammes af de **samme skjulte confoundere** som dit rigtige udfald. Kør din hovedmodel på det. Finder du alligevel en "effekt", er det et **advarselsflag**: grupperne er systematisk forskellige (*residual confounding*, dvs. confounding der er tilbage trods justering), og dit hovedresultat er sandsynligvis også farvet af det. Ligger estimatet derimod tæt på 1, styrker det din hovedanalyse.
+
+**Pædagogisk eksempel (healthy-vaccinee).** Studier finder ofte, at influenza-vaccinerede ældre har markant **lavere total dødelighed**. Men ser man på dødeligheden **uden for influenzasæsonen** - et negativt kontroludfald, for vaccinen kan ikke beskytte mod influenza, når der ingen influenza er - er de *stadig* "beskyttede". Det afslører, at de vaccinerede er sundere og mere ressourcestærke fra start (*healthy-vaccinee-bias*), ikke at vaccinen i sig selv halverer dødeligheden.
+
+```r
+library(survival)                          # coxph(), Surv()
+
+# Hovedanalyse: effekten på det RIGTIGE udfald
+coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen, data = df)
+
+# Negativt kontroludfald: PRÆCIS samme model, men et udfald eksponeringen ikke kan påvirke
+# (her fx: død uden for influenzasæsonen). En tydelig "effekt" her = advarsel om confounding.
+coxph(Surv(tid_dage, neg_kontrol_udfald) ~ eksponering + alder + koen, data = df)
+```
+
+### Aktiv komparator (ny-bruger)
+
+**Idé:** i stedet for at sammenligne lægemiddelbrugere med **ikke-brugere** (som er vidt forskellige - de har jo ikke engang indikationen), så sammenlign med **nye brugere af et alternativt lægemiddel mod samme tilstand**. Begge grupper har da samme indikation, så *confounding by indication* mindskes kraftigt. "Ny bruger" betyder, at begge starter behandlingen ved index, så du ikke blander nystartede og mangeårige brugere (*prevalent-user-bias*).
+
+**Pædagogisk eksempel.** Du undersøger, om **GLP-1-receptoragonister** (et 2.-linjemiddel mod type 2-diabetes) påvirker risikoen for et udfald. Sammenligner du med **ikke-brugere**, sammenligner du reelt personer med og uden behandlingskrævende diabetes - to vidt forskellige grupper, hvor selve sygdommen forvirrer billedet. Sammenligner du i stedet med nye brugere af **DPP-4-hæmmere** (et andet 2.-linjemiddel mod samme tilstand), er grupperne langt mere ens på indikation og sygdomssværhedsgrad, og estimatet er mindre farvet af, *hvorfor* folk er i behandling.
+
+Aktiv komparator handler om, **hvordan du bygger kohorten** (Fase 10) - se ny-bruger- og risk-set-tankegangen i [Sammenligningskohorte](10a_sammenligningskohorte.qmd).
+
+::: {.callout-note}
+**Selvkontrollerede designs** (hvor personen er sin egen kontrol og al *tidsinvariant* confounding forsvinder) er et beslægtet, stærkt greb i registerforskning. Se [Selvkontrollerede og familiebaserede designs](10c_specielle-designs.qmd).
+:::
+
+::: {.callout-note}
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+:::
+
+
+::: {.callout-tip}
+## Læs mere
+
+- [Hernán & Robins, *Causal Inference: What If*](https://miguelhernan.org/whatifbook) - det kausale fundament under confounding og sensitivitetsanalyser (gratis PDF).
+- Lund, Richardson & Stürmer, "[The Active Comparator, New User Study Design in Pharmacoepidemiology](https://link.springer.com/article/10.1007/s40471-015-0053-5)", *Curr Epidemiol Rep* 2015 - aktiv komparator og ny-bruger-design.
+- Lipsitch, Tchetgen Tchetgen & Cohen, "[Negative controls: a tool for detecting confounding and bias in observational studies](https://doi.org/10.1097/EDE.0b013e3181d61eeb)", *Epidemiology* 2010 - introduktion til negative kontroller (bruger netop influenza-vaccine-eksemplet ovenfor).
+:::

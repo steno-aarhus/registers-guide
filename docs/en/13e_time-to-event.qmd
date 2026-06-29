@@ -93,6 +93,15 @@ coxph(Surv(time_days, outcome) ~ exposure + age + sex,
 
 Note the syntax: `coxph()` takes the cluster variable as an **argument** without a tilde (`cluster = pnr`), whereas `sandwich::vcovCL()` on the [Regression](13d_regression.qmd#klyngebaserede-standardfejl) page uses a **formula** with a tilde (`cluster = ~ pnr`). Same idea (cluster on person id), just two functions' different ways of receiving the variable.
 
+::: {.callout-note}
+**What is your time scale?** The time axis (what the x-axis shows on e.g. a Kaplan-Meier curve) is a choice. By default it is **time since index** - how long each person has been followed since their own start date (that is `time_days` in the examples). But you can also follow people on:
+
+- **attained age** - so the model compares people at the **same age**. That adjusts for age automatically and flexibly (a strong confounder for most outcomes), without you having to model the shape of age yourself. Common in register studies.
+- **calendar time** - if the calendar period itself matters (e.g. treatment that has changed over the years).
+
+Time since index is simplest; age-as-time-scale is often stronger when risk is driven heavily by age. Technically you choose the time scale via what you put in as time in `Surv()`.
+:::
+
 ## Check the assumption: proportional hazards
 
 The Cox model assumes **proportional hazards** (PH): that a variable's effect is constant over time. If it does not hold, the single hazard ratio is misleading. Always check it with `cox.zph()`, which is based on *Schoenfeld residuals* (in short, a measure of whether the effect "drifts" over time).
@@ -108,6 +117,8 @@ plot(ph)                                   # residual curve per variable; a slop
 <summary>What to do if the assumption is violated</summary>
 
 If a variable violates the assumption, you can e.g. **stratify** on it (`+ strata(variable)` in the model, giving it its own baseline hazard) or **model a time-dependent effect** (let the effect change over follow-up).
+
+A third alternative is to **drop the hazard ratio** and use **RMST** (*restricted mean survival time*): the average event-free time within a fixed window (e.g. "months alive within 5 years"). You compare groups by the **difference in RMST**, measured in **time units** instead of a ratio, and it is valid even when PH is violated. In R: the `survRM2` package.
 
 </details>
 

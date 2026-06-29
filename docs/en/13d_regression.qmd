@@ -53,7 +53,7 @@ model %>%                                # pass the model on to a table
 - `family = binomial` makes it logistic regression.
 - `exponentiate = TRUE` shows **odds ratios** (OR) instead of log-odds coefficients.
 
-**Assumptions:** the observations are independent (one row per person - otherwise use robust standard errors, see below), and continuous variables are linearly related to the **log-odds**. Check linearity by, for example, letting the variable enter flexibly with splines (`splines::ns(age, 3)` = a smooth curve instead of a straight line) and seeing whether the picture changes.
+**Assumptions:** the observations are independent (one row per person - otherwise use robust standard errors, see below), and continuous variables are linearly related to the **log-odds**. If linearity does not hold, you can let the variable enter as a smooth curve instead of a straight line - see [Non-linear relationships (splines)](#splines) below.
 
 ## Linear regression (continuous outcome)
 
@@ -81,6 +81,68 @@ clogit(case ~ exposure + age + sex + strata(match_id),  # strata() = the matched
 
 **Assumptions:** as for logistic regression (continuous variables linear with the log-odds; the matched sets independent of one another). The matching itself is handled by `strata()`.
 
+## Interaction (effect modification)
+
+Sometimes an exposure's effect depends on a **third variable**: a drug may work more strongly in younger than older people, or a risk factor may hit men harder than women. This is called **effect modification** (or statistical **interaction**), and you examine it with a **product term** in the model.
+
+```r
+# `*` expands to: exposure + sex + exposure:sex (the interaction term itself)
+model <- glm(outcome ~ exposure * sex + age,        # tests whether the exposure's effect depends on sex
+             data = df, family = binomial)
+
+model %>%
+  tbl_regression(exponentiate = TRUE)               # OR for each term, including the interaction term
+```
+
+- `exposure * sex` means "both variables plus their interplay". It is the **interaction term** `exposure:sex` that you read off.
+- If the interaction term's OR sits close to 1 (and p is large), the exposure works **the same** in the two groups. If it differs clearly from 1, the **effect depends on sex**, and you should then report **group-specific** estimates (e.g. by running the model separately for each sex, or with `emmeans` / `marginaleffects`).
+
+::: {.callout-note}
+**Multiplicative vs. additive scale.** A product term tests interaction on the **multiplicative** (ratio) scale: does the exposure change the *odds ratio* differently between groups? At the public-health level the **additive** scale (differences in absolute risk) is often more relevant, and it is measured with **RERI** (relative excess risk due to interaction). The two scales can give different answers, so be explicit about which you report. See [Read more](#laes-mere).
+:::
+
+::: {.callout-warning}
+**A subgroup analysis is not an interaction test.** Running the model separately in two groups and seeing that one is "significant" and the other is not does **not** show that the effects differ. Only the interaction term (or a formal test of it) settles whether the difference is real.
+:::
+
+<details>
+<summary>Why not? (click)</summary>
+
+Two reasons:
+
+1. **The two tests answer a different question.** A significance test *within* each group only asks: "is this group's effect different from **no effect** (OR = 1)?" It never asks whether the two groups' effects differ **from each other** - and only the latter is interaction.
+2. **Significance depends on precision (group size), not just on the size of the effect.** A smaller group gives a wider confidence interval and more easily lands "non-significant", even when the point estimate is the same.
+
+Example with an **identical** effect in both groups:
+
+- **Men:** OR = 1.5 (95% CI 1.1-2.0), p = 0.01 → "significant"
+- **Women:** OR = 1.5 (95% CI 0.9-2.5), p = 0.12 → "not significant"
+
+The point estimate is the same (1.5); only the precision differs, because the women's group is smaller. Concluding "the effect depends on sex" would be wrong. To compare the two effects you need the uncertainty of **both** estimates at once, and that is exactly what the interaction term does. (The phenomenon is known as *"the difference between 'significant' and 'not significant' is not itself statistically significant"*, [Gelman & Stern](https://doi.org/10.1198/000313006X152649), *The American Statistician*, 2006.)
+
+</details>
+
+## Non-linear relationships (splines) {#splines}
+
+By default, the models above assume a continuous variable is related to the outcome in a **straight line** (on the model's scale): each extra year of age changes the risk by the same amount, whether you go from 30 to 31 or from 70 to 71. That often fits poorly - the risk of many outcomes rises only slowly at young ages and steeply later. That is a **curve**, not a straight line.
+
+A **spline** lets the variable enter as a **smooth curve** instead of a straight line, so the model finds the shape itself. You only decide how bendy the curve may be (via the number of *degrees of freedom* - how many "bends" the curve may have).
+
+```r
+library(splines)                         # ns() = "natural spline" (a smooth curve)
+
+glm(outcome ~ ns(age, df = 3) + exposure + sex,  # age as a smooth curve instead of a straight line
+    data = df, family = binomial)
+```
+
+- `ns(age, df = 3)` replaces the straight line for `age` with a smooth curve. `df = 3` controls the bendiness: more degrees of freedom = a more flexible curve. **3-4** is a common starting point.
+- It works in all the models on these pages (logistic, linear, Cox, Poisson) - just wrap the continuous variable in `ns(...)`.
+- Especially useful when the variable is your **exposure** (so you see the dose-response shape itself) or a **strong confounder** (so a too-rigid straight line does not leave *residual confounding*, i.e. confounding left after adjustment).
+
+::: {.callout-note}
+**You no longer read off a single number.** A spline variable has no single odds ratio, because the effect changes across the values. Instead you **plot** the fitted curve (e.g. predicted risk against age) to show the relationship. The `ggeffects` or `marginaleffects` packages do this in a few lines.
+:::
+
 ## Reading your result {#laes-resultat}
 
 For each variable the regression table gives an **estimate**, a **confidence interval** and a **p-value**:
@@ -90,7 +152,7 @@ For each variable the regression table gives an **estimate**, a **confidence int
 - **The p-value** is the probability of seeing an effect at least as large as yours *if there were truly none*. A small p (typically < 0.05) argues against "no effect", but does **not** tell you how large or important the effect is - the estimate and confidence interval do. In very large register datasets even tiny, unimportant differences often become "significant", so always look at the **size** (the estimate), not just p.
 
 ::: {.callout-note}
-**OR and HR are non-collapsible.** Unlike a risk difference or relative risk, an adjusted odds ratio (and hazard ratio) can differ from the crude one *even when there is no confounding*, purely because you added covariates. So an adjusted OR is a *conditional* effect (within strata of the covariates), not the population-average effect, and "adjusted ≠ crude" is not by itself evidence of confounding. If you need a marginal (population-average) effect, standardization or IPTW gives one - see [IP weighting](13f_vaegtning-iptw.qmd).
+**OR and HR are non-collapsible.** Unlike a risk difference or relative risk, an adjusted odds ratio (and hazard ratio) can differ from the crude one *even when there is no confounding*, purely because you added covariates. So an adjusted OR is a *conditional* effect (within strata of the covariates), not the population-average effect, and "adjusted ≠ crude" is not by itself evidence of confounding. If you need a marginal (population-average) effect, standardization or IPTW gives one - see [IP weighting](13g_vaegtning-iptw.qmd).
 :::
 
 <details id="klyngebaserede-standardfejl">
@@ -114,15 +176,39 @@ coeftest(model,                          # show the coefficients ...
 </details>
 
 ::: {.callout-note}
+**Mixed models: when groups in your data should each have their own level.**
+
+A **cluster** is a group of **rows** that belong together and are therefore more alike than two random rows - a group of *rows*, not necessarily of people. It can be **several rows from the same person** (e.g. repeated measurements over time), all patients at the **same hospital**, or **siblings** in the same family. So a person is a cluster only if they appear in several rows; if you have exactly one row per person, there is no person cluster. Rows in the same cluster are correlated because they share something, and that breaks the assumption of independent rows. You have two choices:
+
+- **Cluster-robust standard errors** (fold-out above): keep your model, but correct the confidence intervals so they account for the correlation. The effect estimate is **unchanged**; you still get **one overall effect**.
+- **Mixed model (random effects):** let each cluster have **its own baseline level** in the model (a *random intercept*) - e.g. each hospital gets its own baseline risk, instead of the model pretending all hospitals are the same. (To "model the cluster" means exactly that: building the groups' differences into the model instead of ignoring them.) "Mixed" = it mixes **fixed effects** (the usual coefficients, the same for everyone, e.g. the exposure effect) with **random effects** (the variation between clusters).
+
+Choose a **mixed model** when the clustering structure is itself of interest, when you have **repeated measurements** or **many small clusters**, or when you want to separate variation *within* and *between* clusters. In R: [`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), and [`coxme`](https://CRAN.R-project.org/package=coxme) for a Cox model. A thorough treatment is beyond this page.
+:::
+
+::: {.callout-note}
 Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
 :::
 
 
 ::: {.callout-tip}
-## Further information
+## Further information {#laes-mere}
 
 Further depth in *The Epidemiologist R Handbook*:
 
 - [Univariate and multivariable regression](https://www.epirhandbook.com/en/new_pages/regression.html)
 - [Factors](https://www.epirhandbook.com/en/new_pages/factors.html)
+
+On interaction / effect modification:
+
+- Knol & VanderWeele, "[Recommendations for presenting analyses of effect modification and interaction](https://doi.org/10.1093/ije/dyr218)", *Int J Epidemiol* 2012 - how to report it correctly (both scales).
+- [The `interactionR` package](https://CRAN.R-project.org/package=interactionR) - computes additive interaction (RERI, AP) with confidence intervals, ready for a table.
+
+On non-linear relationships (splines):
+
+- Harrell, *Regression Modeling Strategies*, and [the `rms` package](https://CRAN.R-project.org/package=rms) - the standard reference on flexible modelling with splines.
+
+On mediation (when you want to split an effect into a **direct** part and an **indirect** part that goes through an intermediate variable):
+
+- [`CMAverse`](https://bs1125.github.io/CMAverse/) - causal mediation analysis in R.
 :::

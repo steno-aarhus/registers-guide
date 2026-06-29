@@ -53,7 +53,7 @@ model %>%                                # send modellen videre til en tabel
 - `family = binomial` gør det til logistisk regression.
 - `exponentiate = TRUE` viser **odds ratios** (OR) i stedet for log-odds-koefficienter.
 
-**Antagelser:** observationerne er uafhængige (én række per person - ellers brug robuste standardfejl, se nedenfor), og kontinuerte variable hænger lineært sammen med **log-odds**. Tjek lineariteten ved fx at lade variablen indgå fleksibelt med splines (`splines::ns(alder, 3)` = en blød kurve i stedet for en ret linje) og se, om billedet ændrer sig.
+**Antagelser:** observationerne er uafhængige (én række per person - ellers brug robuste standardfejl, se nedenfor), og kontinuerte variable hænger lineært sammen med **log-odds**. Holder lineariteten ikke, kan du lade variablen indgå som en blød kurve i stedet for en ret linje - se [Ikke-lineære sammenhænge (splines)](#splines) nedenfor.
 
 ## Lineær regression (kontinuert udfald)
 
@@ -81,6 +81,68 @@ clogit(case ~ eksponering + alder + koen + strata(match_id),  # strata() = match
 
 **Antagelser:** som logistisk regression (kontinuerte variable lineære med log-odds; matchsættene indbyrdes uafhængige). Selve matchningen håndteres af `strata()`.
 
+## Interaktion (effektmodifikation)
+
+Nogle gange afhænger en eksponerings effekt af en **tredje variabel**: et lægemiddel virker måske stærkere hos yngre end ældre, eller en risikofaktor rammer mænd hårdere end kvinder. Det kaldes **effektmodifikation** (eller statistisk **interaktion**), og du undersøger det med et **produktled** i modellen.
+
+```r
+# `*` udvider til: eksponering + koen + eksponering:koen (selve interaktionsleddet)
+model <- glm(udfald ~ eksponering * koen + alder,   # tester om eksponeringens effekt afhænger af køn
+             data = df, family = binomial)
+
+model %>%
+  tbl_regression(exponentiate = TRUE)               # OR for hvert led, inkl. interaktionsleddet
+```
+
+- `eksponering * koen` betyder "begge variable plus deres samspil". Det er **interaktionsleddet** `eksponering:koen`, du aflæser.
+- Ligger interaktionsleddets OR tæt på 1 (og p stor), virker eksponeringen **ens** i de to grupper. Afviger det tydeligt fra 1, **afhænger effekten af køn**, og så bør du rapportere **gruppe-specifikke** estimater (fx ved at køre modellen separat for hvert køn, eller med `emmeans` / `marginaleffects`).
+
+::: {.callout-note}
+**Multiplikativ vs. additiv skala.** Et produktled tester interaktion på **multiplikativ** (ratio-)skala: ændrer eksponeringen *odds ratio'en* forskelligt mellem grupper? På folkesundhedsniveau er **additiv** skala (forskelle i absolut risiko) ofte mere relevant, og den måles med **RERI** (relative excess risk due to interaction). De to skalaer kan give forskellige svar, så vær eksplicit om, hvilken du rapporterer. Se [Læs mere](#laes-mere).
+:::
+
+::: {.callout-warning}
+**Subgruppeanalyse er ikke en interaktionstest.** At køre modellen separat i to grupper og se, at den ene er "signifikant" og den anden ikke, viser **ikke**, at effekterne er forskellige. Kun interaktionsleddet (eller en formel test af det) afgør, om forskellen er reel.
+:::
+
+<details>
+<summary>Hvorfor ikke? (klik)</summary>
+
+To grunde:
+
+1. **De to tests svarer på et andet spørgsmål.** En signifikanstest *inden i* hver gruppe spørger kun: "er denne gruppes effekt forskellig fra **ingen effekt** (OR = 1)?" Den spørger aldrig, om de to gruppers effekter er forskellige **fra hinanden** - og det er kun det sidste, der er interaktion.
+2. **Signifikans afhænger af præcision (gruppestørrelse), ikke kun af effektens størrelse.** En mindre gruppe giver et bredere konfidensinterval og rammer lettere "ikke-signifikant", selv om punktestimatet er det samme.
+
+Eksempel med **identisk** effekt i begge grupper:
+
+- **Mænd:** OR = 1,5 (95 % CI 1,1-2,0), p = 0,01 → "signifikant"
+- **Kvinder:** OR = 1,5 (95 % CI 0,9-2,5), p = 0,12 → "ikke signifikant"
+
+Punktestimatet er det samme (1,5); kun præcisionen adskiller dem, fordi kvinde-gruppen er mindre. At konkludere "effekten afhænger af køn" ville være forkert. For at sammenligne de to effekter skal du bruge usikkerheden på **begge** estimater samtidig, og det er præcis, hvad interaktionsleddet gør. (Fænomenet er kendt som *"the difference between 'significant' and 'not significant' is not itself statistically significant"*, [Gelman & Stern](https://doi.org/10.1198/000313006X152649), *The American Statistician*, 2006.)
+
+</details>
+
+## Ikke-lineære sammenhænge (splines) {#splines}
+
+Modellerne ovenfor antager som standard, at en kontinuert variabel hænger **lineært** sammen med udfaldet (på modellens skala): hvert ekstra år alder ændrer risikoen lige meget, hvad enten du går fra 30 til 31 eller fra 70 til 71. Det passer ofte dårligt - risikoen for mange udfald stiger fx kun langsomt i ung alder og stejlt senere. Det er en **kurve**, ikke en ret linje.
+
+En **spline** lader variablen indgå som en **blød kurve** i stedet for en ret linje, så modellen selv finder formen. Du bestemmer kun, hvor bøjelig kurven må være (via antallet af *frihedsgrader* - hvor mange "knæk" kurven må have).
+
+```r
+library(splines)                         # ns() = "natural spline" (en blød kurve)
+
+glm(udfald ~ ns(alder, df = 3) + eksponering + koen,  # alder som blød kurve i stedet for ret linje
+    data = df, family = binomial)
+```
+
+- `ns(alder, df = 3)` erstatter den rette linje for `alder` med en blød kurve. `df = 3` styrer bøjeligheden: flere frihedsgrader = mere bøjelig kurve. **3-4** er et almindeligt udgangspunkt.
+- Det virker i alle modellerne på disse sider (logistisk, lineær, Cox, Poisson) - pak bare den kontinuerte variabel ind i `ns(...)`.
+- Især nyttigt, når variablen er din **eksponering** (så ser du selve dosis-respons-formen) eller en **stærk confounder** (så en for stiv ret linje ikke efterlader *residual confounding*, dvs. confounding der er tilbage trods justering).
+
+::: {.callout-note}
+**Du aflæser ikke længere ét tal.** En spline-variabel har ikke én enkelt odds ratio, for effekten ændrer sig hen over værdierne. I stedet **plotter** du den tilpassede kurve (fx forudsagt risiko mod alder) for at vise sammenhængen. Pakkerne `ggeffects` eller `marginaleffects` gør det i få linjer.
+:::
+
 ## Sådan læser du dit resultat {#laes-resultat}
 
 Regressionstabellen giver for hver variabel et **estimat**, et **konfidensinterval** og en **p-værdi**:
@@ -90,7 +152,7 @@ Regressionstabellen giver for hver variabel et **estimat**, et **konfidensinterv
 - **P-værdien** er sandsynligheden for at se en effekt mindst så stor som din, *hvis der i virkeligheden ingen var*. Lille p (typisk < 0,05) taler imod "ingen effekt", men siger **ikke**, hvor stor eller vigtig effekten er - det gør estimatet og konfidensintervallet. I meget store registerdatasæt bliver selv små, ligegyldige forskelle ofte "signifikante", så se altid på **størrelsen** (estimatet), ikke kun på p.
 
 ::: {.callout-note}
-**OR og HR er non-collapsible.** Modsat en risikoforskel eller relativ risiko kan en justeret odds ratio (og hazard ratio) afvige fra den ujusterede *selv når der ikke er confounding*, alene fordi du tilføjede kovariater. En justeret OR er derfor en *betinget* effekt (inden for strata af kovariaterne), ikke den populationsgennemsnitlige effekt, og "justeret ≠ ujusteret" er ikke i sig selv tegn på confounding. Har du brug for en marginal (populationsgennemsnitlig) effekt, giver standardisering eller IPTW en - se [IP-vægtning](13f_vaegtning-iptw.qmd).
+**OR og HR er non-collapsible.** Modsat en risikoforskel eller relativ risiko kan en justeret odds ratio (og hazard ratio) afvige fra den ujusterede *selv når der ikke er confounding*, alene fordi du tilføjede kovariater. En justeret OR er derfor en *betinget* effekt (inden for strata af kovariaterne), ikke den populationsgennemsnitlige effekt, og "justeret ≠ ujusteret" er ikke i sig selv tegn på confounding. Har du brug for en marginal (populationsgennemsnitlig) effekt, giver standardisering eller IPTW en - se [IP-vægtning](13g_vaegtning-iptw.qmd).
 :::
 
 <details id="klyngebaserede-standardfejl">
@@ -114,15 +176,39 @@ coeftest(model,                          # vis koefficienterne ...
 </details>
 
 ::: {.callout-note}
+**Mixed models: når grupper i dine data skal have hver sit niveau.**
+
+En **klynge** er en gruppe af **rækker**, der hører sammen og derfor ligner hinanden mere end to tilfældige rækker - en gruppe af *rækker*, ikke nødvendigvis af personer. Det kan være **flere rækker fra samme person** (fx gentagne målinger over tid), alle patienter på **samme hospital**, eller **søskende** i samme familie. En person er altså kun en klynge, hvis hun optræder i flere rækker; har du præcis én række per person, er der ingen person-klynge. Rækker i samme klynge er korrelerede, fordi de deler noget, og det bryder antagelsen om uafhængige rækker. Du har to valg:
+
+- **Klyngebaserede (robuste) standardfejl** (fold-ud ovenfor): behold din model, men ret konfidensintervallerne, så de tager højde for korrelationen. Effektestimatet er **uændret**; du får stadig **én samlet effekt**.
+- **Mixed model (random effects):** lad hver klynge få **sit eget grundniveau** i modellen (et *random intercept*) - fx får hvert hospital sin egen baseline-risiko, i stedet for at modellen lader som om alle hospitaler er ens. (At "modellere klyngen" betyder netop det: at bygge gruppernes forskelle ind i modellen i stedet for at se bort fra dem.) "Mixed" = den blander **faste effekter** (de almindelige koefficienter, ens for alle, fx eksponeringens effekt) med **tilfældige effekter** (variationen mellem klynger).
+
+Vælg en **mixed model**, når klyngestrukturen i sig selv er interessant, når du har **gentagne målinger** eller **mange små klynger**, eller når du vil adskille variation *inden for* og *mellem* klynger. I R: [`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), og [`coxme`](https://CRAN.R-project.org/package=coxme) for en Cox-model. En grundig indføring ligger uden for denne side.
+:::
+
+::: {.callout-note}
 Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
 
 
 ::: {.callout-tip}
-## Læs mere
+## Læs mere {#laes-mere}
 
 Generel uddybning i *The Epidemiologist R Handbook* (på engelsk):
 
 - [Univariate and multivariable regression](https://www.epirhandbook.com/en/new_pages/regression.html)
 - [Factors](https://www.epirhandbook.com/en/new_pages/factors.html)
+
+Om interaktion / effektmodifikation:
+
+- Knol & VanderWeele, "[Recommendations for presenting analyses of effect modification and interaction](https://doi.org/10.1093/ije/dyr218)", *Int J Epidemiol* 2012 - hvordan du rapporterer det rigtigt (begge skalaer).
+- [`interactionR`-pakken](https://CRAN.R-project.org/package=interactionR) - beregner additiv interaktion (RERI, AP) med konfidensintervaller, klar til tabel.
+
+Om ikke-lineære sammenhænge (splines):
+
+- Harrell, *Regression Modeling Strategies*, og [`rms`-pakken](https://CRAN.R-project.org/package=rms) - standardværket om fleksibel modellering med splines.
+
+Om mediation (når du vil opdele en effekt i en **direkte** del og en **indirekte** del, der går gennem et mellemled):
+
+- [`CMAverse`](https://bs1125.github.io/CMAverse/) - kausal mediationsanalyse i R.
 :::
