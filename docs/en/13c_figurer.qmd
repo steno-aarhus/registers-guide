@@ -20,6 +20,9 @@ The code examples use generic path and variable names. Adapt them to your projec
 
 Build the figure from your dataset. Here we count the number of people per group and draw a bar chart.
 
+<details>
+<summary>Show the code: build the bar chart</summary>
+
 ```r
 library(ggplot2)                       # ggplot(), geom_*, ggsave()
 library(dplyr)                         # %>% and count()
@@ -41,9 +44,11 @@ p <- ggplot(counts, aes(x = exposure, y = n, fill = outcome)) +  # map columns t
 p                                      # print the figure (show it in the Plots pane)
 ```
 
-With synthetic numbers the figure looks like this:
+</details>
 
-![Bar chart produced by the code above. The numbers are synthetic.](images/figure_example_bar.png)
+With simulated numbers the figure looks like this:
+
+![Bar chart produced by the code above. The numbers are simulated.](images/figure_example_bar.png)
 
 The key parts:
 
@@ -57,6 +62,9 @@ A figure is built up **layer by layer** with `+`: you start with `ggplot(...)` a
 
 Because we saved the figure in the object `p` in the code block above, you can build on it with `+`: you write **only what you want to add or change** - not the whole code again. (This requires that you have run the first code block, so `p` exists in your session.)
 
+<details>
+<summary>Show the code: customise the look</summary>
+
 ```r
 p +                                                       # the figure from before
   labs(                                                   # new text (overrides what p already has):
@@ -66,6 +74,8 @@ p +                                                       # the figure from befo
   theme_minimal(base_size = 14) +                         # clean theme, slightly larger text
   theme(legend.position = "bottom")                       # move the legend to the bottom
 ```
+
+</details>
 
 Each line is one layer, and the order does not matter. A few typical moves:
 
@@ -80,6 +90,9 @@ Each function has many more arguments - look them up with e.g. `?labs` or `?scal
 The bar chart above shows raw counts. In registry work you will often rather show a **proportion or rate with a confidence interval**, so the figure also conveys the uncertainty. Error bars (`geom_errorbar()`) draw the interval on top of each bar or point.
 
 Aggregate first again: one row per group with count, proportion and interval. Here we assume `outcome` is coded 0/1.
+
+<details>
+<summary>Show the code: proportion with error bars</summary>
 
 ```r
 library(ggplot2)                       # ggplot(), geom_col(), geom_errorbar()
@@ -116,9 +129,11 @@ p2 <- ggplot(props, aes(x = exposure, y = prop)) +        # proportion on the y-
 p2                                     # print the figure
 ```
 
-With synthetic numbers the figure looks like this:
+</details>
 
-![Bar chart with 95% confidence intervals as error bars, produced by the code above. The numbers are synthetic.](images/figure_example_errorbar.png)
+With simulated numbers the figure looks like this:
+
+![Bar chart with 95% confidence intervals as error bars, produced by the code above. The numbers are simulated.](images/figure_example_errorbar.png)
 
 The key parts:
 
@@ -126,15 +141,63 @@ The key parts:
 - The interval here is a simple **Wald interval**. It is fine for the large groups output control requires anyway, but becomes unreliable with few people or proportions close to 0 or 100 %. Use a better interval then, e.g. `prop.test()` or the `binom` package.
 - **Same pattern for means:** to show a mean of a continuous variable per group (e.g. age at index), replace `prop` with `mean(variable)` and `se` with `sd(variable) / sqrt(n)`. The rest of the figure is the same.
 
+## Forest plot (estimates with 95% CI)
+
+A **forest plot** shows several effect estimates (hazard ratios or odds ratios) side by side with their confidence intervals and a vertical reference line at 1 (no effect). It is the standard way to present a regression model or a subgroup analysis, and it is output-control-safe because it shows only estimates and intervals, not individuals.
+
+The typical workflow: pull the estimates out of a fitted model with `broom::tidy()` and plot them.
+
+<details>
+<summary>Show the code: forest plot from a model</summary>
+
+```r
+library(broom)                         # tidy() - model results as a tidy table
+library(ggplot2)                       # the figure
+library(dplyr)                         # %>%
+
+# `model` is a fitted regression model, e.g. coxph() (survival) or glm() (logistic)
+est <- tidy(model, conf.int = TRUE, exponentiate = TRUE) %>%  # exponentiate: log scale -> HR/OR
+  filter(term != "(Intercept)") %>%                           # drop the intercept
+  mutate(term = factor(term, levels = rev(term)))             # keep the order, first on top
+
+ggplot(est, aes(x = estimate, y = term)) +
+  geom_vline(xintercept = 1, linetype = "dashed", colour = "grey50") +    # 1 = no effect
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.15) +  # 95% CI
+  geom_point(size = 2.6, colour = "steelblue") +                          # the estimate itself
+  scale_x_log10() +                                                       # HR/OR read on a log scale
+  labs(x = "Hazard ratio (95% CI)", y = NULL,
+       title = "Risk of outcome per variable") +
+  theme_minimal()
+```
+
+</details>
+
+With simulated numbers the figure looks like this:
+
+![Forest plot (simulated data): hazard ratios with 95% confidence intervals and a reference line at 1.](images/figure_example_forest.png)
+
+The key parts:
+
+- `tidy(..., exponentiate = TRUE)` converts the coefficients from the log scale to **HR/OR**; `conf.int = TRUE` gives `conf.low`/`conf.high` (95% CI).
+- The **reference line at 1** is "no effect": if the interval crosses 1, the estimate is not statistically clear (here e.g. *Low income*).
+- `scale_x_log10()` puts e.g. HR 0.5 and HR 2 equally far from 1 - which is how ratios should be read.
+- Control the **order** with `factor(term, levels = ...)`; without it ggplot sorts alphabetically.
+- Estimates and CIs are aggregated numbers, so a forest plot passes output control easily.
+
 ## Save the figure
 
 `ggsave()` writes the most recent (or a named) figure to a file you can send to output control.
+
+<details>
+<summary>Show the code: save the figure</summary>
 
 ```r
 ggsave("figure1.png", plot = p,        # save the figure p to a file
        width = 16, height = 10, units = "cm",  # physical size
        dpi = 300)                       # resolution (300 = print quality)
 ```
+
+</details>
 
 - `width` / `height` + `units` (`"cm"`, `"mm"`, `"in"` or `"px"`) set the physical size; `dpi = 300` is a good resolution for print.
 - Choose `.png` (raster) or `.pdf` (vector, scales crisply) depending on the journal's requirements.

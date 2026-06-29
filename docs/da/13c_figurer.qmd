@@ -20,6 +20,9 @@ Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. 
 
 Byg figuren fra dit datasæt. Her tæller vi antal personer per gruppe og tegner et søjlediagram.
 
+<details>
+<summary>Vis koden: byg søjlediagrammet</summary>
+
 ```r
 library(ggplot2)                       # ggplot(), geom_*, ggsave()
 library(dplyr)                         # %>% og count()
@@ -41,9 +44,11 @@ p <- ggplot(optaelling, aes(x = eksponering, y = n, fill = udfald)) +  # kobl ko
 p                                      # skriv figuren ud (vis den i Plots-vinduet)
 ```
 
-Med syntetiske tal ser figuren sådan ud:
+</details>
 
-![Søjlediagram lavet med koden ovenfor. Tallene er syntetiske.](images/figur_eksempel_soejle.png)
+Med simulerede tal ser figuren sådan ud:
+
+![Søjlediagram lavet med koden ovenfor. Tallene er simulerede.](images/figur_eksempel_soejle.png)
 
 Det vigtigste:
 
@@ -57,6 +62,9 @@ En figur bygges op **lag for lag** med `+`: du starter med `ggplot(...)` og læg
 
 Fordi vi gemte figuren i objektet `p` i kodeblokken ovenfor, kan du bygge videre på den med `+`: du skriver **kun det, du vil lægge til eller ændre** - ikke hele koden igen. (Det kræver, at du har kørt den første kodeblok, så `p` findes i din session.)
 
+<details>
+<summary>Vis koden: tilpas udseendet</summary>
+
 ```r
 p +                                                       # figuren fra før
   labs(                                                   # nye tekster (overskriver dem, p allerede har):
@@ -67,6 +75,8 @@ p +                                                       # figuren fra før
   theme(legend.position = "bottom")                       # flyt signaturforklaringen ned
 ```
 
+</details>
+
 Hver linje er ét lag, og rækkefølgen betyder ikke noget. Et par typiske greb:
 
 - **Farve efter en variabel** sætter du inde i `aes()` (fx `fill = udfald` som i eksemplet øverst på siden); farverne styrer du så med `scale_fill_manual(values = ...)` eller en færdig palet (`scale_fill_brewer()`). Vil du i stedet have **én fast farve** til alle søjler, skriver du `fill = "steelblue"` inde i `geom_col()`, altså *uden for* `aes()`.
@@ -75,11 +85,14 @@ Hver linje er ét lag, og rækkefølgen betyder ikke noget. Et par typiske greb:
 
 Hver funktion har mange flere argumenter - slå dem op med fx `?labs` eller `?scale_fill_manual`.
 
-## Figur med fejllinjer (andel og 95% CI)
+## Figur med error bars (andel og 95% CI)
 
-Søjlediagrammet ovenfor viser rå antal. I registerarbejde vil du ofte hellere vise en **andel eller rate med et konfidensinterval**, så figuren også fortæller om usikkerheden. Fejllinjer (`geom_errorbar()`) tegner intervallet oven på hver søjle eller hvert punkt.
+Søjlediagrammet ovenfor viser rå antal. I registerarbejde vil du ofte hellere vise en **andel eller rate med et konfidensinterval**, så figuren også fortæller om usikkerheden. Error bars (`geom_errorbar()`) tegner intervallet oven på hver søjle eller hvert punkt.
 
 Aggreger igen først: én række per gruppe med antal, andel og interval. Her antager vi, at `udfald` er kodet 0/1.
+
+<details>
+<summary>Vis koden: andel med error bars</summary>
 
 ```r
 library(ggplot2)                       # ggplot(), geom_col(), geom_errorbar()
@@ -104,7 +117,7 @@ andele <- df %>%
 
 p2 <- ggplot(andele, aes(x = eksponering, y = andel)) +   # andel på y-aksen
   geom_col(fill = "steelblue") +                          # søjle for andelen
-  geom_errorbar(aes(ymin = nedre, ymax = oevre),          # fejllinjer = 95% CI
+  geom_errorbar(aes(ymin = nedre, ymax = oevre),          # error bars = 95% CI
                 width = 0.2) +                            # bredde på "hatten" på linjen
   scale_y_continuous(labels = scales::percent) +          # vis y-aksen i procent
   labs(
@@ -116,9 +129,11 @@ p2 <- ggplot(andele, aes(x = eksponering, y = andel)) +   # andel på y-aksen
 p2                                     # skriv figuren ud
 ```
 
-Med syntetiske tal ser figuren sådan ud:
+</details>
 
-![Søjlediagram med 95% konfidensinterval som fejllinjer, lavet med koden ovenfor. Tallene er syntetiske.](images/figur_eksempel_fejllinjer.png)
+Med simulerede tal ser figuren sådan ud:
+
+![Søjlediagram med 95% konfidensinterval som error bars, lavet med koden ovenfor. Tallene er simulerede.](images/figur_eksempel_errorbar.png)
 
 Det vigtigste:
 
@@ -126,15 +141,63 @@ Det vigtigste:
 - Intervallet her er et simpelt **Wald-interval**. Det er fint for de store grupper, outputkontrol alligevel kræver, men bliver upålideligt ved få personer eller andele tæt på 0 eller 100 %. Brug da et bedre interval, fx `prop.test()` eller `binom`-pakken.
 - **Samme mønster til gennemsnit:** vil du vise et gennemsnit af en kontinuert variabel per gruppe (fx alder ved index), så erstat `andel` med `mean(variabel)` og `se` med `sd(variabel) / sqrt(n)`. Resten af figuren er den samme.
 
+## Forest plot (estimater med 95% CI)
+
+Et **forest plot** viser flere effektestimater (hazard ratios eller odds ratios) side om side med deres konfidensinterval og en lodret referencelinje ved 1 (ingen effekt). Det er standardmåden at vise en regressionsmodel eller en subgruppeanalyse, og det er sikkert ift. outputkontrol, fordi det kun viser estimater og intervaller, ikke enkeltpersoner.
+
+Den typiske fremgangsmåde: hent estimaterne ud af en færdig model med `broom::tidy()` og tegn dem.
+
+<details>
+<summary>Vis koden: forest plot fra en model</summary>
+
+```r
+library(broom)                         # tidy() - modelresultater som ryddelig tabel
+library(ggplot2)                       # figuren
+library(dplyr)                         # %>%
+
+# `model` er en færdig regressionsmodel, fx coxph() (overlevelse) eller glm() (logistisk)
+est <- tidy(model, conf.int = TRUE, exponentiate = TRUE) %>%  # exponentiate: log-skala -> HR/OR
+  filter(term != "(Intercept)") %>%                           # skæringspunktet skal ikke med
+  mutate(term = factor(term, levels = rev(term)))             # behold rækkefølgen, øverst først
+
+ggplot(est, aes(x = estimate, y = term)) +
+  geom_vline(xintercept = 1, linetype = "dashed", colour = "grey50") +    # 1 = ingen effekt
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.15) +  # 95% CI
+  geom_point(size = 2.6, colour = "steelblue") +                          # selve estimatet
+  scale_x_log10() +                                                       # HR/OR læses på log-skala
+  labs(x = "Hazard ratio (95% CI)", y = NULL,
+       title = "Risiko for udfald per variabel") +
+  theme_minimal()
+```
+
+</details>
+
+Med simulerede tal ser figuren sådan ud:
+
+![Forest plot (simuleret data): hazard ratios med 95% konfidensinterval og en referencelinje ved 1.](images/figur_eksempel_forest.png)
+
+Det vigtigste:
+
+- `tidy(..., exponentiate = TRUE)` omregner koefficienterne fra log-skala til **HR/OR**; `conf.int = TRUE` giver `conf.low`/`conf.high` (95% CI).
+- **Referencelinjen ved 1** er "ingen effekt": krydser intervallet 1, er estimatet ikke statistisk sikkert (her fx *Lav indkomst*).
+- `scale_x_log10()` gør, at fx HR 0,5 og HR 2 ligger lige langt fra 1 - sådan skal ratios læses.
+- **Rækkefølgen** styrer du med `factor(term, levels = ...)`; uden det sorterer ggplot alfabetisk.
+- Estimater og CI er aggregerede tal, så et forest plot slipper let gennem outputkontrol.
+
 ## Gem figuren
 
 `ggsave()` skriver den seneste (eller en navngiven) figur til en fil, du kan sende til outputkontrol.
+
+<details>
+<summary>Vis koden: gem figuren</summary>
 
 ```r
 ggsave("figur1.png", plot = p,         # gem figuren p til en fil
        width = 16, height = 10, units = "cm",  # fysisk størrelse
        dpi = 300)                       # opløsning (300 = trykkvalitet)
 ```
+
+</details>
 
 - `width` / `height` + `units` (`"cm"`, `"mm"`, `"in"` eller `"px"`) bestemmer den fysiske størrelse; `dpi = 300` er en god opløsning til tryk.
 - Vælg `.png` (raster) eller `.pdf` (vektor, skalerer skarpt) afhængigt af tidsskriftets krav.

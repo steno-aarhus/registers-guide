@@ -223,6 +223,46 @@ stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))   # tjek: én række
 
 ---
 
+## Deltagerdiagram (STROBE flow)
+
+De N-optællinger, du lavede i Trin 1 og Trin 2, samles til sidst i et **STROBE flow-diagram**: en figur, der viser hvor mange personer der var med fra start, hvor mange der blev ekskluderet ved hvert trin og hvorfor, og hvor mange der endte i studiepopulationen. Det forventes i næsten alle observationelle studier. Diagrammet her viser også **hvor dataene kommer fra** i hvert trin (tallene er simulerede).
+
+```{mermaid}
+flowchart TD
+    A[("Kilderegistre - hele befolkningen<br>LPR2: lpr_sksopr + lpr_adm<br>LPR3: procedurer_kirurgi + lpr_a_kontakt")]:::store
+    B["Trin 1: filtrér på eksponeringskoder<br>eksponerede med pnr + index_date<br>n = 12.300"]:::step
+    E1["Ekskluderet i Trin 2:<br>prævalent outcome før index<br>(fra LPR-diagnoser)<br>n = 1.150"]:::excl
+    C["Eksponeret kohorte<br>n = 11.150"]:::step
+    F["Valgfrit (Fase 10a):<br>+ matchet sammenligningskohorte"]:::optional
+    D["Endelig studiepopulation<br>pnr + index_date<br>(→ Fase 11)"]:::result
+
+    A --> B
+    B --> C
+    B -.->|frafald| E1
+    C -.-> F
+    C --> D
+    F -.-> D
+
+    classDef store fill:#eef0f2,stroke:#8a94a6,color:#1f2733;
+    classDef step fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
+    classDef excl fill:#fdecea,stroke:#d9534f,color:#7a1f1a;
+    classDef optional fill:#fff3e0,stroke:#e69500,color:#7a4f00;
+    classDef result fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
+```
+
+Sådan hænger hvert trin sammen med dataene:
+
+- **Kilderegistre:** hele befolkningens LPR-data (du har endnu ingen kohorteliste). LPR2 og LPR3 åbnes dovent med `open_dataset()` - se Trin 1 ovenfor.
+- **Trin 1:** du filtrerer på dine eksponeringskoder og knytter `pnr` + `index_date` på. Resultatet er `eksponerede`.
+- **Trin 2 (eksklusion):** prævalente tilfælde - personer med outcome før deres index-dato - findes i LPR-diagnoserne og fjernes. Det er `n_before - nrow(eksponerede)`, der står i eksklusionsboksen.
+- **Endelig studiepopulation:** `pnr` + `index_date` per person, klar til [Fase 11 - Udtræk variable](11_udtraek-variable.qmd). Bygger du en sammenligningskohorte, indsættes [Fase 10a](10a_sammenligningskohorte.qmd) før det sidste trin.
+
+::: {.callout-warning}
+**Outputkontrol:** eksklusionsboksene viser rå antal. Små tal (fx en eksklusionsgruppe med ganske få personer) kan være afslørende - rund af eller slå sammen, før diagrammet forlader DST. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+:::
+
+---
+
 ::: {.callout-tip}
 **Hvad nu - vælg dit design:**
 
