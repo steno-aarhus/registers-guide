@@ -5,11 +5,21 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least-privilege for the official Pages deploy: read the repo, write to Pages,
+# and mint the short-lived OIDC token that actions/deploy-pages uses.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Avoid overlapping deploys; let an in-progress deploy finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
-  build-deploy:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -21,8 +31,18 @@ jobs:
       - name: Render Quarto site
         run: quarto render docs/
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_site
+          path: docs/_site   # Quarto output dir (output-dir: _site under docs/)
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
