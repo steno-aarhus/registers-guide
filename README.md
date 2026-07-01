@@ -2,7 +2,7 @@
 
 Vejledning til registerbaseret kohortestudie på Danmarks Statistik — for begyndere.
 
-**[Åbn vejledningen →](https://saras-clin.github.io/DST_help/)**
+**[Åbn vejledningen →](https://steno-aarhus.github.io/registers-guide/)**
 
 ---
 
