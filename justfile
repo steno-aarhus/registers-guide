@@ -40,7 +40,9 @@ check-urls:
     --verbose \
     --extensions md,qmd \
     --exclude "github\.com" \
-    --exclude-path "_badges.qmd"
+    --exclude-path "_badges.qmd" \
+    --exclude-path "README.md" \
+    --exclude-path "da/_parked_content.md"
 
 # Format Markdown files
 format-md:

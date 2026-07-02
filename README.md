@@ -49,7 +49,3 @@ to abide by its terms.
 ## Licensing
 
 This project is licensed under the [CC-BY-4.0 License](LICENSE.md).
-
-## Changelog
-
-For a list of changes, see our [changelog](CHANGELOG.md) page.
