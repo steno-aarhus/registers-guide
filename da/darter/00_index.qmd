@@ -20,47 +20,22 @@ Ny på projektet? Start med den generelle vejledning og vend tilbage hertil:
 → [Fase 2 - R: det allermest nødvendige](../02_r-intro.qmd)
 → [Fase 3 - Log ind på DST](../03_log-ind-dst.qmd)
 
-::: {.callout-tip}
-**Praktisk introduktion fra projektet selv**
-Projektet har en grundig onboarding-vejledning (en Quarto-/`.qmd`-fil) skrevet specifikt til DARTER. Bemærk, at pakken og onboarding-filen ligger **to forskellige steder**:
-
-- **`dstDataPrep`-pakken** (med `load_database()`) ligger i Lukes mappe:
-  `E:/workdata/708421/workspaces/luke/dstDataPrep/`
-- **Onboarding-`.qmd`-filen** ligger i `_onboarding`-mappen: `E:/workdata/708421/workspaces/_onboarding/` (altså *ikke* i `dstDataPrep`-mappen ovenfor).
-
-Onboarding-dokumentet gennemgår `dstDataPrep`, `load_database()` og det praktiske workflow trin for trin med rigtige eksempler fra projektet. God supplerende læsning til denne vejledning.
-:::
-
 ### I denne sektion
 
 | Side | Indhold |
 |---|---|
-| Denne side | Setup (`dstDataPrep` + `duckplyr`) og en genanvendelig LPR-udtræksfunktion |
+| Denne side | Setup (`fastreg` + `duckplyr`) og en genanvendelig LPR-udtræksfunktion |
 | [Registersti og datastores](01_registersti-datastores.qmd) | Bekræftede stier og adgangsmetoder til alle registre på 708421 |
 | [DARTER-specifikke faldgruber](02_darter-faldgruber.qmd) | Quirks der er specifikke for dette projekt |
 
 ---
 
-## Initielle setup-trin for DARTER
+## Initielt setup for DARTER
 
-To trin skal gennemføres **inden du skriver kode** på DARTER:
-
-::: {.callout-important}
-**Trin 1 - Byg `dstDataPrep`**
-
-`dstDataPrep` er den pakke, der giver adgang til `load_database()` og alle registerdata.
-Den skal bygges manuelt, da DST-serveren nulstiller installerede pakker.
-
-1. **File → Open Project in New Session**
-2. Naviger til `E:/workdata/708421/workspaces/luke/dstDataPrep/dstDataPrep.Rproj`
-3. Tryk **Ctrl+Shift+B** (Build) - eller på Mac via menuen: **Build → Install Package**
-4. Vent på "Done" og luk sessionen
-
-Gør det igen hvis `library(dstDataPrep)` melder `Error: there is no package called 'dstDataPrep'`.
-:::
+Registerdata på DARTER indlæses med **`fastreg::read_register("navn")`** - præcis som i den generelle vejledning. Du skal blot pege fastreg på DARTERs parquet-mappe én gang per script; se [Indlæsningsskabeloner](01_registersti-datastores.qmd#load-templates).
 
 ::: {.callout-important}
-**Trin 2 - Installér nyeste `duckplyr` i starten af hver session**
+**Installér nyeste `duckplyr` i starten af hver session**
 
 DST har `duckplyr` **forudinstalleret, men i en gammel version**, der mangler funktionalitet - flere af mønstrene i denne vejledning virker ikke med den. Hent derfor den nyeste version fra CRAN, og **gentag efter hvert logout / server-reset** (resettet sætter pakken tilbage til den gamle, forudinstallerede version). `duckplyr` leverer DuckDB-motoren bag `compute()` (se [Store registre](#store-registre) nedenfor).
 
@@ -76,8 +51,8 @@ packageVersion("duckplyr")     # tjek versionen i din session; >= 1.1 er fin
 
 ### Anbefaling: lav en hjælpefunktion til LPR-udtræk
 
-LPR-udtræk kræver at du kombinerer LPR2 somatisk, LPR2 psykiatrisk og LPR3 - og gør det samme for hvert nyt udfald i projektet.
-Det betaler sig at samle dette i én genanvendelig funktion fremfor at kopiere koden gentagne gange.
+LPR-udtræk kræver ofte at du kombinerer LPR2 somatisk, LPR2 psykiatrisk og LPR3 - og gør det samme for hvert nyt udfald i projektet.
+Hvis der er flere udfald/kovariate kan det godt betale sig at samle dette i én genanvendelig funktion fremfor at kopiere koden gentagne gange.
 
 **Fordele:**
 - Ét sted at rette, hvis noget ændres (fx et nyt register eller en ny kolonne)
@@ -90,60 +65,67 @@ Det betaler sig at samle dette i én genanvendelig funktion fremfor at kopiere k
 <summary>Se den fulde <code>get_lpr_diagnoses()</code>-funktion</summary>
 
 ```r
-library(dstDataPrep)
+library(fastreg)
 library(dplyr)
 
-get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_only = FALSE) {
-  # Åbn registre
-  lpr_adm   <- load_database("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatisk kontakter
-  lpr_diag  <- load_database("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatisk diagnoser
-  psyk_adm  <- load_database("t_psyk_adm")  %>% rename_with(tolower) %>%
+# icd_codes: 3-tegns ICD-koder UDEN D-præfiks, fx c("F03", "G30"). PÅKRÆVET (se advarsel).
+# diagtypes: diagnose-TYPE - "A"=aktions, "B"=bi, "G"=grundmorbus (kun LPR2). Standard c("A", "B").
+get_lpr_diagnoses <- function(pnr_vector, icd_codes, diagtypes = c("A", "B")) {   
+  #-------------------------------------------------------------
+  # Åbn registre (LPR2 somatisk + psykiatrisk + LPR3)
+  #-------------------------------------------------------------
+  lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatisk kontakter
+  lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatisk diagnoser
+  psyk_adm  <- read_register("t_psyk_adm")  %>% rename_with(tolower) %>%
     rename(pnr = v_cpr, recnum = k_recnum)                            # LPR2 psykiatrisk kontakter
-  psyk_diag <- load_database("t_psyk_diag") %>% rename_with(tolower) %>%
+  psyk_diag <- read_register("t_psyk_diag") %>% rename_with(tolower) %>%
     rename(recnum = v_recnum)                                          # LPR2 psykiatrisk diagnoser
-  lpr3_k    <- load_database("lpr_a_kontakt")  %>% rename_with(tolower) %>%
+  lpr3_k    <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
     filter(lprindberetningssystem == "LPR3")                               # KRITISK: behold kun rækker fra LPR3-systemet - undgå overlappende rækker
-  lpr3_d    <- load_database("lpr_a_diagnose") %>% rename_with(tolower)  # LPR3 diagnoser
+  lpr3_d    <- read_register("lpr_a_diagnose") %>% rename_with(tolower)  # LPR3 diagnoser
 
-  # Filtrer på indlæggelsestype hvis ønsket
-  if (inpatient_only) {
-    lpr_adm <- lpr_adm %>% filter(c_pattype == "0")          # "0" = indlagt i LPR2
-    lpr3_k  <- lpr3_k  %>% filter(kont_type == "ALCA00")     # "ALCA00" = indlagt i LPR3
-  }
-
+  #-------------------------------------------------------------
   # LPR2 somatisk
+  #-------------------------------------------------------------
   lpr2_dx <- lpr_adm %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Udtræk fra LPR
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - mønstret er forklaret i Fase 9 (Hospitalskontakter)
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
-      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
       by = "recnum"
     ) %>%
+    filter(substr(c_diag, 2, 4) %in% !!icd_codes) %>%        # filtrér på KODER FØR collect() - kun relevante rækker hentes ind i R
     collect() %>%
-    mutate(icd3 = substr(c_diag, 2, 4))                       # strip D-præfiks
+    mutate(icd3 = substr(c_diag, 2, 4))                       # "DF03" -> "F03": fjern D-præfiks
 
+  #-------------------------------------------------------------
   # LPR2 psykiatrisk
+  #-------------------------------------------------------------
   lpr2_psyk_dx <- psyk_adm %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Udtræk fra LPR
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Fase 9
     select(pnr, recnum, date_contact = d_inddto) %>%
     inner_join(
-      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag),
+      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
       by = "recnum"
     ) %>%
+    filter(substr(c_diag, 2, 4) %in% !!icd_codes) %>%
     collect() %>%
     mutate(icd3 = substr(c_diag, 2, 4))
 
+  #-------------------------------------------------------------
   # LPR3
+  #-------------------------------------------------------------
   lpr3_dx <- lpr3_k %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Udtræk fra LPR
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # kun kohorten - se Fase 9
     select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
     inner_join(
       lpr3_d %>%
-        filter(diag_kode_type %in% !!diagtypes,
+        filter(diag_kode_type %in% !!diagtypes,               # NB: "G" (grundmorbus) findes kun i LPR2, ikke LPR3
                is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
-        select(dw_ek_kontakt, c_diag = diag_kode),
+        select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
       by = "dw_ek_kontakt"
     ) %>%
+    filter(substr(c_diag, 2, 4) %in% !!icd_codes) %>%
     collect() %>%
     mutate(date_contact = as.Date(date_contact),               # datetime → dato
            icd3 = substr(c_diag, 2, 4))
@@ -154,26 +136,32 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B"), inpatient_onl
 
 </details>
 
+::: {.callout-note}
+**`semi_join` eller `filter(... %in% ...)`?** Begge udvælger rækker, men bruges til hver sit:
+
+- **`semi_join(tibble(pnr = pnr_vector), by = "pnr")`**: til din **kohorte**. En stor R-vektor af pnr'er skubbes mere pålideligt ned i Arrow/DuckDB som en lille tabel end et `filter(pnr %in% ...)`, der kan blive langsomt eller helt afvist (især med ældre `duckplyr`).
+- **`filter(substr(c_diag, 2, 4) %in% !!icd_codes)`**: til en **kort kodeliste**. Her er `filter` fint - men husk `!!`, der sender den lokale R-vektor ind i forespørgslen (uden `!!` leder DuckDB efter en kolonne med det navn). Baggrunden står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
+:::
+
 <details>
-<summary>Brug funktionen - ét kald pr. udtræk, skift kun <code>KODER</code></summary>
+<summary>Brug funktionen - ét kald pr. udtræk, skift kun <code>icd_codes</code></summary>
 
 ```r
 kohort    <- readRDS("datasets/full_cohort.rds")
 pnr_liste <- unique(kohort$pnr)
 
-# Hent alle diagnoser for kohorten (Fase 1 - se hospitalskontakter-siden)
-alle_dx <- get_lpr_diagnoses(
-  pnr_vector    = pnr_liste,
-  diagtypes     = c("A", "B"),
-  inpatient_only = FALSE
+# Angiv de ICD-koder du vil have (3 tegn, uden D). Funktionen filtrerer FØR data hentes ind i R.
+demens_dx <- get_lpr_diagnoses(
+  pnr_vector = pnr_liste,
+  icd_codes  = c("F00", "F01", "F02", "F03", "G30", "G31"),  # demens (G30/G31 er ICD G-koder)
+  diagtypes  = c("A", "B")         # "A"=aktions, "B"=bi, "G"=grundmorbus (kun LPR2). Udvid fx til c("A","B","G")
 )
-# Returnerer: pnr | date_contact | c_diag | icd3
+# Returnerer én række pr. diagnose: pnr | date_contact | c_diag | icd3 | c_diagtype (A/B/G)
+# c_diagtype gør sensitivitetsanalyser mulige, fx kun aktionsdiagnoser: filter(c_diagtype == "A")
+# Flere udfald? Giv unionen af alle koder her og opdel bagefter i R på icd3 - så scannes registrene kun én gang.
 
-# Udtræk ét udfald - skift kun KODER (Fase 2)
-KODER <- c("F00", "F01", "F02", "F03", "G30", "G31")   # demens
-
-demens <- alle_dx %>%
-  filter(icd3 %in% KODER) %>%
+# Første forekomst efter index-dato pr. person
+demens <- demens_dx %>%
   inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%
   filter(date_contact > index_date) %>%
   group_by(pnr) %>% arrange(date_contact) %>% slice(1) %>% ungroup() %>%
@@ -185,27 +173,21 @@ saveRDS(resultat, "datasets/extract_dementia.rds")
 
 </details>
 
+::: {.callout-warning}
+**Angiv altid `icd_codes` - hent aldrig alle diagnoser.** Funktionen filtrerer på dine koder **før `collect()`**, så kun de relevante rækker hentes ind i R's RAM. Derfor er `icd_codes` et påkrævet argument.
+
+Fjern ikke kode-filteret for at "tage det hele": hver A/B/G-diagnose for en hel kohorte på tværs af LPR2 og LPR3 kan blive **millioner af rækker**. Det fylder R's hukommelse, og et så tungt udtræk kan få dig **smidt af DST-serveren**.
+:::
+
 ::: {.callout-note}
-Dette er DARTER-varianten (med `load_database()` og de bekræftede registernavne for 708421, pr. juni 2026). Den generelle `open_dataset()`-version og forklaringen bag mønstret står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
+Dette er DARTER-varianten (med `read_register()` og de bekræftede registernavne for 708421, pr. juni 2026). Den generelle `open_dataset()`-version og forklaringen bag mønstret står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
 :::
 
 ---
 
 ## Store registre - `compute()` vs `collect()` {#store-registre}
 
-`get_lpr_diagnoses()` ovenfor afslutter hvert udtræk med `collect()` - det henter resultatet **ind i R**. På et meget stort register (fx LMDB eller laboratoriesvar) kan du i stedet pipe til `compute()`.
-
-`load_database()` returnerer en **Arrow**-forbindelse, der kun understøtter et subset af dplyr-funktioner. Har du brug for DuckDB-specifik funktionalitet eller oplever langsom ydeevne, hjælper `compute()`.
-
-**Forskellen på `collect()` og `compute()`:** `collect()` henter data **ind i R** (du er færdig med den dovne forbindelse og kan nu bruge `$`, `table()` mv.). `compute()` udfører forespørgslen, men lader resultatet blive **i databasen** (Arrow → DuckDB) - det er stadig en doven forbindelse, du kan pipe videre på, uden at fylde R's RAM. Det er DuckDB-motoren fra `duckplyr` (se Trin 2 ovenfor). Du `collect()`'er stadig til sidst, når du vil have data ind i R. Mere om dovne forbindelser og `collect()`: [Fase 5 - Udtræk trin for trin](../05_udtraek-trin-for-trin.qmd).
-
-```r
-lmdb <- load_database("lmdb") %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # filtrer i Arrow FØR compute - reducer data
-  compute()                             # materialisér som DuckDB - endnu ikke i R
-```
-
-Reducer altid data med `semi_join()`/`filter()`/`select()` inden `compute()`. Filtrerer du på en lokal kode- eller år-liste (ikke pnr), sætter du `!!` foran R-variablen - forklaret i [Fase 5 - Den vigtigste regel](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent). Se [osdc-dokumentationen](https://steno-aarhus.github.io/osdc/) for DuckDB-konfiguration og memory limits.
+`get_lpr_diagnoses()` afslutter hvert udtræk med `collect()` (henter ind i R). På et meget stort register (fx LMDB eller laboratoriesvar) kan du i stedet pipe til `compute()`, som materialiserer resultatet i DuckDB uden at fylde R's RAM - reducér altid med `semi_join()`/`filter()`/`select()` **før** `compute()`. Selve teknikken og forskellen på `compute()` og `collect()` er forklaret generelt i [Fase 5 - Udtræk trin for trin](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent).
 
 ---
 

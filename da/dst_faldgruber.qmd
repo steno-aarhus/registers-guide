@@ -28,7 +28,7 @@ Der er to registre med lignende navne:
 
 ```r
 # KORREKT - erstat "sti/til/dodsaars/" med din projekts parquet-sti
-# DARTER: load_database("dodsaars") %>% rename_with(tolower)
+# DARTER: read_register("dodsaars") %>% rename_with(tolower)
 dod <- open_dataset("sti/til/dodsaars/") %>%
   rename_with(tolower)                       # kontrollér dækning i din projektvejledning
 dod_person <- dod %>%
@@ -49,7 +49,7 @@ og **DST lukker automatisk processer** når RAM'en er ved at være fyldt, så et
 
 ```r
 # Filtrer tidligt - aldrig collect() først
-# DARTER: load_database("lmdb") %>% rename_with(tolower)
+# DARTER: read_register("lmdb") %>% rename_with(tolower)
 lmdb <- open_dataset("sti/til/lmdb/") %>%
   rename_with(tolower)                  # doven forbindelse - ingen RAM brugt endnu
 
@@ -75,7 +75,7 @@ Flere praktiske vaner (gem ofte, delvis indlæsning, Task Manager) i [Pas på RA
 Rå kolonnenavne varierer efter register og år: `PNR`, `pnr`, `Pnr`, `V_CPR`.
 Glemmer du det, fejler `semi_join(..., by = "pnr")` stille med "Column `pnr` not found" - selvom kolonnen er der.
 
-**Reglen:** hvert `open_dataset()`- eller `load_database()`-kald ender med `%>% rename_with(tolower)` som det første trin i din pipe.
+**Reglen:** hvert `open_dataset()`- eller `read_register()`-kald ender med `%>% rename_with(tolower)` som det første trin i din pipe.
 Se [Udtræk trin for trin](05_udtraek-trin-for-trin.qmd) for forklaring og eksempel.
 
 ---
@@ -124,7 +124,7 @@ bef_2020 <- bef %>%
                         # - også dem der dør i løbet af 2020
 
 # KORREKT: kombiner med dodsaars for at ekskludere dødsfald
-deaths <- open_dataset("sti/til/dodsaars/") %>%   # DARTER: load_database("dodsaars")
+deaths <- open_dataset("sti/til/dodsaars/") %>%   # DARTER: read_register("dodsaars")
   rename_with(tolower) %>%
   semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
   select(pnr, d_dodsdto) %>%
@@ -236,9 +236,9 @@ R's fejlbeskeder er korte og tekniske - her er de du oftest møder i et DST-work
 
 | Fejlbesked | Typisk årsag | Løsning |
 |---|---|---|
-| `Error: Column 'pnr' not found` | `rename_with(tolower)` mangler | Tilføj `%>% rename_with(tolower)` direkte efter `load_database()` - se [faldgrube 3](#3-rename_withtolower-skal-kaldes-på-hvert-register) |
+| `Error: Column 'pnr' not found` | `rename_with(tolower)` mangler | Tilføj `%>% rename_with(tolower)` direkte efter `read_register()` - se [faldgrube 3](#3-rename_withtolower-skal-kaldes-på-hvert-register) |
 | `Error: object 'min_liste' not found` | `!!` mangler i `filter()` på en doven forbindelse | Skriv `filter(aar %in% !!min_liste)` - se [faldgrube 8](#8-bang-bang-glemmes-i-lazy-evaluering) |
-| `Error: could not find function "load_database"` | `library(dstDataPrep)` mangler *(kun DARTER)* | Tilføj `library(dstDataPrep)` øverst i scriptet - kun relevant på DARTER/projekt 708421 |
+| `Error: could not find function "read_register"` | `library(fastreg)` mangler | Tilføj `library(fastreg)` øverst i scriptet |
 | `non-numeric argument to binary operator` | Datokolonne er `character`, ikke `Date` | `mutate(dato = as.Date(dato))` - se [faldgrube 4](#4-datokolonner-er-ikke-altid-i-date-format) |
 | `Error in filter.default(...)` | Filtrering på et dovent objekt uden `%>%` | Skift til `%>%` - se [røret](guide_til_funktioner.qmd#røret) |
 | `Error: Can't convert ... to ...` | Join på kolonner med forskellig type (fx numeric vs. character) | Brug `mutate(pnr = as.character(pnr))` for at matche typer |
