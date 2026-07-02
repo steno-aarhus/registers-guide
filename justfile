@@ -37,6 +37,7 @@ check-spelling:
 # Check that URLs work
 check-urls:
   lychee . \
+    --config .config/lychee.toml \
     --verbose \
     --extensions md,qmd \
     --exclude "github\.com" \
