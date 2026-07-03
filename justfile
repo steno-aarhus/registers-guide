@@ -19,6 +19,11 @@ list-todos:
     --exclude-dir=_site \
     "TODO" *
 
+# Install the command-line tools this project uses (macOS + Homebrew)
+install:
+  brew install uv lychee air      # uv (tool runner), lychee (links), air (R formatter)
+  uv tool install jarl-linter     # jarl (R linter); then run `uv tool update-shell` once so ~/.local/bin is on PATH
+
 # Install the pre-commit hooks
 install-precommit:
   uvx pre-commit install
@@ -45,11 +50,13 @@ check-urls:
     --exclude-path "README.md" \
     --exclude-path "da/_parked_content.md"
 
-# Format Markdown files
+# Lint R code with jarl
+check-r:
+  uvx --from jarl-linter jarl check .
+
+# Format the docs: markdown + R code cells (panache runs air on the R)
 format-md:
-  # Use both rumdl and panache, for different purposes
-  uvx rumdl fmt --silent
-  uvx --from panache-cli panache format . --quiet
+  uvx --from panache-cli panache format .
 
 # Re-build the README file from the Quarto version
 build-readme:
