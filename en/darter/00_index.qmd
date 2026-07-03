@@ -4,62 +4,75 @@ subtitle: "Project-specific guide to the BS & Dementia cohort study"
 date: last-modified
 ---
 
-**DARTER** - *Diabetes And inteRgenerational Transmission of hEalth determinants over the life couRse* (project 708421).
+**DARTER** - *Diabetes And inteRgenerational Transmission of hEalth determinants
+over the life couRse* (project 708421).
 
-This section is **only** for those working on the DARTER project.
-The content here builds on the general DST guide and adds the project-specific material.
+This section is **only** for those working on the DARTER project. The content
+here builds on the general DST guide and adds the project-specific material.
 
 ::: {.callout-tip}
-**Searchable variable and register overview for DARTER**
-All variables and registers applied for in the project are collected in a searchable table:
-[steno-aarhus.github.io/darter-project →](https://steno-aarhus.github.io/darter-project/)
+**Searchable variable and register overview for DARTER** All variables and
+registers applied for in the project are collected in a searchable table:
+[steno-aarhus.github.io/darter-project
+→](https://steno-aarhus.github.io/darter-project/)
 :::
 
-New to the project? Start with the general guide and return here:
-→ [Phase 1 - Plan your study](../01_studieforberedelse.qmd)
-→ [Phase 2 - R: the bare essentials](../02_r-intro.qmd)
-→ [Phase 3 - Log in to DST](../03_log-ind-dst.qmd)
+New to the project? Start with the general guide and return here: → [Phase 1 -
+Plan your study](../01_studieforberedelse.qmd) → [Phase 2 - R: the bare
+essentials](../02_r-intro.qmd) → [Phase 3 - Log in to
+DST](../03_log-ind-dst.qmd)
 
 ### In this section
 
-| Page | Contents |
-|---|---|
-| This page | Setup (`fastreg` + `duckplyr`) and a reusable LPR extraction function |
-| [Register paths and datastores](01_registersti-datastores.qmd) | Confirmed paths and access methods for all registers on 708421 |
-| [DARTER-specific pitfalls](02_darter-faldgruber.qmd) | Quirks specific to this project |
+  | Page                                                           | Contents                                                              |
+  | -------------------------------------------------------------- | --------------------------------------------------------------------- |
+  | This page                                                      | Setup (`fastreg` + `duckplyr`) and a reusable LPR extraction function |
+  | [Register paths and datastores](01_registersti-datastores.qmd) | Confirmed paths and access methods for all registers on 708421        |
+  | [DARTER-specific pitfalls](02_darter-faldgruber.qmd)           | Quirks specific to this project                                       |
 
----
+--------------------------------------------------------------------------------
 
 ## Initial setup for DARTER
 
-Register data on DARTER is loaded with **`fastreg::read_register("name")`** - exactly as in the general guide. You just point fastreg at DARTER's parquet folder once per script; see [Loading templates](01_registersti-datastores.qmd#load-templates).
+Register data on DARTER is loaded with **`fastreg::read_register("name")`** -
+exactly as in the general guide. You just point fastreg at DARTER's parquet
+folder once per script; see [Loading
+templates](01_registersti-datastores.qmd#load-templates).
 
 ::: {.callout-important}
 **Install the latest `duckplyr` at the start of each session**
 
-DST has `duckplyr` **pre-installed, but in an old version** that is missing functionality - several of the patterns in this guide will not work with it. So get the latest version from CRAN, and **repeat after every log-out / server reset** (the reset reverts the package to the old, pre-installed version). `duckplyr` provides the DuckDB engine behind `compute()` (see [Large registers](#store-registre) below).
+DST has `duckplyr` **pre-installed, but in an old version** that is missing
+functionality - several of the patterns in this guide will not work with it. So
+get the latest version from CRAN, and **repeat after every log-out / server
+reset** (the reset reverts the package to the old, pre-installed version).
+`duckplyr` provides the DuckDB engine behind `compute()` (see [Large
+registers](#store-registre) below).
 
 ```r
-install.packages("duckplyr")   # get the latest CRAN version - run before library()
-packageVersion("duckplyr")     # check the version in your session; >= 1.1 is fine
+install.packages("duckplyr") # get the latest CRAN version - run before library()
+packageVersion("duckplyr") # check the version in your session; >= 1.1 is fine
 ```
 :::
 
----
+--------------------------------------------------------------------------------
 
-**Before running a script:** verify that `path_output` at the top of each script points to your workspace folder (defined under [Base paths in Register paths and datastores](01_registersti-datastores.qmd#base-paths)).
+**Before running a script:** verify that `path_output` at the top of each script
+points to your workspace folder (defined under [Base paths in Register paths and
+datastores](01_registersti-datastores.qmd#base-paths)).
 
 ### Recommendation: create a helper function for LPR extractions
 
-LPR extractions require combining LPR2 somatic, LPR2 psychiatric and LPR3 - and doing the same for each new outcome in the project.
-It pays off to encapsulate this in one reusable function rather than copying the code repeatedly.
+LPR extractions require combining LPR2 somatic, LPR2 psychiatric and LPR3 - and
+doing the same for each new outcome in the project. It pays off to encapsulate
+this in one reusable function rather than copying the code repeatedly.
 
-**Advantages:**
-- One place to fix if something changes (e.g. a new register or a new column)
-- The code block for each outcome is reduced from ~40 lines to one function call
-- Errors are introduced in one place instead of in each copy
+**Advantages:** - One place to fix if something changes (e.g. a new register or
+a new column) - The code block for each outcome is reduced from \~40 lines to
+one function call - Errors are introduced in one place instead of in each copy
 
-**How to create the function** - define it at the top of your script or in a separate `functions.R` file:
+**How to create the function** - define it at the top of your script or in a
+separate `functions.R` file:
 
 <details>
 <summary>See the full <code>get_lpr_diagnoses()</code> function</summary>
@@ -137,10 +150,17 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes, diagtypes = c("A", "B")) {
 </details>
 
 ::: {.callout-note}
-**`semi_join` or `filter(... %in% ...)`?** Both select rows, but each has its use:
+**`semi_join` or `filter(... %in% ...)`?** Both select rows, but each has its
+use:
 
-- **`semi_join(tibble(pnr = pnr_vector), by = "pnr")`**: for your **cohort**. A large R vector of pnrs pushes down into Arrow/DuckDB more reliably as a small table than a `filter(pnr %in% ...)`, which can be slow or rejected outright (especially with older `duckplyr`).
-- **`filter(substr(c_diag, 2, 4) %in% !!icd_codes)`**: for a **short code list**. Here `filter` is fine - but remember `!!`, which injects the local R vector into the query (without `!!` DuckDB looks for a column of that name). The background is in [Extract from LPR](../09b_udtraek_fra_lpr.qmd).
+- **`semi_join(tibble(pnr = pnr_vector), by = "pnr")`**: for your **cohort**. A
+  large R vector of pnrs pushes down into Arrow/DuckDB more reliably as a small
+  table than a `filter(pnr %in% ...)`, which can be slow or rejected outright
+  (especially with older `duckplyr`).
+- **`filter(substr(c_diag, 2, 4) %in% !!icd_codes)`**: for a **short code
+  list**. Here `filter` is fine - but remember `!!`, which injects the local R
+  vector into the query (without `!!` DuckDB looks for a column of that name).
+  The background is in [Extract from LPR](../09b_udtraek_fra_lpr.qmd).
 :::
 
 <details>
@@ -174,30 +194,49 @@ saveRDS(result, "datasets/extract_dementia.rds")
 </details>
 
 ::: {.callout-warning}
-**Always specify `icd_codes` - never fetch all diagnoses.** The function filters on your codes **before `collect()`**, so only the relevant rows are pulled into R's RAM. That is why `icd_codes` is a required argument.
+**Always specify `icd_codes` - never fetch all diagnoses.** The function filters
+on your codes **before `collect()`**, so only the relevant rows are pulled into
+R's RAM. That is why `icd_codes` is a required argument.
 
-Do not remove the code filter to "grab everything": every A/B/G diagnosis for a whole cohort across LPR2 and LPR3 can be **millions of rows**. It fills R's memory, and such a heavy extraction can get you **kicked off the DST server**.
+Do not remove the code filter to "grab everything": every A/B/G diagnosis for a
+whole cohort across LPR2 and LPR3 can be **millions of rows**. It fills R's
+memory, and such a heavy extraction can get you **kicked off the DST server**.
 :::
 
 ::: {.callout-note}
-This is the DARTER variant (using `read_register()` and the confirmed register names for 708421, as of June 2026). The general `open_dataset()` version and the explanation behind the pattern are in [Extract from LPR](../09b_udtraek_fra_lpr.qmd).
+This is the DARTER variant (using `read_register()` and the confirmed register
+names for 708421, as of June 2026). The general `open_dataset()` version and the
+explanation behind the pattern are in [Extract from
+LPR](../09b_udtraek_fra_lpr.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Large registers - `compute()` vs `collect()` {#store-registre}
 
-`get_lpr_diagnoses()` ends each extraction with `collect()` (pulls into R). On a very large register (e.g. LMDB or laboratory results) you can pipe to `compute()` instead, which materialises the result in DuckDB without filling R's RAM - always reduce with `semi_join()`/`filter()`/`select()` **before** `compute()`. The technique and the difference between `compute()` and `collect()` are explained generally in [Phase 5 - Extracting data step by step](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent).
+`get_lpr_diagnoses()` ends each extraction with `collect()` (pulls into R). On a
+very large register (e.g. LMDB or laboratory results) you can pipe to
+`compute()` instead, which materialises the result in DuckDB without filling R's
+RAM - always reduce with `semi_join()`/`filter()`/`select()` **before**
+`compute()`. The technique and the difference between `compute()` and
+`collect()` are explained generally in [Phase 5 - Extracting data step by
+step](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent).
 
----
+--------------------------------------------------------------------------------
 
 ## See also
 
 `get_lpr_diagnoses()` above wraps the pattern from the general guide:
 
-- [Phase 8 - Find your registers](../08_find-dine-registre.qmd): which register contains what
-- [Phase 9 - Hospital contacts (LPR)](../09a_forstaa_lpr.qmd): the explanation behind the two-phase strategy, LPR2/LPR3 and the D-prefix
-- [Phase 10 - Build your cohort](../10_byg-studiepopulation.qmd): where you create `full_cohort.rds`, which the function above reads
-- [Register paths and datastores](01_registersti-datastores.qmd): confirmed paths on 708421
+- [Phase 8 - Find your registers](../08_find-dine-registre.qmd): which register
+  contains what
+- [Phase 9 - Hospital contacts (LPR)](../09a_forstaa_lpr.qmd): the explanation
+  behind the two-phase strategy, LPR2/LPR3 and the D-prefix
+- [Phase 10 - Build your cohort](../10_byg-studiepopulation.qmd): where you
+  create `full_cohort.rds`, which the function above reads
+- [Register paths and datastores](01_registersti-datastores.qmd): confirmed
+  paths on 708421
 
-**Further down the pipeline:** [Phase 7 - Inspect data](../07_inspicer-data.qmd) · [Phase 12 - Assemble and prepare the dataset](../12_data-manipulation.qmd) · [Phase 14 - Export and repatriation](../14_eksport-hjemsendelse.qmd)
+**Further down the pipeline:** [Phase 7 - Inspect data](../07_inspicer-data.qmd)
+· [Phase 12 - Assemble and prepare the dataset](../12_data-manipulation.qmd) ·
+[Phase 14 - Export and repatriation](../14_eksport-hjemsendelse.qmd)

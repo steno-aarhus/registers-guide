@@ -4,84 +4,113 @@ subtitle: "Joins, pivots og klargøring af dit analysedatasæt"
 date: last-modified
 ---
 
-Du ankommer til denne fase med separate RDS-filer: din kohort fra [Fase 10](10_byg-studiepopulation.qmd) og de variable du har udtrukket i [Fase 11](11_udtraek-variable.qmd) - udfald, socioøkonomi og komorbiditet (plus evt. demografi fra [Fase 6](06_foerste-udtraek.qmd)). Du forlader med ét analyseklart datasæt klar til [Fase 13 - Analyse](13_analyse.qmd).
+Du ankommer til denne fase med separate RDS-filer: din kohort fra [Fase
+10](10_byg-studiepopulation.qmd) og de variable du har udtrukket i [Fase
+11](11_udtraek-variable.qmd) - udfald, socioøkonomi og komorbiditet (plus evt.
+demografi fra [Fase 6](06_foerste-udtraek.qmd)). Du forlader med ét analyseklart
+datasæt klar til [Fase 13 - Analyse](13_analyse.qmd).
 
 ::: {.callout-tip}
-**Kort fortalt:** Form hvert udtræk til **én række per person** (med `group_by() + slice()` eller `pivot_wider()`), og kobl dem så sammen på `pnr` med `left_join()` til ét analyseklart datasæt.
+**Kort fortalt:** Form hvert udtræk til **én række per person** (med
+`group_by() + slice()` eller `pivot_wider()`), og kobl dem så sammen på `pnr`
+med `left_join()` til ét analyseklart datasæt.
 :::
 
 Inden du kan analysere, skal du:
 
-1. Forme hvert udtræk til **én række per person** (de fleste registre er i langt format med mange rækker per person)
+1. Forme hvert udtræk til **én række per person** (de fleste registre er i langt
+   format med mange rækker per person)
 2. Samle dem til **ét analyseklart datasæt** med `left_join()`
 
-Det er det, denne fase handler om. Teknikken til trin 1 er enten `group_by() + slice()` eller `pivot_wider()` - valget afhænger af, hvad du vil have ud af registret. Trin 2 er altid `left_join()`.
+Det er det, denne fase handler om. Teknikken til trin 1 er enten
+`group_by() + slice()` eller `pivot_wider()` - valget afhænger af, hvad du vil
+have ud af registret. Trin 2 er altid `left_join()`.
 
 ::: {.callout-note}
-Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts mappestruktur og kolonnenavne.
+Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts
+mappestruktur og kolonnenavne.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Hvad er et analyseklart datasæt?
 
-Et analyseklart datasæt har **én række per person** og **én kolonne per variabel** - det vi kalder *bredt format*:
+Et analyseklart datasæt har **én række per person** og **én kolonne per
+variabel** - det vi kalder *bredt format*:
 
-| `pnr` | `index_date` | `censor_date` | `followup_years` | `event` | `alder` | `koen` | `nmi_score` |
-|---|---|---|---|---|---|---|---|
-| 001 | 2015-03-01 | 2022-07-14 | 7.4 | 0 | 58 | 2 | 12 |
-| 002 | 2016-11-20 | 2019-11-20 | 3.0 | 1 | 63 | 1 | 7 |
+  | `pnr` | `index_date` | `censor_date` | `followup_years` | `event` | `alder` | `koen` | `nmi_score` |
+  | ----- | ------------ | ------------- | ---------------- | ------- | ------- | ------ | ----------- |
+  | 001   | 2015-03-01   | 2022-07-14    | 7.4              | 0       | 58      | 2      | 12          |
+  | 002   | 2016-11-20   | 2019-11-20    | 3.0              | 1       | 63      | 1      | 7           |
 
 ::: {.callout-note}
-Eksemplet bruger et **kohortestudie** med `exposed`, `event` og `followup_years`. For et **prævalensstudie** vil kolonnestrukturen se anderledes ud - typisk uden opfølgningstid, men med en tværsnitsdato og kovariater målt på det tidspunkt. Teknikken i denne fase (joins, pivots, `group_by() + slice()`) er den samme uanset studiedesign.
+Eksemplet bruger et **kohortestudie** med `exposed`, `event` og
+`followup_years`. For et **prævalensstudie** vil kolonnestrukturen se anderledes
+ud - typisk uden opfølgningstid, men med en tværsnitsdato og kovariater målt på
+det tidspunkt. Teknikken i denne fase (joins, pivots, `group_by() + slice()`) er
+den samme uanset studiedesign.
 :::
 
-Registrene du trækker fra - LPR, LMDB, BEF - er næsten altid i *langt format* med mange rækker per person. Denne fase viser, hvordan du former dem om og samler dem.
+Registrene du trækker fra - LPR, LMDB, BEF - er næsten altid i *langt format*
+med mange rækker per person. Denne fase viser, hvordan du former dem om og
+samler dem.
 
 ### Hvad har du allerede gemt?
 
-Hvert udtræk fra Fase 6, 9 og 11 m.fl. bør gemmes som sin egen RDS-fil - ét register, ét emne. Eksempel på hvad du typisk har:
+Hvert udtræk fra Fase 6, 9 og 11 m.fl. bør gemmes som sin egen RDS-fil - ét
+register, ét emne. Eksempel på hvad du typisk har:
 
-| Fil | Indhold | Nøglekolonner |
-|---|---|---|
-| `full_cohort.rds` | Kohorte med index-dato | `pnr`, `index_date`, `exposed` |
-| `extract_demens.rds` | Første demensdiagnose | `pnr`, `event_date` (NA = ingen) |
-| `extract_doed.rds` | Dødsdato | `pnr`, `death_date` (NA = i live) |
-| `extract_emigration.rds` | Første emigration | `pnr`, `emigration_date` (NA = ikke emigreret) |
-| `extract_bef.rds` | Demografi ved index | `pnr`, `alder`, `koen` |
-| `extract_nmi.rds` | Komorbiditet ved baseline | `pnr`, `nmi_score` |
-| `extract_ses.rds` | Socioøkonomiske variable | `pnr`, `udda`, `indkomst`, `socio` |
+  | Fil                      | Indhold                   | Nøglekolonner                                  |
+  | ------------------------ | ------------------------- | ---------------------------------------------- |
+  | `full_cohort.rds`        | Kohorte med index-dato    | `pnr`, `index_date`, `exposed`                 |
+  | `extract_demens.rds`     | Første demensdiagnose     | `pnr`, `event_date` (NA = ingen)               |
+  | `extract_doed.rds`       | Dødsdato                  | `pnr`, `death_date` (NA = i live)              |
+  | `extract_emigration.rds` | Første emigration         | `pnr`, `emigration_date` (NA = ikke emigreret) |
+  | `extract_bef.rds`        | Demografi ved index       | `pnr`, `alder`, `koen`                         |
+  | `extract_nmi.rds`        | Komorbiditet ved baseline | `pnr`, `nmi_score`                             |
+  | `extract_ses.rds`        | Socioøkonomiske variable  | `pnr`, `udda`, `indkomst`, `socio`             |
 
-Målet med denne fase er at samle dem til ét datasæt med `left_join()` - én ny kolonne per fil. Kohorten er rygraden: hvert udtræk kobles på via `pnr` og tilføjer sine kolonner - alle kohortemedlemmer bevares, og personer uden match får `NA`.
+Målet med denne fase er at samle dem til ét datasæt med `left_join()` - én ny
+kolonne per fil. Kohorten er rygraden: hvert udtræk kobles på via `pnr` og
+tilføjer sine kolonner - alle kohortemedlemmer bevares, og personer uden match
+får `NA`.
 
 ::: {.callout-important}
-**Saml kun det du skal bruge.**
-Det er fristende at beholde alle kolonner "for en sikkerheds skyld". Gør det ikke. Afslut altid med `select()` og vælg eksplicit de kolonner analysen kræver. Et datasæt med kun de nødvendige kolonner er langt lettere at debugge og forstå.
+**Saml kun det du skal bruge.** Det er fristende at beholde alle kolonner "for
+en sikkerheds skyld". Gør det ikke. Afslut altid med `select()` og vælg
+eksplicit de kolonner analysen kræver. Et datasæt med kun de nødvendige kolonner
+er langt lettere at debugge og forstå.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## To redskaber til at forme data
 
-De to centrale operationer i denne fase er **pivots** og **joins** - de ligner hinanden i navn, men gør noget fundamentalt forskelligt:
+De to centrale operationer i denne fase er **pivots** og **joins** - de ligner
+hinanden i navn, men gør noget fundamentalt forskelligt:
 
-| | Pivots | Joins |
-|---|---|---|
-| **Hvad det gør** | Former én tabel om - ændrer formen, ikke indholdet | Kobler to tabeller - tilføjer kolonner fra en anden tabel |
-| **Input** | Én tabel | To tabeller med en fælles nøgle (typisk `pnr`) |
-| **Output** | Samme data, ny form | Bredere tabel med kolonner fra begge |
-| **Brugt til** | Langt → bredt format (`pivot_wider`) eller bredt → langt (`pivot_longer`) | Saml kohort + udfald + kovariater til ét datasæt |
+  |                  | Pivots                                                                    | Joins                                                     |
+  | ---------------- | ------------------------------------------------------------------------- | --------------------------------------------------------- |
+  | **Hvad det gør** | Former én tabel om - ændrer formen, ikke indholdet                        | Kobler to tabeller - tilføjer kolonner fra en anden tabel |
+  | **Input**        | Én tabel                                                                  | To tabeller med en fælles nøgle (typisk `pnr`)            |
+  | **Output**       | Samme data, ny form                                                       | Bredere tabel med kolonner fra begge                      |
+  | **Brugt til**    | Langt → bredt format (`pivot_wider`) eller bredt → langt (`pivot_longer`) | Saml kohort + udfald + kovariater til ét datasæt          |
 
-**Tommelfingerregel:** Brug pivot når du vil ændre *formen* på én tabel. Brug join når du vil *kombinere* to tabeller.
+**Tommelfingerregel:** Brug pivot når du vil ændre *formen* på én tabel. Brug
+join når du vil *kombinere* to tabeller.
 
----
+--------------------------------------------------------------------------------
 
 ## Afledte variable: lav nye kolonner
 
-Ud over at forme og koble skal du næsten altid **beregne nye variable** ud fra dem, du har. Det gør du med `mutate()` (introduceret i [Fase 2](02_r-intro.qmd)): den tilføjer en kolonne, der er beregnet fra eksisterende kolonner.
+Ud over at forme og koble skal du næsten altid **beregne nye variable** ud fra
+dem, du har. Det gør du med `mutate()` (introduceret i [Fase
+2](02_r-intro.qmd)): den tilføjer en kolonne, der er beregnet fra eksisterende
+kolonner.
 
 ```r
-library(dplyr); library(lubridate)
+library(dplyr)
+library(lubridate)
 
 df <- df %>%
   mutate(
@@ -98,38 +127,53 @@ df <- df %>%
     alders_gruppe = case_when(
       alder_ved_index < 50 ~ "<50",
       alder_ved_index < 65 ~ "50-64",
-      TRUE                 ~ "65+"     # alt andet (her: 65 og derover)
+      TRUE ~ "65+" # alt andet (her: 65 og derover)
     )
   )
 ```
 
 Et par vaner:
 
-- **Beregn en variabel ÉN gang** og genbrug den - så fx alder ved index er den samme i matchingen og i Table 1.
-- **`if_else()`** til ja/nej (to udfald); **`case_when()`** til flere kategorier. Sæt typen ens i alle grene (fx `1L`/`0L`, eller tekst i alle).
-- **Opfølgningstid** (`censor_date - index_date`) beregnes typisk *efter* joinet, fordi den bruger datoer fra flere udtræk - se [Kobl udtræk sammen](12b_joins.qmd).
+- **Beregn en variabel ÉN gang** og genbrug den - så fx alder ved index er den
+  samme i matchingen og i Table 1.
+- **`if_else()`** til ja/nej (to udfald); **`case_when()`** til flere
+  kategorier. Sæt typen ens i alle grene (fx `1L`/`0L`, eller tekst i alle).
+- **Opfølgningstid** (`censor_date - index_date`) beregnes typisk *efter*
+  joinet, fordi den bruger datoer fra flere udtræk - se [Kobl udtræk
+  sammen](12b_joins.qmd).
 
 ::: {.callout-tip}
-`mutate()`, `if_else()` og `case_when()` er forklaret i [Funktioner: oversigt](guide_til_funktioner.qmd).
+`mutate()`, `if_else()` og `case_when()` er forklaret i [Funktioner:
+oversigt](guide_til_funktioner.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Fasens sider
 
 To **kerne-sider** fører dig fra separate udtræk til ét analyseklart datasæt:
 
-1. **[Langt ↔ bredt format](12a_langt-bredt.qmd):** få hvert udtræk ned til **én række per person**. Forstå forskellen på langt og bredt format, og brug enten `group_by() + slice()` (én repræsentativ værdi per person) eller `pivot_wider()` (flere tidspunkter side om side).
-2. **[Kobl udtræk sammen](12b_joins.qmd):** kobl udtrækkene på `pnr` (`left_join()`, `inner_join()`, `semi_join()`, `anti_join()`), stak to versioner af samme register lodret (`bind_rows()`), validér joinet, og beregn opfølgningstid og hændelsesvariabel. **Her samles det endelige datasæt.**
+1. **[Langt ↔ bredt format](12a_langt-bredt.qmd):** få hvert udtræk ned til **én
+   række per person**. Forstå forskellen på langt og bredt format, og brug enten
+   `group_by() + slice()` (én repræsentativ værdi per person) eller
+   `pivot_wider()` (flere tidspunkter side om side).
+2. **[Kobl udtræk sammen](12b_joins.qmd):** kobl udtrækkene på `pnr`
+   (`left_join()`, `inner_join()`, `semi_join()`, `anti_join()`), stak to
+   versioner af samme register lodret (`bind_rows()`), validér joinet, og beregn
+   opfølgningstid og hændelsesvariabel. **Her samles det endelige datasæt.**
 
-Rækkefølgen er bevidst: **form først, kobl bagefter**. Du kan ikke koble forudsigeligt, før hvert udtræk har én række per person.
+Rækkefølgen er bevidst: **form først, kobl bagefter**. Du kan ikke koble
+forudsigeligt, før hvert udtræk har én række per person.
 
 To **valgfrie tillægssider** tager du kun, hvis dit projekt har brug for dem:
 
-- **[Manglende data](12c_manglende-data.qmd):** hvordan du forstår og håndterer missing values, inkl. multipel imputation.
-- **[Tidsvarierende variable](12d_tidsvarierende.qmd):** hvad du gør, når en variabel ændrer sig under opfølgningen (og hvornår du ikke behøver at gøre noget).
+- **[Manglende data](12c_manglende-data.qmd):** hvordan du forstår og håndterer
+  missing values, inkl. multipel imputation.
+- **[Tidsvarierende variable](12d_tidsvarierende.qmd):** hvad du gør, når en
+  variabel ændrer sig under opfølgningen (og hvornår du ikke behøver at gøre
+  noget).
 
----
+--------------------------------------------------------------------------------
 
 ## Næste skridt
 
@@ -139,15 +183,17 @@ Begynd med at få hvert udtræk ned til én række per person:
 
 ## Se også
 
-- [Funktioner: oversigt](guide_til_funktioner.qmd): alle funktioner du bruger til at transformere data
-- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): praktisk eksempel på langt registerdata og inner_join
-
+- [Funktioner: oversigt](guide_til_funktioner.qmd): alle funktioner du bruger
+  til at transformere data
+- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): praktisk eksempel på langt
+  registerdata og inner_join
 
 ::: {.callout-tip}
 ## Læs mere
 
 Generel uddybning i *The Epidemiologist R Handbook* (på engelsk):
 
-- [Cleaning data and core functions](https://www.epirhandbook.com/en/new_pages/cleaning.html)
+- [Cleaning data and core
+  functions](https://www.epirhandbook.com/en/new_pages/cleaning.html)
 - [Grouping data](https://www.epirhandbook.com/en/new_pages/grouping.html)
 :::

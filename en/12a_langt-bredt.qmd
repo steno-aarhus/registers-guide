@@ -1,16 +1,24 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Long ↔ wide format"
-subtitle: "Get one extract down to one row per person - with group_by() + slice() or pivot"
+subtitle: >-
+  Get one extract down to one row per person - with group_by() + slice() or
+  pivot
 date: last-modified
 ---
 
-Before you can link your extracts together ([Link your extracts](12b_joins.qmd)), each extract needs to be in **wide format with one row per person**. The registers you extract from are almost always in *long format* with many rows per person. This page explains the difference and shows the two ways you reshape an extract: `group_by() + slice()` and `pivot_wider()` / `pivot_longer()`.
+Before you can link your extracts together ([Link your
+extracts](12b_joins.qmd)), each extract needs to be in **wide format with one
+row per person**. The registers you extract from are almost always in *long
+format* with many rows per person. This page explains the difference and shows
+the two ways you reshape an extract: `group_by() + slice()` and `pivot_wider()`
+/ `pivot_longer()`.
 
 ::: {.callout-note}
-The code examples use generic paths and variable names. Adapt to your project's folder structure and column names.
+The code examples use generic paths and variable names. Adapt to your project's
+folder structure and column names.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Wide vs. long format
 
@@ -18,119 +26,131 @@ Imagine three persons with weight measurements at two time points.
 
 **Wide format** - one row per person, one column per time point:
 
-| pnr | weight_baseline | weight_6mo |
-|---|---|---|
-| 001 | 120 | 95 |
-| 002 | 105 | 88 |
-| 003 | 98 | 80 |
+  | pnr | weight_baseline | weight_6mo |
+  | --- | --------------- | ---------- |
+  | 001 | 120             | 95         |
+  | 002 | 105             | 88         |
+  | 003 | 98              | 80         |
 
-**Long format** - one row per observation, one column for time point and one for value:
+**Long format** - one row per observation, one column for time point and one for
+value:
 
-| pnr | timepoint | weight |
-|---|---|---|
-| 001 | baseline | 120 |
-| 001 | 6mo | 95 |
-| 002 | baseline | 105 |
-| 002 | 6mo | 88 |
-| 003 | baseline | 98 |
-| 003 | 6mo | 80 |
+  | pnr | timepoint | weight |
+  | --- | --------- | ------ |
+  | 001 | baseline  | 120    |
+  | 001 | 6mo       | 95     |
+  | 002 | baseline  | 105    |
+  | 002 | 6mo       | 88     |
+  | 003 | baseline  | 98     |
+  | 003 | 6mo       | 80     |
 
-Both formats contain **the same information** - they are just arranged differently.
+Both formats contain **the same information** - they are just arranged
+differently.
 
----
+--------------------------------------------------------------------------------
 
 ## Which formats are where?
 
-| Register | Format | Why |
-|---|---|---|
-| BEF | Long | One row per person **per snapshot** - quarterly since 2008, otherwise annual |
-| LPR (lpr_adm + lpr_diag) | Long | One row per **diagnosis per contact** - one admission can have 10 diagnoses |
-| LMDB | Long | One row per **dispensed prescription** - the same person can have hundreds |
-| DODSAARS | Wide | One row per **deceased person** - already one-per-person |
-| Your analysis dataset | Wide | One row per person - one column per covariate |
+  | Register                 | Format | Why                                                                          |
+  | ------------------------ | ------ | ---------------------------------------------------------------------------- |
+  | BEF                      | Long   | One row per person **per snapshot** - quarterly since 2008, otherwise annual |
+  | LPR (lpr_adm + lpr_diag) | Long   | One row per **diagnosis per contact** - one admission can have 10 diagnoses  |
+  | LMDB                     | Long   | One row per **dispensed prescription** - the same person can have hundreds   |
+  | DODSAARS                 | Wide   | One row per **deceased person** - already one-per-person                     |
+  | Your analysis dataset    | Wide   | One row per person - one column per covariate                                |
 
-**Registers are usually in long format. Your analysis dataset should typically be in wide format.**
+**Registers are usually in long format. Your analysis dataset should typically
+be in wide format.**
 
----
+--------------------------------------------------------------------------------
 
 ## Two ways to get one row per person
 
 The key choice is *what you want out* of the long register:
 
-| You want… | Use | Result |
-|---|---|---|
-| **One representative value** per person (newest snapshot, first event, earliest date) | `group_by() + slice()` | One row per person, same columns |
-| **Several time points side by side** as separate columns | `pivot_wider()` | One row per person, one new column per time point |
+  | You want…                                                                             | Use                    | Result                                            |
+  | ------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
+  | **One representative value** per person (newest snapshot, first event, earliest date) | `group_by() + slice()` | One row per person, same columns                  |
+  | **Several time points side by side** as separate columns                              | `pivot_wider()`        | One row per person, one new column per time point |
 
-In register-based research, `group_by() + slice()` is by far the most common choice - you usually just want "the newest" or "the first" value per person. You use `pivot_wider()` when you explicitly want to compare several time points.
+In register-based research, `group_by() + slice()` is by far the most common
+choice - you usually just want "the newest" or "the first" value per person. You
+use `pivot_wider()` when you explicitly want to compare several time points.
 
----
+--------------------------------------------------------------------------------
 
 ## `group_by()` + `slice()` - one representative row
 
-The pattern is always the same: group by `pnr`, sort so the desired row is on top, take the first row per group.
+The pattern is always the same: group by `pnr`, sort so the desired row is on
+top, take the first row per group.
 
 ```r
 # BEF: keep only the newest record per person (BEF has one snapshot per year)
 bef_one_per_person <- bef %>%
-  group_by(pnr) %>%          # group: all rows with the same pnr are treated together
-  arrange(desc(aar)) %>%     # sort within group: newest year first (desc = descending)
-  slice(1) %>%               # take only the first row per group - i.e. the newest year
-  ungroup()                  # IMPORTANT: release grouping when done
+  group_by(pnr) %>% # group: all rows with the same pnr are treated together
+  arrange(desc(aar)) %>% # sort within group: newest year first (desc = descending)
+  slice(1) %>% # take only the first row per group - i.e. the newest year
+  ungroup() # IMPORTANT: release grouping when done
 ```
 
 ::: {.callout-important}
-**Always remember `ungroup()`.**
-`group_by()` puts a "grouped_df" tag on your data.frame, which *all* subsequent operations inherit. That means:
-- `mutate()` calculates per group, not across the entire dataset
-- `n()` counts rows per group, not in total
-- `summarize()` gives one result per group
+**Always remember `ungroup()`.** `group_by()` puts a "grouped_df" tag on your
+data.frame, which *all* subsequent operations inherit. That means: - `mutate()`
+calculates per group, not across the entire dataset - `n()` counts rows per
+group, not in total - `summarize()` gives one result per group
 
-These errors are hard to detect because the code runs without error messages and produces seemingly reasonable numbers. `ungroup()` removes the tag and makes the data.frame normal again. Rule of thumb: always end a `group_by()` chain with `ungroup()`.
+These errors are hard to detect because the code runs without error messages and
+produces seemingly reasonable numbers. `ungroup()` removes the tag and makes the
+data.frame normal again. Rule of thumb: always end a `group_by()` chain with
+`ungroup()`.
 :::
 
 ```r
 # LPR / alle_dx: find first diagnosis per person (for outcome definition)
 first_dementia <- alle_dx %>%
-  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>%   # only dementia codes
-  group_by(pnr) %>%              # group per person
-  arrange(date_contact) %>%      # oldest date first (ascending - no desc)
-  slice(1) %>%                   # first diagnosis per person
-  ungroup()                      # release grouping
+  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>% # only dementia codes
+  group_by(pnr) %>% # group per person
+  arrange(date_contact) %>% # oldest date first (ascending - no desc)
+  slice(1) %>% # first diagnosis per person
+  ungroup() # release grouping
 # → ready for join: cohort %>% left_join(first_dementia, by = "pnr")
 ```
 
 ```r
 # VNDS: find first emigration per person (a person may have emigrated and returned)
 first_emigration <- vnds %>%
-  filter(indud_kode == "U") %>%   # only emigration events
+  filter(indud_kode == "U") %>% # only emigration events
   group_by(pnr) %>%
   arrange(haend_dato) %>%
   slice(1) %>%
   ungroup()
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## Pivots - switch between long and wide
 
 ### Long → wide with `pivot_wider()`
 
 ```r
-library(tidyr)   # pivot_wider, pivot_longer
+library(tidyr) # pivot_wider, pivot_longer
 
 df_wide <- df_long %>%
   pivot_wider(
-    names_from  = "timepoint",  # which column should become column names?
-    values_from = "weight"      # which column contains the values?
+    names_from = "timepoint", # which column should become column names?
+    values_from = "weight" # which column contains the values?
   )
 ```
 
 ::: {.callout-warning}
-**You CANNOT `pivot_wider()` an entire LPR table.**
-LPR potentially has hundreds of unique ICD codes per person - `pivot_wider()` would give you one column per code, i.e. thousands of columns and a dataset that is impossible to work with.
+**You CANNOT `pivot_wider()` an entire LPR table.** LPR potentially has hundreds
+of unique ICD codes per person - `pivot_wider()` would give you one column per
+code, i.e. thousands of columns and a dataset that is impossible to work with.
 
-Instead use the pattern from [Extract from LPR](09b_udtraek_fra_lpr.qmd): extract the first date for one specific diagnosis group (with `group_by() + slice()` above), save as `extract_dementia.rds`, and join it as one column with `left_join()`.
+Instead use the pattern from [Extract from LPR](09b_udtraek_fra_lpr.qmd):
+extract the first date for one specific diagnosis group (with
+`group_by() + slice()` above), save as `extract_dementia.rds`, and join it as
+one column with `left_join()`.
 :::
 
 <details>
@@ -176,25 +196,27 @@ In practice you would typically not pivot AKM - you filter to one specific year 
 ```r
 df_long <- df_wide %>%
   pivot_longer(
-    cols      = c(weight_baseline, weight_6mo),  # columns to "fold in"
-    names_to  = "timepoint",                     # name for the new timepoint column
-    values_to = "weight"                         # name for the new value column
+    cols = c(weight_baseline, weight_6mo), # columns to "fold in"
+    names_to = "timepoint", # name for the new timepoint column
+    values_to = "weight" # name for the new value column
   )
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## Next steps
 
-Once each extract is down to one row per person, you link them into one analysis-ready dataset:
+Once each extract is down to one row per person, you link them into one
+analysis-ready dataset:
 
 → [Link your extracts](12b_joins.qmd)
 
 ## See also
 
-- [Link your extracts](12b_joins.qmd): joins, `bind_rows()` and calculating follow-up time
-- [Functions: overview](guide_til_funktioner.qmd): all functions for transforming data
-
+- [Link your extracts](12b_joins.qmd): joins, `bind_rows()` and calculating
+  follow-up time
+- [Functions: overview](guide_til_funktioner.qmd): all functions for
+  transforming data
 
 ::: {.callout-tip}
 ## Further information

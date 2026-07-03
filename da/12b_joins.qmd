@@ -1,28 +1,44 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Kobl udtræk sammen"
-subtitle: "Joins, bind_rows() og beregning af opfølgningstid - saml dine udtræk til ét datasæt"
+subtitle: >-
+  Joins, bind_rows() og beregning af opfølgningstid - saml dine udtræk til ét
+  datasæt
 date: last-modified
 ---
 
-Dine udtræk fra [Fase 6](06_foerste-udtraek.qmd), [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og [Fase 11](11_udtraek-variable.qmd) ligger som separate RDS-filer. Når hvert udtræk er nede på **én række per person** ([Langt ↔ bredt format](12a_langt-bredt.qmd)), kobler du dem sammen på `pnr` til ét analyseklart datasæt. Til sidst beregner du opfølgningstid og hændelsesvariabel.
+Dine udtræk fra [Fase 6](06_foerste-udtraek.qmd), [Udtræk fra
+LPR](09b_udtraek_fra_lpr.qmd) og [Fase 11](11_udtraek-variable.qmd) ligger som
+separate RDS-filer. Når hvert udtræk er nede på **én række per person** ([Langt
+↔ bredt format](12a_langt-bredt.qmd)), kobler du dem sammen på `pnr` til ét
+analyseklart datasæt. Til sidst beregner du opfølgningstid og hændelsesvariabel.
 
 ::: {.callout-note}
-Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts mappestruktur og kolonnenavne.
+Kodeeksemplerne bruger generiske stier og variabelnavne. Tilpas til dit projekts
+mappestruktur og kolonnenavne.
 :::
 
 ::: {.callout-important}
-**Få først hvert udtræk ned til én række per person.**
-`left_join()` virker kun forudsigeligt, når begge tabeller har **én række per `pnr`**. Mange registerudtræk har flere rækker per person (langt format). Reducér dem til én række per person med `group_by() + slice()` eller `pivot_wider()` - det er forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd). Denne side antager, at dine udtræk allerede er på den form.
+**Få først hvert udtræk ned til én række per person.** `left_join()` virker kun
+forudsigeligt, når begge tabeller har **én række per `pnr`**. Mange
+registerudtræk har flere rækker per person (langt format). Reducér dem til én
+række per person med `group_by() + slice()` eller `pivot_wider()` - det er
+forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd). Denne side antager, at
+dine udtræk allerede er på den form.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Joins - kobl to tabeller sammen {#joins-kobl-to-tabeller-sammen}
 
-I registerbaseret forskning arbejder du næsten altid med data fra **to eller flere tabeller**, der skal kobles sammen.
-Alle joins i `dplyr` tager to tabeller og én nøgle-kolonne, de deler (fx `pnr`).
+I registerbaseret forskning arbejder du næsten altid med data fra **to eller
+flere tabeller**, der skal kobles sammen. Alle joins i `dplyr` tager to tabeller
+og én nøgle-kolonne, de deler (fx `pnr`).
 
-Når du kobler dine **færdige person-niveau udtræk på kohorten**, er nøglen som regel `pnr`. Inde i et register er det andre nøgler: kobler du fx kontakt og diagnose i LPR, sker det på `recnum` eller `dw_ek_kontakt`, ikke `pnr` (se [oversigten over join-nøgler i LPR](09a_forstaa_lpr.qmd)). ER-diagrammet nedenfor viser den almindelige kobling på `pnr` - udtræk koblet på kohorten:
+Når du kobler dine **færdige person-niveau udtræk på kohorten**, er nøglen som
+regel `pnr`. Inde i et register er det andre nøgler: kobler du fx kontakt og
+diagnose i LPR, sker det på `recnum` eller `dw_ek_kontakt`, ikke `pnr` (se
+[oversigten over join-nøgler i LPR](09a_forstaa_lpr.qmd)). ER-diagrammet
+nedenfor viser den almindelige kobling på `pnr` - udtræk koblet på kohorten:
 
 ```{mermaid}
 erDiagram
@@ -49,23 +65,31 @@ erDiagram
     }
 ```
 
-`pnr` er primærnøgle (PK) i kohorten og fremmednøgle (FK) i hvert udtræk. Symbolet `||--o|` er standard ER-notation ("crow's foot"): `||` = præcis én, `o|` = nul eller én. Linjen læses altså: hver person i kohorten matcher **nul eller én** række i udtrækket.
+`pnr` er primærnøgle (PK) i kohorten og fremmednøgle (FK) i hvert udtræk.
+Symbolet `||--o|` er standard ER-notation ("crow's foot"): `||` = præcis én,
+`o|` = nul eller én. Linjen læses altså: hver person i kohorten matcher **nul
+eller én** række i udtrækket.
 
-Det beskriver den **form, du selv skal sikre inden join** - ikke noget `left_join()` tjekker eller retter. Har et udtræk flere rækker per `pnr`, kobler `left_join()` glad videre og duplikerer kohorte-rækkerne (række-eksplosion). Derfor callout'en ovenfor om at få hvert udtræk ned til én række per person *først*, og derfor tjek 1 i [Validér dit join](#valider-dit-join) bagefter (steg rækketallet?).
+Det beskriver den **form, du selv skal sikre inden join** - ikke noget
+`left_join()` tjekker eller retter. Har et udtræk flere rækker per `pnr`, kobler
+`left_join()` glad videre og duplikerer kohorte-rækkerne (række-eksplosion).
+Derfor callout'en ovenfor om at få hvert udtræk ned til én række per person
+*først*, og derfor tjek 1 i [Validér dit join](#valider-dit-join) bagefter (steg
+rækketallet?).
 
 ### De joins du vil bruge
 
 ```r
-library(dplyr)   # left_join, inner_join, semi_join, anti_join
+library(dplyr) # left_join, inner_join, semi_join, anti_join
 
 # left_join: behold ALLE rækker fra x, tilføj kolonner fra y
 # Personer i x uden match i y får NA.
 resultat <- kohort %>%
-  left_join(udfald, by = "pnr")   # alle kohort-medlemmer bevares; udfald = NA hvis ingen hændelse
+  left_join(udfald, by = "pnr") # alle kohort-medlemmer bevares; udfald = NA hvis ingen hændelse
 
 # inner_join: behold kun rækker med match i BEGGE tabeller
 resultat <- lpr_adm %>%
-  inner_join(lpr_diag, by = "recnum")   # kun kontakter med mindst én diagnose
+  inner_join(lpr_diag, by = "recnum") # kun kontakter med mindst én diagnose
 
 # right_join: behold alle rækker fra y (sjældent brugt)
 # full_join: behold alle rækker fra begge (sjældent brugt)
@@ -76,12 +100,12 @@ resultat <- lpr_adm %>%
 ```r
 # semi_join: behold rækker i x SOM HAR match i y
 bef_i_kohort <- bef %>%
-  semi_join(kohort, by = "pnr")   # kun BEF-rækker for kohort-medlemmer
+  semi_join(kohort, by = "pnr") # kun BEF-rækker for kohort-medlemmer
 
 # anti_join: behold rækker i x SOM IKKE HAR match i y
 bef_ikke_i_kohort <- bef %>%
-  anti_join(kohort, by = "pnr")   # kun BEF-rækker for ikke-kohort-medlemmer
-                                  # bruges også som diagnostik - se "Validér dit join" nedenfor
+  anti_join(kohort, by = "pnr") # kun BEF-rækker for ikke-kohort-medlemmer
+# bruges også som diagnostik - se "Validér dit join" nedenfor
 ```
 
 <details>
@@ -100,84 +124,99 @@ bef_ikke_i_kohort <- bef %>%
 
 ### Join med flere nøgler
 
-Flere nøgler bliver kun relevant, når **mindst én af tabellerne har flere rækker per person** - ellers er `pnr` alene nok. Med flere nøgler skal **alle** de angivne kolonner stemme overens, før to rækker tælles som et match (`pnr` *og* `aar`, ikke `pnr` *eller* `aar`).
+Flere nøgler bliver kun relevant, når **mindst én af tabellerne har flere rækker
+per person** - ellers er `pnr` alene nok. Med flere nøgler skal **alle** de
+angivne kolonner stemme overens, før to rækker tælles som et match (`pnr` *og*
+`aar`, ikke `pnr` *eller* `aar`).
 
-Det typiske tilfælde er **panel-data: registre med én række per person per år**. BEF, AKM, FAIK osv. har en `pnr`-række for hvert kalenderår. Kobler du to af dem på `pnr` alene, parres hver af personens rækker med *alle* personens rækker i den anden tabel: har personen 5 år i BEF og 5 år i AKM, får du alle kombinationer, 5 × 5 = 25 rækker i stedet for 5. Tilføjer du året som ekstra nøgle, filtreres de 25 ned til de 5, hvor året også stemmer - 2018 mod 2018:
+Det typiske tilfælde er **panel-data: registre med én række per person per år**.
+BEF, AKM, FAIK osv. har en `pnr`-række for hvert kalenderår. Kobler du to af dem
+på `pnr` alene, parres hver af personens rækker med *alle* personens rækker i
+den anden tabel: har personen 5 år i BEF og 5 år i AKM, får du alle
+kombinationer, 5 × 5 = 25 rækker i stedet for 5. Tilføjer du året som ekstra
+nøgle, filtreres de 25 ned til de 5, hvor året også stemmer - 2018 mod 2018:
 
 ```r
 # Join på pnr OG år: en række matcher kun når BEGGE kolonner er ens
 bef_akm <- bef %>%
-  left_join(akm, by = c("pnr", "aar"))   # 2018-BEF kobles kun til 2018-AKM
+  left_join(akm, by = c("pnr", "aar")) # 2018-BEF kobles kun til 2018-AKM
 ```
 
-Kobler du derimod to udtræk der hver har **én række per person** (fx færdige person-niveau udtræk på kohorten), er `pnr` alene nok - der er ingen ekstra dimension at holde styr på.
+Kobler du derimod to udtræk der hver har **én række per person** (fx færdige
+person-niveau udtræk på kohorten), er `pnr` alene nok - der er ingen ekstra
+dimension at holde styr på.
 
----
+--------------------------------------------------------------------------------
 
 ## Validér dit join {#valider-dit-join}
 
-Joins fejler sjældent med en fejlbesked - men de kan give stille forkerte resultater.
-Tjek altid disse tre ting efter et `left_join()`:
+Joins fejler sjældent med en fejlbesked - men de kan give stille forkerte
+resultater. Tjek altid disse tre ting efter et `left_join()`:
 
 ```r
 # Inden join: hvad er nrow?
-nrow(kohort)                                   # fx 4.823
+nrow(kohort) # fx 4.823
 
 # Join:
 kohort2 <- kohort %>% left_join(udfald, by = "pnr")
 
 # Tjek 1: steg rækketallet? Duplikerede nøgler i udfald giver ekstra rækker.
-nrow(kohort2)                                  # skal stadig være 4.823
+nrow(kohort2) # skal stadig være 4.823
 
 # Tjek 2: hvor mange fik et match?
-sum(!is.na(kohort2$event_date))                # antal med udfald
-sum(is.na(kohort2$event_date))                 # antal uden - forventede censurerede?
+sum(!is.na(kohort2$event_date)) # antal med udfald
+sum(is.na(kohort2$event_date)) # antal uden - forventede censurerede?
 
 # Tjek 3: hvem matchede IKKE? (diagnostisk - ikke nødvendigvis en fejl)
-mangler <- anti_join(kohort, udfald, by = "pnr")   # pnr'er der ikke fandtes i udfald
-nrow(mangler)                                  # 0 = alle matchede; > 0 = undersøg
+mangler <- anti_join(kohort, udfald, by = "pnr") # pnr'er der ikke fandtes i udfald
+nrow(mangler) # 0 = alle matchede; > 0 = undersøg
 ```
 
 ::: {.callout-tip}
-**`anti_join()` som diagnostik**
-`anti_join(kohort, udfald, by = "pnr")` returnerer de kohortepersoner der *ikke* findes i udfald-tabellen.
-Bruges til "hvem i min kohorte har ingen dødsdato-record?" (alle levende - forventet) eller "hvem mangler i register X?" (uforventet - undersøg).
+**`anti_join()` som diagnostik** `anti_join(kohort, udfald, by = "pnr")`
+returnerer de kohortepersoner der *ikke* findes i udfald-tabellen. Bruges til
+"hvem i min kohorte har ingen dødsdato-record?" (alle levende - forventet) eller
+"hvem mangler i register X?" (uforventet - undersøg).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Sæt tabeller lodret sammen - `bind_rows()`
 
 `bind_rows()` og `left_join()` løser **to fundamentalt forskellige problemer**:
 
-| | `bind_rows()` | `left_join()` |
-|---|---|---|
-| Hvad den gør | Stacker tabeller **lodret** - tilføjer rækker | Kombinerer tabeller **vandret** - tilføjer kolonner |
-| Kræver | At kolonnerne hedder det samme | At tabellerne deler én fælles nøglekolonne |
-| Resultat | Flere rækker, samme antal kolonner | Samme antal rækker, flere kolonner |
-| Matcher på nøgle? | Nej - alle rækker fra begge tabeller | Ja - match på `pnr` eller anden nøgle |
-| Typisk brug | LPR2 + LPR3 → ét samlet register | Kobl udfald eller kovariat til kohortetabel |
+  |                   | `bind_rows()`                                 | `left_join()`                                       |
+  | ----------------- | --------------------------------------------- | --------------------------------------------------- |
+  | Hvad den gør      | Stacker tabeller **lodret** - tilføjer rækker | Kombinerer tabeller **vandret** - tilføjer kolonner |
+  | Kræver            | At kolonnerne hedder det samme                | At tabellerne deler én fælles nøglekolonne          |
+  | Resultat          | Flere rækker, samme antal kolonner            | Samme antal rækker, flere kolonner                  |
+  | Matcher på nøgle? | Nej - alle rækker fra begge tabeller          | Ja - match på `pnr` eller anden nøgle               |
+  | Typisk brug       | LPR2 + LPR3 → ét samlet register              | Kobl udfald eller kovariat til kohortetabel         |
 
-`bind_rows()` er **ikke** et join. Den ser ikke på `pnr` og matcher ikke. Den sætter simpelthen tabel 2's rækker under tabel 1's rækker - som at klistre to Excel-ark sammen lodret.
+`bind_rows()` er **ikke** et join. Den ser ikke på `pnr` og matcher ikke. Den
+sætter simpelthen tabel 2's rækker under tabel 1's rækker - som at klistre to
+Excel-ark sammen lodret.
 
 ```r
 # bind_rows: LPR2 og LPR3 har samme kolonner (pnr, date_contact, icd3)
 # → sæt dem sammen lodret til ét samlet diagnoseregister
-lpr2_dx    # 45.000 rækker - diagnoser frem til marts 2019
-lpr3_dx    # 32.000 rækker - diagnoser fra marts 2019 og frem
+lpr2_dx # 45.000 rækker - diagnoser frem til marts 2019
+lpr3_dx # 32.000 rækker - diagnoser fra marts 2019 og frem
 
-alle_dx <- bind_rows(lpr2_dx, lpr3_dx)   # 77.000 rækker - begge perioder samlet
+alle_dx <- bind_rows(lpr2_dx, lpr3_dx) # 77.000 rækker - begge perioder samlet
 ```
 
-Kolonner der mangler i den ene tabel (fx en kolonne der kun findes i LPR3) fyldes automatisk med `NA` for rækker fra den anden tabel.
+Kolonner der mangler i den ene tabel (fx en kolonne der kun findes i LPR3)
+fyldes automatisk med `NA` for rækker fra den anden tabel.
 
 ::: {.callout-note}
-**Hvornår bruger du hvad?**
-`bind_rows()` - når du har **to versioner af det samme register** (LPR2 + LPR3, eksponerede + sammenligningskohorte-medlemmer) og vil slå dem sammen til ét.
-`left_join()` - når du vil **tilknytte en ny variabel** (udfald, dødsdato, alder) til din kohortetabel.
+**Hvornår bruger du hvad?** `bind_rows()` - når du har **to versioner af det
+samme register** (LPR2 + LPR3, eksponerede + sammenligningskohorte-medlemmer) og
+vil slå dem sammen til ét. `left_join()` - når du vil **tilknytte en ny
+variabel** (udfald, dødsdato, alder) til din kohortetabel.
 :::
 
----
+--------------------------------------------------------------------------------
 
 <details>
 <summary>Praktiske eksempler: kobl dødsdato og emigration til kohorten</summary>
@@ -231,26 +270,33 @@ kohort_med_emigration <- kohort %>%
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Beregn opfølgningstid og hændelsesvariabel {#opfoelgningstid}
 
-Inden du kan analysere, skal hvert kohortemedlem have en **censureringsdato** (hvornår opfølgningen slutter) og en **hændelsesvariabel** (fik de udfaldet?).
+Inden du kan analysere, skal hvert kohortemedlem have en **censureringsdato**
+(hvornår opfølgningen slutter) og en **hændelsesvariabel** (fik de udfaldet?).
 
-Censureringsdatoen er den *tidligste* af: hændelses-dato, dødsdato, emigrationsdato og studieslutningstidspunkt.
+Censureringsdatoen er den *tidligste* af: hændelses-dato, dødsdato,
+emigrationsdato og studieslutningstidspunkt.
 
 ```r
 #=====================================================
 # Beregn opfølgningstid og hændelsesvariabel
 #=====================================================
-studie_slut <- as.Date("2024-12-31")   # erstat med din faktiske studieslutningstidspunkt
-                                        # format: "åååå-mm-dd" (ISO 8601 - R's standard)
+studie_slut <- as.Date("2024-12-31") # erstat med din faktiske studieslutningstidspunkt
+# format: "åååå-mm-dd" (ISO 8601 - R's standard)
 
 kohort <- kohort %>%
   mutate(
     # Censureringsdato = det tidligst indtrufne af alle mulige stopårsager
-    censor_date = pmin(event_date, death_date, emigration_date,
-                       studie_slut, na.rm = TRUE),
+    censor_date = pmin(
+      event_date,
+      death_date,
+      emigration_date,
+      studie_slut,
+      na.rm = TRUE
+    ),
 
     # Opfølgningstid i år
     followup_years = as.numeric(censor_date - index_date) / 365.25,
@@ -261,10 +307,16 @@ kohort <- kohort %>%
 ```
 
 ::: {.callout-note}
-`pmin()` sammenligner vektorer position for position og returnerer den mindste værdi per person - det er den vektoriserede version af `min()`. `na.rm = TRUE` sikrer at en manglende dødsdato (= levende) ikke gør censureringsdatoen til `NA`.
+`pmin()` sammenligner vektorer position for position og returnerer den mindste
+værdi per person - det er den vektoriserede version af `min()`. `na.rm = TRUE`
+sikrer at en manglende dødsdato (= levende) ikke gør censureringsdatoen til
+`NA`.
 :::
 
-**Konkurrerende risici?** Skal en konkurrerende hændelse (typisk død) håndteres særskilt (se [Time-to-event](13e_time-to-event.qmd#konkurrerende-risici)), så lav i stedet for `event` (0/1) en **status med tre værdier** - hvad der skete *først*:
+**Konkurrerende risici?** Skal en konkurrerende hændelse (typisk død) håndteres
+særskilt (se [Time-to-event](13e_time-to-event.qmd#konkurrerende-risici)), så
+lav i stedet for `event` (0/1) en **status med tre værdier** - hvad der skete
+*først*:
 
 ```r
 #=====================================================
@@ -274,21 +326,31 @@ kohort <- kohort %>%
   mutate(
     # status_kode: hvilken dato "vandt" pmin() ovenfor?
     status_kode = case_when(
-      !is.na(event_date) & event_date <= censor_date ~ 1,   # udfald først
-      !is.na(death_date) & death_date <= censor_date ~ 2,   # død først (konkurrerende risiko)
-      TRUE                                           ~ 0     # ellers censureret (emigration/studieslut)
+      !is.na(event_date) & event_date <= censor_date ~ 1, # udfald først
+      !is.na(death_date) & death_date <= censor_date ~ 2, # død først (konkurrerende risiko)
+      TRUE ~ 0 # ellers censureret (emigration/studieslut)
     )
   )
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## Saml det endelige analysedatasæt
 
-Nu er din **kohorte** bygget i [Fase 10](10_byg-studiepopulation.qmd): en tabel med én række per person, `pnr` og `index-dato` (og `exposed`/`case`, hvis du har en sammenligningsgruppe). Dine **udfald, kovariater og censurerings-variable** er trukket ud som separate RDS-filer ([Fase 9](09b_udtraek_fra_lpr.qmd), [Fase 11](11_udtraek-variable.qmd)). Dette sidste trin kobler dem på kohorten med `left_join()`, beregner opfølgningstid og beholder kun de kolonner analysen kræver.
+Nu er din **kohorte** bygget i [Fase 10](10_byg-studiepopulation.qmd): en tabel
+med én række per person, `pnr` og `index-dato` (og `exposed`/`case`, hvis du har
+en sammenligningsgruppe). Dine **udfald, kovariater og censurerings-variable**
+er trukket ud som separate RDS-filer ([Fase 9](09b_udtraek_fra_lpr.qmd), [Fase
+11](11_udtraek-variable.qmd)). Dette sidste trin kobler dem på kohorten med
+`left_join()`, beregner opfølgningstid og beholder kun de kolonner analysen
+kræver.
 
 ::: {.callout-note}
-**Kohorteopbygningen - inkl. matchingen - hører til [Fase 10](10_byg-studiepopulation.qmd).** Her antager vi, at kohorten allerede findes; denne side samler kun analysedatasættet rundt om den. Designvalgene (sammenligningskohorte, immortal time, matching-ratio) afgøres tilbage i [Fase 1](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
+**Kohorteopbygningen - inkl. matchingen - hører til [Fase
+10](10_byg-studiepopulation.qmd).** Her antager vi, at kohorten allerede findes;
+denne side samler kun analysedatasættet rundt om den. Designvalgene
+(sammenligningskohorte, immortal time, matching-ratio) afgøres tilbage i [Fase
+1](01_studieforberedelse.qmd#sammenligningskohorten-komparator).
 :::
 
 ::: {.callout-important}
@@ -296,10 +358,21 @@ Nu er din **kohorte** bygget i [Fase 10](10_byg-studiepopulation.qmd): en tabel 
 
 ```r
 kohort_final <- kohort %>%
-  select(pnr, index_date, censor_date, followup_years, event,
-         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
+  select(
+    pnr,
+    index_date,
+    censor_date,
+    followup_years,
+    event,
+    alder,
+    koen,
+    nmi_score,
+    occupation_cat,
+    education_cat,
+    income_cat
+  )
 
-saveRDS(kohort_final, "sti/til/analysis_dataset.rds")   # gem det endelige datasæt
+saveRDS(kohort_final, "sti/til/analysis_dataset.rds") # gem det endelige datasæt
 ```
 :::
 
@@ -383,26 +456,32 @@ names(kohort_final)                                       # verificér kolonnena
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Næste skridt
 
-Du har nu ét analyseklart datasæt med én række per person. Næste skridt er analysen:
+Du har nu ét analyseklart datasæt med én række per person. Næste skridt er
+analysen:
 
 → [Fase 13 - Analyse](13_analyse.qmd)
 
 ## Se også
 
-- [Langt ↔ bredt format](12a_langt-bredt.qmd): få hvert udtræk ned til én række per person
-- [Funktioner: oversigt](guide_til_funktioner.qmd): alle funktioner du bruger til at transformere data
-- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): praktisk eksempel på langt registerdata og inner_join
-
+- [Langt ↔ bredt format](12a_langt-bredt.qmd): få hvert udtræk ned til én række
+  per person
+- [Funktioner: oversigt](guide_til_funktioner.qmd): alle funktioner du bruger
+  til at transformere data
+- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): praktisk eksempel på langt
+  registerdata og inner_join
 
 ::: {.callout-tip}
 ## Læs mere
 
 Generel uddybning (på engelsk):
 
-- [Joining data](https://www.epirhandbook.com/en/new_pages/joining_matching.html) i *The Epidemiologist R Handbook*.
-- [Joins](https://r4ds.hadley.nz/joins.html) i *R for Data Science*: nøgler, mutating vs. filtering joins og hvad der sker, når en nøgle har dubletter.
+- [Joining
+  data](https://www.epirhandbook.com/en/new_pages/joining_matching.html) i *The
+  Epidemiologist R Handbook*.
+- [Joins](https://r4ds.hadley.nz/joins.html) i *R for Data Science*: nøgler,
+  mutating vs. filtering joins og hvad der sker, når en nøgle har dubletter.
 :::

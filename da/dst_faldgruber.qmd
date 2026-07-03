@@ -5,126 +5,143 @@ date: last-modified
 ---
 
 Denne side samler de fejl, der hyppigst rammer nye brugere af DST-registrene.
-Fælles for dem: fejlmeddelelserne er enten forvirrende, eller der er slet ingen fejlmeddelelse -
-resultatet er bare stille forkert.
+Fælles for dem: fejlmeddelelserne er enten forvirrende, eller der er slet ingen
+fejlmeddelelse - resultatet er bare stille forkert.
 
----
+--------------------------------------------------------------------------------
 
 ## 1. `dodsaars` vs `dodsaasg` - brug det rigtige dødsregister
 
 Der er to registre med lignende navne:
 
-| Register | Indeholder | Bruges til |
-|---|---|---|
-| `dodsaars` | Individuelle dødsregistreringer med præcis dødsdato (`d_dodsdto`) | **Censurering ved dødsfald** |
-| `dodsaasg` | Dødsårsagsklassifikation | Kun analyse af dødsårsag |
+  | Register   | Indeholder                                                        | Bruges til                   |
+  | ---------- | ----------------------------------------------------------------- | ---------------------------- |
+  | `dodsaars` | Individuelle dødsregistreringer med præcis dødsdato (`d_dodsdto`) | **Censurering ved dødsfald** |
+  | `dodsaasg` | Dødsårsagsklassifikation                                          | Kun analyse af dødsårsag     |
 
-`dodsaasg` har ikke dødsdatoen i det rigtige format og er ikke den autoritative kilde til individuelle dødsdatoer.
+`dodsaasg` har ikke dødsdatoen i det rigtige format og er ikke den autoritative
+kilde til individuelle dødsdatoer.
 
 ::: {.callout-warning}
-**Kontrollér dodsaars' dækning i din projektvejledning.**
-`dodsaars` dækker ikke nødvendigvis hele din studieperiode - i projekt 708421 dækker det kun ~1970–2001 (pr. juni 2026), og post-2001 dødsfald kræver separat udtræk. Andre projekter kan have anden dækning.
+**Kontrollér dodsaars' dækning i din projektvejledning.** `dodsaars` dækker ikke
+nødvendigvis hele din studieperiode - i projekt 708421 dækker det kun
+\~1970--2001 (pr. juni 2026), og post-2001 dødsfald kræver separat udtræk. Andre
+projekter kan have anden dækning.
 :::
 
 ```r
 # KORREKT - erstat "sti/til/dodsaars/" med din projekts parquet-sti
 # DARTER: read_register("dodsaars") %>% rename_with(tolower)
 dod <- open_dataset("sti/til/dodsaars/") %>%
-  rename_with(tolower)                       # kontrollér dækning i din projektvejledning
+  rename_with(tolower) # kontrollér dækning i din projektvejledning
 dod_person <- dod %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # kun kohortens pnr'er
-  select(pnr, death_date = d_dodsdto) %>%   # d_dodsdto er den bekræftede kolonne
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>% # kun kohortens pnr'er
+  select(pnr, death_date = d_dodsdto) %>% # d_dodsdto er den bekræftede kolonne
   collect()
 
 # FORKERT - brug ikke dodsaasg til censureringsdatoer
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## 2. RAM er delt - ryd op efter store udtræk
 
-Du er på en delt server med fælles RAM.
-Når hukommelsesbjælken i RStudio bliver rød, oplever alle på serveren langsomhed -
-og **DST lukker automatisk processer** når RAM'en er ved at være fyldt, så et for stort udtræk kan koste dig dit ulagrede arbejde.
+Du er på en delt server med fælles RAM. Når hukommelsesbjælken i RStudio bliver
+rød, oplever alle på serveren langsomhed - og **DST lukker automatisk
+processer** når RAM'en er ved at være fyldt, så et for stort udtræk kan koste
+dig dit ulagrede arbejde.
 
 ```r
 # Filtrer tidligt - aldrig collect() først
 # DARTER: read_register("lmdb") %>% rename_with(tolower)
 lmdb <- open_dataset("sti/til/lmdb/") %>%
-  rename_with(tolower)                  # doven forbindelse - ingen RAM brugt endnu
+  rename_with(tolower) # doven forbindelse - ingen RAM brugt endnu
 
 result <- lmdb %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # kun kohortens pnr'er
-  filter(substr(atc, 1, 4) == "N06D") %>%                            # filtrer inden collect
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>% # kun kohortens pnr'er
+  filter(substr(atc, 1, 4) == "N06D") %>% # filtrer inden collect
   select(pnr, atc, eksd) %>%
-  collect()                                                            # kun nu flyttes data til R
+  collect() # kun nu flyttes data til R
 
 # Frigør store objekter, når du er færdig med dem
-rm(lmdb)   # slet den dovne forbindelse - den fylder ikke meget, men det er god vane
-gc()       # frigiver hukommelse tilbage til operativsystemet
+rm(lmdb) # slet den dovne forbindelse - den fylder ikke meget, men det er god vane
+gc() # frigiver hukommelse tilbage til operativsystemet
 ```
 
 ::: {.callout-tip}
-Flere praktiske vaner (gem ofte, delvis indlæsning, Task Manager) i [Pas på RAM i det fælles miljø](god-kode-praksis.qmd#pas-på-ram), og DST's officielle råd i [DST-vejledning: Reduktion af RAM-forbrug i det fælles miljø (PDF)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
+Flere praktiske vaner (gem ofte, delvis indlæsning, Task Manager) i [Pas på RAM
+i det fælles miljø](god-kode-praksis.qmd#pas-på-ram), og DST's officielle råd i
+[DST-vejledning: Reduktion af RAM-forbrug i det fælles miljø
+(PDF)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## 3. `rename_with(tolower)` skal kaldes på hvert register
 
 Rå kolonnenavne varierer efter register og år: `PNR`, `pnr`, `Pnr`, `V_CPR`.
-Glemmer du det, fejler `semi_join(..., by = "pnr")` stille med "Column `pnr` not found" - selvom kolonnen er der.
+Glemmer du det, fejler `semi_join(..., by = "pnr")` stille med "Column `pnr` not
+found" - selvom kolonnen er der.
 
-**Reglen:** hvert `open_dataset()`- eller `read_register()`-kald ender med `%>% rename_with(tolower)` som det første trin i din pipe.
-Se [Udtræk trin for trin](05_udtraek-trin-for-trin.qmd) for forklaring og eksempel.
+**Reglen:** hvert `open_dataset()`- eller `read_register()`-kald ender med
+`%>% rename_with(tolower)` som det første trin i din pipe. Se [Udtræk trin for
+trin](05_udtraek-trin-for-trin.qmd) for forklaring og eksempel.
 
----
+--------------------------------------------------------------------------------
 
 ## 4. Datokolonner er ikke altid i Date-format
 
-DST-registre gemmer datoer i flere formater - og de ser ens ud, men opfører sig forskelligt.
+DST-registre gemmer datoer i flere formater - og de ser ens ud, men opfører sig
+forskelligt.
 
-| Format | Eksempel | Hvad `class()` returnerer | Hvad du skal gøre |
-|---|---|---|---|
-| Date | `2020-05-15` | `"Date"` | Ingenting - kan bruges direkte |
-| Character | `"2020-05-15"` | `"character"` | `as.Date(kolonne)` |
-| Datetime | `"2020-05-15 14:32:00"` | `"POSIXct"` | `as.Date(kolonne)` for at få kun datodel |
-| SAS-heltal | `21990` | `"numeric"` | `as.Date(kolonne, origin = "1960-01-01")` |
+  | Format     | Eksempel                | Hvad `class()` returnerer | Hvad du skal gøre                         |
+  | ---------- | ----------------------- | ------------------------- | ----------------------------------------- |
+  | Date       | `2020-05-15`            | `"Date"`                  | Ingenting - kan bruges direkte            |
+  | Character  | `"2020-05-15"`          | `"character"`             | `as.Date(kolonne)`                        |
+  | Datetime   | `"2020-05-15 14:32:00"` | `"POSIXct"`               | `as.Date(kolonne)` for at få kun datodel  |
+  | SAS-heltal | `21990`                 | `"numeric"`               | `as.Date(kolonne, origin = "1960-01-01")` |
 
-**Reglen:** Tjek altid `class()` på en datokolonne inden du bruger den i beregninger.
+**Reglen:** Tjek altid `class()` på en datokolonne inden du bruger den i
+beregninger.
 
 ```r
-class(lpr_a_kontakt$kont_starttidspunkt)   # "POSIXct" - datetime, ikke Date
+class(lpr_a_kontakt$kont_starttidspunkt) # "POSIXct" - datetime, ikke Date
 # Fix:
 mutate(dato = as.Date(kont_starttidspunkt))
 
-class(bef$foed_dag)   # "Date" - kan bruges direkte
+class(bef$foed_dag) # "Date" - kan bruges direkte
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## 5. BEF er et status-snapshot - ikke et levende register
 
-BEF er et **statusregister**: det opgør befolkningens sammensætning på et givet referencetidspunkt - ikke løbende.
-DST's referencetid er **ultimo** (typisk 31. december for et årssnap). Siden 2008 leveres BEF desuden **kvartalsvist** (marts, juni, september, december).
+BEF er et **statusregister**: det opgør befolkningens sammensætning på et givet
+referencetidspunkt - ikke løbende. DST's referencetid er **ultimo** (typisk 31.
+december for et årssnap). Siden 2008 leveres BEF desuden **kvartalsvist**
+(marts, juni, september, december).
 
 ::: {.callout-note}
-**"aar == 2020 = 1. januar 2020" er en projektkonvention.**
-I mange projekter omdøbes BEF's snapshots så `aar == 2020` konventionelt refererer til befolkningens sammensætning pr. 1. januar 2020 - men dette fremgår ikke af DST's leverancenavngivning. Bekræft konventionen i din projektvejledning.
+**"aar == 2020 = 1. januar 2020" er en projektkonvention.** I mange projekter
+omdøbes BEF's snapshots så `aar == 2020` konventionelt refererer til
+befolkningens sammensætning pr. 1. januar 2020 - men dette fremgår ikke af DST's
+leverancenavngivning. Bekræft konventionen i din projektvejledning.
 
-Se DST's officielle BEF-dokumentation: [statistikdokumentation/befolkningen →](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen)
+Se DST's officielle BEF-dokumentation: [statistikdokumentation/befolkningen
+→](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen)
 :::
 
-Det betyder, at en person der dør i juni 2020 stadig optræder i BEF-snapshottet for starten af 2020.
+Det betyder, at en person der dør i juni 2020 stadig optræder i BEF-snapshottet
+for starten af 2020.
 
 ```r
 # FEJL: brug ikke BEF til at tjekke "levende på en specifik dato"
 bef_2020 <- bef %>%
-  filter(aar == 2020)   # inkluderer alle i snapshottet for 2020
-                        # - også dem der dør i løbet af 2020
+  filter(aar == 2020) # inkluderer alle i snapshottet for 2020
+# - også dem der dør i løbet af 2020
 
 # KORREKT: kombiner med dodsaars for at ekskludere dødsfald
-deaths <- open_dataset("sti/til/dodsaars/") %>%   # DARTER: read_register("dodsaars")
+deaths <- open_dataset("sti/til/dodsaars/") %>% # DARTER: read_register("dodsaars")
   rename_with(tolower) %>%
   semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
   select(pnr, d_dodsdto) %>%
@@ -132,121 +149,159 @@ deaths <- open_dataset("sti/til/dodsaars/") %>%   # DARTER: read_register("dodsa
 
 bef_levende <- bef_data %>%
   left_join(deaths, by = "pnr") %>%
-  filter(is.na(d_dodsdto) | d_dodsdto > index_date)   # levende på index-dato
+  filter(is.na(d_dodsdto) | d_dodsdto > index_date) # levende på index-dato
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## 6. LPR3's "a" i `lpr_a_diagnose` er ikke A-type diagnoser
 
-Tabellen hedder `lpr_a_diagnose` - det "a" refererer til "analysemodel" (LPR_A-serien introduceret i 2025).
-Det betyder **ikke**, at tabellen kun indeholder A-type (aktions-)diagnoser.
+Tabellen hedder `lpr_a_diagnose` - det "a" refererer til "analysemodel"
+(LPR_A-serien introduceret i 2025). Det betyder **ikke**, at tabellen kun
+indeholder A-type (aktions-)diagnoser.
 
-Tabellen indeholder alle diagnosetyper: A (aktion), B (bi-diagnose) og G (grundmorbus).
-Du skal stadig filtrere på `diag_kode_type`:
+Tabellen indeholder alle diagnosetyper: A (aktion), B (bi-diagnose) og G
+(grundmorbus). Du skal stadig filtrere på `diag_kode_type`:
 
 ```r
 lpr_a_diagnose %>%
-  filter(diag_kode_type %in% c("A", "B")) %>%   # stadig nødvendigt
+  filter(diag_kode_type %in% c("A", "B")) %>% # stadig nødvendigt
   ...
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## 7. Kategoriske koder er ikke konsistente på tværs af registre
 
-Samme variabel kan have forskellig kodning i forskellige registre - forskellig type (numeric vs. character), forskellige værdier, eller begge dele.
+Samme variabel kan have forskellig kodning i forskellige registre - forskellig
+type (numeric vs. character), forskellige værdier, eller begge dele.
 
-I praksis trækker du demografiske variable (køn, alder) fra BEF og behøver sjældent at sammenligne med samme variabel i et andet register. Men hvis du gør, så tjek altid med `table()` og `class()` inden du bruger variablen:
+I praksis trækker du demografiske variable (køn, alder) fra BEF og behøver
+sjældent at sammenligne med samme variabel i et andet register. Men hvis du gør,
+så tjek altid med `table()` og `class()` inden du bruger variablen:
 
 ```r
-table(register_a$koen)   # hvad er de faktiske værdier og typer?
+table(register_a$koen) # hvad er de faktiske værdier og typer?
 class(register_a$koen)
 table(register_b$koen)
 class(register_b$koen)
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## 8. `!!` (bang-bang) glemmes i lazy evaluering
 
-Når du filtrerer med en lokal R-vektor inde i en DuckDB-forespørgsel, skal du bruge `!!`.
-Uden det leder DuckDB efter en kolonne med det navn - og fejler stille eller med en forvirrende besked.
+Når du filtrerer med en lokal R-vektor inde i en DuckDB-forespørgsel, skal du
+bruge `!!`. Uden det leder DuckDB efter en kolonne med det navn - og fejler
+stille eller med en forvirrende besked.
 
 ```r
 # Eksempel: en år-liste mod bef (princippet gælder enhver lokal R-vektor)
-mine_aar <- c(2018, 2019, 2020)   # lokal R-vektor (år, her som eksempel)
+mine_aar <- c(2018, 2019, 2020) # lokal R-vektor (år, her som eksempel)
 
 # FORKERT - DuckDB leder efter en kolonne kaldet "mine_aar"
-bef %>% filter(aar %in% mine_aar)   # fejl eller forkert resultat
+bef %>% filter(aar %in% mine_aar) # fejl eller forkert resultat
 
 # KORREKT - !! fortæller DuckDB: "brug den lokale R-vektor"
 bef %>% filter(aar %in% !!mine_aar)
 ```
 
 ::: {.callout-note}
-`!!` er nødvendigt for **alle** lokale R-objekter brugt inde i `filter()`, `mutate()` mv.
-på dovne DuckDB-forbindelser - typisk kode- eller år-lister (`%in% !!koder`, `>= !!min_dato`).
-Filtrerer du derimod på **pnr** mod hele kohorten, så brug `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")`: den tager en lokal tabel direkte og kræver ikke `!!`. Se [Funktionsguiden](guide_til_funktioner.qmd#bang-bang-to-udråbstegn) for fuld forklaring.
+`!!` er nødvendigt for **alle** lokale R-objekter brugt inde i `filter()`,
+`mutate()` mv. på dovne DuckDB-forbindelser - typisk kode- eller år-lister
+(`%in% !!koder`, `>= !!min_dato`). Filtrerer du derimod på **pnr** mod hele
+kohorten, så brug `semi_join(tibble(pnr = kohort_pnrs), by = "pnr")`: den tager
+en lokal tabel direkte og kræver ikke `!!`. Se
+[Funktionsguiden](guide_til_funktioner.qmd#bang-bang-to-udråbstegn) for fuld
+forklaring.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## 9. `nmi_count` ≠ `nmi_score`
 
 Disse to variabler er **ikke** det samme og er ikke udskiftelige:
 
-| Variabel | Hvad den er | Kilde |
-|---|---|---|
-| `nmi_score` | **Vægtet** comorbiditetsscore - Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 prediktorer med individuelle vægte; lungekreft tæller f.eks. 19 point, type 2-diabetes tæller 2. | Se [NMI-siden](nmi.qmd) |
-| `nmi_count` | Simpel **optælling** af antal kroniske tilstande (ud af 33 mulige) personen er diagnosticeret med | Beregnes separat |
+  | Variabel    | Hvad den er                                                                                                                                                                                                 | Kilde                   |
+  | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+  | `nmi_score` | **Vægtet** comorbiditetsscore - Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 prediktorer med individuelle vægte; lungekreft tæller f.eks. 19 point, type 2-diabetes tæller 2. | Se [NMI-siden](nmi.qmd) |
+  | `nmi_count` | Simpel **optælling** af antal kroniske tilstande (ud af 33 mulige) personen er diagnosticeret med                                                                                                           | Beregnes separat        |
 
-Bruger du `nmi_count` i din regressionsmodel i stedet for `nmi_score`, justerer du for noget andet end du tror - og får ingen fejlmeddelelse.
+Bruger du `nmi_count` i din regressionsmodel i stedet for `nmi_score`, justerer
+du for noget andet end du tror - og får ingen fejlmeddelelse.
 
----
+--------------------------------------------------------------------------------
 
 ## 10. Immortal time bias - eksponering defineret ud fra fremtiden {#immortal-time-bias}
 
-Ingen fejlbesked, ingen advarsel - bare et effektestimat der ser for godt ud. **Immortal time bias** opstår, når en person tildeles opfølgningstid, hvori vedkommende per konstruktion ikke kunne have fået udfaldet. Det er den klassiske registerfejl, fordi registerdata lader dig definere grupper *retrospektivt*, med tilbageblik på hvad der til sidst skete.
+Ingen fejlbesked, ingen advarsel - bare et effektestimat der ser for godt ud.
+**Immortal time bias** opstår, når en person tildeles opfølgningstid, hvori
+vedkommende per konstruktion ikke kunne have fået udfaldet. Det er den klassiske
+registerfejl, fordi registerdata lader dig definere grupper *retrospektivt*, med
+tilbageblik på hvad der til sidst skete.
 
-**Et konkret eksempel.** Spørgsmål: sænker bariatrisk kirurgi dødeligheden hos personer med type 2-diabetes? Du tager alle der fik T2D-diagnosen i 2010, deler dem i en **kirurgi**-gruppe (blev opereret på et tidspunkt i opfølgningen) og en **ingen kirurgi**-gruppe, og starter opfølgningen for alle på *diagnose*datoen.
+**Et konkret eksempel.** Spørgsmål: sænker bariatrisk kirurgi dødeligheden hos
+personer med type 2-diabetes? Du tager alle der fik T2D-diagnosen i 2010, deler
+dem i en **kirurgi**-gruppe (blev opereret på et tidspunkt i opfølgningen) og en
+**ingen kirurgi**-gruppe, og starter opfølgningen for alle på *diagnose*datoen.
 
-Fælden: for at havne i kirurgigruppen skulle personen **overleve længe nok til at blive opereret**. Sig at den gennemsnitlige ventetid fra diagnose til operation er 2 år. De 2 år er *udødelige* (immortal): enhver der døde i det vindue, nåede aldrig operationen og faldt derfor i ingen-kirurgi-gruppen i stedet. Du har givet kirurgigruppen ~2 års garanteret-levende persontid og kaldt det "kirurgi"-tid.
+Fælden: for at havne i kirurgigruppen skulle personen **overleve længe nok til
+at blive opereret**. Sig at den gennemsnitlige ventetid fra diagnose til
+operation er 2 år. De 2 år er *udødelige* (immortal): enhver der døde i det
+vindue, nåede aldrig operationen og faldt derfor i ingen-kirurgi-gruppen i
+stedet. Du har givet kirurgigruppen \~2 års garanteret-levende persontid og
+kaldt det "kirurgi"-tid.
 
-| Gruppe | Dødsfald | Personår | Rate (pr. 1000 py) |
-|---|---|---|---|
-| Kirurgi (immortal time talt med som kirurgi-tid) | 30 | 12.000 | 2,5 |
-| Kirurgi (tid korrekt justeret) | 30 | 8.000 | 3,8 |
-| Ingen kirurgi | 50 | 13.000 | 3,8 |
+  | Gruppe                                           | Dødsfald | Personår | Rate (pr. 1000 py) |
+  | ------------------------------------------------ | -------- | -------- | ------------------ |
+  | Kirurgi (immortal time talt med som kirurgi-tid) | 30       | 12.000   | 2,5                |
+  | Kirurgi (tid korrekt justeret)                   | 30       | 8.000    | 3,8                |
+  | Ingen kirurgi                                    | 50       | 13.000   | 3,8                |
 
-De sande rater er ens (3,8) - kirurgi gør ingenting. Men ved at tælle de 4.000 udødelige personår med som kirurgi-tid falder raten til 2,5 og får kirurgi til at se **34% beskyttende** ud. "Effekten" er en artefakt af den forskudte tid-nul, ikke af kirurgien.
+De sande rater er ens (3,8) - kirurgi gør ingenting. Men ved at tælle de 4.000
+udødelige personår med som kirurgi-tid falder raten til 2,5 og får kirurgi til
+at se **34% beskyttende** ud. "Effekten" er en artefakt af den forskudte
+tid-nul, ikke af kirurgien.
 
-**Løsningen: justér tid-nul.** Eligibilitet, eksponeringstildeling og opfølgningsstart skal falde sammen.
+**Løsningen: justér tid-nul.** Eligibilitet, eksponeringstildeling og
+opfølgningsstart skal falde sammen.
 
-- **Risk-set- (incidens-densitets-) matching:** start hver persons opfølgning på det tidspunkt de bliver eksponeret, og tildel hver sammenligningsperson *samme* index-dato (kerneregelen i [Sammenligningskohorte](10a_sammenligningskohorte.qmd)).
-- **Behandl eksponering som tidsvarierende:** personen bidrager med *ueksponeret* persontid indtil operationen, derefter *eksponeret* tid - aldrig eksponeret tid før de blev eksponeret (se [Tidsvarierende variable](12d_tidsvarierende.qmd)).
+- **Risk-set- (incidens-densitets-) matching:** start hver persons opfølgning på
+  det tidspunkt de bliver eksponeret, og tildel hver sammenligningsperson
+  *samme* index-dato (kerneregelen i
+  [Sammenligningskohorte](10a_sammenligningskohorte.qmd)).
+- **Behandl eksponering som tidsvarierende:** personen bidrager med
+  *ueksponeret* persontid indtil operationen, derefter *eksponeret* tid - aldrig
+  eksponeret tid før de blev eksponeret (se [Tidsvarierende
+  variable](12d_tidsvarierende.qmd)).
 
-Beslægtet: at definere en *baseline-kovariat* ud fra information efter index er den samme fejl i forklædning (fx OSDC-diabetestypen, se [OSDC](osdc.qmd)). Når en variabel bygges på fremtiden, så spørg om du betinger på at personen har overlevet til at se den. Baggrund: [Hernán & Robins, *What If*, §3.6](https://miguelhernan.org/whatifbook) (target trial, tid-nul).
+Beslægtet: at definere en *baseline-kovariat* ud fra information efter index er
+den samme fejl i forklædning (fx OSDC-diabetestypen, se [OSDC](osdc.qmd)). Når
+en variabel bygges på fremtiden, så spørg om du betinger på at personen har
+overlevet til at se den. Baggrund: [Hernán & Robins, *What If*,
+§3.6](https://miguelhernan.org/whatifbook) (target trial, tid-nul).
 
----
+--------------------------------------------------------------------------------
 
 ## 11. De hyppigste fejlbeskeder og hvad de betyder {#de-hyppigste-fejlbeskeder-og-hvad-de-betyder}
 
-R's fejlbeskeder er korte og tekniske - her er de du oftest møder i et DST-workflow, oversat til hvad de faktisk betyder:
+R's fejlbeskeder er korte og tekniske - her er de du oftest møder i et
+DST-workflow, oversat til hvad de faktisk betyder:
 
-| Fejlbesked | Typisk årsag | Løsning |
-|---|---|---|
-| `Error: Column 'pnr' not found` | `rename_with(tolower)` mangler | Tilføj `%>% rename_with(tolower)` direkte efter `read_register()` - se [faldgrube 3](#3-rename_withtolower-skal-kaldes-på-hvert-register) |
-| `Error: object 'min_liste' not found` | `!!` mangler i `filter()` på en doven forbindelse | Skriv `filter(aar %in% !!min_liste)` - se [faldgrube 8](#8-bang-bang-glemmes-i-lazy-evaluering) |
-| `Error: could not find function "read_register"` | `library(fastreg)` mangler | Tilføj `library(fastreg)` øverst i scriptet |
-| `non-numeric argument to binary operator` | Datokolonne er `character`, ikke `Date` | `mutate(dato = as.Date(dato))` - se [faldgrube 4](#4-datokolonner-er-ikke-altid-i-date-format) |
-| `Error in filter.default(...)` | Filtrering på et dovent objekt uden `%>%` | Skift til `%>%` - se [røret](guide_til_funktioner.qmd#røret) |
-| `Error: Can't convert ... to ...` | Join på kolonner med forskellig type (fx numeric vs. character) | Brug `mutate(pnr = as.character(pnr))` for at matche typer |
-| `object of type 'closure' is not subsettable` | Et variabelnavn overskriver en funktion (fx `data <- ...`) | Brug et unikt variabelnavn - undgå `data`, `df`, `c` som objektnavne |
+  | Fejlbesked                                       | Typisk årsag                                                    | Løsning                                                                                                                                   |
+  | ------------------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+  | `Error: Column 'pnr' not found`                  | `rename_with(tolower)` mangler                                  | Tilføj `%>% rename_with(tolower)` direkte efter `read_register()` - se [faldgrube 3](#3-rename_withtolower-skal-kaldes-på-hvert-register) |
+  | `Error: object 'min_liste' not found`            | `!!` mangler i `filter()` på en doven forbindelse               | Skriv `filter(aar %in% !!min_liste)` - se [faldgrube 8](#8-bang-bang-glemmes-i-lazy-evaluering)                                           |
+  | `Error: could not find function "read_register"` | `library(fastreg)` mangler                                      | Tilføj `library(fastreg)` øverst i scriptet                                                                                               |
+  | `non-numeric argument to binary operator`        | Datokolonne er `character`, ikke `Date`                         | `mutate(dato = as.Date(dato))` - se [faldgrube 4](#4-datokolonner-er-ikke-altid-i-date-format)                                            |
+  | `Error in filter.default(...)`                   | Filtrering på et dovent objekt uden `%>%`                       | Skift til `%>%` - se [røret](guide_til_funktioner.qmd#røret)                                                                              |
+  | `Error: Can't convert ... to ...`                | Join på kolonner med forskellig type (fx numeric vs. character) | Brug `mutate(pnr = as.character(pnr))` for at matche typer                                                                                |
+  | `object of type 'closure' is not subsettable`    | Et variabelnavn overskriver en funktion (fx `data <- ...`)      | Brug et unikt variabelnavn - undgå `data`, `df`, `c` som objektnavne                                                                      |
 
 ::: {.callout-tip}
-**Det hurtigste debugging-flow** - hvad du gør trin for trin når du ser en rød fejlbesked - er beskrevet i [Fase 7 - Ser du en rød fejlbesked?](07_inspicer-data.qmd#ser-du-en-rød-fejlbesked).
+**Det hurtigste debugging-flow** - hvad du gør trin for trin når du ser en rød
+fejlbesked - er beskrevet i [Fase 7 - Ser du en rød
+fejlbesked?](07_inspicer-data.qmd#ser-du-en-rød-fejlbesked).
 :::
 
----
-
+--------------------------------------------------------------------------------

@@ -4,15 +4,27 @@ subtitle: "Identificér dine cases/eksponerede - vælg derefter studiedesign"
 date: last-modified
 ---
 
-De senere faser - udtræk af variable ([Fase 11](11_udtraek-variable.qmd)), saml datasættet ([Fase 12](12_data-manipulation.qmd)) og analyse ([Fase 13](13_analyse.qmd)) - forudsætter, at du allerede har en **kohorte**: en tabel med `pnr` og `index_date` per person. Denne side viser, hvordan du identificerer din studiepopulation og giver hver person en index-dato; derefter vælger du studiedesign.
+De senere faser - udtræk af variable ([Fase 11](11_udtraek-variable.qmd)), saml
+datasættet ([Fase 12](12_data-manipulation.qmd)) og analyse ([Fase
+13](13_analyse.qmd)) - forudsætter, at du allerede har en **kohorte**: en tabel
+med `pnr` og `index_date` per person. Denne side viser, hvordan du identificerer
+din studiepopulation og giver hver person en index-dato; derefter vælger du
+studiedesign.
 
 ::: {.callout-tip}
-**Kort fortalt:** Først identificerer du dine **cases/eksponerede** og giver hver en **index-dato**. Derefter afhænger vejen af dit design:
+**Kort fortalt:** Først identificerer du dine **cases/eksponerede** og giver
+hver en **index-dato**. Derefter afhænger vejen af dit design:
 
-- **Prævalensstudie / kohorte uden sammenligningsgruppe:** efter denne side er du færdig med at bygge studiepopulationen; gå videre til [Fase 11 - Udtræk variable](11_udtraek-variable.qmd).
-- **Kohortestudie med sammenligningskohorte:** efter denne side fortsætter du til → [Sammenligningskohorte](10a_sammenligningskohorte.qmd).
-- **(Nested) case-control:** efter denne side fortsætter du til → [Case-control](10b_case-control.qmd).
-- **Selvkontrolleret eller familiebaseret design:** lader personen (eller familien) være sin egen kontrol - se [Selvkontrollerede og familiebaserede designs](10c_specielle-designs.qmd).
+- **Prævalensstudie / kohorte uden sammenligningsgruppe:** efter denne side er
+  du færdig med at bygge studiepopulationen; gå videre til [Fase 11 - Udtræk
+  variable](11_udtraek-variable.qmd).
+- **Kohortestudie med sammenligningskohorte:** efter denne side fortsætter du
+  til → [Sammenligningskohorte](10a_sammenligningskohorte.qmd).
+- **(Nested) case-control:** efter denne side fortsætter du til →
+  [Case-control](10b_case-control.qmd).
+- **Selvkontrolleret eller familiebaseret design:** lader personen (eller
+  familien) være sin egen kontrol - se [Selvkontrollerede og familiebaserede
+  designs](10c_specielle-designs.qmd).
 :::
 
 <details>
@@ -28,30 +40,40 @@ Alt efterfølgende - udfaldsdato, kovariater ved baseline, opfølgningstid - ber
 </details>
 
 ::: {.callout-warning}
-**Denne side er stadig under udvikling.** Koden skal gennemgås og testes yderligere inden den bruges direkte. Brug den som strukturel vejledning og tilpas til dit eget projekt.
+**Denne side er stadig under udvikling.** Koden skal gennemgås og testes
+yderligere inden den bruges direkte. Brug den som strukturel vejledning og
+tilpas til dit eget projekt.
 :::
 
 ::: {.callout-note}
-**Funktioner brugt her.**
-`inner_join()` og `bind_rows()` er allerede vist i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og gennemgås grundigt i [Kobl udtræk sammen](12b_joins.qmd#joins-kobl-to-tabeller-sammen). `group_by() + slice()` forklares i [Langt ↔ bredt format](12a_langt-bredt.qmd). Nyt i Trin 2: `anti_join()`, `distinct()`, `pull()` samt `nrow()`, `cat()` og `stopifnot()` - se [Guide til funktioner](guide_til_funktioner.qmd).
+**Funktioner brugt her.** `inner_join()` og `bind_rows()` er allerede vist i
+[Udtræk fra LPR](09b_udtraek_fra_lpr.qmd) og gennemgås grundigt i [Kobl udtræk
+sammen](12b_joins.qmd#joins-kobl-to-tabeller-sammen). `group_by() + slice()`
+forklares i [Langt ↔ bredt format](12a_langt-bredt.qmd). Nyt i Trin 2:
+`anti_join()`, `distinct()`, `pull()` samt `nrow()`, `cat()` og `stopifnot()` -
+se [Guide til funktioner](guide_til_funktioner.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Trin 1 - Identificér de eksponerede (eller cases) {.step-heading}
 
-Du scanner det register der definerer din eksponering. **Du har endnu ingen `kohort_pnrs`-liste - du forespørger hele registret** og filtrerer på eksponeringskriteriet.
+Du scanner det register der definerer din eksponering. **Du har endnu ingen
+`kohort_pnrs`-liste - du forespørger hele registret** og filtrerer på
+eksponeringskriteriet.
 
 **Eksponeringen kan defineres på mange måder:**
 
-| Type | Eksempel | Register |
-|---|---|---|
-| Operation / procedure (SKS-kode) | Bariatrisk kirurgi KJDF10/KJDF11 | `lpr_sksopr`^a^ (LPR2), `procedurer_kirurgi`^a^ (LPR3) |
-| Hospitaldiagnose (ICD-kode) | Type 2-diabetes E11 | `lpr_diag` + `lpr_adm`, `lpr_a_diagnose` + `lpr_a_kontakt` |
-| Medicineksponering (ATC-kode) | Metformin A10BA02 | LMDB |
-| Klinisk mål / biomarkør | BMI > 35, HbA1c > 75 mmol/mol | Projektspecifikke data / OSDC / DBSO |
+  | Type                             | Eksempel                         | Register                                                   |
+  | -------------------------------- | -------------------------------- | ---------------------------------------------------------- |
+  | Operation / procedure (SKS-kode) | Bariatrisk kirurgi KJDF10/KJDF11 | `lpr_sksopr`^a^ (LPR2), `procedurer_kirurgi`^a^ (LPR3)     |
+  | Hospitaldiagnose (ICD-kode)      | Type 2-diabetes E11              | `lpr_diag` + `lpr_adm`, `lpr_a_diagnose` + `lpr_a_kontakt` |
+  | Medicineksponering (ATC-kode)    | Metformin A10BA02                | LMDB                                                       |
+  | Klinisk mål / biomarkør          | BMI > 35, HbA1c > 75 mmol/mol    | Projektspecifikke data / OSDC / DBSO                       |
 
-^a^ `lpr_sksopr` og `procedurer_kirurgi` er navnene på DARTER-projektet (708421) - se [Register-overblik](register_reference.qmd). Navnene kan variere på andre projekter.
+^a^ `lpr_sksopr` og `procedurer_kirurgi` er navnene på DARTER-projektet (708421)
+- se [Register-overblik](register_reference.qmd). Navnene kan variere på andre
+projekter.
 
 <details>
 <summary>Eksempel A: SKS-koder (operation/procedure)</summary>
@@ -162,17 +184,27 @@ Dette eksempel henter kun fra **LPR2**. Tag altid stilling til, hvilke registre 
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Trin 2 - Ekskludér prævalente tilfælde {.step-heading}
 
-Personer der allerede havde **dit outcome** før index-dato skal ekskluderes - ellers tæller de som nye tilfælde, selvom de ikke er det. Det gælder **alle designs**, også et prævalensstudie uden sammenligningsgruppe, så det hører til her, hvor du bygger den eksponerede kohorte.
+Personer der allerede havde **dit outcome** før index-dato skal ekskluderes -
+ellers tæller de som nye tilfælde, selvom de ikke er det. Det gælder **alle
+designs**, også et prævalensstudie uden sammenligningsgruppe, så det hører til
+her, hvor du bygger den eksponerede kohorte.
 
-Tæl hvor mange der ryger fra ved hvert eksklusionstrin, så du kan beskrive frafaldet og senere tegne et **STROBE flow-diagram** (også kaldet et deltager- eller attrition-diagram; se [STROBE-checklisten](https://www.strobe-statement.org/checklists/)). Den generiske N-optællings-skabelon står i [Fase 6](06_foerste-udtraek.qmd).
+Tæl hvor mange der ryger fra ved hvert eksklusionstrin, så du kan beskrive
+frafaldet og senere tegne et **STROBE flow-diagram** (også kaldet et deltager-
+eller attrition-diagram; se
+[STROBE-checklisten](https://www.strobe-statement.org/checklists/)). Den
+generiske N-optællings-skabelon står i [Fase 6](06_foerste-udtraek.qmd).
 
 **Hjælpefunktion til at ekskludere prævalente tilfælde**
 
-Skal samme tjek bruges flere gange (fx også på en sammenligningsgruppe senere, se [Sammenligningskohorte](10a_sammenligningskohorte.qmd)), kan du pakke logikken i en funktion, så de to tjek ikke skrider fra hinanden. Se [God kode-praksis](god-kode-praksis.qmd).
+Skal samme tjek bruges flere gange (fx også på en sammenligningsgruppe senere,
+se [Sammenligningskohorte](10a_sammenligningskohorte.qmd)), kan du pakke
+logikken i en funktion, så de to tjek ikke skrider fra hinanden. Se [God
+kode-praksis](god-kode-praksis.qmd).
 
 <details>
 <summary>Vis koden: ekskludér prævalente tilfælde</summary>
@@ -215,18 +247,30 @@ stopifnot(n_distinct(eksponerede$pnr) == nrow(eksponerede))   # tjek: én række
 </details>
 
 ::: {.callout-tip}
-`nrow()`, `cat()` og `stopifnot()` er forklaret i [Guide til funktioner](guide_til_funktioner.qmd).
+`nrow()`, `cat()` og `stopifnot()` er forklaret i [Guide til
+funktioner](guide_til_funktioner.qmd).
 :::
 
 ::: {.callout-tip}
-**Planlægger du en sammenligningskohorte?** Så udtræk gerne outcome- (og eksponerings-)datoerne for **hele befolkningen** allerede her - ikke kun for de eksponerede - og genbrug dem: i Trin 2 afgrænset til de eksponerede (som ovenfor), og senere til sammenligningspoolen (se [Sammenligningskohorte](10a_sammenligningskohorte.qmd)). Outcome-udtrækket på diagnosekoderne returnerer alligevel alle med diagnosen, så du sparer en ekstra forespørgsel mod registrene.
+**Planlægger du en sammenligningskohorte?** Så udtræk gerne outcome- (og
+eksponerings-)datoerne for **hele befolkningen** allerede her - ikke kun for de
+eksponerede - og genbrug dem: i Trin 2 afgrænset til de eksponerede (som
+ovenfor), og senere til sammenligningspoolen (se
+[Sammenligningskohorte](10a_sammenligningskohorte.qmd)). Outcome-udtrækket på
+diagnosekoderne returnerer alligevel alle med diagnosen, så du sparer en ekstra
+forespørgsel mod registrene.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Deltagerdiagram (STROBE flow)
 
-De N-optællinger, du lavede i Trin 1 og Trin 2, samles til sidst i et **STROBE flow-diagram**: en figur, der viser hvor mange personer der var med fra start, hvor mange der blev ekskluderet ved hvert trin og hvorfor, og hvor mange der endte i studiepopulationen. Det forventes i næsten alle observationelle studier. Diagrammet her viser også **hvor dataene kommer fra** i hvert trin (tallene er simulerede).
+De N-optællinger, du lavede i Trin 1 og Trin 2, samles til sidst i et **STROBE
+flow-diagram**: en figur, der viser hvor mange personer der var med fra start,
+hvor mange der blev ekskluderet ved hvert trin og hvorfor, og hvor mange der
+endte i studiepopulationen. Det forventes i næsten alle observationelle studier.
+Diagrammet her viser også **hvor dataene kommer fra** i hvert trin (tallene er
+simulerede).
 
 ```{mermaid}
 flowchart TD
@@ -253,29 +297,51 @@ flowchart TD
 
 Sådan hænger hvert trin sammen med dataene:
 
-- **Kilderegistre:** hele befolkningens LPR-data (du har endnu ingen kohorteliste). LPR2 og LPR3 åbnes dovent med `open_dataset()` - se Trin 1 ovenfor.
-- **Trin 1:** du filtrerer på dine eksponeringskoder og knytter `pnr` + `index_date` på. Resultatet er `eksponerede`.
-- **Trin 2 (eksklusion):** prævalente tilfælde - personer med outcome før deres index-dato - findes i LPR-diagnoserne og fjernes. Det er `n_before - nrow(eksponerede)`, der står i eksklusionsboksen.
-- **Endelig studiepopulation:** `pnr` + `index_date` per person, klar til [Fase 11 - Udtræk variable](11_udtraek-variable.qmd). Bygger du en sammenligningskohorte, indsættes [Fase 10a](10a_sammenligningskohorte.qmd) før det sidste trin.
+- **Kilderegistre:** hele befolkningens LPR-data (du har endnu ingen
+  kohorteliste). LPR2 og LPR3 åbnes dovent med `open_dataset()` - se Trin 1
+  ovenfor.
+- **Trin 1:** du filtrerer på dine eksponeringskoder og knytter `pnr` +
+  `index_date` på. Resultatet er `eksponerede`.
+- **Trin 2 (eksklusion):** prævalente tilfælde - personer med outcome før deres
+  index-dato - findes i LPR-diagnoserne og fjernes. Det er
+  `n_before - nrow(eksponerede)`, der står i eksklusionsboksen.
+- **Endelig studiepopulation:** `pnr` + `index_date` per person, klar til [Fase
+  11 - Udtræk variable](11_udtraek-variable.qmd). Bygger du en
+  sammenligningskohorte, indsættes [Fase 10a](10a_sammenligningskohorte.qmd) før
+  det sidste trin.
 
 ::: {.callout-warning}
-**Outputkontrol:** eksklusionsboksene viser rå antal. Små tal (fx en eksklusionsgruppe med ganske få personer) kan være afslørende - rund af eller slå sammen, før diagrammet forlader DST. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+**Outputkontrol:** eksklusionsboksene viser rå antal. Små tal (fx en
+eksklusionsgruppe med ganske få personer) kan være afslørende - rund af eller
+slå sammen, før diagrammet forlader DST. Se [Fase 14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ::: {.callout-tip}
 **Hvad nu - vælg dit design:**
 
-- **Prævalensstudie / kohorte uden sammenligningsgruppe:** efter denne side er du færdig: du har din studiepopulation med en index-dato. Gå videre til [Fase 11 - Udtræk variable](11_udtraek-variable.qmd) og [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd).
-- **Kohortestudie med sammenligningskohorte:** efter denne side fortsætter du til → [Sammenligningskohorte](10a_sammenligningskohorte.qmd), hvor du bygger en matchpool og risk-set matcher en sammenligningsgruppe.
-- **(Nested) case-control:** efter denne side fortsætter du til → [Case-control](10b_case-control.qmd), hvor din "eksponerede" gruppe ovenfor i stedet er dine **cases**, og du sampler kontroller der var i risiko, da casen fik udfaldet.
+- **Prævalensstudie / kohorte uden sammenligningsgruppe:** efter denne side er
+  du færdig: du har din studiepopulation med en index-dato. Gå videre til [Fase
+  11 - Udtræk variable](11_udtraek-variable.qmd) og [Fase 12 - Saml & klargør
+  datasættet](12_data-manipulation.qmd).
+- **Kohortestudie med sammenligningskohorte:** efter denne side fortsætter du
+  til → [Sammenligningskohorte](10a_sammenligningskohorte.qmd), hvor du bygger
+  en matchpool og risk-set matcher en sammenligningsgruppe.
+- **(Nested) case-control:** efter denne side fortsætter du til →
+  [Case-control](10b_case-control.qmd), hvor din "eksponerede" gruppe ovenfor i
+  stedet er dine **cases**, og du sampler kontroller der var i risiko, da casen
+  fik udfaldet.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Se også
 
-- [Fase 1 - Studieforberedelse](01_studieforberedelse.qmd): designvalg bag kohorte, matching og case-control
-- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): diagnosemønster for eksponerings-/case-identifikation
-- [Register-overblik](register_reference.qmd): kolonnenavne for lpr_sksopr, procedurer_kirurgi m.fl.
+- [Fase 1 - Studieforberedelse](01_studieforberedelse.qmd): designvalg bag
+  kohorte, matching og case-control
+- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): diagnosemønster for
+  eksponerings-/case-identifikation
+- [Register-overblik](register_reference.qmd): kolonnenavne for lpr_sksopr,
+  procedurer_kirurgi m.fl.

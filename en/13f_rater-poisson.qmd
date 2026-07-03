@@ -1,6 +1,8 @@
 ---
 title: "![](images/icons/icon_14.png){.title-icon} Rates and rate ratios (Poisson)"
-subtitle: "Incidence rate ratios (IRR) with Poisson regression and person-time - and when to choose it over Cox"
+subtitle: >-
+  Incidence rate ratios (IRR) with Poisson regression and person-time - and when
+  to choose it over Cox
 date: last-modified
 ---
 
@@ -8,72 +10,129 @@ date: last-modified
 **Under development.** This page few examples. More detail to come.
 :::
 
-A **rate** is the number of events divided by the time people were at risk (**person-time**). An **incidence rate ratio (IRR)** compares the rate in two groups: if the rate is twice as high among the exposed, the IRR is 2. It is one of the most common effect measures (measures of effect size) in Danish register papers, precisely because registers follow people over time and count up events.
+A **rate** is the number of events divided by the time people were at risk
+(**person-time**). An **incidence rate ratio (IRR)** compares the rate in two
+groups: if the rate is twice as high among the exposed, the IRR is 2. It is one
+of the most common effect measures (measures of effect size) in Danish register
+papers, precisely because registers follow people over time and count up events.
 
-In [Descriptive tables](13b_deskriptive-tabeller.qmd#crude-rate) you computed a **crude** rate per group. This page goes one step further: a **Poisson regression** gives an IRR that is **adjusted for confounding** (age, sex, other covariates), the same way logistic regression gives an adjusted odds ratio.
+In [Descriptive tables](13b_deskriptive-tabeller.qmd#crude-rate) you computed a
+**crude** rate per group. This page goes one step further: a **Poisson
+regression** gives an IRR that is **adjusted for confounding** (age, sex, other
+covariates), the same way logistic regression gives an adjusted odds ratio.
 
 ::: {.callout-note}
-The code examples use generic path and variable names. Adapt them to your project. The packages (`survival`, `gtsummary`, `MASS`) must be installed in your R environment at Statistics Denmark.
+The code examples use generic path and variable names. Adapt them to your
+project. The packages (`survival`, `gtsummary`, `MASS`) must be installed in
+your R environment at Statistics Denmark.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## When do you choose Poisson?
 
-Three models can be used on a "did the event happen?" outcome. The difference is **whether time enters, and how**:
+Three models can be used on a "did the event happen?" outcome. The difference is
+**whether time enters, and how**:
 
-- **Logistic regression** ([Regression](13d_regression.qmd)) only looks at **yes/no** and ignores time. Gives an **odds ratio**. Fits when everyone is followed equally long, or when time is irrelevant.
-- **Cox regression** ([Time-to-event](13e_time-to-event.qmd)) looks at the **time until the first event** per person and gives a **hazard ratio**. It models the rate without assuming a particular shape over time.
-- **Poisson regression** (this page) looks at the **number of events per person-time** and gives a **rate ratio (IRR)**. It is strong when you want to work with **rates across age groups or calendar periods**, or when you have **counted-up events and person-time** rather than one time-to-event per person.
+- **Logistic regression** ([Regression](13d_regression.qmd)) only looks at
+  **yes/no** and ignores time. Gives an **odds ratio**. Fits when everyone is
+  followed equally long, or when time is irrelevant.
+- **Cox regression** ([Time-to-event](13e_time-to-event.qmd)) looks at the
+  **time until the first event** per person and gives a **hazard ratio**. It
+  models the rate without assuming a particular shape over time.
+- **Poisson regression** (this page) looks at the **number of events per
+  person-time** and gives a **rate ratio (IRR)**. It is strong when you want to
+  work with **rates across age groups or calendar periods**, or when you have
+  **counted-up events and person-time** rather than one time-to-event per
+  person.
 
 ::: {.callout-tip}
-**Cox or Poisson?** They often answer almost the same question, and HR and IRR are close when the event is rare. Choose **Cox** if you think in individual follow-up time and time-to-first-event. Choose **Poisson** if you think in **rates per person-year** split by age/calendar time (classic in register studies of e.g. cancer or mortality), or if your data are already **counted up** (events and person-years per group).
+**Cox or Poisson?** They often answer almost the same question, and HR and IRR
+are close when the event is rare. Choose **Cox** if you think in individual
+follow-up time and time-to-first-event. Choose **Poisson** if you think in
+**rates per person-year** split by age/calendar time (classic in register
+studies of e.g. cancer or mortality), or if your data are already **counted up**
+(events and person-years per group).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Starting point
 
-You need two things per person, exactly as for [the crude rate](13b_deskriptive-tabeller.qmd#crude-rate): the **number of events** (`event`, here 0 or 1) and the **person-time** (`followup_years`, follow-up time in years). Both are built in [Phase 12](12b_joins.qmd#opfoelgningstid).
+You need two things per person, exactly as for [the crude
+rate](13b_deskriptive-tabeller.qmd#crude-rate): the **number of events**
+(`event`, here 0 or 1) and the **person-time** (`followup_years`, follow-up time
+in years). Both are built in [Phase 12](12b_joins.qmd#opfoelgningstid).
 
 ```r
-library(dplyr)                         # %>% (pipe)
-library(gtsummary)                     # tbl_regression() for tidy output
+library(dplyr) # %>% (pipe)
+library(gtsummary) # tbl_regression() for tidy output
 
-df <- readRDS("path/to/analysis.rds")  # analysis-ready dataset, one row per person
+df <- readRDS("path/to/analysis.rds") # analysis-ready dataset, one row per person
 ```
 
 ## Poisson regression: rate ratio (IRR)
 
-The model is a `glm` with `family = poisson`. The new part, compared with logistic regression, is the **offset**: it tells the model **how long each person was at risk**, so it models the *rate* (events per time) and not just the number of events.
+The model is a `glm` with `family = poisson`. The new part, compared with
+logistic regression, is the **offset**: it tells the model **how long each
+person was at risk**, so it models the *rate* (events per time) and not just the
+number of events.
 
 ```r
-model <- glm(event ~ exposure + age + sex +          # outcome (event count) explained by exposure + covariates
-               offset(log(followup_years)),          # offset = person-time: turns counts into a RATE
-             data = df, family = poisson)             # family = poisson -> rate model
+model <- glm(
+  event ~ exposure +
+    age +
+    sex + # outcome (event count) explained by exposure + covariates
+    offset(log(followup_years)), # offset = person-time: turns counts into a RATE
+  data = df,
+  family = poisson
+) # family = poisson -> rate model
 
-model %>%                                # send the model on to a table
-  tbl_regression(exponentiate = TRUE)    # exponentiate = TRUE -> rate ratios (IRR)
+model %>% # send the model on to a table
+  tbl_regression(exponentiate = TRUE) # exponentiate = TRUE -> rate ratios (IRR)
 ```
 
 - `family = poisson` makes it a rate model.
-- `offset(log(followup_years))` is the person-time. It must be **logged** (`log()`), because the Poisson model works on the log scale. Without the offset you model the number of events, not the rate - and that is almost never what you want.
-- `exponentiate = TRUE` shows **rate ratios (IRR)** instead of log-rate coefficients.
+- `offset(log(followup_years))` is the person-time. It must be **logged**
+  (`log()`), because the Poisson model works on the log scale. Without the
+  offset you model the number of events, not the rate - and that is almost never
+  what you want.
+- `exponentiate = TRUE` shows **rate ratios (IRR)** instead of log-rate
+  coefficients.
 
-An IRR reads exactly like an OR or HR: **1 = no difference**, above 1 = higher rate, below 1 = lower. See [Reading your result](13d_regression.qmd#laes-resultat).
+An IRR reads exactly like an OR or HR: **1 = no difference**, above 1 = higher
+rate, below 1 = lower. See [Reading your
+result](13d_regression.qmd#laes-resultat).
 
 ::: {.callout-note}
-Here `event` is 0/1 (one row per person), and the offset is the person's total follow-up time. That gives a valid IRR adjusted for the covariates you have at **baseline** (at study start/index). If you want the rate to **change with age or calendar year** during follow-up, the person-time must be split - see [Rates that vary over time](#rates-over-time) below.
+Here `event` is 0/1 (one row per person), and the offset is the person's total
+follow-up time. That gives a valid IRR adjusted for the covariates you have at
+**baseline** (at study start/index). If you want the rate to **change with age
+or calendar year** during follow-up, the person-time must be split - see [Rates
+that vary over time](#rates-over-time) below.
 :::
 
 ## Assumptions
 
-The Poisson model rests on a few assumptions. If they fail, the confidence intervals in particular become misleading:
+The Poisson model rests on a few assumptions. If they fail, the confidence
+intervals in particular become misleading:
 
-- **Constant rate within each "band".** The model assumes the rate is the same throughout the person-time a group contributes. If the rate changes strongly with e.g. age, you satisfy the assumption by **splitting** the person-time into age groups (see below), so the rate only has to be constant within each narrow band.
-- **Events are Poisson-distributed (mean = variance).** If the variance is larger than the mean (**overdispersion**), the standard errors become too small and the confidence intervals artificially narrow. This is common in register data - see the box below.
-- **Independent observations.** One row (or one cluster of person-time) per person. If the same person appears several times (e.g. matched *with replacement* or recurrent events), use **cluster-robust standard errors** as in [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
-- **Log-linearity.** Continuous variables are related to the log rate in a straight line. Check as for logistic regression, e.g. with [splines](13d_regression.qmd#splines).
+- **Constant rate within each "band".** The model assumes the rate is the same
+  throughout the person-time a group contributes. If the rate changes strongly
+  with e.g. age, you satisfy the assumption by **splitting** the person-time
+  into age groups (see below), so the rate only has to be constant within each
+  narrow band.
+- **Events are Poisson-distributed (mean = variance).** If the variance is
+  larger than the mean (**overdispersion**), the standard errors become too
+  small and the confidence intervals artificially narrow. This is common in
+  register data - see the box below.
+- **Independent observations.** One row (or one cluster of person-time) per
+  person. If the same person appears several times (e.g. matched *with
+  replacement* or recurrent events), use **cluster-robust standard errors** as
+  in [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
+- **Log-linearity.** Continuous variables are related to the log rate in a
+  straight line. Check as for logistic regression, e.g. with
+  [splines](13d_regression.qmd#splines).
 
 <details>
 <summary>Check for overdispersion (and switch to negative binomial if needed)</summary>
@@ -95,24 +154,48 @@ Alternatively you can keep the Poisson model and use `family = quasipoisson`, wh
 
 ## Rates that vary over time {#rates-over-time}
 
-The model above assumes one rate throughout the person's follow-up. But in a register study the person *ages* along the way, and the calendar year changes - and the rate of e.g. cancer or death changes strongly with both. If you want the rate to vary with **attained age** or **calendar period**, the follow-up time must be **split into intervals**: one row per person per interval, so each row sits in one age band and one calendar year. You then count up events and person-time and fit the same Poisson model with age and period bands as covariates.
+The model above assumes one rate throughout the person's follow-up. But in a
+register study the person *ages* along the way, and the calendar year changes -
+and the rate of e.g. cancer or death changes strongly with both. If you want the
+rate to vary with **attained age** or **calendar period**, the follow-up time
+must be **split into intervals**: one row per person per interval, so each row
+sits in one age band and one calendar year. You then count up events and
+person-time and fit the same Poisson model with age and period bands as
+covariates.
 
-This is a standard move in register epidemiology, but it needs a bit more machinery than this page covers. Use `survival::survSplit()` or `Epi::splitLexis()` (Lexis objects), or the `popEpi` package, which is built for exactly rates, person-time and standardisation on register data. See [Read more](#read-more).
+This is a standard move in register epidemiology, but it needs a bit more
+machinery than this page covers. Use `survival::survSplit()` or
+`Epi::splitLexis()` (Lexis objects), or the `popEpi` package, which is built for
+exactly rates, person-time and standardisation on register data. See [Read
+more](#read-more).
 
 ::: {.callout-note}
-**SMR and SIR.** If you want to compare your population's rate with a **reference population** (e.g. the rates for all of Denmark from Statistics Denmark), you use **indirect standardisation**: the standardized mortality/incidence ratio (SMR/SIR) is observed events divided by those you would expect from the reference rates. `Epi` and `popEpi` have ready-made functions. It is a descriptive standardisation, not an adjusted regression, so choose according to your question.
+**SMR and SIR.** If you want to compare your population's rate with a
+**reference population** (e.g. the rates for all of Denmark from Statistics
+Denmark), you use **indirect standardisation**: the standardized
+mortality/incidence ratio (SMR/SIR) is observed events divided by those you
+would expect from the reference rates. `Epi` and `popEpi` have ready-made
+functions. It is a descriptive standardisation, not an adjusted regression, so
+choose according to your question.
 :::
 
 ::: {.callout-note}
-Remember: anything leaving Statistics Denmark must pass **output control** - no small cells, only aggregated results. See [Phase 14 - Export and sending home](14_eksport-hjemsendelse.qmd).
+Remember: anything leaving Statistics Denmark must pass **output control** - no
+small cells, only aggregated results. See [Phase 14 - Export and sending
+home](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Read more {#read-more}
 
-- *The Epidemiologist R Handbook*, general background: [Univariate and multivariable regression](https://www.epirhandbook.com/en/new_pages/regression.html)
-- [The `Epi` package](https://CRAN.R-project.org/package=Epi) - person-time, Lexis objects and rates on register data.
-- [The `popEpi` package](https://CRAN.R-project.org/package=popEpi) - rates, SIR/SMR and standardisation, built for register data.
-- [Bendix Carstensen's course material](http://bendixcarstensen.com/) (Statistical Practice in Epidemiology) - a thorough walkthrough of person-time, age/period splitting and Poisson rates.
+- *The Epidemiologist R Handbook*, general background: [Univariate and
+  multivariable
+  regression](https://www.epirhandbook.com/en/new_pages/regression.html)
+- [The `Epi` package](https://CRAN.R-project.org/package=Epi) - person-time,
+  Lexis objects and rates on register data.
+- [The `popEpi` package](https://CRAN.R-project.org/package=popEpi) - rates,
+  SIR/SMR and standardisation, built for register data.
+- [Bendix Carstensen's course material](http://bendixcarstensen.com/)
+  (Statistical Practice in Epidemiology) - a thorough walkthrough of
+  person-time, age/period splitting and Poisson rates.
 :::

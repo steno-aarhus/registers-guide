@@ -4,98 +4,114 @@ subtitle: "Fra register til analyseklar data - trin for trin"
 date: last-modified
 ---
 
-Denne side viser det komplette forløb fra et råt register til et gemt datasæt klar til analyse.
-Du vil se det mønster, der går igen i næsten alle registerudtræk.
+Denne side viser det komplette forløb fra et råt register til et gemt datasæt
+klar til analyse. Du vil se det mønster, der går igen i næsten alle
+registerudtræk.
 
 ::: {.callout-important}
-**Disse eksempler kan ikke køres på DST-serveren.**
-Det syntetiske datasæt (`fakeregs`) er ikke tilgængeligt der.
-Du skal bruge **RStudio installeret lokalt på din computer**:
+**Disse eksempler kan ikke køres på DST-serveren.** Det syntetiske datasæt
+(`fakeregs`) er ikke tilgængeligt der. Du skal bruge **RStudio installeret
+lokalt på din computer**:
 
 1. Download R: [cran.r-project.org](https://cran.r-project.org/)
-2. Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
-3. Åbn RStudio, opret et nyt script (**File → New File → R Script**), og kopier koden derover.
+2. Download RStudio:
+   [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
+3. Åbn RStudio, opret et nyt script (**File → New File → R Script**), og kopier
+   koden derover.
 
-Når du er klar til at arbejde med rigtige registerdata, bruger du det samme mønster - men på DST-serveren og med dine projekts registerdata.
+Når du er klar til at arbejde med rigtige registerdata, bruger du det samme
+mønster - men på DST-serveren og med dine projekts registerdata.
 :::
 
 ::: {.callout-note}
-**Eksemplerne bruger syntetiske data fra pakken [`fakeregs`](https://github.com/steno-aarhus/fakeregs)** (MIT-licens, Anders Aasted Isaksen, Steno Diabetes Center Aarhus) - opdigtede personer med DST-registrenes struktur og kolonnenavne.
-Pakken bruger `generate_*()`-funktioner til at oprette syntetiske data, som du gemmer som parquet og øver `open_dataset()` på. (Disse lokale eksempler bruger `open_dataset()`; fastregs `read_register()` er til et konfigureret DST-projekt, ikke ad-hoc lokale mapper.)
+**Eksemplerne bruger syntetiske data fra pakken
+[`fakeregs`](https://github.com/steno-aarhus/fakeregs)** (MIT-licens, Anders
+Aasted Isaksen, Steno Diabetes Center Aarhus) - opdigtede personer med
+DST-registrenes struktur og kolonnenavne. Pakken bruger
+`generate_*()`-funktioner til at oprette syntetiske data, som du gemmer som
+parquet og øver `open_dataset()` på. (Disse lokale eksempler bruger
+`open_dataset()`; fastregs `read_register()` er til et konfigureret DST-projekt,
+ikke ad-hoc lokale mapper.)
 :::
-
 
 ::: {.callout-note}
-**Næste skridt: hospitalsdiagnoser (LPR)**
-Dette eksempel bruger `lpr_adm` (hospitalkontakter - kun kontaktdatoer, ingen diagnosejoin). Når du arbejder med **diagnosedata fra LPR** (ICD-koder), gælder ekstra regler: registret er delt i to perioder (LPR2 og LPR3), koder har et D-præfiks der skal fjernes, og du skal vælge diagnosetyper. Alt dette gennemgås i [Forstå LPR](09a_forstaa_lpr.qmd).
+**Næste skridt: hospitalsdiagnoser (LPR)** Dette eksempel bruger `lpr_adm`
+(hospitalkontakter - kun kontaktdatoer, ingen diagnosejoin). Når du arbejder med
+**diagnosedata fra LPR** (ICD-koder), gælder ekstra regler: registret er delt i
+to perioder (LPR2 og LPR3), koder har et D-præfiks der skal fjernes, og du skal
+vælge diagnosetyper. Alt dette gennemgås i [Forstå LPR](09a_forstaa_lpr.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Forberedelse: installer fakeregs og generer syntetiske data
 
 `fakeregs` er ikke på CRAN - installer direkte fra GitHub:
 
 ```r
-install.packages("pak")             # kun første gang
-pak::pak("steno-aarhus/fakeregs")   # installer fakeregs
+install.packages("pak") # kun første gang
+pak::pak("steno-aarhus/fakeregs") # installer fakeregs
 ```
 
 ```r
-library(fakeregs)    # syntetiske DST-registerdata
-library(dplyr)       # filter, select, mutate, collect
-library(arrow)       # open_dataset, write_parquet
+library(fakeregs) # syntetiske DST-registerdata
+library(dplyr) # filter, select, mutate, collect
+library(arrow) # open_dataset, write_parquet
 
 # Generer syntetiske data og gem som parquet (gøres kun én gang)
-bp        <- generate_background_pop()                           # syntetisk grundpopulation
-bef_synth <- generate_bef(background_df = bp)                    # syntetisk BEF-register
-lpr_synth <- generate_lpr_adm(background_df = bp)                # syntetisk LPR-kontaktregister
+bp <- generate_background_pop() # syntetisk grundpopulation
+bef_synth <- generate_bef(background_df = bp) # syntetisk BEF-register
+lpr_synth <- generate_lpr_adm(background_df = bp) # syntetisk LPR-kontaktregister
 
-dir.create("synth_data/bef",     recursive = TRUE, showWarnings = FALSE)   # opret mapper
+dir.create("synth_data/bef", recursive = TRUE, showWarnings = FALSE) # opret mapper
 dir.create("synth_data/lpr_adm", recursive = TRUE, showWarnings = FALSE)
-write_parquet(bef_synth,  "synth_data/bef/bef.parquet")                    # gem som parquet
-write_parquet(lpr_synth,  "synth_data/lpr_adm/lpr_adm.parquet")
+write_parquet(bef_synth, "synth_data/bef/bef.parquet") # gem som parquet
+write_parquet(lpr_synth, "synth_data/lpr_adm/lpr_adm.parquet")
 ```
 
 ::: {.callout-tip}
-**Stien er relativ til dit working directory.**
-`"synth_data/bef/"` oprettes i den mappe R er sat til at arbejde i - tjek hvilken det er med `getwd()`.
-Vil du gemme et andet sted, brug en fuld sti: `"C:/Users/ditbrugernavn/projekter/synth_data/bef/"`.
+**Stien er relativ til dit working directory.** `"synth_data/bef/"` oprettes i
+den mappe R er sat til at arbejde i - tjek hvilken det er med `getwd()`. Vil du
+gemme et andet sted, brug en fuld sti:
+`"C:/Users/ditbrugernavn/projekter/synth_data/bef/"`.
 :::
 
 Nu kan du øve `open_dataset()` præcis som på DST-serveren.
 
----
+--------------------------------------------------------------------------------
 
 ## Trin 1 - Definer din studiepopulation
 
 Ethvert udtræk starter med en liste af pnr'er - de personer du ønsker data for.
-I praksis kommer den fra dit kohorte-script. Her bygger vi en lille øvelseskohorte
-direkte fra BEF-registret.
+I praksis kommer den fra dit kohorte-script. Her bygger vi en lille
+øvelseskohorte direkte fra BEF-registret.
 
-```{.r filename="trin1_kohorte.R"}
+```r {filename="trin1_kohorte.R"}
 # Åbn BEF - doven forbindelse, ingen data i R endnu
 bef_data <- open_dataset("synth_data/bef/") %>%
   rename_with(tolower)
 
 # Hent 200 tilfældige pnr'er som din kohort
 kohort_pnrs <- bef_data %>%
-  filter(year == 2015) %>%                # tag ét snapshotår
+  filter(year == 2015) %>% # tag ét snapshotår
   select(pnr) %>%
-  collect() %>%                           # HER hentes data ind i R
+  collect() %>% # HER hentes data ind i R
   slice_sample(n = 200) %>%
   pull(pnr)
 
-length(kohort_pnrs)                      # tjek: bør returnere 200
+length(kohort_pnrs) # tjek: bør returnere 200
 ```
 
 ::: {.callout-tip}
-I et rigtigt projekt er `kohort_pnrs` en vektor du har bygget i et tidligere script
-og genlæser med `readRDS("sti/til/full_cohort.rds") %>% pull(pnr)`.
+I et rigtigt projekt er `kohort_pnrs` en vektor du har bygget i et tidligere
+script og genlæser med `readRDS("sti/til/full_cohort.rds") %>% pull(pnr)`.
 :::
 
 ::: {.callout-note}
-**Hvad betyder tegnene i `filter()`?** `,`/`&` = OG, `\|` = ELLER, `!` = IKKE, plus `==`, `!=`, `>`, `>=`, `%in%`. Fuld oversigt med eksempler og parentes-faldgruben: [Kombinér betingelser i `filter()`](guide_til_funktioner.qmd#filtrer-betingelser).
+**Hvad betyder tegnene i `filter()`?** `,`/`&` = OG, `\|` = ELLER, `!` = IKKE,
+plus `==`, `!=`, `>`, `>=`, `%in%`. Fuld oversigt med eksempler og
+parentes-faldgruben: [Kombinér betingelser i
+`filter()`](guide_til_funktioner.qmd#filtrer-betingelser).
 :::
 
 <details>
@@ -159,116 +175,142 @@ Dette er kun et udsnit. Isaksens fulde vignette (linket ovenfor) er mere gennema
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Trin 2 - Udtræk data fra et register
 
-Nu trækker vi hospitalkontakter fra `lpr_adm` for vores kohorte.
-Mønstret er altid det samme: **åbn → filtrer → vælg kolonner → collect**.
+Nu trækker vi hospitalkontakter fra `lpr_adm` for vores kohorte. Mønstret er
+altid det samme: **åbn → filtrer → vælg kolonner → collect**.
 
-```{.r filename="trin2_udtraek.R"}
+```r {filename="trin2_udtraek.R"}
 # Åbn lpr_adm - doven forbindelse
 lpr_adm <- open_dataset("synth_data/lpr_adm/") %>%
   rename_with(tolower)
 
 # Udtræk: filter FØR collect - ellers crasher sessionen
 kontakter <- lpr_adm %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # kun vores kohort
-  select(pnr, recnum, d_inddto) %>%             # kun de kolonner vi bruger
-  collect()                                     # HER flyttes data ind i R
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>% # kun vores kohort
+  select(pnr, recnum, d_inddto) %>% # kun de kolonner vi bruger
+  collect() # HER flyttes data ind i R
 
-nrow(kontakter)                                 # hvor mange kontaktrækker?
-head(kontakter)                                 # de første seks rækker
+nrow(kontakter) # hvor mange kontaktrækker?
+head(kontakter) # de første seks rækker
 ```
 
 **Hvad skete der?**
 
 - `open_dataset()` åbnede en doven forbindelse - ingen data i R endnu
-- `filter()` og `select()` sendte instruktioner til Arrow/DuckDB - stadig ingen data i R
+- `filter()` og `select()` sendte instruktioner til Arrow/DuckDB - stadig ingen
+  data i R
 - `collect()` udførte forespørgslen og hentede kun de nødvendige rækker ind i R
 
-Se [Udtræk trin for trin](05_udtraek-trin-for-trin.qmd) for en detaljeret forklaring af doven evaluering.
+Se [Udtræk trin for trin](05_udtraek-trin-for-trin.qmd) for en detaljeret
+forklaring af doven evaluering.
 
 ::: {.callout-tip}
-**Test på et lille udsnit først.** Inden du kører et tungt udtræk på hele kohorten, så afprøv koden på nogle få personer eller rækker - så fanger du fejl hurtigt uden at vente. Fx `semi_join(tibble(pnr = head(kohort_pnrs, 10)), by = "pnr")`, eller `collect() %>% head(100)` mens du bygger koden.
+**Test på et lille udsnit først.** Inden du kører et tungt udtræk på hele
+kohorten, så afprøv koden på nogle få personer eller rækker - så fanger du fejl
+hurtigt uden at vente. Fx
+`semi_join(tibble(pnr = head(kohort_pnrs, 10)), by = "pnr")`, eller
+`collect() %>% head(100)` mens du bygger koden.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Trin 3 - Byg analysevariable
 
-Tilføj variabler med `mutate()` *efter* `collect()` - nu er du i R og kan bruge alle funktioner.
+Tilføj variabler med `mutate()` *efter* `collect()` - nu er du i R og kan bruge
+alle funktioner.
 
 ```r
 kontakter <- kontakter %>%
   mutate(
-    dato = as.Date(d_inddto),                            # eksplicit dato-klasse
-    aar  = as.integer(format(dato, "%Y"))                # år fra kontaktdato
+    dato = as.Date(d_inddto), # eksplicit dato-klasse
+    aar = as.integer(format(dato, "%Y")) # år fra kontaktdato
   )
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## Trin 4 - Gem og genindlæs
 
-Gem med `saveRDS()` så næste script kan genindlæse det uden at køre hele udtrækkene igen.
+Gem med `saveRDS()` så næste script kan genindlæse det uden at køre hele
+udtrækkene igen.
 
-```{.r filename="trin4_gem.R"}
-saveRDS(kontakter, "sti/til/extract_kontakter.rds")   # gem til disk - skift stien til din egen mappe
+```r {filename="trin4_gem.R"}
+saveRDS(kontakter, "sti/til/extract_kontakter.rds") # gem til disk - skift stien til din egen mappe
 
 # Genindlæs i næste script:
 kontakter <- readRDS("sti/til/extract_kontakter.rds")
 ```
 
-Hvis du ikke skriver en fuld sti, gemmes filen i dit working directory. Kør `getwd()` for at se hvilken mappe det er.
+Hvis du ikke skriver en fuld sti, gemmes filen i dit working directory. Kør
+`getwd()` for at se hvilken mappe det er.
 
 ::: {.callout-warning}
-**`datasets/`-mappen gemmes kun lokalt på DST-serveren.**
-Mellemresultater hjemsendres via outputkontrol - se [14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+**`datasets/`-mappen gemmes kun lokalt på DST-serveren.** Mellemresultater
+hjemsendres via outputkontrol - se [14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Inspicér resultatet
 
 Lige efter et udtræk bør du tjekke, at du fik det, du forventede:
 
 ```r
-head(kontakter)                     # de første seks rækker - ser det rigtigt ud?
-nrow(kontakter)                     # antal rækker - som forventet?
-length(unique(kontakter$pnr))       # hvor mange unikke personer?
-colSums(is.na(kontakter))           # manglende værdier per kolonne
-class(kontakter$d_inddto)           # er datokolonnen Date? (ikke character)
+head(kontakter) # de første seks rækker - ser det rigtigt ud?
+nrow(kontakter) # antal rækker - som forventet?
+length(unique(kontakter$pnr)) # hvor mange unikke personer?
+colSums(is.na(kontakter)) # manglende værdier per kolonne
+class(kontakter$d_inddto) # er datokolonnen Date? (ikke character)
 ```
 
-Hvis dit udtræk inkluderer eksklusionstrin - fx "fjern personer med tidlig diagnose" - er det god praksis at tælle N for hvert trin. Erstat `raa` og `renset` med dine egne variabelnavne:
+Hvis dit udtræk inkluderer eksklusionstrin - fx "fjern personer med tidlig
+diagnose" - er det god praksis at tælle N for hvert trin. Erstat `raa` og
+`renset` med dine egne variabelnavne:
 
 ```r
 # Skabelon - erstat raa og renset med dine egne variabelnavne:
-cat("Rå udtræk:           ", nrow(raa),                         "\n")   # alle rækker før eksklusion
-cat("Efter eksklusioner:  ", nrow(renset),                      "\n")   # efter hvert trin
-cat("Ekskluderede i alt:  ", nrow(raa) - nrow(renset),          "\n")   # forskel
+cat("Rå udtræk:           ", nrow(raa), "\n") # alle rækker før eksklusion
+cat("Efter eksklusioner:  ", nrow(renset), "\n") # efter hvert trin
+cat("Ekskluderede i alt:  ", nrow(raa) - nrow(renset), "\n") # forskel
 ```
 
-Disse linjer kan du ikke køre med de syntetiske øvelsesdata - de er en skabelon til brug, når du arbejder med dine egne data og har et eksklusionsforløb. Mønsteret gentages for hvert ekskluderingstrin og danner grundlag for et **STROBE flow-diagram** (et standardiseret diagram der viser, hvor mange der blev ekskluderet ved hvert trin og hvorfor; STROBE er rapporteringsstandarden for observationelle studier, CONSORT er til randomiserede forsøg). Den samme attrition-optælling indgår, når du bygger studiepopulationen i [Fase 10](10_byg-studiepopulation.qmd).
+Disse linjer kan du ikke køre med de syntetiske øvelsesdata - de er en skabelon
+til brug, når du arbejder med dine egne data og har et eksklusionsforløb.
+Mønsteret gentages for hvert ekskluderingstrin og danner grundlag for et
+**STROBE flow-diagram** (et standardiseret diagram der viser, hvor mange der
+blev ekskluderet ved hvert trin og hvorfor; STROBE er rapporteringsstandarden
+for observationelle studier, CONSORT er til randomiserede forsøg). Den samme
+attrition-optælling indgår, når du bygger studiepopulationen i [Fase
+10](10_byg-studiepopulation.qmd).
 
-Dette er en hurtig fornuftskontrol. Den fulde værktøjskasse til at udforske data - `summary()`, `table()`, krydstabeller og NA-håndtering - gennemgås i [Fase 7 - Inspicér din data](07_inspicer-data.qmd).
+Dette er en hurtig fornuftskontrol. Den fulde værktøjskasse til at udforske data
+- `summary()`, `table()`, krydstabeller og NA-håndtering - gennemgås i [Fase 7 -
+Inspicér din data](07_inspicer-data.qmd).
 
----
+--------------------------------------------------------------------------------
 
 ## Næste skridt
 
-Du har nu lavet et komplet udtræk og gemt det. Næste skridt er at lære at udforske data grundigt:
+Du har nu lavet et komplet udtræk og gemt det. Næste skridt er at lære at
+udforske data grundigt:
 
-- [Fase 7 - Inspicér din data](07_inspicer-data.qmd): den fulde værktøjskasse til at forstå hvad du har
-- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): det komplette mønster for diagnoseudtræk
-- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): kobl to udtræk sammen
+- [Fase 7 - Inspicér din data](07_inspicer-data.qmd): den fulde værktøjskasse
+  til at forstå hvad du har
+- [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): det komplette mønster for
+  diagnoseudtræk
+- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): kobl to
+  udtræk sammen
 
----
+--------------------------------------------------------------------------------
 
 ## Kilde og tilpasning
 
-Trin 1 (kohorte-opbygning fra BEF) er tilpasset fra Anders Aasted Isaksens vignette
+Trin 1 (kohorte-opbygning fra BEF) er tilpasset fra Anders Aasted Isaksens
+vignette
 [`common_tasks_dplyr.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/vignettes/common_tasks_dplyr.qmd)
-i `fakeregs`-pakken (MIT-licens, Steno Diabetes Center Aarhus).
-Trin 2–4 og tjeklisten er skrevet til denne vejledning.
+i `fakeregs`-pakken (MIT-licens, Steno Diabetes Center Aarhus). Trin 2--4 og
+tjeklisten er skrevet til denne vejledning.

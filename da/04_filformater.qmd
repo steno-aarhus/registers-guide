@@ -5,15 +5,21 @@ date: last-modified
 ---
 
 Når du åbner Stifinder på DST-serveren, møder du filer med forskellige endelser.
-Denne side er dit opslagsværktøj: hvilken filtype er det, hvilken funktion åbner den, og kommer dataene ind i hukommelsen med det samme eller ej?
+Denne side er dit opslagsværktøj: hvilken filtype er det, hvilken funktion åbner
+den, og kommer dataene ind i hukommelsen med det samme eller ej?
 
-Det sidste - **doven vs. fuld indlæsning** - er den vigtigste skelnen på denne side. Mekanismen bag forklares i [Fase 5 - Udtræk trin for trin](05_udtraek-trin-for-trin.qmd); her skal du bare vide, *hvilke* filtyper der opfører sig hvordan.
+Det sidste - **doven vs. fuld indlæsning** - er den vigtigste skelnen på denne
+side. Mekanismen bag forklares i [Fase 5 - Udtræk trin for
+trin](05_udtraek-trin-for-trin.qmd); her skal du bare vide, *hvilke* filtyper
+der opfører sig hvordan.
 
----
+--------------------------------------------------------------------------------
 
 ## Sådan ser en projektmappe ud
 
-Et typisk projekt på DST-serveren er organiseret nogenlunde sådan her. Registrene ligger under `cleaned-data/`; dine egne scripts og resultater ligger under `workspace/[eget-navn]/`:
+Et typisk projekt på DST-serveren er organiseret nogenlunde sådan her.
+Registrene ligger under `cleaned-data/`; dine egne scripts og resultater ligger
+under `workspace/[eget-navn]/`:
 
 ```
 E:/rawdata/[projektnummer]/
@@ -33,68 +39,114 @@ E:/workdata/[projektnummer]/
         └── output/              # tabeller, figurer og logs
 ```
 
-Stierne i kodeeksemplerne følger denne struktur, men **dine egne mappenavne kan sagtens være anderledes** - tjek med Stifinder. To ting er værd at vide:
+Stierne i kodeeksemplerne følger denne struktur, men **dine egne mappenavne kan
+sagtens være anderledes** - tjek med Stifinder. To ting er værd at vide:
 
-- **`rawdata/` er skrivebeskyttet.** Du kan ikke redigere eller skrive i de rå registerdata, DST leverer. Du arbejder i `workspace/`, hvor hver projektdeltager typisk har sin egen undermappe (`[eget-navn]/`) til scripts, mellemresultater og output.
-- **Næsten al koden i denne guide forudsætter, at registrene er i parquet.** Hvis dit projekt kun har rå SAS-filer, er første opgave at konvertere dem til parquet - og at sætte en fornuftig mappestruktur op til projektet. Se [Konvertér SAS-filer til Parquet](#konvertér-sas-til-parquet) nedenfor.
+- **`rawdata/` er skrivebeskyttet.** Du kan ikke redigere eller skrive i de rå
+  registerdata, DST leverer. Du arbejder i `workspace/`, hvor hver
+  projektdeltager typisk har sin egen undermappe (`[eget-navn]/`) til scripts,
+  mellemresultater og output.
+- **Næsten al koden i denne guide forudsætter, at registrene er i parquet.**
+  Hvis dit projekt kun har rå SAS-filer, er første opgave at konvertere dem til
+  parquet - og at sætte en fornuftig mappestruktur op til projektet. Se
+  [Konvertér SAS-filer til Parquet](#konvertér-sas-til-parquet) nedenfor.
 
-Hvordan du selv navngiver scripts i `R/`, gennemgås i [God kode-praksis](god-kode-praksis.qmd).
+Hvordan du selv navngiver scripts i `R/`, gennemgås i [God
+kode-praksis](god-kode-praksis.qmd).
 
----
+--------------------------------------------------------------------------------
 
 ## Doven vs. fuld indlæsning - hvad er forskellen i praksis?
 
-Det er den vigtigste skelnen på siden, så vi tager den først. Hver filtype nedenfor falder i én af to indlæsningsmåder.
+Det er den vigtigste skelnen på siden, så vi tager den først. Hver filtype
+nedenfor falder i én af to indlæsningsmåder.
 
-Tænk på forskellen som to måder at handle på. **Fuld indlæsning** er at køre hele supermarkedet hjem og først derhjemme finde de tre varer, du skulle bruge. **Doven indlæsning** er at sende en indkøbsseddel og kun få de tre varer leveret. Når et register fylder millioner af rækker, er den forskel afgørende.
+Tænk på forskellen som to måder at handle på. **Fuld indlæsning** er at køre
+hele supermarkedet hjem og først derhjemme finde de tre varer, du skulle bruge.
+**Doven indlæsning** er at sende en indkøbsseddel og kun få de tre varer
+leveret. Når et register fylder millioner af rækker, er den forskel afgørende.
 
-**Fuld indlæsning** (`readRDS`, `read_sas`, `read_csv`, `read_xlsx`)
-Hele filen læses ind i RAM (computerens arbejdshukommelse - den er begrænset og deles med alle andre på serveren) med det samme. For dine egne mellemresultater er det fint - de er relativt små. Men det ville crashe din session, hvis du prøvede det på et helt register.
+**Fuld indlæsning** (`readRDS`, `read_sas`, `read_csv`, `read_xlsx`) Hele filen
+læses ind i RAM (computerens arbejdshukommelse - den er begrænset og deles med
+alle andre på serveren) med det samme. For dine egne mellemresultater er det
+fint - de er relativt små. Men det ville crashe din session, hvis du prøvede det
+på et helt register.
 
-**Doven indlæsning** (parquet via `open_dataset()`)
-Filen åbnes som en *forbindelse* til dataene på disken, ikke som selve dataene. Du kan filtrere og vælge kolonner (skrive din "indkøbsseddel"), og **først når du kalder `collect()`** hentes de udvalgte rækker ind i RAM. Det er sådan du arbejder med registre på millioner af rækker uden at løbe tør for hukommelse.
+**Doven indlæsning** (parquet via `open_dataset()`) Filen åbnes som en
+*forbindelse* til dataene på disken, ikke som selve dataene. Du kan filtrere og
+vælge kolonner (skrive din "indkøbsseddel"), og **først når du kalder
+`collect()`** hentes de udvalgte rækker ind i RAM. Det er sådan du arbejder med
+registre på millioner af rækker uden at løbe tør for hukommelse.
 
 ::: {.callout-important}
-**SAS-filer er også store - og deles med alle på serveren.**
-På DST deler alle brugere serverens RAM. `read_sas()` på en stor SAS-fil belaster serveren for alle på samme tid. DST **lukker automatisk processer** (RStudio-sessioner, jobs m.m.) når RAM'en er ved at være fyldt - så et for stort udtræk kan koste dig dit ulagrede arbejde. Hvis du bruger en SAS-fil gentagne gange, er det værd at konvertere den til parquet én gang - det sparer markant RAM og gør indlæsning meget hurtigere.
-Se [Konvertér SAS til parquet](#konvertér-sas-til-parquet) nedenfor for fremgangsmåden, og [Pas på RAM i det fælles miljø](god-kode-praksis.qmd#pas-på-ram) for de praktiske vaner.
-DST's officielle råd er samlet i [DST-vejledning: Reduktion af RAM-forbrug i det fælles miljø (PDF)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
+**SAS-filer er også store - og deles med alle på serveren.** På DST deler alle
+brugere serverens RAM. `read_sas()` på en stor SAS-fil belaster serveren for
+alle på samme tid. DST **lukker automatisk processer** (RStudio-sessioner, jobs
+m.m.) når RAM'en er ved at være fyldt - så et for stort udtræk kan koste dig dit
+ulagrede arbejde. Hvis du bruger en SAS-fil gentagne gange, er det værd at
+konvertere den til parquet én gang - det sparer markant RAM og gør indlæsning
+meget hurtigere. Se [Konvertér SAS til parquet](#konvertér-sas-til-parquet)
+nedenfor for fremgangsmåden, og [Pas på RAM i det fælles
+miljø](god-kode-praksis.qmd#pas-på-ram) for de praktiske vaner. DST's officielle
+råd er samlet i [DST-vejledning: Reduktion af RAM-forbrug i det fælles miljø
+(PDF)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Oversigt - filtype, pakke, funktion
 
-| Filtype | Pakke | Funktion | Indlæsning |
-|---|---|---|---|
-| `.parquet` / parquet-mappe | `arrow` eller `fastreg` | `open_dataset("sti/til/mappe/")` eller `read_register("navn")` | **Doven** - intet i RAM før `collect()` |
-| `.rds` | base R | `readRDS("sti/til/fil.rds")` | **Fuld** - hele filen ind i RAM |
-| `.sas7bdat` | `haven` | `read_sas("sti/til/fil.sas7bdat")` | **Fuld** - hele filen ind i RAM |
-| `.csv` | `readr` | `read_csv("sti/til/fil.csv")` | **Fuld** - hele filen ind i RAM |
-| `.xlsx` | `readxl` | `read_xlsx("sti/til/fil.xlsx")` | **Fuld** - hele filen ind i RAM |
+  | Filtype                    | Pakke                   | Funktion                                                       | Indlæsning                              |
+  | -------------------------- | ----------------------- | -------------------------------------------------------------- | --------------------------------------- |
+  | `.parquet` / parquet-mappe | `arrow` eller `fastreg` | `open_dataset("sti/til/mappe/")` eller `read_register("navn")` | **Doven** - intet i RAM før `collect()` |
+  | `.rds`                     | base R                  | `readRDS("sti/til/fil.rds")`                                   | **Fuld** - hele filen ind i RAM         |
+  | `.sas7bdat`                | `haven`                 | `read_sas("sti/til/fil.sas7bdat")`                             | **Fuld** - hele filen ind i RAM         |
+  | `.csv`                     | `readr`                 | `read_csv("sti/til/fil.csv")`                                  | **Fuld** - hele filen ind i RAM         |
+  | `.xlsx`                    | `readxl`                | `read_xlsx("sti/til/fil.xlsx")`                                | **Fuld** - hele filen ind i RAM         |
 
-Den sidste kolonne er doven/fuld-skelnen fra ovenfor: parquet er det eneste dovne format, alt andet læses fuldt ind i RAM.
+Den sidste kolonne er doven/fuld-skelnen fra ovenfor: parquet er det eneste
+dovne format, alt andet læses fuldt ind i RAM.
 
 **Hvad skriver du i parenteserne?**
 
-- Med `open_dataset()` (arrow) skriver du **stien** til parquet-mappen - fx `open_dataset("sti/til/bef/")`. Den virker på alle parquet-filer, på alle projekter.
-- Med `read_register()` (fastreg) skriver du bare registrets **navn** - fx `read_register("bef")` - fordi fastreg allerede ved, hvor dine parquet-data ligger (sat én gang under konverteringen). Den giver dig desuden en DuckDB-forbindelse, så flere dplyr-funktioner virker uden et ekstra `to_duckdb()`-trin. Den kræver, at registrene er sat op med fastreg.
+- Med `open_dataset()` (arrow) skriver du **stien** til parquet-mappen - fx
+  `open_dataset("sti/til/bef/")`. Den virker på alle parquet-filer, på alle
+  projekter.
+- Med `read_register()` (fastreg) skriver du bare registrets **navn** - fx
+  `read_register("bef")` - fordi fastreg allerede ved, hvor dine parquet-data
+  ligger (sat én gang under konverteringen). Den giver dig desuden en
+  DuckDB-forbindelse, så flere dplyr-funktioner virker uden et ekstra
+  `to_duckdb()`-trin. Den kræver, at registrene er sat op med fastreg.
 
-Hvilken sti det konkret er, afhænger af dit projekt og din server. Kolonnenavne for hvert register finder du i [Register-overblik](register_reference.qmd).
+Hvilken sti det konkret er, afhænger af dit projekt og din server. Kolonnenavne
+for hvert register finder du i [Register-overblik](register_reference.qmd).
 
 ::: {.callout-note}
-**Har du ikke selv konverteret dataene?** Hvis en kollega allerede har konverteret registrene med fastreg, peger du bare fastreg på den mappe én gang per script - sæt `options(fastreg.project_workdata_dir = "...")` til den konverterede mappe (spørg den der satte det op om den præcise sti, typisk `cleaned-data/parquet-registers/`). Derefter virker `read_register("bef")` via navn, uden konvertering og uden en sti i hvert kald. [Getting started-vignetten](https://dp-next.github.io/fastreg/articles/fastreg.html) viser optionen.
+**Har du ikke selv konverteret dataene?** Hvis en kollega allerede har
+konverteret registrene med fastreg, peger du bare fastreg på den mappe én gang
+per script - sæt `options(fastreg.project_workdata_dir = "...")` til den
+konverterede mappe (spørg den der satte det op om den præcise sti, typisk
+`cleaned-data/parquet-registers/`). Derefter virker `read_register("bef")` via
+navn, uden konvertering og uden en sti i hvert kald. [Getting
+started-vignetten](https://dp-next.github.io/fastreg/articles/fastreg.html)
+viser optionen.
 :::
 
 ::: {.callout-note}
-**Et register kommer ofte som mange årlige filer** (fx `bef2015.parquet`, `bef2016.parquet` … i samme mappe, nogle gange én undermappe per år). Både `open_dataset("sti/til/bef/")` og fastregs `read_register("bef")` læser **hele mappen (inkl. eventuelle års-undermapper) som ét samlet datasæt**. Vælg år ved at filtrere på årskolonnen *i dataene*, fx `filter(year == 2015)` (nogle registre bruger `aar`).
+**Et register kommer ofte som mange årlige filer** (fx `bef2015.parquet`,
+`bef2016.parquet` ... i samme mappe, nogle gange én undermappe per år). Både
+`open_dataset("sti/til/bef/")` og fastregs `read_register("bef")` læser **hele
+mappen (inkl. eventuelle års-undermapper) som ét samlet datasæt**. Vælg år ved
+at filtrere på årskolonnen *i dataene*, fx `filter(year == 2015)` (nogle
+registre bruger `aar`).
 :::
 
-**RDS er det format du selv skriver mest.** Du gemmer mellemresultater fra ét script og genindlæser dem i det næste:
+**RDS er det format du selv skriver mest.** Du gemmer mellemresultater fra ét
+script og genindlæser dem i det næste:
 
 ```r
-saveRDS(kohort, "sti/til/full_cohort.rds")   # gem et R-objekt til disk
-kohort <- readRDS("sti/til/full_cohort.rds")   # læs det ind igen i næste script
+saveRDS(kohort, "sti/til/full_cohort.rds") # gem et R-objekt til disk
+kohort <- readRDS("sti/til/full_cohort.rds") # læs det ind igen i næste script
 ```
 
 <details>
@@ -146,14 +198,20 @@ Gem **aldrig** rå registerdata som CSV - kun aggregerede resultater. Se [Fase 1
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Konvertér SAS-filer til Parquet {#konvertér-sas-til-parquet}
 
-De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden du kan bruge dem med `open_dataset()` og doven evaluering, skal de konverteres til Parquet **én enkelt gang**. Derefter bruger du dem præcis som alle andre registre.
+De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden
+du kan bruge dem med `open_dataset()` og doven evaluering, skal de konverteres
+til Parquet **én enkelt gang**. Derefter bruger du dem præcis som alle andre
+registre.
 
 ::: {.callout-important}
-**Relevant for de fleste uden for DARTER.** Arbejder du på et projekt hvor registrene ikke allerede er konverteret til parquet, er dette trin nødvendigt inden du kan køre udtræk. Gøres én gang per register - herefter gælder det normale udtræksmønster.
+**Relevant for de fleste uden for DARTER.** Arbejder du på et projekt hvor
+registrene ikke allerede er konverteret til parquet, er dette trin nødvendigt
+inden du kan køre udtræk. Gøres én gang per register - herefter gælder det
+normale udtræksmønster.
 :::
 
 <details>
@@ -170,19 +228,33 @@ De fleste projekter på DST modtager registre som SAS-filer (`.sas7bdat`). Inden
 
 ### Anbefalet: konvertér med `fastreg`
 
-Det anbefalede værktøj er pakken [`fastreg`](https://dp-next.github.io/fastreg/) (dp-next, på CRAN). Den konverterer SAS-registre til Parquet (partitioneret efter år) og lader dig læse dem ind igen via registrets **navn**.
+Det anbefalede værktøj er pakken [`fastreg`](https://dp-next.github.io/fastreg/)
+(dp-next, på CRAN). Den konverterer SAS-registre til Parquet (partitioneret
+efter år) og lader dig læse dem ind igen via registrets **navn**.
 
 ::: {.callout-important}
-**Brug fastregs egen vejledning til selve konverteringskoden.** De præcise kommandoer er dokumenteret - og holdes opdateret af teamet - i fastregs [Getting started-vignette](https://dp-next.github.io/fastreg/articles/fastreg.html). Vi linker til det relevante afsnit nedenfor frem for at gengive kode, der kan blive forældet. Du installerer den én gang med `install.packages("fastreg")` og peger den på dine rådata- og output-mapper, som vist der.
+**Brug fastregs egen vejledning til selve konverteringskoden.** De præcise
+kommandoer er dokumenteret - og holdes opdateret af teamet - i fastregs [Getting
+started-vignette](https://dp-next.github.io/fastreg/articles/fastreg.html). Vi
+linker til det relevante afsnit nedenfor frem for at gengive kode, der kan blive
+forældet. Du installerer den én gang med `install.packages("fastreg")` og peger
+den på dine rådata- og output-mapper, som vist der.
 :::
 
 #### Konvertér én fil
 
-Skal du kun konvertere **én** SAS-fil, så brug fastregs `convert()`-funktion - den skriver ét enkelt register til Parquet. Se [Getting started-vignetten](https://dp-next.github.io/fastreg/articles/fastreg.html) for det præcise kald.
+Skal du kun konvertere **én** SAS-fil, så brug fastregs `convert()`-funktion -
+den skriver ét enkelt register til Parquet. Se [Getting
+started-vignetten](https://dp-next.github.io/fastreg/articles/fastreg.html) for
+det præcise kald.
 
 #### Konvertér flere filer på én gang
 
-Skal du konvertere et **helt workspace**, anbefaler fastreg-teamet dens **`targets`-pipeline**: `use_template()` kopierer en klar-til-brug pipeline, der konverterer alle dine registre parallelt - reproducerbart, og genkørbart når et register opdateres. Se [Converting multiple registers in parallel](https://dp-next.github.io/fastreg/articles/fastreg.html#converting-multiple-registers-in-parallel).
+Skal du konvertere et **helt workspace**, anbefaler fastreg-teamet dens
+**`targets`-pipeline**: `use_template()` kopierer en klar-til-brug pipeline, der
+konverterer alle dine registre parallelt - reproducerbart, og genkørbart når et
+register opdateres. Se [Converting multiple registers in
+parallel](https://dp-next.github.io/fastreg/articles/fastreg.html#converting-multiple-registers-in-parallel).
 
 <details>
 <summary>Hvis fastreg ikke er tilgængelig på dit projekt: konvertér manuelt med haven + arrow</summary>
@@ -221,20 +293,23 @@ Du kan også konvertere til Parquet (eller `.dta`) i **StatTransfer**, som finde
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Næste skridt
 
-Hvorfor doven indlæsning fungerer, og hvordan `collect()` virker, er emnet for næste fase.
+Hvorfor doven indlæsning fungerer, og hvordan `collect()` virker, er emnet for
+næste fase.
 
 → [Fase 5 - Udtræk trin for trin](05_udtraek-trin-for-trin.qmd)
-
 
 ::: {.callout-tip}
 ## Læs mere
 
 Generel uddybning (på engelsk):
 
-- [Import and export](https://www.epirhandbook.com/en/new_pages/importing.html) i *The Epidemiologist R Handbook*.
-- [Arrow](https://r4ds.hadley.nz/arrow.html) i *R for Data Science*: at læse parquet med `open_dataset()` og bruge dplyr direkte på arrow-data - præcis det indlæsningsmønster, denne guide bygger på.
+- [Import and export](https://www.epirhandbook.com/en/new_pages/importing.html)
+  i *The Epidemiologist R Handbook*.
+- [Arrow](https://r4ds.hadley.nz/arrow.html) i *R for Data Science*: at læse
+  parquet med `open_dataset()` og bruge dplyr direkte på arrow-data - præcis det
+  indlæsningsmønster, denne guide bygger på.
 :::

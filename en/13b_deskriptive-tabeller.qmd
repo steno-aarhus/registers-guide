@@ -8,48 +8,57 @@ date: last-modified
 **Under development.** More examples (subgroups, more statistics) are coming.
 :::
 
-A **"Table 1"** describes your study population: age, sex and other baseline variables, usually split by exposure. It is almost always the first table in a register-based paper. Here we use the [`gtsummary`](https://www.danieldsjoberg.com/gtsummary/) package, which builds a publication-ready table in a few lines.
+A **"Table 1"** describes your study population: age, sex and other baseline
+variables, usually split by exposure. It is almost always the first table in a
+register-based paper. Here we use the
+[`gtsummary`](https://www.danieldsjoberg.com/gtsummary/) package, which builds a
+publication-ready table in a few lines.
 
 ::: {.callout-note}
-The code examples use generic path and variable names. Adapt them to your project. `gtsummary` (and `huxtable`, if you want to export to Excel) must be installed in your R environment on DST; if they are not, contact your data manager.
+The code examples use generic path and variable names. Adapt them to your
+project. `gtsummary` (and `huxtable`, if you want to export to Excel) must be
+installed in your R environment on DST; if they are not, contact your data
+manager.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Starting point
 
-You start from your **analysis-ready dataset** with one row per person ([Phase 12](12_data-manipulation.qmd)).
+You start from your **analysis-ready dataset** with one row per person ([Phase
+12](12_data-manipulation.qmd)).
 
 ```r
-library(dplyr)                         # %>% (pipe)
-library(gtsummary)                     # tbl_summary() + export functions
+library(dplyr) # %>% (pipe)
+library(gtsummary) # tbl_summary() + export functions
 
-df <- readRDS("path/to/analysis.rds")  # analysis-ready dataset, one row per person
+df <- readRDS("path/to/analysis.rds") # analysis-ready dataset, one row per person
 ```
 
 ## Example
 
-`tbl_summary()` summarises the variables you point it at. With `by =` you split the table into columns by a group (e.g. exposure).
+`tbl_summary()` summarises the variables you point it at. With `by =` you split
+the table into columns by a group (e.g. exposure).
 
 ```r
 table1 <- df %>%
   tbl_summary(
-    by = exposure,                          # one column per group (omit for an overall table)
-    include = c(age, sex, bmi),             # variables to include
+    by = exposure, # one column per group (omit for an overall table)
+    include = c(age, sex, bmi), # variables to include
     statistic = list(
-      all_continuous()  ~ "{median} ({p25}, {p75})",
+      all_continuous() ~ "{median} ({p25}, {p75})",
       all_categorical() ~ "{n} ({p}%)"
     ),
-    digits  = all_continuous() ~ 1,          # number of decimals for continuous numbers
-    label   = list(age ~ "Age (years)", sex ~ "Sex", bmi ~ "BMI"),  # nice variable names
-    missing = "ifany",                       # show an "unknown" row if values are missing
-    missing_text = "Missing"                 # the text for that row
+    digits = all_continuous() ~ 1, # number of decimals for continuous numbers
+    label = list(age ~ "Age (years)", sex ~ "Sex", bmi ~ "BMI"), # nice variable names
+    missing = "ifany", # show an "unknown" row if values are missing
+    missing_text = "Missing" # the text for that row
   ) %>%
-  add_overall() %>%                           # add an "Overall" column: ALL participants combined (both groups)
-  bold_labels() %>%                           # bold the variable names
-  modify_header(label ~ "**Variable**")       # text in the header of the variable column (your choice)
+  add_overall() %>% # add an "Overall" column: ALL participants combined (both groups)
+  bold_labels() %>% # bold the variable names
+  modify_header(label ~ "**Variable**") # text in the header of the variable column (your choice)
 
-table1                                        # print the table (display it)
+table1 # print the table (display it)
 ```
 
 <details>
@@ -81,54 +90,68 @@ table1 %>%           # take the already-built table ...
 
 ## Crude incidence rate (per 1000 person-years) {#crude-rate}
 
-Register papers often report the **crude incidence rate** per exposure group alongside Table 1: the number of events divided by the total follow-up time (person-years), scaled to per 1000 person-years. It needs `event` (1 = event, 0 = censored) and `followup_years` from your analysis-ready dataset (built in [Phase 12](12b_joins.qmd#opfoelgningstid)).
+Register papers often report the **crude incidence rate** per exposure group
+alongside Table 1: the number of events divided by the total follow-up time
+(person-years), scaled to per 1000 person-years. It needs `event` (1 = event, 0
+= censored) and `followup_years` from your analysis-ready dataset (built in
+[Phase 12](12b_joins.qmd#opfoelgningstid)).
 
 ```r
 df %>%
-  group_by(exposure) %>%                                      # one line per exposure group
+  group_by(exposure) %>% # one line per exposure group
   summarise(
-    events        = sum(event),                               # number of outcomes in the group
-    person_years  = sum(followup_years),                      # total follow-up time (person-years)
-    rate_per_1000 = sum(event) / sum(followup_years) * 1000   # crude rate per 1000 person-years
+    events = sum(event), # number of outcomes in the group
+    person_years = sum(followup_years), # total follow-up time (person-years)
+    rate_per_1000 = sum(event) / sum(followup_years) * 1000 # crude rate per 1000 person-years
   )
 ```
 
-This is a **descriptive** rate with no adjustment, and counts as aggregated output (check for small cells before export). To compare the groups with control for confounding, that belongs to [regression](13d_regression.qmd) and [time-to-event](13e_time-to-event.qmd), where a Cox model gives a hazard ratio.
+This is a **descriptive** rate with no adjustment, and counts as aggregated
+output (check for small cells before export). To compare the groups with control
+for confounding, that belongs to [regression](13d_regression.qmd) and
+[time-to-event](13e_time-to-event.qmd), where a Cox model gives a hazard ratio.
 
 ## Export the table (for output control)
 
-Anything leaving DST must go through output control. A table like this is aggregated, but always check for **small cells** before exporting.
+Anything leaving DST must go through output control. A table like this is
+aggregated, but always check for **small cells** before exporting.
 
 ```r
 # To Excel: as_hux_xlsx() requires the huxtable package to be INSTALLED
 # (you don't need to call library(huxtable) yourself - gtsummary uses it behind the scenes).
-table1 %>% as_hux_xlsx(file = "table1.xlsx")   # write the table to a .xlsx file
+table1 %>% as_hux_xlsx(file = "table1.xlsx") # write the table to a .xlsx file
 
 # To Word: requires the flextable package installed
-table1 %>% as_flex_table()                     # gives a flextable object for a Word document
+table1 %>% as_flex_table() # gives a flextable object for a Word document
 
 # Works ALWAYS without extra packages (base R): turn the table into a data frame and save as CSV
 table1 %>%
-  as_tibble() %>%                              # the table as a plain data frame
-  write.csv("table1.csv", row.names = FALSE)   # a CSV opens directly in Excel
+  as_tibble() %>% # the table as a plain data frame
+  write.csv("table1.csv", row.names = FALSE) # a CSV opens directly in Excel
 ```
 
-If `huxtable` or `flextable` is not available on DST, use the CSV route (base R, no packages needed) or contact your data manager.
+If `huxtable` or `flextable` is not available on DST, use the CSV route (base R,
+no packages needed) or contact your data manager.
 
 ## Alternative package
 
-`finalfit::summary_factorlist()` builds a similar baseline table and is popular in epidemiology. `gtsummary` is used here because exporting to Excel and Word is straightforward.
+`finalfit::summary_factorlist()` builds a similar baseline table and is popular
+in epidemiology. `gtsummary` is used here because exporting to Excel and Word is
+straightforward.
 
 ::: {.callout-note}
-Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
+Remember: anything leaving DST must go through **output control** - no small
+cells, only aggregated results. See [Phase 14 - Export and
+repatriation](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Further information
 
 Further depth in *The Epidemiologist R Handbook*:
 
-- [Descriptive tables](https://www.epirhandbook.com/en/new_pages/tables_descriptive.html)
-- [Tables for presentation](https://www.epirhandbook.com/en/new_pages/tables_presentation.html)
+- [Descriptive
+  tables](https://www.epirhandbook.com/en/new_pages/tables_descriptive.html)
+- [Tables for
+  presentation](https://www.epirhandbook.com/en/new_pages/tables_presentation.html)
 :::

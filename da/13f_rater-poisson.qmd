@@ -1,6 +1,8 @@
 ---
 title: "![](images/icons/icon_14.png){.title-icon} Rater og rate-ratio (Poisson)"
-subtitle: "Incidensrate-ratio (IRR) med Poisson-regression og person-tid - og hvornår du vælger den frem for Cox"
+subtitle: >-
+  Incidensrate-ratio (IRR) med Poisson-regression og person-tid - og hvornår du
+  vælger den frem for Cox
 date: last-modified
 ---
 
@@ -8,72 +10,128 @@ date: last-modified
 **Under udvikling.** Siden viser enkelte eksempler. Flere detaljer kommer.
 :::
 
-En **rate** er antallet af hændelser delt med den tid, personerne var i risiko (**person-tid**). En **incidensrate-ratio (IRR)** sammenligner raten i to grupper: er raten dobbelt så høj blandt de eksponerede, er IRR = 2. Det er et af de hyppigste effektmål (mål for effektens størrelse) i danske registerartikler, fordi registre netop følger personer over tid og tæller hændelser op.
+En **rate** er antallet af hændelser delt med den tid, personerne var i risiko
+(**person-tid**). En **incidensrate-ratio (IRR)** sammenligner raten i to
+grupper: er raten dobbelt så høj blandt de eksponerede, er IRR = 2. Det er et af
+de hyppigste effektmål (mål for effektens størrelse) i danske registerartikler,
+fordi registre netop følger personer over tid og tæller hændelser op.
 
-I [Deskriptive tabeller](13b_deskriptive-tabeller.qmd#crude-rate) beregnede du en **rå (crude)** rate per gruppe. Denne side går skridtet videre: en **Poisson-regression** giver en IRR, der er **justeret for confounding** (alder, køn, andre covariater), på samme måde som logistisk regression giver en justeret odds ratio.
+I [Deskriptive tabeller](13b_deskriptive-tabeller.qmd#crude-rate) beregnede du
+en **rå (crude)** rate per gruppe. Denne side går skridtet videre: en
+**Poisson-regression** giver en IRR, der er **justeret for confounding** (alder,
+køn, andre covariater), på samme måde som logistisk regression giver en justeret
+odds ratio.
 
 ::: {.callout-note}
-Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. Pakkerne (`survival`, `gtsummary`, `MASS`) skal være installeret i dit R-miljø på DST.
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt.
+Pakkerne (`survival`, `gtsummary`, `MASS`) skal være installeret i dit R-miljø
+på DST.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Hvornår vælger du Poisson?
 
-Tre modeller kan bruges på et "skete hændelsen?"-udfald. Forskellen er, **om tid indgår, og hvordan**:
+Tre modeller kan bruges på et "skete hændelsen?"-udfald. Forskellen er, **om tid
+indgår, og hvordan**:
 
-- **Logistisk regression** ([Regression](13d_regression.qmd)) ser kun på **ja/nej** og ignorerer tid. Giver en **odds ratio**. Passer, når alle er fulgt lige længe, eller når tid er ligegyldig.
-- **Cox-regression** ([Time-to-event](13e_time-to-event.qmd)) ser på **tiden indtil den første hændelse** per person og giver en **hazard ratio**. Den modellerer raten uden at antage en bestemt form på den over tid.
-- **Poisson-regression** (denne side) ser på **antal hændelser per person-tid** og giver en **rate-ratio (IRR)**. Den er stærk, når du vil regne på **rater over aldersgrupper eller kalenderperioder**, eller når du har **optalte hændelser og person-tid** frem for én tid-til-hændelse per person.
+- **Logistisk regression** ([Regression](13d_regression.qmd)) ser kun på
+  **ja/nej** og ignorerer tid. Giver en **odds ratio**. Passer, når alle er
+  fulgt lige længe, eller når tid er ligegyldig.
+- **Cox-regression** ([Time-to-event](13e_time-to-event.qmd)) ser på **tiden
+  indtil den første hændelse** per person og giver en **hazard ratio**. Den
+  modellerer raten uden at antage en bestemt form på den over tid.
+- **Poisson-regression** (denne side) ser på **antal hændelser per person-tid**
+  og giver en **rate-ratio (IRR)**. Den er stærk, når du vil regne på **rater
+  over aldersgrupper eller kalenderperioder**, eller når du har **optalte
+  hændelser og person-tid** frem for én tid-til-hændelse per person.
 
 ::: {.callout-tip}
-**Cox eller Poisson?** De svarer ofte på næsten det samme spørgsmål, og HR og IRR ligner hinanden, når hændelsen er sjælden. Vælg **Cox**, hvis du tænker i individuel opfølgningstid og tid-til-første-hændelse. Vælg **Poisson**, hvis du tænker i **rater pr. person-år** opdelt på alder/kalendertid (klassisk i registerstudier af fx kræft eller dødelighed), eller hvis dine data allerede er **optalte** (hændelser og person-år per gruppe).
+**Cox eller Poisson?** De svarer ofte på næsten det samme spørgsmål, og HR og
+IRR ligner hinanden, når hændelsen er sjælden. Vælg **Cox**, hvis du tænker i
+individuel opfølgningstid og tid-til-første-hændelse. Vælg **Poisson**, hvis du
+tænker i **rater pr. person-år** opdelt på alder/kalendertid (klassisk i
+registerstudier af fx kræft eller dødelighed), eller hvis dine data allerede er
+**optalte** (hændelser og person-år per gruppe).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Udgangspunkt
 
-Du skal bruge to ting per person, præcis som ved [den crude rate](13b_deskriptive-tabeller.qmd#crude-rate): **antal hændelser** (`event`, her 0 eller 1) og **person-tid** (`followup_years`, opfølgningstid i år). Begge bygges i [Fase 12](12b_joins.qmd#opfoelgningstid).
+Du skal bruge to ting per person, præcis som ved [den crude
+rate](13b_deskriptive-tabeller.qmd#crude-rate): **antal hændelser** (`event`,
+her 0 eller 1) og **person-tid** (`followup_years`, opfølgningstid i år). Begge
+bygges i [Fase 12](12b_joins.qmd#opfoelgningstid).
 
 ```r
-library(dplyr)                         # %>% (rør)
-library(gtsummary)                     # tbl_regression() til pæn output
+library(dplyr) # %>% (rør)
+library(gtsummary) # tbl_regression() til pæn output
 
-df <- readRDS("sti/til/analyse.rds")   # analyseklart datasæt, én række per person
+df <- readRDS("sti/til/analyse.rds") # analyseklart datasæt, én række per person
 ```
 
 ## Poisson-regression: rate-ratio (IRR)
 
-Modellen er en `glm` med `family = poisson`. Det nye, sammenlignet med logistisk regression, er **offset**: den fortæller modellen, **hvor længe hver person var i risiko**, så den modellerer *raten* (hændelser pr. tid) og ikke bare antallet af hændelser.
+Modellen er en `glm` med `family = poisson`. Det nye, sammenlignet med logistisk
+regression, er **offset**: den fortæller modellen, **hvor længe hver person var
+i risiko**, så den modellerer *raten* (hændelser pr. tid) og ikke bare antallet
+af hændelser.
 
 ```r
-model <- glm(event ~ eksponering + alder + koen +  # udfald (antal hændelser) forklaret af eksponering + covariater
-               offset(log(followup_years)),        # offset = person-tid: gør antal til en RATE
-             data = df, family = poisson)           # family = poisson -> rate-model
+model <- glm(
+  event ~ eksponering +
+    alder +
+    koen + # udfald (antal hændelser) forklaret af eksponering + covariater
+    offset(log(followup_years)), # offset = person-tid: gør antal til en RATE
+  data = df,
+  family = poisson
+) # family = poisson -> rate-model
 
-model %>%                                # send modellen videre til en tabel
-  tbl_regression(exponentiate = TRUE)    # exponentiate = TRUE -> rate-ratios (IRR)
+model %>% # send modellen videre til en tabel
+  tbl_regression(exponentiate = TRUE) # exponentiate = TRUE -> rate-ratios (IRR)
 ```
 
 - `family = poisson` gør det til en rate-model.
-- `offset(log(followup_years))` er person-tiden. Den skal **logaritmeres** (`log()`), fordi Poisson-modellen regner på log-skala. Uden offset modellerer du antallet af hændelser, ikke raten - og det er næsten aldrig det, du vil.
-- `exponentiate = TRUE` viser **rate-ratios (IRR)** i stedet for log-rate-koefficienter.
+- `offset(log(followup_years))` er person-tiden. Den skal **logaritmeres**
+  (`log()`), fordi Poisson-modellen regner på log-skala. Uden offset modellerer
+  du antallet af hændelser, ikke raten - og det er næsten aldrig det, du vil.
+- `exponentiate = TRUE` viser **rate-ratios (IRR)** i stedet for
+  log-rate-koefficienter.
 
-En IRR læses præcis som en OR eller HR: **1 = ingen forskel**, over 1 = højere rate, under 1 = lavere. Se [Sådan læser du dit resultat](13d_regression.qmd#laes-resultat).
+En IRR læses præcis som en OR eller HR: **1 = ingen forskel**, over 1 = højere
+rate, under 1 = lavere. Se [Sådan læser du dit
+resultat](13d_regression.qmd#laes-resultat).
 
 ::: {.callout-note}
-Her er `event` 0/1 (én række per person), og offset er personens samlede opfølgningstid. Det giver en gyldig IRR justeret for de covariater, du har på **baseline** (ved studiestart/index). Vil du lade raten **ændre sig med alderen eller kalenderåret** undervejs i opfølgningen, skal person-tiden splittes - se [Rater der varierer over tid](#rater-over-tid) nedenfor.
+Her er `event` 0/1 (én række per person), og offset er personens samlede
+opfølgningstid. Det giver en gyldig IRR justeret for de covariater, du har på
+**baseline** (ved studiestart/index). Vil du lade raten **ændre sig med alderen
+eller kalenderåret** undervejs i opfølgningen, skal person-tiden splittes - se
+[Rater der varierer over tid](#rater-over-tid) nedenfor.
 :::
 
 ## Antagelser
 
-Poisson-modellen bygger på nogle antagelser. Holder de ikke, bliver især konfidensintervallerne misvisende:
+Poisson-modellen bygger på nogle antagelser. Holder de ikke, bliver især
+konfidensintervallerne misvisende:
 
-- **Konstant rate inden for hvert "bånd".** Modellen antager, at raten er den samme gennem den person-tid, en gruppe bidrager med. Ændrer raten sig kraftigt med fx alderen, opfylder du antagelsen ved at **splitte** person-tiden på aldersgrupper (se nedenfor), så raten kun skal være konstant inden for hvert smalt bånd.
-- **Hændelser er Poisson-fordelte (middelværdi = varians).** Er variansen større end middelværdien (**overdispersion**), bliver standardfejlene for små og konfidensintervallerne kunstigt snævre. Det er almindeligt i registerdata - se boksen nedenfor.
-- **Uafhængige observationer.** Én række (eller én klynge person-tid) per person. Optræder samme person flere gange (fx matchet *med replacement* eller gentagne hændelser), så brug **klyngebaserede standardfejl** ligesom i [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
-- **Log-linearitet.** Kontinuerte variable hænger lineært (i en ret linje) sammen med log-raten. Tjek som ved logistisk regression, fx med [splines](13d_regression.qmd#splines).
+- **Konstant rate inden for hvert "bånd".** Modellen antager, at raten er den
+  samme gennem den person-tid, en gruppe bidrager med. Ændrer raten sig kraftigt
+  med fx alderen, opfylder du antagelsen ved at **splitte** person-tiden på
+  aldersgrupper (se nedenfor), så raten kun skal være konstant inden for hvert
+  smalt bånd.
+- **Hændelser er Poisson-fordelte (middelværdi = varians).** Er variansen større
+  end middelværdien (**overdispersion**), bliver standardfejlene for små og
+  konfidensintervallerne kunstigt snævre. Det er almindeligt i registerdata - se
+  boksen nedenfor.
+- **Uafhængige observationer.** Én række (eller én klynge person-tid) per
+  person. Optræder samme person flere gange (fx matchet *med replacement* eller
+  gentagne hændelser), så brug **klyngebaserede standardfejl** ligesom i
+  [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
+- **Log-linearitet.** Kontinuerte variable hænger lineært (i en ret linje)
+  sammen med log-raten. Tjek som ved logistisk regression, fx med
+  [splines](13d_regression.qmd#splines).
 
 <details>
 <summary>Tjek for overdispersion (og skift evt. til negativ binomial)</summary>
@@ -95,24 +153,45 @@ Alternativt kan du beholde Poisson-modellen og bruge `family = quasipoisson`, de
 
 ## Rater der varierer over tid {#rater-over-tid}
 
-Modellen ovenfor antager én rate gennem hele personens opfølgning. Men i et registerstudie *ældes* personen undervejs, og kalenderåret skifter - og raten af fx kræft eller død ændrer sig kraftigt med begge. Vil du lade raten variere med **opnået alder** eller **kalenderperiode**, skal opfølgningstiden **splittes i intervaller**: én række per person per interval, så hver række ligger i ét aldersbånd og ét kalenderår. Derefter tæller du hændelser og person-tid op og fitter samme Poisson-model med alders- og periodebånd som covariater.
+Modellen ovenfor antager én rate gennem hele personens opfølgning. Men i et
+registerstudie *ældes* personen undervejs, og kalenderåret skifter - og raten af
+fx kræft eller død ændrer sig kraftigt med begge. Vil du lade raten variere med
+**opnået alder** eller **kalenderperiode**, skal opfølgningstiden **splittes i
+intervaller**: én række per person per interval, så hver række ligger i ét
+aldersbånd og ét kalenderår. Derefter tæller du hændelser og person-tid op og
+fitter samme Poisson-model med alders- og periodebånd som covariater.
 
-Det er et standardgreb i registerepidemiologi, men kræver lidt mere maskineri, end denne side dækker. Brug `survival::survSplit()` eller `Epi::splitLexis()` (Lexis-objekter), eller pakken `popEpi`, der er bygget til netop rater, person-tid og standardisering på registerdata. Se [Læs mere](#laes-mere).
+Det er et standardgreb i registerepidemiologi, men kræver lidt mere maskineri,
+end denne side dækker. Brug `survival::survSplit()` eller `Epi::splitLexis()`
+(Lexis-objekter), eller pakken `popEpi`, der er bygget til netop rater,
+person-tid og standardisering på registerdata. Se [Læs mere](#laes-mere).
 
 ::: {.callout-note}
-**SMR og SIR.** Vil du sammenligne din populations rate med en **referencepopulation** (fx hele Danmarks rater fra Danmarks Statistik), bruger du **indirekte standardisering**: standardized mortality/incidence ratio (SMR/SIR) er observerede hændelser delt med dem, man ville forvente ud fra referenceraterne. `Epi` og `popEpi` har færdige funktioner. Det er en deskriptiv standardisering, ikke en justeret regression, så vælg efter dit spørgsmål.
+**SMR og SIR.** Vil du sammenligne din populations rate med en
+**referencepopulation** (fx hele Danmarks rater fra Danmarks Statistik), bruger
+du **indirekte standardisering**: standardized mortality/incidence ratio
+(SMR/SIR) er observerede hændelser delt med dem, man ville forvente ud fra
+referenceraterne. `Epi` og `popEpi` har færdige funktioner. Det er en deskriptiv
+standardisering, ikke en justeret regression, så vælg efter dit spørgsmål.
 :::
 
 ::: {.callout-note}
-Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun
+aggregerede resultater. Se [Fase 14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Læs mere {#laes-mere}
 
-- *The Epidemiologist R Handbook*, generel uddybning (på engelsk): [Univariate and multivariable regression](https://www.epirhandbook.com/en/new_pages/regression.html)
-- [`Epi`-pakken](https://CRAN.R-project.org/package=Epi) - person-tid, Lexis-objekter og rater på registerdata.
-- [`popEpi`-pakken](https://CRAN.R-project.org/package=popEpi) - rater, SIR/SMR og standardisering, bygget til registerdata.
-- [Bendix Carstensens kursusmateriale](http://bendixcarstensen.com/) (Statistical Practice in Epidemiology) - grundig gennemgang af person-tid, alders/periode-split og Poisson-rater.
+- *The Epidemiologist R Handbook*, generel uddybning (på engelsk): [Univariate
+  and multivariable
+  regression](https://www.epirhandbook.com/en/new_pages/regression.html)
+- [`Epi`-pakken](https://CRAN.R-project.org/package=Epi) - person-tid,
+  Lexis-objekter og rater på registerdata.
+- [`popEpi`-pakken](https://CRAN.R-project.org/package=popEpi) - rater, SIR/SMR
+  og standardisering, bygget til registerdata.
+- [Bendix Carstensens kursusmateriale](http://bendixcarstensen.com/)
+  (Statistical Practice in Epidemiology) - grundig gennemgang af person-tid,
+  alders/periode-split og Poisson-rater.
 :::

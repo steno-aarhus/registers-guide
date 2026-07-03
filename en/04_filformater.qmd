@@ -4,16 +4,22 @@ subtitle: "What you encounter in your workspace - and what opens it"
 date: last-modified
 ---
 
-When you open File Explorer on the DST server, you encounter files with different extensions.
-This page is your reference tool: what file type is it, which function opens it, and does the data enter memory immediately or not?
+When you open File Explorer on the DST server, you encounter files with
+different extensions. This page is your reference tool: what file type is it,
+which function opens it, and does the data enter memory immediately or not?
 
-The last point - **lazy vs. full loading** - is the most important distinction on this page. The mechanism behind it is explained in [Phase 5 - Extracting data step by step](05_udtraek-trin-for-trin.qmd); here you just need to know *which* file types behave which way.
+The last point - **lazy vs. full loading** - is the most important distinction
+on this page. The mechanism behind it is explained in [Phase 5 - Extracting data
+step by step](05_udtraek-trin-for-trin.qmd); here you just need to know *which*
+file types behave which way.
 
----
+--------------------------------------------------------------------------------
 
 ## What a project folder looks like
 
-A typical project on the DST server is organised roughly like this. The registers live under `cleaned-data/`; your own scripts and results sit under `workspace/[your-name]/`:
+A typical project on the DST server is organised roughly like this. The
+registers live under `cleaned-data/`; your own scripts and results sit under
+`workspace/[your-name]/`:
 
 ```
 E:/rawdata/[projectnumber]/
@@ -33,68 +39,116 @@ E:/workdata/[projectnumber]/
         └── output/              # tables, figures and logs
 ```
 
-The paths in the code examples follow this structure, but **your own folder names may well differ** - check with File Explorer. Two things are worth knowing:
+The paths in the code examples follow this structure, but **your own folder
+names may well differ** - check with File Explorer. Two things are worth
+knowing:
 
-- **`rawdata/` is read-only.** You cannot edit or write to the raw register data DST delivers. You work in `workspace/`, where each project member typically has their own subfolder (`[your-name]/`) for scripts, intermediate results and output.
-- **Almost all the code in this guide assumes the registers are in parquet.** If your project only has raw SAS files, converting them to parquet - and setting up a sensible folder structure for the project - is the first job. See [Convert SAS files to Parquet](#convert-sas-to-parquet) below.
+- **`rawdata/` is read-only.** You cannot edit or write to the raw register data
+  DST delivers. You work in `workspace/`, where each project member typically
+  has their own subfolder (`[your-name]/`) for scripts, intermediate results and
+  output.
+- **Almost all the code in this guide assumes the registers are in parquet.** If
+  your project only has raw SAS files, converting them to parquet - and setting
+  up a sensible folder structure for the project - is the first job. See
+  [Convert SAS files to Parquet](#convert-sas-to-parquet) below.
 
-How to name the scripts in `R/` is covered in [Good code practice](god-kode-praksis.qmd).
+How to name the scripts in `R/` is covered in [Good code
+practice](god-kode-praksis.qmd).
 
----
+--------------------------------------------------------------------------------
 
 ## Lazy vs. full loading - what is the difference in practice?
 
-This is the most important distinction on the page, so we take it first. Every file type below falls into one of two loading behaviours.
+This is the most important distinction on the page, so we take it first. Every
+file type below falls into one of two loading behaviours.
 
-Think of the difference as two ways to do your grocery shopping. **Full loading** is driving the whole supermarket home and only then picking out the three items you needed. **Lazy loading** is sending a shopping list and getting just those three items delivered. When a register runs to millions of rows, that difference is decisive.
+Think of the difference as two ways to do your grocery shopping. **Full
+loading** is driving the whole supermarket home and only then picking out the
+three items you needed. **Lazy loading** is sending a shopping list and getting
+just those three items delivered. When a register runs to millions of rows, that
+difference is decisive.
 
-**Full loading** (`readRDS`, `read_sas`, `read_csv`, `read_xlsx`)
-The entire file is read into RAM (the computer's working memory - it is limited and shared with everyone else on the server) immediately. For your own intermediate results this is fine - they are relatively small. But it would crash your session if you tried it on a whole register.
+**Full loading** (`readRDS`, `read_sas`, `read_csv`, `read_xlsx`) The entire
+file is read into RAM (the computer's working memory - it is limited and shared
+with everyone else on the server) immediately. For your own intermediate results
+this is fine - they are relatively small. But it would crash your session if you
+tried it on a whole register.
 
-**Lazy loading** (parquet via `open_dataset()`)
-The file is opened as a *connection* to the data on disk, not as the data itself. You can filter and select columns (write your "shopping list"), and **only when you call `collect()`** are the selected rows fetched into RAM. This is how you work with registers of millions of rows without running out of memory.
+**Lazy loading** (parquet via `open_dataset()`) The file is opened as a
+*connection* to the data on disk, not as the data itself. You can filter and
+select columns (write your "shopping list"), and **only when you call
+`collect()`** are the selected rows fetched into RAM. This is how you work with
+registers of millions of rows without running out of memory.
 
 ::: {.callout-important}
-**SAS files are also large - and are shared with everyone on the server.**
-On DST all users share the server's RAM. `read_sas()` on a large SAS file burdens the server for everyone at the same time. DST **automatically kills processes** (RStudio sessions, jobs, etc.) when RAM is close to full - so an oversized extraction can cost you your unsaved work. If you use a SAS file repeatedly, it is worth converting it to parquet once - this saves significant RAM and makes loading much faster.
-See [Convert SAS to parquet](#convert-sas-to-parquet) below for the procedure, and [Mind your RAM in the shared environment](god-kode-praksis.qmd#mind-your-ram) for the practical habits.
-DST's official advice is collected in [DST guide: Reducing RAM use in the shared environment (PDF, Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
+**SAS files are also large - and are shared with everyone on the server.** On
+DST all users share the server's RAM. `read_sas()` on a large SAS file burdens
+the server for everyone at the same time. DST **automatically kills processes**
+(RStudio sessions, jobs, etc.) when RAM is close to full - so an oversized
+extraction can cost you your unsaved work. If you use a SAS file repeatedly, it
+is worth converting it to parquet once - this saves significant RAM and makes
+loading much faster. See [Convert SAS to parquet](#convert-sas-to-parquet) below
+for the procedure, and [Mind your RAM in the shared
+environment](god-kode-praksis.qmd#mind-your-ram) for the practical habits. DST's
+official advice is collected in [DST guide: Reducing RAM use in the shared
+environment (PDF,
+Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Overview - file type, package, function
 
-| File type | Package | Function | Loading |
-|---|---|---|---|
-| `.parquet` / parquet folder | `arrow` or `fastreg` | `open_dataset("path/to/folder/")` or `read_register("name")` | **Lazy** - nothing in RAM until `collect()` |
-| `.rds` | base R | `readRDS("path/to/file.rds")` | **Full** - entire file into RAM |
-| `.sas7bdat` | `haven` | `read_sas("path/to/file.sas7bdat")` | **Full** - entire file into RAM |
-| `.csv` | `readr` | `read_csv("path/to/file.csv")` | **Full** - entire file into RAM |
-| `.xlsx` | `readxl` | `read_xlsx("path/to/file.xlsx")` | **Full** - entire file into RAM |
+  | File type                   | Package              | Function                                                     | Loading                                     |
+  | --------------------------- | -------------------- | ------------------------------------------------------------ | ------------------------------------------- |
+  | `.parquet` / parquet folder | `arrow` or `fastreg` | `open_dataset("path/to/folder/")` or `read_register("name")` | **Lazy** - nothing in RAM until `collect()` |
+  | `.rds`                      | base R               | `readRDS("path/to/file.rds")`                                | **Full** - entire file into RAM             |
+  | `.sas7bdat`                 | `haven`              | `read_sas("path/to/file.sas7bdat")`                          | **Full** - entire file into RAM             |
+  | `.csv`                      | `readr`              | `read_csv("path/to/file.csv")`                               | **Full** - entire file into RAM             |
+  | `.xlsx`                     | `readxl`             | `read_xlsx("path/to/file.xlsx")`                             | **Full** - entire file into RAM             |
 
-The last column is the lazy/full distinction from above: parquet is the only lazy format, everything else loads fully into RAM.
+The last column is the lazy/full distinction from above: parquet is the only
+lazy format, everything else loads fully into RAM.
 
 **What do you write in the parentheses?**
 
-- With `open_dataset()` (arrow) you write the **path** to the parquet folder - e.g. `open_dataset("path/to/bef/")`. It works on any parquet, on any project.
-- With `read_register()` (fastreg) you write just the register **name** - e.g. `read_register("bef")` - because fastreg already knows where your parquet lives (you set that once during conversion). It also hands you a DuckDB connection, so more dplyr functions work without an extra `to_duckdb()` step. It requires that the registers were set up with fastreg.
+- With `open_dataset()` (arrow) you write the **path** to the parquet folder -
+  e.g. `open_dataset("path/to/bef/")`. It works on any parquet, on any project.
+- With `read_register()` (fastreg) you write just the register **name** - e.g.
+  `read_register("bef")` - because fastreg already knows where your parquet
+  lives (you set that once during conversion). It also hands you a DuckDB
+  connection, so more dplyr functions work without an extra `to_duckdb()` step.
+  It requires that the registers were set up with fastreg.
 
-The exact path depends on your project and server. Column names for each register are in [Overview of registers](register_reference.qmd).
+The exact path depends on your project and server. Column names for each
+register are in [Overview of registers](register_reference.qmd).
 
 ::: {.callout-note}
-**Didn't convert the data yourself?** If a colleague already converted the registers with fastreg, you only point fastreg at that folder once per script - set `options(fastreg.project_workdata_dir = "...")` to the converted folder (ask whoever set it up for the exact path, typically `cleaned-data/parquet-registers/`). After that, `read_register("bef")` works by name, with no conversion and no path in each call. The [Getting started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) shows the option.
+**Didn't convert the data yourself?** If a colleague already converted the
+registers with fastreg, you only point fastreg at that folder once per script -
+set `options(fastreg.project_workdata_dir = "...")` to the converted folder (ask
+whoever set it up for the exact path, typically
+`cleaned-data/parquet-registers/`). After that, `read_register("bef")` works by
+name, with no conversion and no path in each call. The [Getting started
+vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) shows the
+option.
 :::
 
 ::: {.callout-note}
-**A register often arrives as many yearly files** (e.g. `bef2015.parquet`, `bef2016.parquet` … in the same folder, sometimes one subfolder per year). Both `open_dataset("path/to/bef/")` and fastreg's `read_register("bef")` read the **whole folder (including any per-year subfolders) as one combined dataset**. Pick years by filtering on the year column *in the data*, e.g. `filter(year == 2015)` (some registers use `aar`).
+**A register often arrives as many yearly files** (e.g. `bef2015.parquet`,
+`bef2016.parquet` ... in the same folder, sometimes one subfolder per year).
+Both `open_dataset("path/to/bef/")` and fastreg's `read_register("bef")` read
+the **whole folder (including any per-year subfolders) as one combined
+dataset**. Pick years by filtering on the year column *in the data*, e.g.
+`filter(year == 2015)` (some registers use `aar`).
 :::
 
-**RDS is the format you write yourself most.** You save intermediate results from one script and reload them in the next:
+**RDS is the format you write yourself most.** You save intermediate results
+from one script and reload them in the next:
 
 ```r
-saveRDS(cohort, "sti/til/full_cohort.rds")   # save an R object to disk
-cohort <- readRDS("sti/til/full_cohort.rds")   # read it back in the next script
+saveRDS(cohort, "sti/til/full_cohort.rds") # save an R object to disk
+cohort <- readRDS("sti/til/full_cohort.rds") # read it back in the next script
 ```
 
 <details>
@@ -146,14 +200,19 @@ write_csv(my_table, "output/table1.csv")
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Convert SAS files to Parquet {#convert-sas-to-parquet}
 
-Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you can use them with `open_dataset()` and lazy evaluation, they must be converted to Parquet **once**. After that you use them exactly like any other register.
+Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you
+can use them with `open_dataset()` and lazy evaluation, they must be converted
+to Parquet **once**. After that you use them exactly like any other register.
 
 ::: {.callout-important}
-**Relevant for most projects outside DARTER.** If you are working on a project where the registers have not already been converted to parquet, this step is necessary before you can run extractions. Done once per register - after that the normal extraction pattern applies.
+**Relevant for most projects outside DARTER.** If you are working on a project
+where the registers have not already been converted to parquet, this step is
+necessary before you can run extractions. Done once per register - after that
+the normal extraction pattern applies.
 :::
 
 <details>
@@ -170,19 +229,33 @@ Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you ca
 
 ### Recommended: convert with `fastreg`
 
-The recommended tool is the [`fastreg`](https://dp-next.github.io/fastreg/) package (dp-next, on CRAN). It converts SAS registers to Parquet (partitioned by year) and lets you read them back by **name**.
+The recommended tool is the [`fastreg`](https://dp-next.github.io/fastreg/)
+package (dp-next, on CRAN). It converts SAS registers to Parquet (partitioned by
+year) and lets you read them back by **name**.
 
 ::: {.callout-important}
-**Use fastreg's own guide for the conversion code.** The exact commands are documented - and kept up to date by the maintainers - in fastreg's [Getting started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html). We link to the relevant section below instead of reproducing code that could drift out of date. You install it once with `install.packages("fastreg")` and point it at your raw-data and output folders as shown there.
+**Use fastreg's own guide for the conversion code.** The exact commands are
+documented - and kept up to date by the maintainers - in fastreg's [Getting
+started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html). We
+link to the relevant section below instead of reproducing code that could drift
+out of date. You install it once with `install.packages("fastreg")` and point it
+at your raw-data and output folders as shown there.
 :::
 
 #### Convert a single file
 
-If you only need to convert **one** SAS file, use fastreg's `convert()` function - it writes a single register to Parquet. See the [Getting started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) for the exact call.
+If you only need to convert **one** SAS file, use fastreg's `convert()` function
+- it writes a single register to Parquet. See the [Getting started
+vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) for the exact
+call.
 
 #### Convert many files at once
 
-To convert a **whole workspace**, the fastreg team recommends its **`targets` pipeline**: `use_template()` copies a ready-to-run pipeline that converts all your registers in parallel - reproducibly, and re-runnable when a register is updated. See [Converting multiple registers in parallel](https://dp-next.github.io/fastreg/articles/fastreg.html#converting-multiple-registers-in-parallel).
+To convert a **whole workspace**, the fastreg team recommends its **`targets`
+pipeline**: `use_template()` copies a ready-to-run pipeline that converts all
+your registers in parallel - reproducibly, and re-runnable when a register is
+updated. See [Converting multiple registers in
+parallel](https://dp-next.github.io/fastreg/articles/fastreg.html#converting-multiple-registers-in-parallel).
 
 <details>
 <summary>If fastreg is not available on your project: convert manually with haven + arrow</summary>
@@ -221,20 +294,23 @@ You can also convert to Parquet (or `.dta`) in **StatTransfer**, available on ev
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Next step
 
-Why lazy loading works, and how `collect()` functions, is the topic of the next phase.
+Why lazy loading works, and how `collect()` functions, is the topic of the next
+phase.
 
 → [Phase 5 - Extracting data step by step](05_udtraek-trin-for-trin.qmd)
-
 
 ::: {.callout-tip}
 ## Further information
 
 Further depth (in English):
 
-- [Import and export](https://www.epirhandbook.com/en/new_pages/importing.html) in *The Epidemiologist R Handbook*.
-- [Arrow](https://r4ds.hadley.nz/arrow.html) in *R for Data Science*: reading parquet with `open_dataset()` and using dplyr directly on arrow data - exactly the loading pattern this guide builds on.
+- [Import and export](https://www.epirhandbook.com/en/new_pages/importing.html)
+  in *The Epidemiologist R Handbook*.
+- [Arrow](https://r4ds.hadley.nz/arrow.html) in *R for Data Science*: reading
+  parquet with `open_dataset()` and using dplyr directly on arrow data - exactly
+  the loading pattern this guide builds on.
 :::

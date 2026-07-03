@@ -1,6 +1,8 @@
 ---
 title: "![](images/icons/icon_14.png){.title-icon} Regression"
-subtitle: "Logistisk, lineær og betinget logistisk regression - og hvornår du skal bruge robuste standardfejl"
+subtitle: >-
+  Logistisk, lineær og betinget logistisk regression - og hvornår du skal bruge
+  robuste standardfejl
 date: last-modified
 ---
 
@@ -8,101 +10,169 @@ date: last-modified
 **Under udvikling.** Flere modeltyper og diagnostik kommer.
 :::
 
-Regression undersøger sammenhængen mellem et **udfald** og en eller flere **forklarende variable** (din eksponering plus covariater) og er måden, du **justerer for confounding** i analysen.
+Regression undersøger sammenhængen mellem et **udfald** og en eller flere
+**forklarende variable** (din eksponering plus covariater) og er måden, du
+**justerer for confounding** i analysen.
 
-Udfaldet kaldes også den **afhængige** variabel og de forklarende variable de **uafhængige**. Har du **én** forklarende variabel, er det en *simpel* regression; har du **flere**, en *multipel* regression. De forklarende variable kan være både kontinuerte (fx alder) og kategoriske (fx køn).
+Udfaldet kaldes også den **afhængige** variabel og de forklarende variable de
+**uafhængige**. Har du **én** forklarende variabel, er det en *simpel*
+regression; har du **flere**, en *multipel* regression. De forklarende variable
+kan være både kontinuerte (fx alder) og kategoriske (fx køn).
 
-- **Lineær regression** (`lm`): når udfaldet er **kontinuert** (fx BMI eller blodtryk). Giver forskelle i gennemsnit.
-- **Logistisk regression** (`glm` med `family = binomial`): når udfaldet er **binært** (ja/nej, fx om en person fik en diagnose). Giver **odds ratios**.
-- **Betinget logistisk regression** (`survival::clogit()`): til **matchede** data (fx matchet case-control), hvor analysen skal respektere matchsættene.
-- **Cox-regression** (`survival::coxph()`): når udfaldet er **time-to-event** (tid indtil en hændelse, med censurering). Den modellerer *raten* og giver **hazard ratios**. Cox er også en regression, men hører under [Time-to-event](13e_time-to-event.qmd), fordi den kræver et `Surv(tid, event)`-objekt og bygger på censurerings- og overlevelsesbegreberne derfra. Den bruges *ikke* på et almindeligt kontinuert eller binært udfald uden tid.
+- **Lineær regression** (`lm`): når udfaldet er **kontinuert** (fx BMI eller
+  blodtryk). Giver forskelle i gennemsnit.
+- **Logistisk regression** (`glm` med `family = binomial`): når udfaldet er
+  **binært** (ja/nej, fx om en person fik en diagnose). Giver **odds ratios**.
+- **Betinget logistisk regression** (`survival::clogit()`): til **matchede**
+  data (fx matchet case-control), hvor analysen skal respektere matchsættene.
+- **Cox-regression** (`survival::coxph()`): når udfaldet er **time-to-event**
+  (tid indtil en hændelse, med censurering). Den modellerer *raten* og giver
+  **hazard ratios**. Cox er også en regression, men hører under
+  [Time-to-event](13e_time-to-event.qmd), fordi den kræver et
+  `Surv(tid, event)`-objekt og bygger på censurerings- og overlevelsesbegreberne
+  derfra. Den bruges *ikke* på et almindeligt kontinuert eller binært udfald
+  uden tid.
 
-`glm` står for *generalized linear model*: én funktion, der via `family`-argumentet kan fitte flere modeltyper (her `binomial` = logistisk). `clogit()` er en "betinget" udgave af logistisk regression, der tager højde for matchingen. `gtsummary::tbl_regression()` viser resultatet som en publikationsklar tabel.
+`glm` står for *generalized linear model*: én funktion, der via
+`family`-argumentet kan fitte flere modeltyper (her `binomial` = logistisk).
+`clogit()` er en "betinget" udgave af logistisk regression, der tager højde for
+matchingen. `gtsummary::tbl_regression()` viser resultatet som en
+publikationsklar tabel.
 
-Hver model bygger desuden på nogle **antagelser**. De er noteret ved hver model nedenfor sammen med, hvordan du tjekker dem; holder de ikke, kan estimaterne blive misvisende.
+Hver model bygger desuden på nogle **antagelser**. De er noteret ved hver model
+nedenfor sammen med, hvordan du tjekker dem; holder de ikke, kan estimaterne
+blive misvisende.
 
 ::: {.callout-tip}
-**Ikke arbejdet med regression før?** Denne side viser, *hvordan* du kører modellerne i R - ikke teorien bag. Til en grundig indføring (modeltyper, antagelser, fortolkning) se [Epidemiologist R Handbook](https://www.epirhandbook.com/en/) og [R for Data Science](https://r4ds.hadley.nz/). Mangler du selve statistik-teorien bag regression, er [*Learning Statistics with R* (Navarro)](https://learningstatisticswithr.com/) begyndervenlig. Flere ressourcer: [Læringsressourcer](laeringsressourcer.qmd).
+**Ikke arbejdet med regression før?** Denne side viser, *hvordan* du kører
+modellerne i R - ikke teorien bag. Til en grundig indføring (modeltyper,
+antagelser, fortolkning) se [Epidemiologist R
+Handbook](https://www.epirhandbook.com/en/) og [R for Data
+Science](https://r4ds.hadley.nz/). Mangler du selve statistik-teorien bag
+regression, er [*Learning Statistics with R*
+(Navarro)](https://learningstatisticswithr.com/) begyndervenlig. Flere
+ressourcer: [Læringsressourcer](laeringsressourcer.qmd).
 :::
 
 ::: {.callout-note}
-Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. De brugte pakker (`gtsummary`, `survival`, `sandwich`, `lmtest`) skal være installeret i dit R-miljø på DST.
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt.
+De brugte pakker (`gtsummary`, `survival`, `sandwich`, `lmtest`) skal være
+installeret i dit R-miljø på DST.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Udgangspunkt
 
 ```r
-library(dplyr)                         # %>% (rør)
-library(gtsummary)                     # tbl_regression() til pæn output
+library(dplyr) # %>% (rør)
+library(gtsummary) # tbl_regression() til pæn output
 
-df <- readRDS("sti/til/analyse.rds")   # analyseklart datasæt
+df <- readRDS("sti/til/analyse.rds") # analyseklart datasæt
 ```
 
 ## Logistisk regression (binært udfald)
 
 ```r
-model <- glm(udfald ~ eksponering + alder + koen,  # udfald forklaret af eksponering + covariater
-             data = df, family = binomial)         # family = binomial -> logistisk regression
+model <- glm(
+  udfald ~ eksponering + alder + koen, # udfald forklaret af eksponering + covariater
+  data = df,
+  family = binomial
+) # family = binomial -> logistisk regression
 
-model %>%                                # send modellen videre til en tabel
-  tbl_regression(exponentiate = TRUE)    # exponentiate = TRUE -> odds ratios (OR)
+model %>% # send modellen videre til en tabel
+  tbl_regression(exponentiate = TRUE) # exponentiate = TRUE -> odds ratios (OR)
 ```
 
 - `family = binomial` gør det til logistisk regression.
-- `exponentiate = TRUE` viser **odds ratios** (OR) i stedet for log-odds-koefficienter.
+- `exponentiate = TRUE` viser **odds ratios** (OR) i stedet for
+  log-odds-koefficienter.
 
-**Antagelser:** observationerne er uafhængige (én række per person - ellers brug robuste standardfejl, se nedenfor), og kontinuerte variable hænger lineært sammen med **log-odds**. Holder lineariteten ikke, kan du lade variablen indgå som en blød kurve i stedet for en ret linje - se [Ikke-lineære sammenhænge (splines)](#splines) nedenfor.
+**Antagelser:** observationerne er uafhængige (én række per person - ellers brug
+robuste standardfejl, se nedenfor), og kontinuerte variable hænger lineært
+sammen med **log-odds**. Holder lineariteten ikke, kan du lade variablen indgå
+som en blød kurve i stedet for en ret linje - se [Ikke-lineære sammenhænge
+(splines)](#splines) nedenfor.
 
 ## Lineær regression (kontinuert udfald)
 
 ```r
-lm(bmi ~ eksponering + alder + koen, data = df) %>%  # lineær model for et kontinuert udfald
-  tbl_regression()                       # koefficienter (ingen eksponentiering)
+lm(bmi ~ eksponering + alder + koen, data = df) %>% # lineær model for et kontinuert udfald
+  tbl_regression() # koefficienter (ingen eksponentiering)
 ```
 
-**Antagelser:** lineær sammenhæng, ens varians (homoskedasticitet), nogenlunde normalfordelte residualer og uafhængige observationer. Gem modellen i en variabel og tjek med `plot(model)`, der giver de klassiske residual-plots; ser de skæve ud, kan en transformation af udfaldet eller en anden model være nødvendig.
+**Antagelser:** lineær sammenhæng, ens varians (homoskedasticitet), nogenlunde
+normalfordelte residualer og uafhængige observationer. Gem modellen i en
+variabel og tjek med `plot(model)`, der giver de klassiske residual-plots; ser
+de skæve ud, kan en transformation af udfaldet eller en anden model være
+nødvendig.
 
 ## Matchet case-control: betinget logistisk regression
 
-Når du har matchet i et nested case-control-design ([Case-control](10b_case-control.qmd)), skal analysen respektere matchningen med **betinget** logistisk regression. Brug `clogit()` med et `strata()`-led på matchsættet.
+Når du har matchet i et nested case-control-design
+([Case-control](10b_case-control.qmd)), skal analysen respektere matchningen med
+**betinget** logistisk regression. Brug `clogit()` med et `strata()`-led på
+matchsættet.
 
 ```r
-library(survival)                        # clogit()
+library(survival) # clogit()
 
-clogit(case ~ eksponering + alder + koen + strata(match_id),  # strata() = matchsættet
-       data = cc) %>%                        # cc = dit case-control-datasæt (fra Fase 10b)
-  tbl_regression(exponentiate = TRUE)    # -> odds ratios
+clogit(
+  case ~ eksponering + alder + koen + strata(match_id), # strata() = matchsættet
+  data = cc
+) %>% # cc = dit case-control-datasæt (fra Fase 10b)
+  tbl_regression(exponentiate = TRUE) # -> odds ratios
 ```
 
-- `strata(match_id)` fortæller modellen, hvilke rækker der hører til samme matchsæt (`case.id` fra `incidenceMatch()` eller `Set` fra `Epi::ccwc()`).
+- `strata(match_id)` fortæller modellen, hvilke rækker der hører til samme
+  matchsæt (`case.id` fra `incidenceMatch()` eller `Set` fra `Epi::ccwc()`).
 - `case` = 1 for case, 0 for kontrol.
 
-**Antagelser:** som logistisk regression (kontinuerte variable lineære med log-odds; matchsættene indbyrdes uafhængige). Selve matchningen håndteres af `strata()`.
+**Antagelser:** som logistisk regression (kontinuerte variable lineære med
+log-odds; matchsættene indbyrdes uafhængige). Selve matchningen håndteres af
+`strata()`.
 
 ## Interaktion (effektmodifikation)
 
-Nogle gange afhænger en eksponerings effekt af en **tredje variabel**: et lægemiddel virker måske stærkere hos yngre end ældre, eller en risikofaktor rammer mænd hårdere end kvinder. Det kaldes **effektmodifikation** (eller statistisk **interaktion**), og du undersøger det med et **produktled** i modellen.
+Nogle gange afhænger en eksponerings effekt af en **tredje variabel**: et
+lægemiddel virker måske stærkere hos yngre end ældre, eller en risikofaktor
+rammer mænd hårdere end kvinder. Det kaldes **effektmodifikation** (eller
+statistisk **interaktion**), og du undersøger det med et **produktled** i
+modellen.
 
 ```r
 # `*` udvider til: eksponering + koen + eksponering:koen (selve interaktionsleddet)
-model <- glm(udfald ~ eksponering * koen + alder,   # tester om eksponeringens effekt afhænger af køn
-             data = df, family = binomial)
+model <- glm(
+  udfald ~ eksponering * koen + alder, # tester om eksponeringens effekt afhænger af køn
+  data = df,
+  family = binomial
+)
 
 model %>%
-  tbl_regression(exponentiate = TRUE)               # OR for hvert led, inkl. interaktionsleddet
+  tbl_regression(exponentiate = TRUE) # OR for hvert led, inkl. interaktionsleddet
 ```
 
-- `eksponering * koen` betyder "begge variable plus deres samspil". Det er **interaktionsleddet** `eksponering:koen`, du aflæser.
-- Ligger interaktionsleddets OR tæt på 1 (og p stor), virker eksponeringen **ens** i de to grupper. Afviger det tydeligt fra 1, **afhænger effekten af køn**, og så bør du rapportere **gruppe-specifikke** estimater (fx ved at køre modellen separat for hvert køn, eller med `emmeans` / `marginaleffects`).
+- `eksponering * koen` betyder "begge variable plus deres samspil". Det er
+  **interaktionsleddet** `eksponering:koen`, du aflæser.
+- Ligger interaktionsleddets OR tæt på 1 (og p stor), virker eksponeringen
+  **ens** i de to grupper. Afviger det tydeligt fra 1, **afhænger effekten af
+  køn**, og så bør du rapportere **gruppe-specifikke** estimater (fx ved at køre
+  modellen separat for hvert køn, eller med `emmeans` / `marginaleffects`).
 
 ::: {.callout-note}
-**Multiplikativ vs. additiv skala.** Et produktled tester interaktion på **multiplikativ** (ratio-)skala: ændrer eksponeringen *odds ratio'en* forskelligt mellem grupper? På folkesundhedsniveau er **additiv** skala (forskelle i absolut risiko) ofte mere relevant, og den måles med **RERI** (relative excess risk due to interaction). De to skalaer kan give forskellige svar, så vær eksplicit om, hvilken du rapporterer. Se [Læs mere](#laes-mere).
+**Multiplikativ vs. additiv skala.** Et produktled tester interaktion på
+**multiplikativ** (ratio-)skala: ændrer eksponeringen *odds ratio'en*
+forskelligt mellem grupper? På folkesundhedsniveau er **additiv** skala
+(forskelle i absolut risiko) ofte mere relevant, og den måles med **RERI**
+(relative excess risk due to interaction). De to skalaer kan give forskellige
+svar, så vær eksplicit om, hvilken du rapporterer. Se [Læs mere](#laes-mere).
 :::
 
 ::: {.callout-warning}
-**Subgruppeanalyse er ikke en interaktionstest.** At køre modellen separat i to grupper og se, at den ene er "signifikant" og den anden ikke, viser **ikke**, at effekterne er forskellige. Kun interaktionsleddet (eller en formel test af det) afgør, om forskellen er reel.
+**Subgruppeanalyse er ikke en interaktionstest.** At køre modellen separat i to
+grupper og se, at den ene er "signifikant" og den anden ikke, viser **ikke**, at
+effekterne er forskellige. Kun interaktionsleddet (eller en formel test af det)
+afgør, om forskellen er reel.
 :::
 
 <details>
@@ -124,35 +194,75 @@ Punktestimatet er det samme (1,5); kun præcisionen adskiller dem, fordi kvinde-
 
 ## Ikke-lineære sammenhænge (splines) {#splines}
 
-Modellerne ovenfor antager som standard, at en kontinuert variabel hænger **lineært** sammen med udfaldet (på modellens skala): hvert ekstra år alder ændrer risikoen lige meget, hvad enten du går fra 30 til 31 eller fra 70 til 71. Det passer ofte dårligt - risikoen for mange udfald stiger fx kun langsomt i ung alder og stejlt senere. Det er en **kurve**, ikke en ret linje.
+Modellerne ovenfor antager som standard, at en kontinuert variabel hænger
+**lineært** sammen med udfaldet (på modellens skala): hvert ekstra år alder
+ændrer risikoen lige meget, hvad enten du går fra 30 til 31 eller fra 70 til 71.
+Det passer ofte dårligt - risikoen for mange udfald stiger fx kun langsomt i ung
+alder og stejlt senere. Det er en **kurve**, ikke en ret linje.
 
-En **spline** lader variablen indgå som en **blød kurve** i stedet for en ret linje, så modellen selv finder formen. Du bestemmer kun, hvor bøjelig kurven må være (via antallet af *frihedsgrader* - hvor mange "knæk" kurven må have).
+En **spline** lader variablen indgå som en **blød kurve** i stedet for en ret
+linje, så modellen selv finder formen. Du bestemmer kun, hvor bøjelig kurven må
+være (via antallet af *frihedsgrader* - hvor mange "knæk" kurven må have).
 
 ```r
-library(splines)                         # ns() = "natural spline" (en blød kurve)
+library(splines) # ns() = "natural spline" (en blød kurve)
 
-glm(udfald ~ ns(alder, df = 3) + eksponering + koen,  # alder som blød kurve i stedet for ret linje
-    data = df, family = binomial)
+glm(
+  udfald ~ ns(alder, df = 3) + eksponering + koen, # alder som blød kurve i stedet for ret linje
+  data = df,
+  family = binomial
+)
 ```
 
-- `ns(alder, df = 3)` erstatter den rette linje for `alder` med en blød kurve. `df = 3` styrer bøjeligheden: flere frihedsgrader = mere bøjelig kurve. **3-4** er et almindeligt udgangspunkt.
-- Det virker i alle modellerne på disse sider (logistisk, lineær, Cox, Poisson) - pak bare den kontinuerte variabel ind i `ns(...)`.
-- Især nyttigt, når variablen er din **eksponering** (så ser du selve dosis-respons-formen) eller en **stærk confounder** (så en for stiv ret linje ikke efterlader *residual confounding*, dvs. confounding der er tilbage trods justering).
+- `ns(alder, df = 3)` erstatter den rette linje for `alder` med en blød kurve.
+  `df = 3` styrer bøjeligheden: flere frihedsgrader = mere bøjelig kurve.
+  **3-4** er et almindeligt udgangspunkt.
+- Det virker i alle modellerne på disse sider (logistisk, lineær, Cox, Poisson) -
+  pak bare den kontinuerte variabel ind i `ns(...)`.
+- Især nyttigt, når variablen er din **eksponering** (så ser du selve
+  dosis-respons-formen) eller en **stærk confounder** (så en for stiv ret linje
+  ikke efterlader *residual confounding*, dvs. confounding der er tilbage trods
+  justering).
 
 ::: {.callout-note}
-**Du aflæser ikke længere ét tal.** En spline-variabel har ikke én enkelt odds ratio, for effekten ændrer sig hen over værdierne. I stedet **plotter** du den tilpassede kurve (fx forudsagt risiko mod alder) for at vise sammenhængen. Pakkerne `ggeffects` eller `marginaleffects` gør det i få linjer.
+**Du aflæser ikke længere ét tal.** En spline-variabel har ikke én enkelt odds
+ratio, for effekten ændrer sig hen over værdierne. I stedet **plotter** du den
+tilpassede kurve (fx forudsagt risiko mod alder) for at vise sammenhængen.
+Pakkerne `ggeffects` eller `marginaleffects` gør det i få linjer.
 :::
 
 ## Sådan læser du dit resultat {#laes-resultat}
 
-Regressionstabellen giver for hver variabel et **estimat**, et **konfidensinterval** og en **p-værdi**:
+Regressionstabellen giver for hver variabel et **estimat**, et
+**konfidensinterval** og en **p-værdi**:
 
-- **Estimatet** er effektmålet. For logistisk regression er det en **odds ratio (OR)**, for log-binomial en **relativ risiko (RR)**, og for Cox ([Time-to-event](13e_time-to-event.qmd)) en **hazard ratio (HR)** - alle er *forholdstal*, hvor **1 betyder ingen forskel** (over 1 = højere odds/risiko/rate, under 1 = lavere). For **lineær** regression er estimatet i stedet en forskel i gennemsnit, hvor **0** betyder ingen forskel. Eksempel: OR = 1,5 → 50 % højere odds; OR = 0,8 → 20 % lavere.
-- **95 %-konfidensintervallet** er det interval, den sande effekt med rimelighed kan ligge i: smalt = præcist, bredt = stor usikkerhed. For et forholdstal gælder: **krydser intervallet 1**, er effekten ikke statistisk signifikant på 5 %-niveau.
-- **P-værdien** er sandsynligheden for at se en effekt mindst så stor som din, *hvis der i virkeligheden ingen var*. Lille p (typisk < 0,05) taler imod "ingen effekt", men siger **ikke**, hvor stor eller vigtig effekten er - det gør estimatet og konfidensintervallet. I meget store registerdatasæt bliver selv små, ligegyldige forskelle ofte "signifikante", så se altid på **størrelsen** (estimatet), ikke kun på p.
+- **Estimatet** er effektmålet. For logistisk regression er det en **odds ratio
+  (OR)**, for log-binomial en **relativ risiko (RR)**, og for Cox
+  ([Time-to-event](13e_time-to-event.qmd)) en **hazard ratio (HR)** - alle er
+  *forholdstal*, hvor **1 betyder ingen forskel** (over 1 = højere
+  odds/risiko/rate, under 1 = lavere). For **lineær** regression er estimatet i
+  stedet en forskel i gennemsnit, hvor **0** betyder ingen forskel. Eksempel: OR
+  = 1,5 → 50 % højere odds; OR = 0,8 → 20 % lavere.
+- **95 %-konfidensintervallet** er det interval, den sande effekt med rimelighed
+  kan ligge i: smalt = præcist, bredt = stor usikkerhed. For et forholdstal
+  gælder: **krydser intervallet 1**, er effekten ikke statistisk signifikant på
+  5 %-niveau.
+- **P-værdien** er sandsynligheden for at se en effekt mindst så stor som din,
+  *hvis der i virkeligheden ingen var*. Lille p (typisk < 0,05) taler imod
+  "ingen effekt", men siger **ikke**, hvor stor eller vigtig effekten er - det
+  gør estimatet og konfidensintervallet. I meget store registerdatasæt bliver
+  selv små, ligegyldige forskelle ofte "signifikante", så se altid på
+  **størrelsen** (estimatet), ikke kun på p.
 
 ::: {.callout-note}
-**OR og HR er non-collapsible.** Modsat en risikoforskel eller relativ risiko kan en justeret odds ratio (og hazard ratio) afvige fra den ujusterede *selv når der ikke er confounding*, alene fordi du tilføjede kovariater. En justeret OR er derfor en *betinget* effekt (inden for strata af kovariaterne), ikke den populationsgennemsnitlige effekt, og "justeret ≠ ujusteret" er ikke i sig selv tegn på confounding. Har du brug for en marginal (populationsgennemsnitlig) effekt, giver standardisering eller IPTW en - se [IP-vægtning](13g_vaegtning-iptw.qmd).
+**OR og HR er non-collapsible.** Modsat en risikoforskel eller relativ risiko
+kan en justeret odds ratio (og hazard ratio) afvige fra den ujusterede *selv når
+der ikke er confounding*, alene fordi du tilføjede kovariater. En justeret OR er
+derfor en *betinget* effekt (inden for strata af kovariaterne), ikke den
+populationsgennemsnitlige effekt, og "justeret ≠ ujusteret" er ikke i sig selv
+tegn på confounding. Har du brug for en marginal (populationsgennemsnitlig)
+effekt, giver standardisering eller IPTW en - se
+[IP-vægtning](13g_vaegtning-iptw.qmd).
 :::
 
 <details id="klyngebaserede-standardfejl">
@@ -178,37 +288,66 @@ coeftest(model,                          # vis koefficienterne ...
 ::: {.callout-note}
 **Mixed models: når grupper i dine data skal have hver sit niveau.**
 
-En **klynge** er en gruppe af **rækker**, der hører sammen og derfor ligner hinanden mere end to tilfældige rækker - en gruppe af *rækker*, ikke nødvendigvis af personer. Det kan være **flere rækker fra samme person** (fx gentagne målinger over tid), alle patienter på **samme hospital**, eller **søskende** i samme familie. En person er altså kun en klynge, hvis hun optræder i flere rækker; har du præcis én række per person, er der ingen person-klynge. Rækker i samme klynge er korrelerede, fordi de deler noget, og det bryder antagelsen om uafhængige rækker. Du har to valg:
+En **klynge** er en gruppe af **rækker**, der hører sammen og derfor ligner
+hinanden mere end to tilfældige rækker - en gruppe af *rækker*, ikke
+nødvendigvis af personer. Det kan være **flere rækker fra samme person** (fx
+gentagne målinger over tid), alle patienter på **samme hospital**, eller
+**søskende** i samme familie. En person er altså kun en klynge, hvis hun
+optræder i flere rækker; har du præcis én række per person, er der ingen
+person-klynge. Rækker i samme klynge er korrelerede, fordi de deler noget, og
+det bryder antagelsen om uafhængige rækker. Du har to valg:
 
-- **Klyngebaserede (robuste) standardfejl** (fold-ud ovenfor): behold din model, men ret konfidensintervallerne, så de tager højde for korrelationen. Effektestimatet er **uændret**; du får stadig **én samlet effekt**.
-- **Mixed model (random effects):** lad hver klynge få **sit eget grundniveau** i modellen (et *random intercept*) - fx får hvert hospital sin egen baseline-risiko, i stedet for at modellen lader som om alle hospitaler er ens. (At "modellere klyngen" betyder netop det: at bygge gruppernes forskelle ind i modellen i stedet for at se bort fra dem.) "Mixed" = den blander **faste effekter** (de almindelige koefficienter, ens for alle, fx eksponeringens effekt) med **tilfældige effekter** (variationen mellem klynger).
+- **Klyngebaserede (robuste) standardfejl** (fold-ud ovenfor): behold din model,
+  men ret konfidensintervallerne, så de tager højde for korrelationen.
+  Effektestimatet er **uændret**; du får stadig **én samlet effekt**.
+- **Mixed model (random effects):** lad hver klynge få **sit eget grundniveau**
+  i modellen (et *random intercept*) - fx får hvert hospital sin egen
+  baseline-risiko, i stedet for at modellen lader som om alle hospitaler er ens.
+  (At "modellere klyngen" betyder netop det: at bygge gruppernes forskelle ind i
+  modellen i stedet for at se bort fra dem.) "Mixed" = den blander **faste
+  effekter** (de almindelige koefficienter, ens for alle, fx eksponeringens
+  effekt) med **tilfældige effekter** (variationen mellem klynger).
 
-Vælg en **mixed model**, når klyngestrukturen i sig selv er interessant, når du har **gentagne målinger** eller **mange små klynger**, eller når du vil adskille variation *inden for* og *mellem* klynger. I R: [`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), og [`coxme`](https://CRAN.R-project.org/package=coxme) for en Cox-model. En grundig indføring ligger uden for denne side.
+Vælg en **mixed model**, når klyngestrukturen i sig selv er interessant, når du
+har **gentagne målinger** eller **mange små klynger**, eller når du vil adskille
+variation *inden for* og *mellem* klynger. I R:
+[`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), og
+[`coxme`](https://CRAN.R-project.org/package=coxme) for en Cox-model. En grundig
+indføring ligger uden for denne side.
 :::
 
 ::: {.callout-note}
-Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun
+aggregerede resultater. Se [Fase 14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Læs mere {#laes-mere}
 
 Generel uddybning i *The Epidemiologist R Handbook* (på engelsk):
 
-- [Univariate and multivariable regression](https://www.epirhandbook.com/en/new_pages/regression.html)
+- [Univariate and multivariable
+  regression](https://www.epirhandbook.com/en/new_pages/regression.html)
 - [Factors](https://www.epirhandbook.com/en/new_pages/factors.html)
 
 Om interaktion / effektmodifikation:
 
-- Knol & VanderWeele, "[Recommendations for presenting analyses of effect modification and interaction](https://doi.org/10.1093/ije/dyr218)", *Int J Epidemiol* 2012 - hvordan du rapporterer det rigtigt (begge skalaer).
-- [`interactionR`-pakken](https://CRAN.R-project.org/package=interactionR) - beregner additiv interaktion (RERI, AP) med konfidensintervaller, klar til tabel.
+- Knol & VanderWeele, "[Recommendations for presenting analyses of effect
+  modification and interaction](https://doi.org/10.1093/ije/dyr218)", *Int J
+  Epidemiol* 2012 - hvordan du rapporterer det rigtigt (begge skalaer).
+- [`interactionR`-pakken](https://CRAN.R-project.org/package=interactionR) -
+  beregner additiv interaktion (RERI, AP) med konfidensintervaller, klar til
+  tabel.
 
 Om ikke-lineære sammenhænge (splines):
 
-- Harrell, *Regression Modeling Strategies*, og [`rms`-pakken](https://CRAN.R-project.org/package=rms) - standardværket om fleksibel modellering med splines.
+- Harrell, *Regression Modeling Strategies*, og
+  [`rms`-pakken](https://CRAN.R-project.org/package=rms) - standardværket om
+  fleksibel modellering med splines.
 
-Om mediation (når du vil opdele en effekt i en **direkte** del og en **indirekte** del, der går gennem et mellemled):
+Om mediation (når du vil opdele en effekt i en **direkte** del og en
+**indirekte** del, der går gennem et mellemled):
 
 - [`CMAverse`](https://bs1125.github.io/CMAverse/) - kausal mediationsanalyse i R.
 :::

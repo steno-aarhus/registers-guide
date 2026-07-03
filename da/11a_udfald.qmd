@@ -5,10 +5,15 @@ date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under udvikling.** Strukturel skitse - udbygges. Mønstret er det samme som i [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd), nu filtreret til din kohorte.
+**Under udvikling.** Strukturel skitse - udbygges. Mønstret er det samme som i
+[Udtræk fra LPR](09b_udtraek_fra_lpr.qmd), nu filtreret til din kohorte.
 :::
 
-Dit **udfald** er typisk datoen for den første hændelse efter index - fx en diagnose (LPR). Men for at kunne beregne opfølgningstid skal du også bruge de datoer hvor en person **holder op med at være i risiko** for udfaldet: **død** (DODSAARS) og **emigration** (VNDS). Du udtrækker hver dato som sin egen tabel med `pnr` + dato, filtreret til kohorten.
+Dit **udfald** er typisk datoen for den første hændelse efter index - fx en
+diagnose (LPR). Men for at kunne beregne opfølgningstid skal du også bruge de
+datoer hvor en person **holder op med at være i risiko** for udfaldet: **død**
+(DODSAARS) og **emigration** (VNDS). Du udtrækker hver dato som sin egen tabel
+med `pnr` + dato, filtreret til kohorten.
 
 <details>
 <summary>Hvorfor andre datoer end selve udfaldet?</summary>
@@ -23,46 +28,84 @@ Hvis en konkurrerende hændelse (fx død) **udelukker** dit udfald frem for blot
 
 ```r
 # unique() fjerner gentagelser, så du får én pnr per person - en ren liste over kohortens personer
-kohort_pnrs <- unique(readRDS("sti/til/full_cohort.rds")$pnr)   # din kohorte fra Fase 10
+kohort_pnrs <- unique(readRDS("sti/til/full_cohort.rds")$pnr) # din kohorte fra Fase 10
 
 # Eksempel: første demensdiagnose efter index (udfald)
 udfald <- open_dataset("sti/til/lpr_diag/") %>%
   rename_with(tolower) %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # KUN din kohorte
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>% # KUN din kohorte
   # ... hent kontaktdatoen fra lpr_adm og filtrér på diagnosekoder - se Fase 9 ...
   collect() %>%
-  group_by(pnr) %>% arrange(event_date) %>% slice(1) %>% ungroup()   # behold kun første hændelse per person
+  group_by(pnr) %>%
+  arrange(event_date) %>%
+  slice(1) %>%
+  ungroup() # behold kun første hændelse per person
 
 saveRDS(udfald, "sti/til/extract_udfald.rds")
 ```
 
-`group_by(pnr) + arrange() + slice(1)` beholder kun den **første** hændelse per person: til en udfaldsdefinition skal du sjældent bruge mere end den første. Mønstret er forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd).
+`group_by(pnr) + arrange() + slice(1)` beholder kun den **første** hændelse per
+person: til en udfaldsdefinition skal du sjældent bruge mere end den første.
+Mønstret er forklaret i [Langt ↔ bredt format](12a_langt-bredt.qmd).
 
 ::: {.callout-note}
-**To slags joins - forveksl dem ikke.** Nogle joins samler **ét udtræk** - fx LPR's kontakt- og diagnoseregister, der kobles for at få `pnr` + dato + diagnose i samme tabel (se [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd)). Det er **ikke** det samme som at koble det færdige udtræk på din kohorte; det sker først i [Kobl udtræk sammen](12b_joins.qmd), når alle dine udtræk er færdige.
+**To slags joins - forveksl dem ikke.** Nogle joins samler **ét udtræk** - fx
+LPR's kontakt- og diagnoseregister, der kobles for at få `pnr` + dato + diagnose
+i samme tabel (se [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd)). Det er **ikke**
+det samme som at koble det færdige udtræk på din kohorte; det sker først i [Kobl
+udtræk sammen](12b_joins.qmd), når alle dine udtræk er færdige.
 :::
 
-- **Censurering:** udtræk også dødsdato fra DODSAARS (`d_dodsdto`) og emigration fra VNDS (`indud_kode == "U"`) - hver som sin egen tabel, se [Register-overblik](register_reference.qmd).
-- **Gem hvert udtræk som sin egen `.rds`-fil.** En `.rds`-fil kan sagtens rumme flere kolonner (det gør den fx for covariater) - for udfald er det typisk `pnr` + én datokolonne. I [Fase 12](12_data-manipulation.qmd) kobler du dem alle på kohorten og beregner opfølgningstid ud fra udfalds-, døds- og emigrationsdatoerne.
+- **Censurering:** udtræk også dødsdato fra DODSAARS (`d_dodsdto`) og emigration
+  fra VNDS (`indud_kode == "U"`) - hver som sin egen tabel, se
+  [Register-overblik](register_reference.qmd).
+- **Gem hvert udtræk som sin egen `.rds`-fil.** En `.rds`-fil kan sagtens rumme
+  flere kolonner (det gør den fx for covariater) - for udfald er det typisk
+  `pnr` + én datokolonne. I [Fase 12](12_data-manipulation.qmd) kobler du dem
+  alle på kohorten og beregner opfølgningstid ud fra udfalds-, døds- og
+  emigrationsdatoerne.
 
 ::: {.callout-warning}
-**Dine koder er ikke sandheden - vær opmærksom på fejlklassifikation.** En registerdiagnose er en *proxy* for den virkelige tilstand, med sin egen validitet (sensitivitet og positiv prædiktiv værdi, PPV). Hvor forkert den er, former dit resultat:
+**Dine koder er ikke sandheden - vær opmærksom på fejlklassifikation.** En
+registerdiagnose er en *proxy* for den virkelige tilstand, med sin egen
+validitet (sensitivitet og positiv prædiktiv værdi, PPV). Hvor forkert den er,
+former dit resultat:
 
-- **Ikke-differentiel fejlklassifikation:** fejl uafhængige af eksponeringen (samme kodevaliditet i begge grupper) trækker som regel effekten **mod nul** - en reel effekt ser svagere ud end den er.
-- **Differentiel fejlklassifikation:** udfaldet fanges mere komplet i den ene gruppe (fx er eksponerede oftere i kontakt med systemet og diagnosticeres derfor mere). Det kan trække estimatet i **begge** retninger og er den farligere slags.
+- **Ikke-differentiel fejlklassifikation:** fejl uafhængige af eksponeringen
+  (samme kodevaliditet i begge grupper) trækker som regel effekten **mod nul** -
+  en reel effekt ser svagere ud end den er.
+- **Differentiel fejlklassifikation:** udfaldet fanges mere komplet i den ene
+  gruppe (fx er eksponerede oftere i kontakt med systemet og diagnosticeres
+  derfor mere). Det kan trække estimatet i **begge** retninger og er den
+  farligere slags.
 
-Praktiske værn: brug validerede kodedefinitioner hvor de findes, slå PPV op for dine koder, og kør en følsomhedsanalyse med en strengere eller løsere definition. For danske registre se validitetsoversigterne, fx [Schmidt et al. 2015, *Clin Epidemiol*](https://doi.org/10.2147/CLEP.S91125) (Landspatientregistret). Baggrund: [Hernán & Robins, *What If*, kap. 9](https://miguelhernan.org/whatifbook) (measurement bias).
+Praktiske værn: brug validerede kodedefinitioner hvor de findes, slå PPV op for
+dine koder, og kør en følsomhedsanalyse med en strengere eller løsere
+definition. For danske registre se validitetsoversigterne, fx [Schmidt et al.
+2015, *Clin Epidemiol*](https://doi.org/10.2147/CLEP.S91125)
+(Landspatientregistret). Baggrund: [Hernán & Robins, *What If*, kap.
+9](https://miguelhernan.org/whatifbook) (measurement bias).
 :::
 
 ::: {.callout-tip}
 ## Hvor kommer din kodeliste fra?
 
-At *bruge* en kodeliste (regex, `%in%`) er den lette del; at *definere hvilke koder* der udgør din tilstand, er den svære. Genopfind den ikke: brug en publiceret, gerne valideret liste, og **dokumentér og del din egen**, så andre kan reproducere den.
+At *bruge* en kodeliste (regex, `%in%`) er den lette del; at *definere hvilke
+koder* der udgør din tilstand, er den svære. Genopfind den ikke: brug en
+publiceret, gerne valideret liste, og **dokumentér og del din egen**, så andre
+kan reproducere den.
 
-- **ICD-10:** fx [mltc-codelists](https://github.com/rprigge-uoe/mltc-codelists) (ICD-10-kodelister for mange kroniske sygdomme, University of Edinburgh) og den tilhørende [metode-artikel (*Communications Medicine* 2025)](https://www.nature.com/articles/s43856-025-00995-4).
-- **ATC (medicin):** afgræns lægemiddelgrupper ud fra [WHO's ATC/DDD-indeks](https://atcddd.fhi.no/atc_ddd_index/) og publicerede lægemiddelklasse-definitioner. Se [Medicin (ATC)](11d_medicin.qmd).
+- **ICD-10:** fx [mltc-codelists](https://github.com/rprigge-uoe/mltc-codelists)
+  (ICD-10-kodelister for mange kroniske sygdomme, University of Edinburgh) og
+  den tilhørende [metode-artikel (*Communications Medicine*
+  2025)](https://www.nature.com/articles/s43856-025-00995-4).
+- **ATC (medicin):** afgræns lægemiddelgrupper ud fra [WHO's
+  ATC/DDD-indeks](https://atcddd.fhi.no/atc_ddd_index/) og publicerede
+  lægemiddelklasse-definitioner. Se [Medicin (ATC)](11d_medicin.qmd).
 :::
 
 ## Se også
+
 - [Udtræk fra LPR](09b_udtraek_fra_lpr.qmd): diagnosemønstret i detaljer
-- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): join udfald til kohorten
+- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): join udfald
+  til kohorten

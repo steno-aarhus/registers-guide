@@ -1,6 +1,8 @@
 ---
 title: "![](images/icons/icon_14.png){.title-icon} Regression"
-subtitle: "Logistic, linear and conditional logistic regression - and when to use robust standard errors"
+subtitle: >-
+  Logistic, linear and conditional logistic regression - and when to use robust
+  standard errors
 date: last-modified
 ---
 
@@ -8,101 +10,171 @@ date: last-modified
 **Under development.** More model types and diagnostics are coming.
 :::
 
-Regression examines the relationship between an **outcome** and one or more **explanatory variables** (your exposure plus covariates), and is how you **adjust for confounding** in the analysis.
+Regression examines the relationship between an **outcome** and one or more
+**explanatory variables** (your exposure plus covariates), and is how you
+**adjust for confounding** in the analysis.
 
-The outcome is also called the **dependent** variable and the explanatory variables the **independent** ones. With **one** explanatory variable it is a *simple* regression; with **several**, a *multiple* regression. Explanatory variables can be either continuous (e.g. age) or categorical (e.g. sex).
+The outcome is also called the **dependent** variable and the explanatory
+variables the **independent** ones. With **one** explanatory variable it is a
+*simple* regression; with **several**, a *multiple* regression. Explanatory
+variables can be either continuous (e.g. age) or categorical (e.g. sex).
 
-- **Linear regression** (`lm`): when the outcome is **continuous** (e.g. BMI or blood pressure). Gives differences in means.
-- **Logistic regression** (`glm` with `family = binomial`): when the outcome is **binary** (yes/no, e.g. whether a person got a diagnosis). Gives **odds ratios**.
-- **Conditional logistic regression** (`survival::clogit()`): for **matched** data (e.g. matched case-control), where the analysis must respect the matched sets.
-- **Cox regression** (`survival::coxph()`): when the outcome is **time-to-event** (time until an event, with censoring). It models the *rate* and gives **hazard ratios**. Cox is also a regression, but it lives under [Time-to-event](13e_time-to-event.qmd) because it needs a `Surv(time, event)` object and builds on the censoring and survival concepts there. It is *not* used on a plain continuous or binary outcome without time.
+- **Linear regression** (`lm`): when the outcome is **continuous** (e.g. BMI or
+  blood pressure). Gives differences in means.
+- **Logistic regression** (`glm` with `family = binomial`): when the outcome is
+  **binary** (yes/no, e.g. whether a person got a diagnosis). Gives **odds
+  ratios**.
+- **Conditional logistic regression** (`survival::clogit()`): for **matched**
+  data (e.g. matched case-control), where the analysis must respect the matched
+  sets.
+- **Cox regression** (`survival::coxph()`): when the outcome is
+  **time-to-event** (time until an event, with censoring). It models the *rate*
+  and gives **hazard ratios**. Cox is also a regression, but it lives under
+  [Time-to-event](13e_time-to-event.qmd) because it needs a `Surv(time, event)`
+  object and builds on the censoring and survival concepts there. It is *not*
+  used on a plain continuous or binary outcome without time.
 
-`glm` stands for *generalized linear model*: one function that, via the `family` argument, can fit several model types (here `binomial` = logistic). `clogit()` is a "conditional" version of logistic regression that accounts for the matching. `gtsummary::tbl_regression()` shows the result as a publication-ready table.
+`glm` stands for *generalized linear model*: one function that, via the `family`
+argument, can fit several model types (here `binomial` = logistic). `clogit()`
+is a "conditional" version of logistic regression that accounts for the
+matching. `gtsummary::tbl_regression()` shows the result as a publication-ready
+table.
 
-Each model also rests on some **assumptions**. They are noted with each model below, together with how to check them; if they do not hold, the estimates can be misleading.
+Each model also rests on some **assumptions**. They are noted with each model
+below, together with how to check them; if they do not hold, the estimates can
+be misleading.
 
 ::: {.callout-tip}
-**New to regression?** This page shows *how* to run the models in R - not the theory behind them. For a thorough introduction (model types, assumptions, interpretation) see the [Epidemiologist R Handbook](https://www.epirhandbook.com/en/) and [R for Data Science](https://r4ds.hadley.nz/). If it is the statistical theory behind regression you are missing, [*Learning Statistics with R* (Navarro)](https://learningstatisticswithr.com/) is beginner-friendly. More resources: [Learning resources](laeringsressourcer.qmd).
+**New to regression?** This page shows *how* to run the models in R - not the
+theory behind them. For a thorough introduction (model types, assumptions,
+interpretation) see the [Epidemiologist R
+Handbook](https://www.epirhandbook.com/en/) and [R for Data
+Science](https://r4ds.hadley.nz/). If it is the statistical theory behind
+regression you are missing, [*Learning Statistics with R*
+(Navarro)](https://learningstatisticswithr.com/) is beginner-friendly. More
+resources: [Learning resources](laeringsressourcer.qmd).
 :::
 
 ::: {.callout-note}
-The code examples use generic path and variable names. Adapt them to your project. The packages used (`gtsummary`, `survival`, `sandwich`, `lmtest`) must be installed in your R environment on DST.
+The code examples use generic path and variable names. Adapt them to your
+project. The packages used (`gtsummary`, `survival`, `sandwich`, `lmtest`) must
+be installed in your R environment on DST.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Starting point
 
 ```r
-library(dplyr)                         # %>% (pipe)
-library(gtsummary)                     # tbl_regression() for clean output
+library(dplyr) # %>% (pipe)
+library(gtsummary) # tbl_regression() for clean output
 
-df <- readRDS("path/to/analysis.rds")  # analysis-ready dataset
+df <- readRDS("path/to/analysis.rds") # analysis-ready dataset
 ```
 
 ## Logistic regression (binary outcome)
 
 ```r
-model <- glm(outcome ~ exposure + age + sex,   # outcome explained by exposure + covariates
-             data = df, family = binomial)     # family = binomial -> logistic regression
+model <- glm(
+  outcome ~ exposure + age + sex, # outcome explained by exposure + covariates
+  data = df,
+  family = binomial
+) # family = binomial -> logistic regression
 
-model %>%                                # pass the model on to a table
-  tbl_regression(exponentiate = TRUE)    # exponentiate = TRUE -> odds ratios (OR)
+model %>% # pass the model on to a table
+  tbl_regression(exponentiate = TRUE) # exponentiate = TRUE -> odds ratios (OR)
 ```
 
 - `family = binomial` makes it logistic regression.
-- `exponentiate = TRUE` shows **odds ratios** (OR) instead of log-odds coefficients.
+- `exponentiate = TRUE` shows **odds ratios** (OR) instead of log-odds
+  coefficients.
 
-**Assumptions:** the observations are independent (one row per person - otherwise use robust standard errors, see below), and continuous variables are linearly related to the **log-odds**. If linearity does not hold, you can let the variable enter as a smooth curve instead of a straight line - see [Non-linear relationships (splines)](#splines) below.
+**Assumptions:** the observations are independent (one row per person -
+otherwise use robust standard errors, see below), and continuous variables are
+linearly related to the **log-odds**. If linearity does not hold, you can let
+the variable enter as a smooth curve instead of a straight line - see
+[Non-linear relationships (splines)](#splines) below.
 
 ## Linear regression (continuous outcome)
 
 ```r
-lm(bmi ~ exposure + age + sex, data = df) %>%  # linear model for a continuous outcome
-  tbl_regression()                       # coefficients (no exponentiation)
+lm(bmi ~ exposure + age + sex, data = df) %>% # linear model for a continuous outcome
+  tbl_regression() # coefficients (no exponentiation)
 ```
 
-**Assumptions:** a linear relationship, constant variance (homoscedasticity), roughly normal residuals and independent observations. Save the model to a variable and check with `plot(model)`, which gives the classic residual plots; if they look skewed, a transformation of the outcome or a different model may be needed.
+**Assumptions:** a linear relationship, constant variance (homoscedasticity),
+roughly normal residuals and independent observations. Save the model to a
+variable and check with `plot(model)`, which gives the classic residual plots;
+if they look skewed, a transformation of the outcome or a different model may be
+needed.
 
 ## Matched case-control: conditional logistic regression
 
-When you have matched in a nested case-control design ([Case-control](10b_case-control.qmd)), the analysis must respect the matching with **conditional** logistic regression. Use `clogit()` with a `strata()` term for the matched set.
+When you have matched in a nested case-control design
+([Case-control](10b_case-control.qmd)), the analysis must respect the matching
+with **conditional** logistic regression. Use `clogit()` with a `strata()` term
+for the matched set.
 
 ```r
-library(survival)                        # clogit()
+library(survival) # clogit()
 
-clogit(case ~ exposure + age + sex + strata(match_id),  # strata() = the matched set
-       data = cc) %>%                        # cc = your case-control dataset (from Phase 10b)
-  tbl_regression(exponentiate = TRUE)    # -> odds ratios
+clogit(
+  case ~ exposure + age + sex + strata(match_id), # strata() = the matched set
+  data = cc
+) %>% # cc = your case-control dataset (from Phase 10b)
+  tbl_regression(exponentiate = TRUE) # -> odds ratios
 ```
 
-- `strata(match_id)` tells the model which rows belong to the same matched set (`case.id` from `incidenceMatch()` or `Set` from `Epi::ccwc()`).
+- `strata(match_id)` tells the model which rows belong to the same matched set
+  (`case.id` from `incidenceMatch()` or `Set` from `Epi::ccwc()`).
 - `case` = 1 for a case, 0 for a control.
 
-**Assumptions:** as for logistic regression (continuous variables linear with the log-odds; the matched sets independent of one another). The matching itself is handled by `strata()`.
+**Assumptions:** as for logistic regression (continuous variables linear with
+the log-odds; the matched sets independent of one another). The matching itself
+is handled by `strata()`.
 
 ## Interaction (effect modification)
 
-Sometimes an exposure's effect depends on a **third variable**: a drug may work more strongly in younger than older people, or a risk factor may hit men harder than women. This is called **effect modification** (or statistical **interaction**), and you examine it with a **product term** in the model.
+Sometimes an exposure's effect depends on a **third variable**: a drug may work
+more strongly in younger than older people, or a risk factor may hit men harder
+than women. This is called **effect modification** (or statistical
+**interaction**), and you examine it with a **product term** in the model.
 
 ```r
 # `*` expands to: exposure + sex + exposure:sex (the interaction term itself)
-model <- glm(outcome ~ exposure * sex + age,        # tests whether the exposure's effect depends on sex
-             data = df, family = binomial)
+model <- glm(
+  outcome ~ exposure * sex + age, # tests whether the exposure's effect depends on sex
+  data = df,
+  family = binomial
+)
 
 model %>%
-  tbl_regression(exponentiate = TRUE)               # OR for each term, including the interaction term
+  tbl_regression(exponentiate = TRUE) # OR for each term, including the interaction term
 ```
 
-- `exposure * sex` means "both variables plus their interplay". It is the **interaction term** `exposure:sex` that you read off.
-- If the interaction term's OR sits close to 1 (and p is large), the exposure works **the same** in the two groups. If it differs clearly from 1, the **effect depends on sex**, and you should then report **group-specific** estimates (e.g. by running the model separately for each sex, or with `emmeans` / `marginaleffects`).
+- `exposure * sex` means "both variables plus their interplay". It is the
+  **interaction term** `exposure:sex` that you read off.
+- If the interaction term's OR sits close to 1 (and p is large), the exposure
+  works **the same** in the two groups. If it differs clearly from 1, the
+  **effect depends on sex**, and you should then report **group-specific**
+  estimates (e.g. by running the model separately for each sex, or with
+  `emmeans` / `marginaleffects`).
 
 ::: {.callout-note}
-**Multiplicative vs. additive scale.** A product term tests interaction on the **multiplicative** (ratio) scale: does the exposure change the *odds ratio* differently between groups? At the public-health level the **additive** scale (differences in absolute risk) is often more relevant, and it is measured with **RERI** (relative excess risk due to interaction). The two scales can give different answers, so be explicit about which you report. See [Read more](#laes-mere).
+**Multiplicative vs. additive scale.** A product term tests interaction on the
+**multiplicative** (ratio) scale: does the exposure change the *odds ratio*
+differently between groups? At the public-health level the **additive** scale
+(differences in absolute risk) is often more relevant, and it is measured with
+**RERI** (relative excess risk due to interaction). The two scales can give
+different answers, so be explicit about which you report. See [Read
+more](#laes-mere).
 :::
 
 ::: {.callout-warning}
-**A subgroup analysis is not an interaction test.** Running the model separately in two groups and seeing that one is "significant" and the other is not does **not** show that the effects differ. Only the interaction term (or a formal test of it) settles whether the difference is real.
+**A subgroup analysis is not an interaction test.** Running the model separately
+in two groups and seeing that one is "significant" and the other is not does
+**not** show that the effects differ. Only the interaction term (or a formal
+test of it) settles whether the difference is real.
 :::
 
 <details>
@@ -124,35 +196,74 @@ The point estimate is the same (1.5); only the precision differs, because the wo
 
 ## Non-linear relationships (splines) {#splines}
 
-By default, the models above assume a continuous variable is related to the outcome in a **straight line** (on the model's scale): each extra year of age changes the risk by the same amount, whether you go from 30 to 31 or from 70 to 71. That often fits poorly - the risk of many outcomes rises only slowly at young ages and steeply later. That is a **curve**, not a straight line.
+By default, the models above assume a continuous variable is related to the
+outcome in a **straight line** (on the model's scale): each extra year of age
+changes the risk by the same amount, whether you go from 30 to 31 or from 70 to
+71. That often fits poorly - the risk of many outcomes rises only slowly at
+young ages and steeply later. That is a **curve**, not a straight line.
 
-A **spline** lets the variable enter as a **smooth curve** instead of a straight line, so the model finds the shape itself. You only decide how bendy the curve may be (via the number of *degrees of freedom* - how many "bends" the curve may have).
+A **spline** lets the variable enter as a **smooth curve** instead of a straight
+line, so the model finds the shape itself. You only decide how bendy the curve
+may be (via the number of *degrees of freedom* - how many "bends" the curve may
+have).
 
 ```r
-library(splines)                         # ns() = "natural spline" (a smooth curve)
+library(splines) # ns() = "natural spline" (a smooth curve)
 
-glm(outcome ~ ns(age, df = 3) + exposure + sex,  # age as a smooth curve instead of a straight line
-    data = df, family = binomial)
+glm(
+  outcome ~ ns(age, df = 3) + exposure + sex, # age as a smooth curve instead of a straight line
+  data = df,
+  family = binomial
+)
 ```
 
-- `ns(age, df = 3)` replaces the straight line for `age` with a smooth curve. `df = 3` controls the bendiness: more degrees of freedom = a more flexible curve. **3-4** is a common starting point.
-- It works in all the models on these pages (logistic, linear, Cox, Poisson) - just wrap the continuous variable in `ns(...)`.
-- Especially useful when the variable is your **exposure** (so you see the dose-response shape itself) or a **strong confounder** (so a too-rigid straight line does not leave *residual confounding*, i.e. confounding left after adjustment).
+- `ns(age, df = 3)` replaces the straight line for `age` with a smooth curve.
+  `df = 3` controls the bendiness: more degrees of freedom = a more flexible
+  curve. **3-4** is a common starting point.
+- It works in all the models on these pages (logistic, linear, Cox, Poisson) -
+  just wrap the continuous variable in `ns(...)`.
+- Especially useful when the variable is your **exposure** (so you see the
+  dose-response shape itself) or a **strong confounder** (so a too-rigid
+  straight line does not leave *residual confounding*, i.e. confounding left
+  after adjustment).
 
 ::: {.callout-note}
-**You no longer read off a single number.** A spline variable has no single odds ratio, because the effect changes across the values. Instead you **plot** the fitted curve (e.g. predicted risk against age) to show the relationship. The `ggeffects` or `marginaleffects` packages do this in a few lines.
+**You no longer read off a single number.** A spline variable has no single odds
+ratio, because the effect changes across the values. Instead you **plot** the
+fitted curve (e.g. predicted risk against age) to show the relationship. The
+`ggeffects` or `marginaleffects` packages do this in a few lines.
 :::
 
 ## Reading your result {#laes-resultat}
 
-For each variable the regression table gives an **estimate**, a **confidence interval** and a **p-value**:
+For each variable the regression table gives an **estimate**, a **confidence
+interval** and a **p-value**:
 
-- **The estimate** is the effect measure. For logistic regression it is an **odds ratio (OR)**, for log-binomial a **relative risk (RR)**, and for Cox ([Time-to-event](13e_time-to-event.qmd)) a **hazard ratio (HR)** - all are *ratios*, where **1 means no difference** (above 1 = higher odds/risk/rate, below 1 = lower). For **linear** regression the estimate is instead a difference in means, where **0** means no difference. Example: OR = 1.5 → 50% higher odds; OR = 0.8 → 20% lower.
-- **The 95% confidence interval** is the range the true effect can plausibly lie in: narrow = precise, wide = much uncertainty. For a ratio: if the interval **crosses 1**, the effect is not statistically significant at the 5% level.
-- **The p-value** is the probability of seeing an effect at least as large as yours *if there were truly none*. A small p (typically < 0.05) argues against "no effect", but does **not** tell you how large or important the effect is - the estimate and confidence interval do. In very large register datasets even tiny, unimportant differences often become "significant", so always look at the **size** (the estimate), not just p.
+- **The estimate** is the effect measure. For logistic regression it is an
+  **odds ratio (OR)**, for log-binomial a **relative risk (RR)**, and for Cox
+  ([Time-to-event](13e_time-to-event.qmd)) a **hazard ratio (HR)** - all are
+  *ratios*, where **1 means no difference** (above 1 = higher odds/risk/rate,
+  below 1 = lower). For **linear** regression the estimate is instead a
+  difference in means, where **0** means no difference. Example: OR = 1.5 → 50%
+  higher odds; OR = 0.8 → 20% lower.
+- **The 95% confidence interval** is the range the true effect can plausibly lie
+  in: narrow = precise, wide = much uncertainty. For a ratio: if the interval
+  **crosses 1**, the effect is not statistically significant at the 5% level.
+- **The p-value** is the probability of seeing an effect at least as large as
+  yours *if there were truly none*. A small p (typically < 0.05) argues against
+  "no effect", but does **not** tell you how large or important the effect is -
+  the estimate and confidence interval do. In very large register datasets even
+  tiny, unimportant differences often become "significant", so always look at
+  the **size** (the estimate), not just p.
 
 ::: {.callout-note}
-**OR and HR are non-collapsible.** Unlike a risk difference or relative risk, an adjusted odds ratio (and hazard ratio) can differ from the crude one *even when there is no confounding*, purely because you added covariates. So an adjusted OR is a *conditional* effect (within strata of the covariates), not the population-average effect, and "adjusted ≠ crude" is not by itself evidence of confounding. If you need a marginal (population-average) effect, standardization or IPTW gives one - see [IP weighting](13g_vaegtning-iptw.qmd).
+**OR and HR are non-collapsible.** Unlike a risk difference or relative risk, an
+adjusted odds ratio (and hazard ratio) can differ from the crude one *even when
+there is no confounding*, purely because you added covariates. So an adjusted OR
+is a *conditional* effect (within strata of the covariates), not the
+population-average effect, and "adjusted ≠ crude" is not by itself evidence of
+confounding. If you need a marginal (population-average) effect, standardization
+or IPTW gives one - see [IP weighting](13g_vaegtning-iptw.qmd).
 :::
 
 <details id="klyngebaserede-standardfejl">
@@ -178,37 +289,67 @@ coeftest(model,                          # show the coefficients ...
 ::: {.callout-note}
 **Mixed models: when groups in your data should each have their own level.**
 
-A **cluster** is a group of **rows** that belong together and are therefore more alike than two random rows - a group of *rows*, not necessarily of people. It can be **several rows from the same person** (e.g. repeated measurements over time), all patients at the **same hospital**, or **siblings** in the same family. So a person is a cluster only if they appear in several rows; if you have exactly one row per person, there is no person cluster. Rows in the same cluster are correlated because they share something, and that breaks the assumption of independent rows. You have two choices:
+A **cluster** is a group of **rows** that belong together and are therefore more
+alike than two random rows - a group of *rows*, not necessarily of people. It
+can be **several rows from the same person** (e.g. repeated measurements over
+time), all patients at the **same hospital**, or **siblings** in the same
+family. So a person is a cluster only if they appear in several rows; if you
+have exactly one row per person, there is no person cluster. Rows in the same
+cluster are correlated because they share something, and that breaks the
+assumption of independent rows. You have two choices:
 
-- **Cluster-robust standard errors** (fold-out above): keep your model, but correct the confidence intervals so they account for the correlation. The effect estimate is **unchanged**; you still get **one overall effect**.
-- **Mixed model (random effects):** let each cluster have **its own baseline level** in the model (a *random intercept*) - e.g. each hospital gets its own baseline risk, instead of the model pretending all hospitals are the same. (To "model the cluster" means exactly that: building the groups' differences into the model instead of ignoring them.) "Mixed" = it mixes **fixed effects** (the usual coefficients, the same for everyone, e.g. the exposure effect) with **random effects** (the variation between clusters).
+- **Cluster-robust standard errors** (fold-out above): keep your model, but
+  correct the confidence intervals so they account for the correlation. The
+  effect estimate is **unchanged**; you still get **one overall effect**.
+- **Mixed model (random effects):** let each cluster have **its own baseline
+  level** in the model (a *random intercept*) - e.g. each hospital gets its own
+  baseline risk, instead of the model pretending all hospitals are the same. (To
+  "model the cluster" means exactly that: building the groups' differences into
+  the model instead of ignoring them.) "Mixed" = it mixes **fixed effects** (the
+  usual coefficients, the same for everyone, e.g. the exposure effect) with
+  **random effects** (the variation between clusters).
 
-Choose a **mixed model** when the clustering structure is itself of interest, when you have **repeated measurements** or **many small clusters**, or when you want to separate variation *within* and *between* clusters. In R: [`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), and [`coxme`](https://CRAN.R-project.org/package=coxme) for a Cox model. A thorough treatment is beyond this page.
+Choose a **mixed model** when the clustering structure is itself of interest,
+when you have **repeated measurements** or **many small clusters**, or when you
+want to separate variation *within* and *between* clusters. In R:
+[`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), and
+[`coxme`](https://CRAN.R-project.org/package=coxme) for a Cox model. A thorough
+treatment is beyond this page.
 :::
 
 ::: {.callout-note}
-Remember: anything leaving DST must go through **output control** - no small cells, only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd).
+Remember: anything leaving DST must go through **output control** - no small
+cells, only aggregated results. See [Phase 14 - Export and
+repatriation](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Further information {#laes-mere}
 
 Further depth in *The Epidemiologist R Handbook*:
 
-- [Univariate and multivariable regression](https://www.epirhandbook.com/en/new_pages/regression.html)
+- [Univariate and multivariable
+  regression](https://www.epirhandbook.com/en/new_pages/regression.html)
 - [Factors](https://www.epirhandbook.com/en/new_pages/factors.html)
 
 On interaction / effect modification:
 
-- Knol & VanderWeele, "[Recommendations for presenting analyses of effect modification and interaction](https://doi.org/10.1093/ije/dyr218)", *Int J Epidemiol* 2012 - how to report it correctly (both scales).
-- [The `interactionR` package](https://CRAN.R-project.org/package=interactionR) - computes additive interaction (RERI, AP) with confidence intervals, ready for a table.
+- Knol & VanderWeele, "[Recommendations for presenting analyses of effect
+  modification and interaction](https://doi.org/10.1093/ije/dyr218)", *Int J
+  Epidemiol* 2012 - how to report it correctly (both scales).
+- [The `interactionR` package](https://CRAN.R-project.org/package=interactionR) -
+  computes additive interaction (RERI, AP) with confidence intervals, ready for
+  a table.
 
 On non-linear relationships (splines):
 
-- Harrell, *Regression Modeling Strategies*, and [the `rms` package](https://CRAN.R-project.org/package=rms) - the standard reference on flexible modelling with splines.
+- Harrell, *Regression Modeling Strategies*, and [the `rms`
+  package](https://CRAN.R-project.org/package=rms) - the standard reference on
+  flexible modelling with splines.
 
-On mediation (when you want to split an effect into a **direct** part and an **indirect** part that goes through an intermediate variable):
+On mediation (when you want to split an effect into a **direct** part and an
+**indirect** part that goes through an intermediate variable):
 
-- [`CMAverse`](https://bs1125.github.io/CMAverse/) - causal mediation analysis in R.
+- [`CMAverse`](https://bs1125.github.io/CMAverse/) - causal mediation analysis
+  in R.
 :::

@@ -1,49 +1,101 @@
 ---
 title: "![](images/icons/icon_09.png){.title-icon} Extract from LPR"
-subtitle: "Practical recipes - the two approaches, helper functions and integration with the cohort"
+subtitle: >-
+  Practical recipes - the two approaches, helper functions and integration with
+  the cohort
 date: last-modified
 ---
 
-This page shows how to extract diagnoses from LPR with code. It builds on the structure from [Understand LPR](09a_forstaa_lpr.qmd): the periods (LPR2/LPR3), the D-prefix, the diagnosis types (A/B/G) and the filter for retracted diagnoses. Read that page first if you haven't already.
+This page shows how to extract diagnoses from LPR with code. It builds on the
+structure from [Understand LPR](09a_forstaa_lpr.qmd): the periods (LPR2/LPR3),
+the D-prefix, the diagnosis types (A/B/G) and the filter for retracted
+diagnoses. Read that page first if you haven't already.
 
-You use the same extraction pattern as in [Phase 5](05_udtraek-trin-for-trin.qmd) and [Phase 6](06_foerste-udtraek.qmd) - just applied to LPR's two generations. It is the most important and probably the most complex part of the guide.
+You use the same extraction pattern as in [Phase
+5](05_udtraek-trin-for-trin.qmd) and [Phase 6](06_foerste-udtraek.qmd) - just
+applied to LPR's two generations. It is the most important and probably the most
+complex part of the guide.
 
 ::: {.callout-note}
-**Circular dependency with Phase 10 - deliberate.** To extract diagnoses (this page) we assume you already have a cohort; but you *build* the cohort in [Phase 10](10_byg-studiepopulation.qmd) using exactly the extraction pattern you learn here. Read the phases in order, and come back to the code when your cohort is ready. The code uses `inner_join()` and `bind_rows()`; if these are new, they are explained in detail in [Phase 12](12_data-manipulation.qmd).
+**Circular dependency with Phase 10 - deliberate.** To extract diagnoses (this
+page) we assume you already have a cohort; but you *build* the cohort in [Phase
+10](10_byg-studiepopulation.qmd) using exactly the extraction pattern you learn
+here. Read the phases in order, and come back to the code when your cohort is
+ready. The code uses `inner_join()` and `bind_rows()`; if these are new, they
+are explained in detail in [Phase 12](12_data-manipulation.qmd).
 :::
 
 ::: {.callout-warning #lpr-a-format}
 **LPR3 files and column names - check before you load.**
 
-- **Use the LPR_A files consistently.** DST has switched LPR3 from the old **LPR_F** format (`kontakter`, `diagnoser`, `forloeb`) to the new **LPR_A** format (`lpr_a_kontakt`, `lpr_a_diagnose`). Both versions may sit in your folder and cover the same years - loading both (or mixing old and new) gives you **duplicated rows**. Use `lpr_a_*` as in the examples here, and leave the LPR_F files alone. Some projects also have older data *inside* `lpr_a_kontakt` that is already in LPR2; filter it out with `lprindberetningssystem == "LPR3"`. This is project-specific - on **DARTER** it is handled in [pitfall 5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem); otherwise check with your data manager.
-- **Verify column names.** The switch to LPR_A changed a number of variable names (often opaque Danish abbreviations). The examples use the names the registers typically have, but always check before relying on a column name. On a lazy `open_dataset()` object use `arrow::schema(your_data)` - it lists the column names **and their types** without reading data into RAM; `colnames(your_data)` also works (and is what you use for the DuckDB-backed objects from `read_register()`/`read_register()`). Look names up in [Overview of registers](register_reference.qmd).
-- **Mind the 2019-2020 diagnosis spike.** The LPR3 contact model registers far more outpatient diagnoses than LPR2 did, producing a spike in diagnosis counts around 2019-2020 that matters for any count- or trend-based analysis. See [the diagnosis spike](09a_forstaa_lpr.qmd#lpr3-spike).
+- **Use the LPR_A files consistently.** DST has switched LPR3 from the old
+  **LPR_F** format (`kontakter`, `diagnoser`, `forloeb`) to the new **LPR_A**
+  format (`lpr_a_kontakt`, `lpr_a_diagnose`). Both versions may sit in your
+  folder and cover the same years - loading both (or mixing old and new) gives
+  you **duplicated rows**. Use `lpr_a_*` as in the examples here, and leave the
+  LPR_F files alone. Some projects also have older data *inside* `lpr_a_kontakt`
+  that is already in LPR2; filter it out with
+  `lprindberetningssystem == "LPR3"`. This is project-specific - on **DARTER**
+  it is handled in [pitfall
+  5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem); otherwise
+  check with your data manager.
+- **Verify column names.** The switch to LPR_A changed a number of variable
+  names (often opaque Danish abbreviations). The examples use the names the
+  registers typically have, but always check before relying on a column name. On
+  a lazy `open_dataset()` object use `arrow::schema(your_data)` - it lists the
+  column names **and their types** without reading data into RAM;
+  `colnames(your_data)` also works (and is what you use for the DuckDB-backed
+  objects from `read_register()`/`read_register()`). Look names up in [Overview
+  of registers](register_reference.qmd).
+- **Mind the 2019-2020 diagnosis spike.** The LPR3 contact model registers far
+  more outpatient diagnoses than LPR2 did, producing a spike in diagnosis counts
+  around 2019-2020 that matters for any count- or trend-based analysis. See [the
+  diagnosis spike](09a_forstaa_lpr.qmd#lpr3-spike).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Fetch diagnoses from LPR - choose your approach
 
 Choose **one** of two approaches depending on your study:
 
-| | Approach 1 - direct extraction | Approach 2 - `alle_dx` |
-|---|---|---|
-| **Best when** | You have **fewer outcomes** | You have **multiple outcomes** from LPR |
-| **Workflow** | Fetch specific codes → Exclude → done | Fetch all → Exclude → filter per outcome |
-| **Advantage** | Simpler and faster for single-outcome studies | LPR queried only once; reused for all outcomes |
+  |               | Approach 1 - direct extraction                | Approach 2 - `alle_dx`                         |
+  | ------------- | --------------------------------------------- | ---------------------------------------------- |
+  | **Best when** | You have **fewer outcomes**                   | You have **multiple outcomes** from LPR        |
+  | **Workflow**  | Fetch specific codes → Exclude → done         | Fetch all → Exclude → filter per outcome       |
+  | **Advantage** | Simpler and faster for single-outcome studies | LPR queried only once; reused for all outcomes |
 
-**Approach 1** is best for a smaller number of outcomes. Filter on specific ICD codes directly in the `filter()` step *before* `collect()`. DuckDB/Arrow pushes the filter down to the storage layer - only matching rows are loaded into RAM.
+**Approach 1** is best for a smaller number of outcomes. Filter on specific ICD
+codes directly in the `filter()` step *before* `collect()`. DuckDB/Arrow pushes
+the filter down to the storage layer - only matching rows are loaded into RAM.
 
-**Approach 2** is best when your study has multiple outcomes. You query LPR once and build `alle_dx`: a shared table with all A and B diagnoses. For each new outcome, filter `alle_dx` on the relevant codes - the only line you change is the code list.
+**Approach 2** is best when your study has multiple outcomes. You query LPR once
+and build `alle_dx`: a shared table with all A and B diagnoses. For each new
+outcome, filter `alle_dx` on the relevant codes - the only line you change is
+the code list.
 
 ::: {.callout-note}
-The examples require parquet files and a completed study population. `kohort` is the data.frame with `pnr` and `index_date` per person - see [Phase 10](10_byg-studiepopulation.qmd).
+The examples require parquet files and a completed study population. `kohort` is
+the data.frame with `pnr` and `index_date` per person - see [Phase
+10](10_byg-studiepopulation.qmd).
 
-**Adapt the path** in `open_dataset(...)` to your project's data folder (the examples' `E:/workdata/[projectnumber]/...` is project-specific). **Note:** LPR is one of the largest registers, so the data **must** be in parquet. That lets Arrow/DuckDB filter before loading and fetch only the rows you ask for; reading LPR directly from e.g. SAS pulls the whole register into RAM. Convert SAS to parquet first: [Phase 4 - SAS to Parquet](04_filformater.qmd#convert-sas-to-parquet).
+**Adapt the path** in `open_dataset(...)` to your project's data folder (the
+examples' `E:/workdata/[projectnumber]/...` is project-specific). **Note:** LPR
+is one of the largest registers, so the data **must** be in parquet. That lets
+Arrow/DuckDB filter before loading and fetch only the rows you ask for; reading
+LPR directly from e.g. SAS pulls the whole register into RAM. Convert SAS to
+parquet first: [Phase 4 - SAS to
+Parquet](04_filformater.qmd#convert-sas-to-parquet).
 :::
 
 ::: {.callout-tip}
-**Why `semi_join(tibble(pnr = ...))` and not `filter(pnr %in% ...)`?** Both keep only the cohort's rows, but a `semi_join` against a small `tibble` of pnr's pushes down into Arrow/DuckDB more efficiently and reliably. A large `%in%` filter with an R vector can get slow or be rejected outright (especially with an older `duckplyr`). It also frees you from `!!`: `semi_join` takes an ordinary local table as its argument. You still need `!!` when you pass a local R vector into a `filter()`, e.g. a code list (`substr(c_diag, 2, 4) %in% !!CODES`).
+**Why `semi_join(tibble(pnr = ...))` and not `filter(pnr %in% ...)`?** Both keep
+only the cohort's rows, but a `semi_join` against a small `tibble` of pnr's
+pushes down into Arrow/DuckDB more efficiently and reliably. A large `%in%`
+filter with an R vector can get slow or be rejected outright (especially with an
+older `duckplyr`). It also frees you from `!!`: `semi_join` takes an ordinary
+local table as its argument. You still need `!!` when you pass a local R vector
+into a `filter()`, e.g. a code list (`substr(c_diag, 2, 4) %in% !!CODES`).
 :::
 
 <details>
@@ -267,7 +319,7 @@ Exclusion of prevalent cases - persons who already had the diagnosis before inde
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 <details>
 <summary>Try it yourself - runnable example with synthetic data (Approach 1)</summary>
@@ -381,19 +433,29 @@ saveRDS(alle_cvd, "sti/til/extract_cvd.rds")                # save - change path
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Wrap the pattern in a reusable function (for multiple outcomes)
 
-If you extract diagnoses for several outcomes, it pays off to encapsulate the Approach 2 pattern in one reusable function rather than copying ~40 lines for each new outcome. Define it at the top of your script or in a separate `functions.R` file. The function keeps the diagnosis-type column (`c_diagtype`) in its output, so you can later restrict the case definition for a sensitivity analysis (see [Diagnosis types](09a_forstaa_lpr.qmd#diagtype)) without re-querying LPR.
+If you extract diagnoses for several outcomes, it pays off to encapsulate the
+Approach 2 pattern in one reusable function rather than copying \~40 lines for
+each new outcome. Define it at the top of your script or in a separate
+`functions.R` file. The function keeps the diagnosis-type column (`c_diagtype`)
+in its output, so you can later restrict the case definition for a sensitivity
+analysis (see [Diagnosis types](09a_forstaa_lpr.qmd#diagtype)) without
+re-querying LPR.
 
-**Advantages:**
-- One place to fix if something changes (e.g. a new register or a new column)
-- The code block for each outcome is reduced from ~40 lines to one function call
-- Errors are introduced in one place instead of in each copy
+**Advantages:** - One place to fix if something changes (e.g. a new register or
+a new column) - The code block for each outcome is reduced from \~40 lines to
+one function call - Errors are introduced in one place instead of in each copy
 
 ::: {.callout-tip}
-**Using fastreg, or working on DARTER?** With **fastreg**, replace `open_dataset("E:/workdata/.../<register>/")` with `read_register("<register>")` (by name). On **DARTER** you use the same `read_register("<register>")` (fastreg). See [DARTER - overview and pipeline](darter/00_index.qmd) for the fully adapted variant - it is kept up to date with the current, confirmed register names (as of June 2026).
+**Using fastreg, or working on DARTER?** With **fastreg**, replace
+`open_dataset("E:/workdata/.../<register>/")` with `read_register("<register>")`
+(by name). On **DARTER** you use the same `read_register("<register>")`
+(fastreg). See [DARTER - overview and pipeline](darter/00_index.qmd) for the
+fully adapted variant - it is kept up to date with the current, confirmed
+register names (as of June 2026).
 :::
 
 <details>
@@ -497,57 +559,77 @@ saveRDS(result, "sti/til/extract_dementia.rds")
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Classify patient type: inpatient, outpatient or emergency {#patienttype}
 
-Many studies need to tell **inpatient** contacts apart from **outpatient** visits and **emergency-room** visits (e.g. only admissions as an outcome, or acute contacts as a marker). There is no single shared field across LPR2 and LPR3 - you derive the type.
+Many studies need to tell **inpatient** contacts apart from **outpatient**
+visits and **emergency-room** visits (e.g. only admissions as an outcome, or
+acute contacts as a marker). There is no single shared field across LPR2 and
+LPR3 - you derive the type.
 
 ::: {.callout-warning}
-**Column names and codes must be verified against your own extract.** The logic itself is durable (the codes `ALCA00` and `ATA1` are confirmed LPR3 values as of 2025), but the exact column names in LPR_A may differ from the example. Check with `arrow::schema()`/`colnames()` and look them up in [Overview of registers](register_reference.qmd). The pattern is adapted from [the Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview).
+**Column names and codes must be verified against your own extract.** The logic
+itself is durable (the codes `ALCA00` and `ATA1` are confirmed LPR3 values as of
+2025), but the exact column names in LPR_A may differ from the example. Check
+with `arrow::schema()`/`colnames()` and look them up in [Overview of
+registers](register_reference.qmd). The pattern is adapted from [the
+Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview).
 :::
 
-**LPR2 (up to March 2019).** Patient type lives in `c_pattype`, but the emergency-room coding changed around 2014:
+**LPR2 (up to March 2019).** Patient type lives in `c_pattype`, but the
+emergency-room coding changed around 2014:
 
 ```r
-lpr2_type <- lpr_adm %>%                        # lpr_adm from the extract above
-  mutate(patienttype = case_when(
-    c_pattype %in% c("0", "1", "4", "5") ~ "inpatient",    # full-day/part-day/day/night
-    c_pattype == "3"                     ~ "emergency",    # explicit ER (mostly pre-2014)
-    c_pattype == "2" & c_indm == "1"     ~ "emergency",    # from ~2014: acute admission mode = ER
-    c_pattype == "2"                     ~ "outpatient",
-    TRUE                                 ~ NA_character_
-  ))
+lpr2_type <- lpr_adm %>% # lpr_adm from the extract above
+  mutate(
+    patienttype = case_when(
+      c_pattype %in% c("0", "1", "4", "5") ~ "inpatient", # full-day/part-day/day/night
+      c_pattype == "3" ~ "emergency", # explicit ER (mostly pre-2014)
+      c_pattype == "2" & c_indm == "1" ~ "emergency", # from ~2014: acute admission mode = ER
+      c_pattype == "2" ~ "outpatient",
+      TRUE ~ NA_character_
+    )
+  )
 ```
 
-**LPR3 (March 2019 and onwards).** There is no direct `c_pattype`. The `kont_type` code `ALCA00` means **physical attendance** (not admission), and the `prioritet` code `ATA1` means **acute**. A common research approach derives patient type from the contact's **duration** plus an ER/acute marker:
+**LPR3 (March 2019 and onwards).** There is no direct `c_pattype`. The
+`kont_type` code `ALCA00` means **physical attendance** (not admission), and the
+`prioritet` code `ATA1` means **acute**. A common research approach derives
+patient type from the contact's **duration** plus an ER/acute marker:
 
 ```r
-lpr3_type <- lpr3_k %>%                          # lpr3_k from the extract above
-  filter(kont_type == "ALCA00") %>%              # keep physical attendances; drop phone/video
+lpr3_type <- lpr3_k %>% # lpr3_k from the extract above
+  filter(kont_type == "ALCA00") %>% # keep physical attendances; drop phone/video
   mutate(
     duration_hours = as.numeric(
-      difftime(kont_sluttidspunkt, kont_starttidspunkt, units = "hours")  # verify the end-time column name
+      difftime(kont_sluttidspunkt, kont_starttidspunkt, units = "hours") # verify the end-time column name
     ),
     patienttype = case_when(
-      duration_hours >= 8                                  ~ "inpatient",    # >= 8 hours ~ admission
-      enhedstype_ans == "skadestue" & prioritet == "ATA1"  ~ "emergency",    # acute ER
-      TRUE                                                 ~ "outpatient"
+      duration_hours >= 8 ~ "inpatient", # >= 8 hours ~ admission
+      enhedstype_ans == "skadestue" & prioritet == "ATA1" ~ "emergency", # acute ER
+      TRUE ~ "outpatient"
     )
   )
 ```
 
 ::: {.callout-note}
-**The 8-hour cut-off is a heuristic, not an official definition** - LPR3 has no "inpatient" field. Pick and document your own threshold, and clarify with your data manager. The column names for start/end time and unit type vary between deliveries; verify them before use.
+**The 8-hour cut-off is a heuristic, not an official definition** - LPR3 has no
+"inpatient" field. Pick and document your own threshold, and clarify with your
+data manager. The column names for start/end time and unit type vary between
+deliveries; verify them before use.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Remove unwanted diagnoses {#rens-diagnoser}
 
-A few codes are **administrative artefacts** rather than the patient's own disease, and should typically be removed from both outcomes and comorbidity:
+A few codes are **administrative artefacts** rather than the patient's own
+disease, and should typically be removed from both outcomes and comorbidity:
 
-- **"Healthy companion"** (someone admitted as a companion to another patient, e.g. a parent): ICD-10 `DZ763`. Related contact/observation codes with no disease: `DZ032`, `DZ038`, `DZ039`.
+- **"Healthy companion"** (someone admitted as a companion to another patient,
+  e.g. a parent): ICD-10 `DZ763`. Related contact/observation codes with no
+  disease: `DZ032`, `DZ038`, `DZ039`.
 - **"Diagnosis not found"/unspecified** from the ICD-8 era: `Y719`.
 
 ```r
@@ -559,20 +641,27 @@ alle_dx <- alle_dx %>%
 ```
 
 ::: {.callout-note}
-What to remove depends on project and question - `DZ03*` (observation for suspected disease) is for instance relevant in some studies and should be kept there. The pattern is adapted from [the Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview); verify against your own data.
+What to remove depends on project and question - `DZ03*` (observation for
+suspected disease) is for instance relevant in some studies and should be kept
+there. The pattern is adapted from [the Plana-Ripoll group's code on
+OSF](https://osf.io/zhfyp/overview); verify against your own data.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Next steps
 
-You have now extracted diagnoses from two LPR generations. Next steps are to shape and combine your extracts:
+You have now extracted diagnoses from two LPR generations. Next steps are to
+shape and combine your extracts:
 
 → [Phase 12 - Assemble and prepare the dataset](12_data-manipulation.qmd)
 
 ## See also
 
-- [Understand LPR](09a_forstaa_lpr.qmd): structure, periods, D-prefix and diagnosis types
-- [Phase 6 - First extraction](06_foerste-udtraek.qmd): step-by-step introduction to open_dataset, collect and saveRDS
-- [Overview of registers](register_reference.qmd): confirmed column names for all LPR registers
+- [Understand LPR](09a_forstaa_lpr.qmd): structure, periods, D-prefix and
+  diagnosis types
+- [Phase 6 - First extraction](06_foerste-udtraek.qmd): step-by-step
+  introduction to open_dataset, collect and saveRDS
+- [Overview of registers](register_reference.qmd): confirmed column names for
+  all LPR registers
 - [DST pitfalls](dst_faldgruber.qmd): known issues with LPR on DST

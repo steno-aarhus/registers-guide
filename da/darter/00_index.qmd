@@ -4,62 +4,76 @@ subtitle: "Projektspecifik vejledning til BS & Demens-kohortestudiet"
 date: last-modified
 ---
 
-**DARTER** - *Diabetes And inteRgenerational Transmission of hEalth determinants over the life couRse* (projekt 708421).
+**DARTER** - *Diabetes And inteRgenerational Transmission of hEalth determinants
+over the life couRse* (projekt 708421).
 
-Denne sektion er **kun** for dem der arbejder på DARTER-projektet.
-Indholdet her bygger ovenpå den generelle DST-vejledning og tilføjer det projekt-specifikke.
+Denne sektion er **kun** for dem der arbejder på DARTER-projektet. Indholdet her
+bygger ovenpå den generelle DST-vejledning og tilføjer det projekt-specifikke.
 
 ::: {.callout-tip}
-**Søgbar variabel- og registeroversigt for DARTER**
-Alle variable og registre der er ansøgt i projektet er samlet i en søgbar tabel:
-[steno-aarhus.github.io/darter-project →](https://steno-aarhus.github.io/darter-project/)
+**Søgbar variabel- og registeroversigt for DARTER** Alle variable og registre
+der er ansøgt i projektet er samlet i en søgbar tabel:
+[steno-aarhus.github.io/darter-project
+→](https://steno-aarhus.github.io/darter-project/)
 :::
 
-Ny på projektet? Start med den generelle vejledning og vend tilbage hertil:
-→ [Fase 1 - Planlæg dit studie](../01_studieforberedelse.qmd)
-→ [Fase 2 - R: det allermest nødvendige](../02_r-intro.qmd)
-→ [Fase 3 - Log ind på DST](../03_log-ind-dst.qmd)
+Ny på projektet? Start med den generelle vejledning og vend tilbage hertil: →
+[Fase 1 - Planlæg dit studie](../01_studieforberedelse.qmd) → [Fase 2 - R: det
+allermest nødvendige](../02_r-intro.qmd) → [Fase 3 - Log ind på
+DST](../03_log-ind-dst.qmd)
 
 ### I denne sektion
 
-| Side | Indhold |
-|---|---|
-| Denne side | Setup (`fastreg` + `duckplyr`) og en genanvendelig LPR-udtræksfunktion |
-| [Registersti og datastores](01_registersti-datastores.qmd) | Bekræftede stier og adgangsmetoder til alle registre på 708421 |
-| [DARTER-specifikke faldgruber](02_darter-faldgruber.qmd) | Quirks der er specifikke for dette projekt |
+  | Side                                                       | Indhold                                                                |
+  | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+  | Denne side                                                 | Setup (`fastreg` + `duckplyr`) og en genanvendelig LPR-udtræksfunktion |
+  | [Registersti og datastores](01_registersti-datastores.qmd) | Bekræftede stier og adgangsmetoder til alle registre på 708421         |
+  | [DARTER-specifikke faldgruber](02_darter-faldgruber.qmd)   | Quirks der er specifikke for dette projekt                             |
 
----
+--------------------------------------------------------------------------------
 
 ## Initielt setup for DARTER
 
-Registerdata på DARTER indlæses med **`fastreg::read_register("navn")`** - præcis som i den generelle vejledning. Du skal blot pege fastreg på DARTERs parquet-mappe én gang per script; se [Indlæsningsskabeloner](01_registersti-datastores.qmd#load-templates).
+Registerdata på DARTER indlæses med **`fastreg::read_register("navn")`** -
+præcis som i den generelle vejledning. Du skal blot pege fastreg på DARTERs
+parquet-mappe én gang per script; se
+[Indlæsningsskabeloner](01_registersti-datastores.qmd#load-templates).
 
 ::: {.callout-important}
 **Installér nyeste `duckplyr` i starten af hver session**
 
-DST har `duckplyr` **forudinstalleret, men i en gammel version**, der mangler funktionalitet - flere af mønstrene i denne vejledning virker ikke med den. Hent derfor den nyeste version fra CRAN, og **gentag efter hvert logout / server-reset** (resettet sætter pakken tilbage til den gamle, forudinstallerede version). `duckplyr` leverer DuckDB-motoren bag `compute()` (se [Store registre](#store-registre) nedenfor).
+DST har `duckplyr` **forudinstalleret, men i en gammel version**, der mangler
+funktionalitet - flere af mønstrene i denne vejledning virker ikke med den. Hent
+derfor den nyeste version fra CRAN, og **gentag efter hvert logout /
+server-reset** (resettet sætter pakken tilbage til den gamle, forudinstallerede
+version). `duckplyr` leverer DuckDB-motoren bag `compute()` (se [Store
+registre](#store-registre) nedenfor).
 
 ```r
-install.packages("duckplyr")   # hent nyeste CRAN-version - kør inden library()
-packageVersion("duckplyr")     # tjek versionen i din session; >= 1.1 er fin
+install.packages("duckplyr") # hent nyeste CRAN-version - kør inden library()
+packageVersion("duckplyr") # tjek versionen i din session; >= 1.1 er fin
 ```
 :::
 
----
+--------------------------------------------------------------------------------
 
-**Inden du kører et script:** kontroller at `path_output` øverst i hvert script peger på din workspace-mappe (defineret under [Basestier i Registersti og datastores](01_registersti-datastores.qmd#basestier)).
+**Inden du kører et script:** kontroller at `path_output` øverst i hvert script
+peger på din workspace-mappe (defineret under [Basestier i Registersti og
+datastores](01_registersti-datastores.qmd#basestier)).
 
 ### Anbefaling: lav en hjælpefunktion til LPR-udtræk
 
-LPR-udtræk kræver ofte at du kombinerer LPR2 somatisk, LPR2 psykiatrisk og LPR3 - og gør det samme for hvert nyt udfald i projektet.
-Hvis der er flere udfald/kovariate kan det godt betale sig at samle dette i én genanvendelig funktion fremfor at kopiere koden gentagne gange.
+LPR-udtræk kræver ofte at du kombinerer LPR2 somatisk, LPR2 psykiatrisk og LPR3
+- og gør det samme for hvert nyt udfald i projektet. Hvis der er flere
+udfald/kovariate kan det godt betale sig at samle dette i én genanvendelig
+funktion fremfor at kopiere koden gentagne gange.
 
-**Fordele:**
-- Ét sted at rette, hvis noget ændres (fx et nyt register eller en ny kolonne)
-- Kodeblokken til hvert udfald reduceres fra ~40 linjer til ét funktionskald
-- Fejl introduceres ét sted i stedet for i hver kopi
+**Fordele:** - Ét sted at rette, hvis noget ændres (fx et nyt register eller en
+ny kolonne) - Kodeblokken til hvert udfald reduceres fra \~40 linjer til ét
+funktionskald - Fejl introduceres ét sted i stedet for i hver kopi
 
-**Sådan laver du funktionen** - definer den øverst i dit script eller i en separat `functions.R`-fil:
+**Sådan laver du funktionen** - definer den øverst i dit script eller i en
+separat `functions.R`-fil:
 
 <details>
 <summary>Se den fulde <code>get_lpr_diagnoses()</code>-funktion</summary>
@@ -137,10 +151,17 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes, diagtypes = c("A", "B")) {
 </details>
 
 ::: {.callout-note}
-**`semi_join` eller `filter(... %in% ...)`?** Begge udvælger rækker, men bruges til hver sit:
+**`semi_join` eller `filter(... %in% ...)`?** Begge udvælger rækker, men bruges
+til hver sit:
 
-- **`semi_join(tibble(pnr = pnr_vector), by = "pnr")`**: til din **kohorte**. En stor R-vektor af pnr'er skubbes mere pålideligt ned i Arrow/DuckDB som en lille tabel end et `filter(pnr %in% ...)`, der kan blive langsomt eller helt afvist (især med ældre `duckplyr`).
-- **`filter(substr(c_diag, 2, 4) %in% !!icd_codes)`**: til en **kort kodeliste**. Her er `filter` fint - men husk `!!`, der sender den lokale R-vektor ind i forespørgslen (uden `!!` leder DuckDB efter en kolonne med det navn). Baggrunden står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
+- **`semi_join(tibble(pnr = pnr_vector), by = "pnr")`**: til din **kohorte**. En
+  stor R-vektor af pnr'er skubbes mere pålideligt ned i Arrow/DuckDB som en
+  lille tabel end et `filter(pnr %in% ...)`, der kan blive langsomt eller helt
+  afvist (især med ældre `duckplyr`).
+- **`filter(substr(c_diag, 2, 4) %in% !!icd_codes)`**: til en **kort
+  kodeliste**. Her er `filter` fint - men husk `!!`, der sender den lokale
+  R-vektor ind i forespørgslen (uden `!!` leder DuckDB efter en kolonne med det
+  navn). Baggrunden står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
 :::
 
 <details>
@@ -174,30 +195,48 @@ saveRDS(resultat, "datasets/extract_dementia.rds")
 </details>
 
 ::: {.callout-warning}
-**Angiv altid `icd_codes` - hent aldrig alle diagnoser.** Funktionen filtrerer på dine koder **før `collect()`**, så kun de relevante rækker hentes ind i R's RAM. Derfor er `icd_codes` et påkrævet argument.
+**Angiv altid `icd_codes` - hent aldrig alle diagnoser.** Funktionen filtrerer
+på dine koder **før `collect()`**, så kun de relevante rækker hentes ind i R's
+RAM. Derfor er `icd_codes` et påkrævet argument.
 
-Fjern ikke kode-filteret for at "tage det hele": hver A/B/G-diagnose for en hel kohorte på tværs af LPR2 og LPR3 kan blive **millioner af rækker**. Det fylder R's hukommelse, og et så tungt udtræk kan få dig **smidt af DST-serveren**.
+Fjern ikke kode-filteret for at "tage det hele": hver A/B/G-diagnose for en hel
+kohorte på tværs af LPR2 og LPR3 kan blive **millioner af rækker**. Det fylder
+R's hukommelse, og et så tungt udtræk kan få dig **smidt af DST-serveren**.
 :::
 
 ::: {.callout-note}
-Dette er DARTER-varianten (med `read_register()` og de bekræftede registernavne for 708421, pr. juni 2026). Den generelle `open_dataset()`-version og forklaringen bag mønstret står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
+Dette er DARTER-varianten (med `read_register()` og de bekræftede registernavne
+for 708421, pr. juni 2026). Den generelle `open_dataset()`-version og
+forklaringen bag mønstret står i [Udtræk fra LPR](../09b_udtraek_fra_lpr.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Store registre - `compute()` vs `collect()` {#store-registre}
 
-`get_lpr_diagnoses()` afslutter hvert udtræk med `collect()` (henter ind i R). På et meget stort register (fx LMDB eller laboratoriesvar) kan du i stedet pipe til `compute()`, som materialiserer resultatet i DuckDB uden at fylde R's RAM - reducér altid med `semi_join()`/`filter()`/`select()` **før** `compute()`. Selve teknikken og forskellen på `compute()` og `collect()` er forklaret generelt i [Fase 5 - Udtræk trin for trin](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent).
+`get_lpr_diagnoses()` afslutter hvert udtræk med `collect()` (henter ind i R).
+På et meget stort register (fx LMDB eller laboratoriesvar) kan du i stedet pipe
+til `compute()`, som materialiserer resultatet i DuckDB uden at fylde R's RAM -
+reducér altid med `semi_join()`/`filter()`/`select()` **før** `compute()`. Selve
+teknikken og forskellen på `compute()` og `collect()` er forklaret generelt i
+[Fase 5 - Udtræk trin for
+trin](../05_udtraek-trin-for-trin.qmd#filtrer-foer-hent).
 
----
+--------------------------------------------------------------------------------
 
 ## Se også
 
 `get_lpr_diagnoses()` ovenfor pakker mønstret fra den generelle vejledning ind:
 
-- [Fase 8 - Find dine registre](../08_find-dine-registre.qmd): hvilket register indeholder hvad
-- [Fase 9 - Hospitalskontakter (LPR)](../09a_forstaa_lpr.qmd): forklaringen bag to-fase strategien, LPR2/LPR3 og D-præfikset
-- [Fase 10 - Byg din kohorte](../10_byg-studiepopulation.qmd): her laver du `full_cohort.rds`, som funktionen ovenfor læser
-- [Registersti og datastores](01_registersti-datastores.qmd): de bekræftede stier på 708421
+- [Fase 8 - Find dine registre](../08_find-dine-registre.qmd): hvilket register
+  indeholder hvad
+- [Fase 9 - Hospitalskontakter (LPR)](../09a_forstaa_lpr.qmd): forklaringen bag
+  to-fase strategien, LPR2/LPR3 og D-præfikset
+- [Fase 10 - Byg din kohorte](../10_byg-studiepopulation.qmd): her laver du
+  `full_cohort.rds`, som funktionen ovenfor læser
+- [Registersti og datastores](01_registersti-datastores.qmd): de bekræftede
+  stier på 708421
 
-**Videre i pipelinen:** [Fase 7 - Inspicér data](../07_inspicer-data.qmd) · [Fase 12 - Saml & klargør datasættet](../12_data-manipulation.qmd) · [Fase 14 - Eksport og hjemsendelse](../14_eksport-hjemsendelse.qmd)
+**Videre i pipelinen:** [Fase 7 - Inspicér data](../07_inspicer-data.qmd) ·
+[Fase 12 - Saml & klargør datasættet](../12_data-manipulation.qmd) · [Fase 14 -
+Eksport og hjemsendelse](../14_eksport-hjemsendelse.qmd)

@@ -5,10 +5,16 @@ date: last-modified
 ---
 
 ::: {.callout-warning}
-**Under development.** Structural outline - to be expanded. The pattern is the same as in [Extract from LPR](09b_udtraek_fra_lpr.qmd), now filtered to your cohort.
+**Under development.** Structural outline - to be expanded. The pattern is the
+same as in [Extract from LPR](09b_udtraek_fra_lpr.qmd), now filtered to your
+cohort.
 :::
 
-Your **outcome** is typically the date of the first event after index - e.g. a diagnosis (LPR). But to calculate follow-up time you also need the dates on which a person **stops being at risk** for the outcome: **death** (DODSAARS) and **emigration** (VNDS). You extract each date as its own table with `pnr` + date, filtered to the cohort.
+Your **outcome** is typically the date of the first event after index - e.g. a
+diagnosis (LPR). But to calculate follow-up time you also need the dates on
+which a person **stops being at risk** for the outcome: **death** (DODSAARS) and
+**emigration** (VNDS). You extract each date as its own table with `pnr` + date,
+filtered to the cohort.
 
 <details>
 <summary>Why dates other than the outcome itself?</summary>
@@ -23,46 +29,84 @@ If a competing event (e.g. death) **precludes** your outcome rather than just en
 
 ```r
 # unique() removes duplicates, so you get one pnr per person - a clean list of the cohort's people
-cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr)   # your cohort from Phase 10
+cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr) # your cohort from Phase 10
 
 # Example: first dementia diagnosis after index (outcome)
 outcome <- open_dataset("path/to/lpr_diag/") %>%
   rename_with(tolower) %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%   # ONLY your cohort
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>% # ONLY your cohort
   # ... get the contact date from lpr_adm and filter on diagnosis codes - see Phase 9 ...
   collect() %>%
-  group_by(pnr) %>% arrange(event_date) %>% slice(1) %>% ungroup()   # keep only first event per person
+  group_by(pnr) %>%
+  arrange(event_date) %>%
+  slice(1) %>%
+  ungroup() # keep only first event per person
 
 saveRDS(outcome, "sti/til/extract_outcome.rds")
 ```
 
-`group_by(pnr) + arrange() + slice(1)` keeps only the **first** event per person: for an outcome definition you rarely need more than the first. The pattern is explained in [Long ↔ wide format](12a_langt-bredt.qmd).
+`group_by(pnr) + arrange() + slice(1)` keeps only the **first** event per
+person: for an outcome definition you rarely need more than the first. The
+pattern is explained in [Long ↔ wide format](12a_langt-bredt.qmd).
 
 ::: {.callout-note}
-**Two kinds of joins - don't confuse them.** Some joins assemble **one extract** - e.g. LPR's contact and diagnosis registers, joined to get `pnr` + date + diagnosis in one table (see [Extract from LPR](09b_udtraek_fra_lpr.qmd)). That is **not** the same as linking the finished extract onto your cohort; that happens later, in [Link your extracts](12b_joins.qmd), once all your extractions are done.
+**Two kinds of joins - don't confuse them.** Some joins assemble **one extract**
+- e.g. LPR's contact and diagnosis registers, joined to get `pnr` + date +
+diagnosis in one table (see [Extract from LPR](09b_udtraek_fra_lpr.qmd)). That
+is **not** the same as linking the finished extract onto your cohort; that
+happens later, in [Link your extracts](12b_joins.qmd), once all your extractions
+are done.
 :::
 
-- **Censoring:** also extract date of death from DODSAARS (`d_dodsdto`) and emigration from VNDS (`indud_kode == "U"`) - each as its own table, see [Overview of registers](register_reference.qmd).
-- **Save each extraction as its own `.rds` file.** An `.rds` file can hold several columns (it does for covariates, for example) - for outcomes it is typically `pnr` + one date column. In [Phase 12](12_data-manipulation.qmd) you link them all onto the cohort and calculate follow-up time from the outcome, death and emigration dates.
+- **Censoring:** also extract date of death from DODSAARS (`d_dodsdto`) and
+  emigration from VNDS (`indud_kode == "U"`) - each as its own table, see
+  [Overview of registers](register_reference.qmd).
+- **Save each extraction as its own `.rds` file.** An `.rds` file can hold
+  several columns (it does for covariates, for example) - for outcomes it is
+  typically `pnr` + one date column. In [Phase 12](12_data-manipulation.qmd) you
+  link them all onto the cohort and calculate follow-up time from the outcome,
+  death and emigration dates.
 
 ::: {.callout-warning}
-**Your codes are not the truth - mind misclassification.** A register diagnosis is a *proxy* for the real condition, with its own validity (sensitivity, and positive predictive value, PPV). How wrong it is shapes your result:
+**Your codes are not the truth - mind misclassification.** A register diagnosis
+is a *proxy* for the real condition, with its own validity (sensitivity, and
+positive predictive value, PPV). How wrong it is shapes your result:
 
-- **Non-differential misclassification:** errors unrelated to exposure (the same code validity in both groups) usually bias the effect **toward the null** - a real effect looks weaker than it is.
-- **Differential misclassification:** the outcome is captured more completely in one group (e.g. exposed people are in contact with the system more often and so get diagnosed more). This can bias the estimate in **either** direction and is the more dangerous kind.
+- **Non-differential misclassification:** errors unrelated to exposure (the same
+  code validity in both groups) usually bias the effect **toward the null** - a
+  real effect looks weaker than it is.
+- **Differential misclassification:** the outcome is captured more completely in
+  one group (e.g. exposed people are in contact with the system more often and
+  so get diagnosed more). This can bias the estimate in **either** direction and
+  is the more dangerous kind.
 
-Practical guards: use validated code definitions where they exist, look up the PPV of your codes, and run a sensitivity analysis with a stricter or looser definition. For Danish registers see the validity reviews, e.g. [Schmidt et al. 2015, *Clin Epidemiol*](https://doi.org/10.2147/CLEP.S91125) (the National Patient Registry). Background: [Hernán & Robins, *What If*, ch. 9](https://miguelhernan.org/whatifbook) (measurement bias).
+Practical guards: use validated code definitions where they exist, look up the
+PPV of your codes, and run a sensitivity analysis with a stricter or looser
+definition. For Danish registers see the validity reviews, e.g. [Schmidt et al.
+2015, *Clin Epidemiol*](https://doi.org/10.2147/CLEP.S91125) (the National
+Patient Registry). Background: [Hernán & Robins, *What If*, ch.
+9](https://miguelhernan.org/whatifbook) (measurement bias).
 :::
 
 ::: {.callout-tip}
 ## Where does your codelist come from?
 
-*Using* a codelist (regex, `%in%`) is the easy part; *defining which codes* make up your condition is the hard part. Don't reinvent it: use a published, ideally validated list, and **document and share your own** so others can reproduce it.
+*Using* a codelist (regex, `%in%`) is the easy part; *defining which codes* make
+up your condition is the hard part. Don't reinvent it: use a published, ideally
+validated list, and **document and share your own** so others can reproduce it.
 
-- **ICD-10:** e.g. [mltc-codelists](https://github.com/rprigge-uoe/mltc-codelists) (ICD-10 codelists for many chronic conditions, University of Edinburgh) and the accompanying [methodology paper (*Communications Medicine* 2025)](https://www.nature.com/articles/s43856-025-00995-4).
-- **ATC (medication):** define drug groups from the [WHO ATC/DDD index](https://atcddd.fhi.no/atc_ddd_index/) and published drug-class definitions. See [Medication (ATC)](11d_medicin.qmd).
+- **ICD-10:** e.g.
+  [mltc-codelists](https://github.com/rprigge-uoe/mltc-codelists) (ICD-10
+  codelists for many chronic conditions, University of Edinburgh) and the
+  accompanying [methodology paper (*Communications Medicine*
+  2025)](https://www.nature.com/articles/s43856-025-00995-4).
+- **ATC (medication):** define drug groups from the [WHO ATC/DDD
+  index](https://atcddd.fhi.no/atc_ddd_index/) and published drug-class
+  definitions. See [Medication (ATC)](11d_medicin.qmd).
 :::
 
 ## See also
+
 - [Extract from LPR](09b_udtraek_fra_lpr.qmd): the diagnosis pattern in detail
-- [Phase 12 - Assemble and prepare the dataset](12_data-manipulation.qmd): join outcomes to the cohort
+- [Phase 12 - Assemble and prepare the dataset](12_data-manipulation.qmd): join
+  outcomes to the cohort

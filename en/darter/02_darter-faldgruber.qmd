@@ -4,55 +4,64 @@ subtitle: "Quirks and known issues specific to project 708421"
 date: last-modified
 ---
 
-This page supplements the [general DST pitfalls](../dst_faldgruber.qmd) with issues specific to the DARTER project.
+This page supplements the [general DST pitfalls](../dst_faldgruber.qmd) with
+issues specific to the DARTER project.
 
----
+--------------------------------------------------------------------------------
 
 ## 1. Check that parquet files are up to date {#1-check-that-parquet-files-are-up-to-date}
 
-Most registers are as of 2026 updated to **end of 2024** (confirmed by Anders Aasted Isaksen/Marie Kempf Frydendahl, DARTER team).
-**`dodsaars` covers only ~1970–2001** however - deaths after 2001 are not captured by the current code.
+Most registers are as of 2026 updated to **end of 2024** (confirmed by Anders
+Aasted Isaksen/Marie Kempf Frydendahl, DARTER team). **`dodsaars` covers only
+\~1970--2001** however - deaths after 2001 are not captured by the current code.
 
 ```r
 # Check when the parquet folder was last updated:
 file.info("E:/workdata/708421/cleaned-data/parquet-registers/dodsaars/")$mtime
 ```
 
-The same may apply to other registers. Always confirm that coverage matches your study period before running the pipeline.
+The same may apply to other registers. Always confirm that coverage matches your
+study period before running the pipeline.
 
 ::: {.callout-warning}
-**If the parquet file does not cover your study period:**
-You need to extract data from the raw SAS file on DST. Contact your data manager - they can help with raw data access and conversion.
+**If the parquet file does not cover your study period:** You need to extract
+data from the raw SAS file on DST. Contact your data manager - they can help
+with raw data access and conversion.
 :::
 
 ```r
 # Current code - only catches deaths up to parquet file coverage:
-death <- read_register("dodsaars") %>% rename_with(tolower)   # lazy connection
+death <- read_register("dodsaars") %>% rename_with(tolower) # lazy connection
 deaths <- death %>%
-  semi_join(tibble(pnr = pnr_list), by = "pnr") %>%   # only the cohort's pnr's
-  select(pnr, d_dodsdto) %>%         # only death date
-  collect()                           # fetch into R
+  semi_join(tibble(pnr = pnr_list), by = "pnr") %>% # only the cohort's pnr's
+  select(pnr, d_dodsdto) %>% # only death date
+  collect() # fetch into R
 ```
 
-**Consequence of missing coverage:** Comparators and BS patients who die after the parquet file's end date are treated as alive - this affects censoring and matching in `01_build_cohorts.R`.
+**Consequence of missing coverage:** Comparators and BS patients who die after
+the parquet file's end date are treated as alive - this affects censoring and
+matching in `01_build_cohorts.R`.
 
----
+--------------------------------------------------------------------------------
 
 ## 2. Surgery and procedures
 
 Procedure codes are split across two registers by period:
 
-- **`lpr_sksopr`** (parquet-registers) - procedures and surgery 1996–2018, joined to `lpr_adm` via `recnum`
-- **`procedurer_kirurgi`** (parquet-external) - 2019 and onwards, joined to `lpr_a_kontakt` via `dw_ek_forloeb`
+- **`lpr_sksopr`** (parquet-registers) - procedures and surgery 1996--2018,
+  joined to `lpr_adm` via `recnum`
+- **`procedurer_kirurgi`** (parquet-external) - 2019 and onwards, joined to
+  `lpr_a_kontakt` via `dw_ek_forloeb`
 
 ::: {.callout-warning}
-**`dw_ek_kontakt` is NA for all rows in `procedurer_kirurgi`** (confirmed 2026-06-02).
-Use `dw_ek_forloeb` - not `dw_ek_kontakt` - to fetch `pnr` from `lpr_a_kontakt`.
+**`dw_ek_kontakt` is NA for all rows in `procedurer_kirurgi`** (confirmed
+2026-06-02). Use `dw_ek_forloeb` - not `dw_ek_kontakt` - to fetch `pnr` from
+`lpr_a_kontakt`.
 :::
 
 ```r
 # WRONG - dw_ek_kontakt is NA:
-proc %>% left_join(contacts, by = "dw_ek_kontakt")   # joins nothing
+proc %>% left_join(contacts, by = "dw_ek_kontakt") # joins nothing
 
 # CORRECT - use dw_ek_forloeb:
 proc <- read_register("procedurer_kirurgi") %>%
@@ -65,61 +74,71 @@ proc <- read_register("procedurer_kirurgi") %>%
   )
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## 3. `lpr_a_diagnose` - "a" does not mean A-type diagnoses
 
-The table is called `lpr_a_diagnose` - "a" refers to the analysis model designation (LPR_A series).
-It is **not** a filter on A-type diagnoses. The table contains A, B and G.
-You still need to filter on `diag_kode_type`.
+The table is called `lpr_a_diagnose` - "a" refers to the analysis model
+designation (LPR_A series). It is **not** a filter on A-type diagnoses. The
+table contains A, B and G. You still need to filter on `diag_kode_type`.
 
----
+--------------------------------------------------------------------------------
 
 ## 4. `nmi_count` ≠ `nmi_score`
 
-| Variable | What it is |
-|---|---|
-| `nmi_score` | **Weighted** score - Nordic Multimorbidity Index (50 predictors with individual weights) |
-| `nmi_count` | Simple **count** of the number of chronic conditions (33 possible) |
+  | Variable    | What it is                                                                               |
+  | ----------- | ---------------------------------------------------------------------------------------- |
+  | `nmi_score` | **Weighted** score - Nordic Multimorbidity Index (50 predictors with individual weights) |
+  | `nmi_count` | Simple **count** of the number of chronic conditions (33 possible)                       |
 
-If you use `nmi_count` in your Cox model instead of `nmi_score`, you are adjusting for something different than you think.
+If you use `nmi_count` in your Cox model instead of `nmi_score`, you are
+adjusting for something different than you think.
 
----
+--------------------------------------------------------------------------------
 
 ## 5. LPR3 - filter on `lprindberetningssystem == "LPR3"` {#lpr3-lprindberetningssystem}
 
-Besides the actual LPR3 reports, `lpr_a_kontakt` also contains **older data that is already present in LPR2** (`lpr_adm`), loaded into the new LPR_A table. If you combine LPR2 and LPR3 without filtering, the same contacts are counted twice - you get **duplicated rows**. `lprindberetningssystem == "LPR3"` keeps only the rows from the LPR3 system (confirmed by Anders Aasted Isaksen, DARTER team 2026).
+Besides the actual LPR3 reports, `lpr_a_kontakt` also contains **older data that
+is already present in LPR2** (`lpr_adm`), loaded into the new LPR_A table. If
+you combine LPR2 and LPR3 without filtering, the same contacts are counted twice
+- you get **duplicated rows**. `lprindberetningssystem == "LPR3"` keeps only the
+rows from the LPR3 system (confirmed by Anders Aasted Isaksen, DARTER team
+2026).
 
 ```r
 # CORRECT - filter to LPR_A format only:
 lpr3_k <- read_register("lpr_a_kontakt") %>%
   rename_with(tolower) %>%
-  filter(lprindberetningssystem == "LPR3")   # keep only rows from the LPR3 system - removes overlapping rows
+  filter(lprindberetningssystem == "LPR3") # keep only rows from the LPR3 system - removes overlapping rows
 ```
 
 ::: {.callout-warning}
-`get_lpr_diagnoses()` in `darter/00_index.qmd` is updated with this filter. If you have copies of LPR3 code in your own scripts, you must add it manually.
+`get_lpr_diagnoses()` in `darter/00_index.qmd` is updated with this filter. If
+you have copies of LPR3 code in your own scripts, you must add it manually.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## 6. Laboratory results - use `laboratorieproevesvar_`
 
-The new laboratory data register is called `laboratorieproevesvar_` and contains >2.2 billion rows.
-The old `lab_forsker` / `lab_dm_forsker` still exists but covers the same data - use **only one source** to avoid duplicates.
+The new laboratory data register is called `laboratorieproevesvar_` and contains
+>2.2 billion rows. The old `lab_forsker` / `lab_dm_forsker` still exists but
+covers the same data - use **only one source** to avoid duplicates.
 
 ```r
 lab <- read_register("laboratorieproevesvar_") %>%
   rename_with(tolower) %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # filter BEFORE collect - the register is very large
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # filter BEFORE collect - the register is very large
   select(pnr, npu, samplingdato, samplevalue) %>%
   collect()
 # samplevalue is character - can contain "not detected", "negative" etc.
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## See also
 
-- [General DST pitfalls](../dst_faldgruber.qmd): 10 pitfalls that apply to all projects
-- [Register paths and datastores](01_registersti-datastores.qmd): confirmed paths and access methods
+- [General DST pitfalls](../dst_faldgruber.qmd): 10 pitfalls that apply to all
+  projects
+- [Register paths and datastores](01_registersti-datastores.qmd): confirmed
+  paths and access methods

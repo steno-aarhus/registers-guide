@@ -4,48 +4,61 @@ subtitle: "Open, filter, select, collect"
 date: last-modified
 ---
 
-In Phase 4 you saw that registers are loaded *lazily*: you open a connection, not data.
-This page shows **the working method** that follows from that - the same pattern you will use in every single extraction for the rest of the guide.
+In Phase 4 you saw that registers are loaded *lazily*: you open a connection,
+not data. This page shows **the working method** that follows from that - the
+same pattern you will use in every single extraction for the rest of the guide.
 
 ::: {.callout-important}
-**This is the most important pattern in the entire guide.** Every extraction from DST registers follows this structure. Learn it here once - you will recognise it everywhere from Phase 6 onwards.
+**This is the most important pattern in the entire guide.** Every extraction
+from DST registers follows this structure. Learn it here once - you will
+recognise it everywhere from Phase 6 onwards.
 :::
 
 ::: {.callout-note}
-**Why can't we just load a register like a CSV file?**
-Because the registers are too large. A CSV (or `readRDS`) reads the entire file into memory at once - that works fine with your own small datasets, but BEF and LMDB have millions to hundreds of millions of rows and would crash your session. The lazy connection lets you filter *before* you fetch, so only the rows you actually need ever reach memory.
+**Why can't we just load a register like a CSV file?** Because the registers are
+too large. A CSV (or `readRDS`) reads the entire file into memory at once - that
+works fine with your own small datasets, but BEF and LMDB have millions to
+hundreds of millions of rows and would crash your session. The lazy connection
+lets you filter *before* you fetch, so only the rows you actually need ever
+reach memory.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## The pattern: open connection → filter → select → fetch
 
-Think of a supermarket. You can either buy the whole shop and sort at home - or send a shopping list and only have what is on the list delivered. Lazy loading is the latter: you describe what you want, and only fetch the items at the end with `collect()`.
+Think of a supermarket. You can either buy the whole shop and sort at home - or
+send a shopping list and only have what is on the list delivered. Lazy loading
+is the latter: you describe what you want, and only fetch the items at the end
+with `collect()`.
 
-**Step 1 - open the register** as a lazy connection. Pick the way that matches your project (the rest of the pattern is identical whichever you choose):
+**Step 1 - open the register** as a lazy connection. Pick the way that matches
+your project (the rest of the pattern is identical whichever you choose):
 
 ::: {.panel-tabset}
 ## fastreg (recommended)
 
 ```r
 library(fastreg)
-bef <- read_register("bef") %>% rename_with(tolower)   # by name - fastreg knows the path
+bef <- read_register("bef") %>% rename_with(tolower) # by name - fastreg knows the path
 ```
 
 ## arrow (any parquet)
 
 ```r
 library(arrow)
-bef <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>%
+bef <- open_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/"
+) %>%
   rename_with(tolower)
 ```
-
 :::
 
-**Steps 2-3 - filter, select, then fetch.** `bef` is now a lazy connection (no data has moved). The rest is the same regardless of how you opened it:
+**Steps 2-3 - filter, select, then fetch.** `bef` is now a lazy connection (no
+data has moved). The rest is the same regardless of how you opened it:
 
 ```r
-library(dplyr)   # filter, select, collect
+library(dplyr) # filter, select, collect
 
 # 2. Filter rows and select columns - still no data in R
 bef_filtered <- bef %>%
@@ -56,47 +69,60 @@ bef_filtered <- bef %>%
 bef_data <- bef_filtered %>% collect()
 ```
 
-Steps 1–2 are pure *instructions* - they cost almost no memory.
-`collect()` in step 3 is the only line that actually moves data.
+Steps 1--2 are pure *instructions* - they cost almost no memory. `collect()` in
+step 3 is the only line that actually moves data.
 
 ::: {.callout-note}
-**Why `rename_with(tolower)` as the first step?**
-Raw column names in DST registers have inconsistent capitalisation - `PNR`, `pnr`, `Pnr`. By standardising to lower case immediately, the rest of your code can use `pnr` everywhere without thinking about it. Add it immediately after `open_dataset()` as the first step in your pipe - before filtering or selecting columns.
+**Why `rename_with(tolower)` as the first step?** Raw column names in DST
+registers have inconsistent capitalisation - `PNR`, `pnr`, `Pnr`. By
+standardising to lower case immediately, the rest of your code can use `pnr`
+everywhere without thinking about it. Add it immediately after `open_dataset()`
+as the first step in your pipe - before filtering or selecting columns.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## The most important rule: filter and select columns BEFORE fetching {#filtrer-foer-hent}
 
 ```r
 # CORRECT - filter rows and select columns BEFORE collect
 result <- large_register %>%
-  filter(aar == 2020) %>%          # keep only the rows you need
-  select(pnr, koen, foed_dag) %>%  # keep only the columns you use
-  collect()                        # only now is data moved into R
+  filter(aar == 2020) %>% # keep only the rows you need
+  select(pnr, koen, foed_dag) %>% # keep only the columns you use
+  collect() # only now is data moved into R
 
 # WRONG - fetches all rows and all columns into RAM first, then filters
 result <- large_register %>%
-  collect() %>%                    # everything into RAM - can crash the session
+  collect() %>% # everything into RAM - can crash the session
   filter(aar == 2020)
 ```
 
-BEF has millions of rows; LMDB has hundreds of millions.
-Calling `collect()` before you have narrowed the rows can crash your session - and because everyone shares the server's RAM, it makes the server slow for **everyone else** at the same time. The more you have filtered and selected columns in advance, the faster and more stably it runs.
+BEF has millions of rows; LMDB has hundreds of millions. Calling `collect()`
+before you have narrowed the rows can crash your session - and because everyone
+shares the server's RAM, it makes the server slow for **everyone else** at the
+same time. The more you have filtered and selected columns in advance, the
+faster and more stably it runs.
 
 ::: {.callout-tip}
-**Rule of thumb:** `filter()` limits rows. `select()` limits columns. Use both *before* `collect()`, never after.
+**Rule of thumb:** `filter()` limits rows. `select()` limits columns. Use both
+*before* `collect()`, never after.
 :::
 
 ::: {.callout-note}
-**Later: keeping just your cohort.** Once you have built a study population, you will usually want to keep only *your cohort's* people in a register. That is done with `semi_join` against your cohort's `pnr` - introduced when you extract from LPR ([Phase 9b](09b_udtraek_fra_lpr.qmd)), once the cohort itself is built ([Phase 10](10_byg-studiepopulation.qmd)). You don't need it yet.
+**Later: keeping just your cohort.** Once you have built a study population, you
+will usually want to keep only *your cohort's* people in a register. That is
+done with `semi_join` against your cohort's `pnr` - introduced when you extract
+from LPR ([Phase 9b](09b_udtraek_fra_lpr.qmd)), once the cohort itself is built
+([Phase 10](10_byg-studiepopulation.qmd)). You don't need it yet.
 :::
 
 ::: {.callout-warning}
-**Never write actual CPR numbers (pnr) in your code** - only variable names and vectors. Hardcoding real CPR numbers in a script violates DST's rules for handling microdata.
+**Never write actual CPR numbers (pnr) in your code** - only variable names and
+vectors. Hardcoding real CPR numbers in a script violates DST's rules for
+handling microdata.
 :::
 
----
+--------------------------------------------------------------------------------
 
 <details>
 <summary>In depth: what `!!` means, and when you need it (skip for now if this is new)</summary>
@@ -118,23 +144,24 @@ The other place this comes up is subsetting a register to your cohort's `pnr` - 
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Check: do you have data or just a connection?
 
-Many errors arise because you think you have fetched data - but actually still have an unexecuted query. Ask the object what it is:
+Many errors arise because you think you have fetched data - but actually still
+have an unexecuted query. Ask the object what it is:
 
 ```r
 class(my_object)
 ```
 
-| What `class()` returns | What it means | What to do |
-|---|---|---|
-| `"tbl_df" "data.frame"` | Data is in R | Nothing - you are ready |
-| `"tbl_duckdb_connection"` | Unsent DuckDB query | Add `%>% collect()` |
-| `"Table" "ArrowObject"` | Unsent Arrow query | Add `%>% collect()` |
+  | What `class()` returns    | What it means       | What to do              |
+  | ------------------------- | ------------------- | ----------------------- |
+  | `"tbl_df" "data.frame"`   | Data is in R        | Nothing - you are ready |
+  | `"tbl_duckdb_connection"` | Unsent DuckDB query | Add `%>% collect()`     |
+  | `"Table" "ArrowObject"`   | Unsent Arrow query  | Add `%>% collect()`     |
 
----
+--------------------------------------------------------------------------------
 
 <details>
 <summary>In depth: RAM is shared - clean up after large extractions</summary>
@@ -154,7 +181,7 @@ Always clean up after large extractions before continuing.
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## What happens visually
 
@@ -181,9 +208,11 @@ flowchart TD
     classDef save fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
 ```
 
-The blue steps are **lazy** - they only build up a query. Data moves into R only at `collect()` (orange). That is why `filter()` and `select()` must come *before* `collect()`.
+The blue steps are **lazy** - they only build up a query. Data moves into R only
+at `collect()` (orange). That is why `filter()` and `select()` must come
+*before* `collect()`.
 
----
+--------------------------------------------------------------------------------
 
 <details>
 <summary>Want to know more? What are Parquet, Arrow and DuckDB really?</summary>
@@ -221,10 +250,11 @@ If you encounter an error about *"unsupported function"* in Arrow, switch to Duc
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Next steps
 
-You now know the pattern. In the next phase you use it on real (synthetic) register data from start to finish.
+You now know the pattern. In the next phase you use it on real (synthetic)
+register data from start to finish.
 
 → [Phase 6 - First extraction](06_foerste-udtraek.qmd)

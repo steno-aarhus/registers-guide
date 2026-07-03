@@ -4,48 +4,63 @@ subtitle: "Udtræk udfald og covariater - filtreret til netop din kohorte"
 date: last-modified
 ---
 
-Du har bygget din kohorte ([Fase 10](10_byg-studiepopulation.qmd)) - en tabel med `pnr` og `index_date` per person. Nu **udtrækker** du de variable du skal bruge: udfald og covariater.
+Du har bygget din kohorte ([Fase 10](10_byg-studiepopulation.qmd)) - en tabel
+med `pnr` og `index_date` per person. Nu **udtrækker** du de variable du skal
+bruge: udfald og covariater.
 
 ::: {.callout-note}
-**Sådan er arbejdsgangen:** Du udtrækker de variable du skal bruge fra hvert register - saml fx alt det du skal bruge fra BEF i ét udtræk, alt fra LPR i ét, osv. - og gemmer hvert udtræk som sin egen `.rds`-fil. Til sidst, i [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd), kobler du alle udtrækkene sammen til ét stort, færdigt analysedatasæt.
+**Sådan er arbejdsgangen:** Du udtrækker de variable du skal bruge fra hvert
+register - saml fx alt det du skal bruge fra BEF i ét udtræk, alt fra LPR i ét,
+osv. - og gemmer hvert udtræk som sin egen `.rds`-fil. Til sidst, i [Fase 12 -
+Saml & klargør datasættet](12_data-manipulation.qmd), kobler du alle udtrækkene
+sammen til ét stort, færdigt analysedatasæt.
 :::
 
 ::: {.callout-important}
-**Filtrér altid til din kohorte - før `collect()`.**
-Du skal kun bruge data på de personer du har bygget. Filtrér derfor hvert udtræk til din kohorte, **mens det stadig er dovent** (i Arrow/DuckDB), så du ikke henter hele befolkningen ind i R:
+**Filtrér altid til din kohorte - før `collect()`.** Du skal kun bruge data på
+de personer du har bygget. Filtrér derfor hvert udtræk til din kohorte, **mens
+det stadig er dovent** (i Arrow/DuckDB), så du ikke henter hele befolkningen ind
+i R:
 
 ```r
-kohort      <- readRDS("sti/til/full_cohort.rds")
-kohort_pnrs <- unique(kohort$pnr)          # vektor med ALLE pnr (eksponerede + sammenligningskohorte)
+kohort <- readRDS("sti/til/full_cohort.rds")
+kohort_pnrs <- unique(kohort$pnr) # vektor med ALLE pnr (eksponerede + sammenligningskohorte)
 
 register <- open_dataset("sti/til/register/") %>%
   rename_with(tolower) %>%
-  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # behold kun kohortens rækker - skubbes ned i DuckDB, se Fase 5
-  select(pnr, ...) %>%                       # vælg kun de kolonner du skal bruge
-  collect()                                  # FØRST nu hentes data ind i R
+  semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>% # behold kun kohortens rækker - skubbes ned i DuckDB, se Fase 5
+  select(pnr, ...) %>% # vælg kun de kolonner du skal bruge
+  collect() # FØRST nu hentes data ind i R
 ```
 
-Filtrér og `select()` **før** `collect()` - det er den vigtigste regel for hastighed og hukommelse (se [Fase 5](05_udtraek-trin-for-trin.qmd)).
+Filtrér og `select()` **før** `collect()` - det er den vigtigste regel for
+hastighed og hukommelse (se [Fase 5](05_udtraek-trin-for-trin.qmd)).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Hvilke variable?
 
-| Type | Side | Kilde |
-|---|---|---|
-| **Udfald** (event-dato, censurering) | [Udfald](11a_udfald.qmd) | LPR (diagnoser), DODSAARS (død), VNDS (emigration) |
-| **Socioøkonomi** (uddannelse, indkomst, beskæftigelse) | [Socioøkonomiske variable](11b_socioekonomiske-variable.qmd) | UDDA, FAIK, AKM |
-| **Komorbiditet** (multimorbiditets-score) | [Komorbiditet](11c_komorbiditet.qmd) | LPR + færdig algoritme (NMI) |
-| **Medicin** (ATC-eksponering) | [Medicin (ATC)](11d_medicin.qmd) | LMDB |
-| **Demografi** (alder, køn) | dækket i [Fase 6](06_foerste-udtraek.qmd) | BEF |
+  | Type                                                   | Side                                                         | Kilde                                              |
+  | ------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------- |
+  | **Udfald** (event-dato, censurering)                   | [Udfald](11a_udfald.qmd)                                     | LPR (diagnoser), DODSAARS (død), VNDS (emigration) |
+  | **Socioøkonomi** (uddannelse, indkomst, beskæftigelse) | [Socioøkonomiske variable](11b_socioekonomiske-variable.qmd) | UDDA, FAIK, AKM                                    |
+  | **Komorbiditet** (multimorbiditets-score)              | [Komorbiditet](11c_komorbiditet.qmd)                         | LPR + færdig algoritme (NMI)                       |
+  | **Medicin** (ATC-eksponering)                          | [Medicin (ATC)](11d_medicin.qmd)                             | LMDB                                               |
+  | **Demografi** (alder, køn)                             | dækket i [Fase 6](06_foerste-udtraek.qmd)                    | BEF                                                |
 
-Hver side viser samme mønster: åbn registret → filtrér til kohorten → udvælg/beregn variablen → `collect()` → gem som `.rds`. Når alle variable er trukket ud, samler du dem i [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd).
+Hver side viser samme mønster: åbn registret → filtrér til kohorten →
+udvælg/beregn variablen → `collect()` → gem som `.rds`. Når alle variable er
+trukket ud, samler du dem i [Fase 12 - Saml & klargør
+datasættet](12_data-manipulation.qmd).
 
----
+--------------------------------------------------------------------------------
 
 ## Se også
 
-- [Fase 10 - Byg din studiepopulation](10_byg-studiepopulation.qmd): kohorten du filtrerer til
-- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): join alle udtræk til ét datasæt
-- [Algoritmer & specialpakker](pakker-oversigt.qmd): færdige værktøjer (OSDC, NMI) til at udlede variable
+- [Fase 10 - Byg din studiepopulation](10_byg-studiepopulation.qmd): kohorten du
+  filtrerer til
+- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): join alle
+  udtræk til ét datasæt
+- [Algoritmer & specialpakker](pakker-oversigt.qmd): færdige værktøjer (OSDC,
+  NMI) til at udlede variable

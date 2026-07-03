@@ -1,66 +1,107 @@
 ---
 title: "![](images/icons/icon_11.png){.title-icon} Tidsvarierende variable"
-subtitle: "Variable der ændrer sig over opfølgningen: hvad kan variere, hvornår baseline er nok, og hvor det bliver svært"
+subtitle: >-
+  Variable der ændrer sig over opfølgningen: hvad kan variere, hvornår baseline
+  er nok, og hvor det bliver svært
 date: last-modified
 ---
 
 ::: {.callout-important}
 **Det her er et svært emne, og siden er kun en kort orientering.**
-Tidsvarierende analyse spænder fra en simpel omformning af data (som vi viser her) til hele den kausale maskine bag *time-varying treatments* - til sidstnævnte henvises bl.a. til [What If, Part III](https://miguelhernan.org/whatifbook).
+Tidsvarierende analyse spænder fra en simpel omformning af data (som vi viser
+her) til hele den kausale maskine bag *time-varying treatments* - til
+sidstnævnte henvises bl.a. til [What If, Part
+III](https://miguelhernan.org/whatifbook).
 :::
 
-Næsten alt i den øvrige guide bygger på **én række per person** med variable målt ved index (baseline). Men nogle ting ændrer sig **under opfølgningen**, og så holder den form ikke altid. Denne side hjælper dig med at afgøre, hvornår det er et problem, og hvad du så gør.
+Næsten alt i den øvrige guide bygger på **én række per person** med variable
+målt ved index (baseline). Men nogle ting ændrer sig **under opfølgningen**, og
+så holder den form ikke altid. Denne side hjælper dig med at afgøre, hvornår det
+er et problem, og hvad du så gør.
 
 ::: {.callout-note}
-Kodeeksemplet bruger generiske sti- og variabelnavne. Tilpas til dit projekt. `survival` skal være installeret i dit R-miljø på DST.
+Kodeeksemplet bruger generiske sti- og variabelnavne. Tilpas til dit projekt.
+`survival` skal være installeret i dit R-miljø på DST.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Hvad kan variere?
 
 Tre forskellige ting kan variere over tid, og de kræver vidt forskellige svar:
 
-- **Tidsvarierende kovariat / confounder:** en baggrundsvariabel der ændrer sig (fx BMI, en blodprøve, en medicinstatus, civilstand). Den kan ikke stå som én værdi per person, hvis den ændrer sig undervejs.
-- **Tidsvarierende eksponering / behandling:** selve eksponeringen starter, stopper eller skifter undervejs (en behandling personen går til og fra). Det er her det bliver kausalt svært, se [afsnittet om feedback nedenfor](#feedback).
-- **Censurering er også tidsvarierende:** personer forlader opfølgningen på forskellige tidspunkter (emigration, død, loss to follow-up). Det håndteres allerede i din opfølgningstid og dit time-to-event-setup, se [Time-to-event](13e_time-to-event.qmd).
+- **Tidsvarierende kovariat / confounder:** en baggrundsvariabel der ændrer sig
+  (fx BMI, en blodprøve, en medicinstatus, civilstand). Den kan ikke stå som én
+  værdi per person, hvis den ændrer sig undervejs.
+- **Tidsvarierende eksponering / behandling:** selve eksponeringen starter,
+  stopper eller skifter undervejs (en behandling personen går til og fra). Det
+  er her det bliver kausalt svært, se [afsnittet om feedback
+  nedenfor](#feedback).
+- **Censurering er også tidsvarierende:** personer forlader opfølgningen på
+  forskellige tidspunkter (emigration, død, loss to follow-up). Det håndteres
+  allerede i din opfølgningstid og dit time-to-event-setup, se
+  [Time-to-event](13e_time-to-event.qmd).
 
----
+--------------------------------------------------------------------------------
 
 ## Hvornår er baseline-setup'et nok?
 
-**Ofte.** Hvis din **eksponering er fastlagt ved index** (fx en diagnose eller en operation på en bestemt dato), og du justerer for **confoundere målt ved baseline**, så er det almindelige setup fra [Fase 10-12](12_data-manipulation.qmd) - én række per person, kovariater frosset ved index, ét opfølgningsinterval - det rigtige. Du skal **ikke** lave tidsvarierende analyse, bare fordi data strækker sig over tid. Overvej det først, når en variabel, der *betyder noget for analysen*, faktisk skifter værdi efter index.
+**Ofte.** Hvis din **eksponering er fastlagt ved index** (fx en diagnose eller
+en operation på en bestemt dato), og du justerer for **confoundere målt ved
+baseline**, så er det almindelige setup fra [Fase
+10-12](12_data-manipulation.qmd) - én række per person, kovariater frosset ved
+index, ét opfølgningsinterval - det rigtige. Du skal **ikke** lave
+tidsvarierende analyse, bare fordi data strækker sig over tid. Overvej det
+først, når en variabel, der *betyder noget for analysen*, faktisk skifter værdi
+efter index.
 
 ::: {.callout-tip}
-Tommelfingerregel: spørg om den ekstra kompleksitet ændrer svaret. Skifter en kovariat lidt undervejs, men er ikke en stærk confounder, er baseline-værdien som regel fin. Skifter selve eksponeringen, eller skifter en stærk confounder systematisk med eksponeringen, så læs videre.
+Tommelfingerregel: spørg om den ekstra kompleksitet ændrer svaret. Skifter en
+kovariat lidt undervejs, men er ikke en stærk confounder, er baseline-værdien
+som regel fin. Skifter selve eksponeringen, eller skifter en stærk confounder
+systematisk med eksponeringen, så læs videre.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## En tidsvarierende kovariat
 
-Har du en kovariat, der ændrer sig undervejs (og som **ikke** er fanget i feedback med eksponeringen, se næste afsnit), er løsningen mekanisk: du laver **start/stop-format** (også kaldet counting-process-format). I stedet for én række per person får du **én række per person-*interval***, hvor variablen er konstant inden for intervallet. Det bygger du med `survival::tmerge()` og analyserer med en almindelig Cox-model.
+Har du en kovariat, der ændrer sig undervejs (og som **ikke** er fanget i
+feedback med eksponeringen, se næste afsnit), er løsningen mekanisk: du laver
+**start/stop-format** (også kaldet counting-process-format). I stedet for én
+række per person får du **én række per person-*interval***, hvor variablen er
+konstant inden for intervallet. Det bygger du med `survival::tmerge()` og
+analyserer med en almindelig Cox-model.
 
-En person med to målinger bliver til to rækker, hver med sit `tstart`/`tstop`-interval og den værdi, der gælder i intervallet:
+En person med to målinger bliver til to rækker, hver med sit
+`tstart`/`tstop`-interval og den værdi, der gælder i intervallet:
 
-| pnr | tstart | tstop | maaling | udfald |
-|---|---|---|---|---|
-| 001 | 0 | 180 | 5.2 | 0 |
-| 001 | 180 | 365 | 6.8 | 1 |
+  | pnr | tstart | tstop | maaling | udfald |
+  | --- | ------ | ----- | ------- | ------ |
+  | 001 | 0      | 180   | 5.2     | 0      |
+  | 001 | 180    | 365   | 6.8     | 1      |
 
 ### Byg start/stop-data med tmerge()
 
 ```r
-library(survival)                          # tmerge(), tdc(), event()
+library(survival) # tmerge(), tdc(), event()
 
 # base      = én række per person: pnr, exit_dag (slut på opfølgning), status (1 = udfald)
 # maalinger = mange rækker per person: pnr, dag (tid for målingen), vaerdi
 
-d <- tmerge(base, base, id = pnr,                 # initialisér start/stop-data fra base
-            udfald = event(exit_dag, status))     # definér hændelsen ved exit-tidspunktet
+d <- tmerge(
+  base,
+  base,
+  id = pnr, # initialisér start/stop-data fra base
+  udfald = event(exit_dag, status)
+) # definér hændelsen ved exit-tidspunktet
 
-d <- tmerge(d, maalinger, id = pnr,               # tilføj den tidsvarierende variabel
-            maaling = tdc(dag, vaerdi))           # tdc = time-dependent covariate
+d <- tmerge(
+  d,
+  maalinger,
+  id = pnr, # tilføj den tidsvarierende variabel
+  maaling = tdc(dag, vaerdi)
+) # tdc = time-dependent covariate
 # -> d har nu tstart, tstop, udfald og maaling (én række per interval)
 ```
 
@@ -70,40 +111,67 @@ d <- tmerge(d, maalinger, id = pnr,               # tilføj den tidsvarierende v
 ### Analysér i en Cox-model
 
 ```r
-coxph(Surv(tstart, tstop, udfald) ~ maaling + alder, data = d)  # tidsvarierende Cox-model
+coxph(Surv(tstart, tstop, udfald) ~ maaling + alder, data = d) # tidsvarierende Cox-model
 ```
 
-Selve time-to-event-analysen (Kaplan-Meier, Cox, antagelser) ligger i [Time-to-event](13e_time-to-event.qmd). Den detaljerede opskrift på `tmerge()` og tidsafhængige effekter står i [survival-pakkens vignette (CRAN PDF)](https://cran.r-project.org/web/packages/survival/vignettes/timedep.pdf).
+Selve time-to-event-analysen (Kaplan-Meier, Cox, antagelser) ligger i
+[Time-to-event](13e_time-to-event.qmd). Den detaljerede opskrift på `tmerge()`
+og tidsafhængige effekter står i [survival-pakkens vignette (CRAN
+PDF)](https://cran.r-project.org/web/packages/survival/vignettes/timedep.pdf).
 
----
+--------------------------------------------------------------------------------
 
 ## Treatment-confounder feedback {#feedback}
 
 ::: {.callout-warning}
-**Start/stop-Cox'en ovenfor er ikke altid nok - og kan endda være forkert.**
-Den vigtigste fælde i tidsvarierende analyse er *treatment-confounder feedback*: når en tidsvarierende variabel **både** er en confounder for eksponeringen **og** selv påvirkes af tidligere eksponering.
+**Start/stop-Cox'en ovenfor er ikke altid nok - og kan endda være forkert.** Den
+vigtigste fælde i tidsvarierende analyse er *treatment-confounder feedback*: når
+en tidsvarierende variabel **både** er en confounder for eksponeringen **og**
+selv påvirkes af tidligere eksponering.
 :::
 
-Klassisk eksempel: en behandling (eksponering) påvirker en biomarkør, biomarkøren påvirker, om personen får mere behandling, og biomarkøren påvirker også udfaldet. Variablen er på én gang confounder (der normalt håndteres via justering) og et mellemled/mediator på vejen fra tidligere behandling til udfald (justerer du for den, **blokerer** du en del af den effekt, du vil måle, og introducerer bias).
+Klassisk eksempel: en behandling (eksponering) påvirker en biomarkør,
+biomarkøren påvirker, om personen får mere behandling, og biomarkøren påvirker
+også udfaldet. Variablen er på én gang confounder (der normalt håndteres via
+justering) og et mellemled/mediator på vejen fra tidligere behandling til udfald
+(justerer du for den, **blokerer** du en del af den effekt, du vil måle, og
+introducerer bias).
 
-I den situation kan du **ikke** bare smide variablen ind i en almindelig Cox-model, sådan som vi gjorde ovenfor. At justere og at lade være giver begge et forkert svar. Løsningen er en helt anden familie af metoder, **g-metoder**:
+I den situation kan du **ikke** bare smide variablen ind i en almindelig
+Cox-model, sådan som vi gjorde ovenfor. At justere og at lade være giver begge
+et forkert svar. Løsningen er en helt anden familie af metoder, **g-metoder**:
 
 - **g-formlen** (standardisering trin for trin over tid)
-- **IP-vægtning / marginale strukturelle modeller:** den mest tilgængelige g-metode. Selve vægtningsidéen introducerer guiden for en fast eksponering i [IP-vægtning (IPTW og IPCW)](13g_vaegtning-iptw.qmd); marginale strukturelle modeller udvider den til tidsvarierende eksponering
+- **IP-vægtning / marginale strukturelle modeller:** den mest tilgængelige
+  g-metode. Selve vægtningsidéen introducerer guiden for en fast eksponering i
+  [IP-vægtning (IPTW og IPCW)](13g_vaegtning-iptw.qmd); marginale strukturelle
+  modeller udvider den til tidsvarierende eksponering
 - **g-estimation** af strukturelle modeller
 
-Det ligger **uden for denne guide**. Mistænker du feedback, så stop her, læs op (fx [What If, Part III](https://miguelhernan.org/whatifbook)), og inddrag en biostatistiker, før du analyserer.
+Det ligger **uden for denne guide**. Mistænker du feedback, så stop her, læs op
+(fx [What If, Part III](https://miguelhernan.org/whatifbook)), og inddrag en
+biostatistiker, før du analyserer.
 
----
+--------------------------------------------------------------------------------
 
 ## Se også
 
-- [What If (Hernán & Robins), Part III - Causal inference for time-varying treatments](https://miguelhernan.org/whatifbook) (gratis PDF): standardværket. Kap. 19 (tidsvarierende behandlinger), kap. 20 (treatment-confounder feedback), kap. 21 (g-metoder) og kap. 22 (target trial emulation).
-- [survival-pakkens vignette: Time Dependent Covariates (CRAN PDF)](https://cran.r-project.org/web/packages/survival/vignettes/timedep.pdf): den tekniske opskrift på `tmerge()` og start/stop-data.
-- [IP-vægtning (IPTW og IPCW)](13g_vaegtning-iptw.qmd): guidens introduktion til IP-vægtning (fast eksponering), fundamentet under marginale strukturelle modeller.
+- [What If (Hernán & Robins), Part III - Causal inference for time-varying
+  treatments](https://miguelhernan.org/whatifbook) (gratis PDF): standardværket.
+  Kap. 19 (tidsvarierende behandlinger), kap. 20 (treatment-confounder
+  feedback), kap. 21 (g-metoder) og kap. 22 (target trial emulation).
+- [survival-pakkens vignette: Time Dependent Covariates (CRAN
+  PDF)](https://cran.r-project.org/web/packages/survival/vignettes/timedep.pdf):
+  den tekniske opskrift på `tmerge()` og start/stop-data.
+- [IP-vægtning (IPTW og IPCW)](13g_vaegtning-iptw.qmd): guidens introduktion til
+  IP-vægtning (fast eksponering), fundamentet under marginale strukturelle
+  modeller.
 - [Time-to-event](13e_time-to-event.qmd): Kaplan-Meier, Cox og antagelser.
-- [Kobl udtræk sammen](12b_joins.qmd#opfoelgningstid): opbygning af opfølgningstid i baseline-setup'et.
+- [Kobl udtræk sammen](12b_joins.qmd#opfoelgningstid): opbygning af
+  opfølgningstid i baseline-setup'et.
 
 ::: {.callout-note}
-Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun
+aggregerede resultater. Se [Fase 14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::

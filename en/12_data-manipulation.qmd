@@ -4,84 +4,112 @@ subtitle: "Joins, pivots and preparing your analysis dataset"
 date: last-modified
 ---
 
-You arrive at this phase with separate RDS files: your cohort from [Phase 10](10_byg-studiepopulation.qmd) and the variables you extracted in [Phase 11](11_udtraek-variable.qmd) - outcomes, socioeconomics and comorbidity (plus demographics from [Phase 6](06_foerste-udtraek.qmd) if relevant). You leave with one analysis-ready dataset ready for [Phase 13 - Analysis](13_analyse.qmd).
+You arrive at this phase with separate RDS files: your cohort from [Phase
+10](10_byg-studiepopulation.qmd) and the variables you extracted in [Phase
+11](11_udtraek-variable.qmd) - outcomes, socioeconomics and comorbidity (plus
+demographics from [Phase 6](06_foerste-udtraek.qmd) if relevant). You leave with
+one analysis-ready dataset ready for [Phase 13 - Analysis](13_analyse.qmd).
 
 ::: {.callout-tip}
-**In short:** Reshape each extract to **one row per person** (with `group_by() + slice()` or `pivot_wider()`), then join them on `pnr` with `left_join()` into one analysis-ready dataset.
+**In short:** Reshape each extract to **one row per person** (with
+`group_by() + slice()` or `pivot_wider()`), then join them on `pnr` with
+`left_join()` into one analysis-ready dataset.
 :::
 
 Before you can analyse, you need to:
 
-1. Shape each extract into **one row per person** (most registers are in long format with many rows per person)
+1. Shape each extract into **one row per person** (most registers are in long
+   format with many rows per person)
 2. Assemble them into **one analysis-ready dataset** with `left_join()`
 
-That is what this phase is about. The technique for step 1 is either `group_by() + slice()` or `pivot_wider()` - the choice depends on what you want out of the register. Step 2 is always `left_join()`.
+That is what this phase is about. The technique for step 1 is either
+`group_by() + slice()` or `pivot_wider()` - the choice depends on what you want
+out of the register. Step 2 is always `left_join()`.
 
 ::: {.callout-note}
-The code examples use generic paths and variable names. Adapt to your project's folder structure and column names.
+The code examples use generic paths and variable names. Adapt to your project's
+folder structure and column names.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## What is an analysis-ready dataset?
 
-An analysis-ready dataset has **one row per person** and **one column per variable** - what we call *wide format*:
+An analysis-ready dataset has **one row per person** and **one column per
+variable** - what we call *wide format*:
 
-| `pnr` | `index_date` | `censor_date` | `followup_years` | `event` | `age` | `sex` | `nmi_score` |
-|---|---|---|---|---|---|---|---|
-| 001 | 2015-03-01 | 2022-07-14 | 7.4 | 0 | 58 | 2 | 12 |
-| 002 | 2016-11-20 | 2019-11-20 | 3.0 | 1 | 63 | 1 | 7 |
+  | `pnr` | `index_date` | `censor_date` | `followup_years` | `event` | `age` | `sex` | `nmi_score` |
+  | ----- | ------------ | ------------- | ---------------- | ------- | ----- | ----- | ----------- |
+  | 001   | 2015-03-01   | 2022-07-14    | 7.4              | 0       | 58    | 2     | 12          |
+  | 002   | 2016-11-20   | 2019-11-20    | 3.0              | 1       | 63    | 1     | 7           |
 
 ::: {.callout-note}
-The example uses a **cohort study** with `exposed`, `event` and `followup_years`. For a **prevalence study** the column structure will look different - typically without follow-up time, but with a cross-sectional date and covariates measured at that point. The techniques in this phase (joins, pivots, `group_by() + slice()`) are the same regardless of study design.
+The example uses a **cohort study** with `exposed`, `event` and
+`followup_years`. For a **prevalence study** the column structure will look
+different - typically without follow-up time, but with a cross-sectional date
+and covariates measured at that point. The techniques in this phase (joins,
+pivots, `group_by() + slice()`) are the same regardless of study design.
 :::
 
-The registers you extract from - LPR, LMDB, BEF - are almost always in *long format* with many rows per person. This phase shows how to reshape and assemble them.
+The registers you extract from - LPR, LMDB, BEF - are almost always in *long
+format* with many rows per person. This phase shows how to reshape and assemble
+them.
 
 ### What have you already saved?
 
-Each extraction from Phases 6, 9 and 11 etc. should be saved as its own RDS file - one register, one topic. Example of what you typically have:
+Each extraction from Phases 6, 9 and 11 etc. should be saved as its own RDS file
+- one register, one topic. Example of what you typically have:
 
-| File | Contents | Key columns |
-|---|---|---|
-| `full_cohort.rds` | Cohort with index date | `pnr`, `index_date`, `exposed` |
-| `extract_dementia.rds` | First dementia diagnosis | `pnr`, `event_date` (NA = none) |
-| `extract_deaths.rds` | Date of death | `pnr`, `death_date` (NA = alive) |
-| `extract_emigration.rds` | First emigration | `pnr`, `emigration_date` (NA = not emigrated) |
-| `extract_bef.rds` | Demographics at index | `pnr`, `age`, `sex` |
-| `extract_nmi.rds` | Comorbidity at baseline | `pnr`, `nmi_score` |
-| `extract_ses.rds` | Socioeconomic variables | `pnr`, `education`, `income`, `occupation` |
+  | File                     | Contents                 | Key columns                                   |
+  | ------------------------ | ------------------------ | --------------------------------------------- |
+  | `full_cohort.rds`        | Cohort with index date   | `pnr`, `index_date`, `exposed`                |
+  | `extract_dementia.rds`   | First dementia diagnosis | `pnr`, `event_date` (NA = none)               |
+  | `extract_deaths.rds`     | Date of death            | `pnr`, `death_date` (NA = alive)              |
+  | `extract_emigration.rds` | First emigration         | `pnr`, `emigration_date` (NA = not emigrated) |
+  | `extract_bef.rds`        | Demographics at index    | `pnr`, `age`, `sex`                           |
+  | `extract_nmi.rds`        | Comorbidity at baseline  | `pnr`, `nmi_score`                            |
+  | `extract_ses.rds`        | Socioeconomic variables  | `pnr`, `education`, `income`, `occupation`    |
 
-The goal of this phase is to assemble them into one dataset with `left_join()` - one new column per file. The cohort is the backbone: each extract is joined on via `pnr` and adds its columns - all cohort members are kept, and people with no match get `NA`.
+The goal of this phase is to assemble them into one dataset with `left_join()` -
+one new column per file. The cohort is the backbone: each extract is joined on
+via `pnr` and adds its columns - all cohort members are kept, and people with no
+match get `NA`.
 
 ::: {.callout-important}
-**Assemble only what you need.**
-It is tempting to keep all columns "just in case". Do not. Always end with `select()` and explicitly choose the columns the analysis requires. A dataset with only the necessary columns is far easier to debug and understand.
+**Assemble only what you need.** It is tempting to keep all columns "just in
+case". Do not. Always end with `select()` and explicitly choose the columns the
+analysis requires. A dataset with only the necessary columns is far easier to
+debug and understand.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Two tools for shaping data
 
-The two central operations in this phase are **pivots** and **joins** - they sound similar but do fundamentally different things:
+The two central operations in this phase are **pivots** and **joins** - they
+sound similar but do fundamentally different things:
 
-| | Pivots | Joins |
-|---|---|---|
-| **What it does** | Reshapes one table - changes the form, not the content | Combines two tables - adds columns from another table |
-| **Input** | One table | Two tables with a shared key (typically `pnr`) |
-| **Output** | Same data, new shape | Wider table with columns from both |
-| **Used for** | Long → wide format (`pivot_wider`) or wide → long (`pivot_longer`) | Assemble cohort + outcomes + covariates into one dataset |
+  |                  | Pivots                                                             | Joins                                                    |
+  | ---------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+  | **What it does** | Reshapes one table - changes the form, not the content             | Combines two tables - adds columns from another table    |
+  | **Input**        | One table                                                          | Two tables with a shared key (typically `pnr`)           |
+  | **Output**       | Same data, new shape                                               | Wider table with columns from both                       |
+  | **Used for**     | Long → wide format (`pivot_wider`) or wide → long (`pivot_longer`) | Assemble cohort + outcomes + covariates into one dataset |
 
-**Rule of thumb:** Use pivot when you want to change the *shape* of one table. Use join when you want to *combine* two tables.
+**Rule of thumb:** Use pivot when you want to change the *shape* of one table.
+Use join when you want to *combine* two tables.
 
----
+--------------------------------------------------------------------------------
 
 ## Derived variables: create new columns
 
-Besides reshaping and joining, you almost always need to **compute new variables** from the ones you have. You do this with `mutate()` (introduced in [Phase 2](02_r-intro.qmd)): it adds a column computed from existing columns.
+Besides reshaping and joining, you almost always need to **compute new
+variables** from the ones you have. You do this with `mutate()` (introduced in
+[Phase 2](02_r-intro.qmd)): it adds a column computed from existing columns.
 
 ```r
-library(dplyr); library(lubridate)
+library(dplyr)
+library(lubridate)
 
 df <- df %>%
   mutate(
@@ -98,38 +126,55 @@ df <- df %>%
     age_group = case_when(
       age_at_index < 50 ~ "<50",
       age_at_index < 65 ~ "50-64",
-      TRUE              ~ "65+"      # everything else (here: 65 and over)
+      TRUE ~ "65+" # everything else (here: 65 and over)
     )
   )
 ```
 
 A few habits:
 
-- **Compute a variable ONCE** and reuse it - so e.g. age at index is the same in the matching and in Table 1.
-- **`if_else()`** for yes/no (two outcomes); **`case_when()`** for several categories. Use the same type in every branch (e.g. `1L`/`0L`, or text in all).
-- **Follow-up time** (`censor_date - index_date`) is usually computed *after* the join, because it uses dates from several extracts - see [Link your extracts](12b_joins.qmd).
+- **Compute a variable ONCE** and reuse it - so e.g. age at index is the same in
+  the matching and in Table 1.
+- **`if_else()`** for yes/no (two outcomes); **`case_when()`** for several
+  categories. Use the same type in every branch (e.g. `1L`/`0L`, or text in
+  all).
+- **Follow-up time** (`censor_date - index_date`) is usually computed *after*
+  the join, because it uses dates from several extracts - see [Link your
+  extracts](12b_joins.qmd).
 
 ::: {.callout-tip}
-`mutate()`, `if_else()` and `case_when()` are explained in the [Function guide](guide_til_funktioner.qmd).
+`mutate()`, `if_else()` and `case_when()` are explained in the [Function
+guide](guide_til_funktioner.qmd).
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## This phase's pages
 
-Two **core pages** take you from separate extracts to one analysis-ready dataset:
+Two **core pages** take you from separate extracts to one analysis-ready
+dataset:
 
-1. **[Long ↔ wide format](12a_langt-bredt.qmd):** get each extract down to **one row per person**. Understand the difference between long and wide format, and use either `group_by() + slice()` (one representative value per person) or `pivot_wider()` (several time points side by side).
-2. **[Link your extracts](12b_joins.qmd):** join the extracts on `pnr` (`left_join()`, `inner_join()`, `semi_join()`, `anti_join()`), stack two versions of the same register vertically (`bind_rows()`), validate the join, and calculate follow-up time and event variable. **This is where the final dataset is assembled.**
+1. **[Long ↔ wide format](12a_langt-bredt.qmd):** get each extract down to **one
+   row per person**. Understand the difference between long and wide format, and
+   use either `group_by() + slice()` (one representative value per person) or
+   `pivot_wider()` (several time points side by side).
+2. **[Link your extracts](12b_joins.qmd):** join the extracts on `pnr`
+   (`left_join()`, `inner_join()`, `semi_join()`, `anti_join()`), stack two
+   versions of the same register vertically (`bind_rows()`), validate the join,
+   and calculate follow-up time and event variable. **This is where the final
+   dataset is assembled.**
 
-The order is deliberate: **reshape first, then join**. You cannot join predictably until each extract has one row per person.
+The order is deliberate: **reshape first, then join**. You cannot join
+predictably until each extract has one row per person.
 
 Two **optional add-on pages** you only take if your project needs them:
 
-- **[Missing data](12c_manglende-data.qmd):** how to understand and handle missing values, including multiple imputation.
-- **[Time-varying variables](12d_tidsvarierende.qmd):** what to do when a variable changes during follow-up (and when you do not need to do anything).
+- **[Missing data](12c_manglende-data.qmd):** how to understand and handle
+  missing values, including multiple imputation.
+- **[Time-varying variables](12d_tidsvarierende.qmd):** what to do when a
+  variable changes during follow-up (and when you do not need to do anything).
 
----
+--------------------------------------------------------------------------------
 
 ## Next steps
 
@@ -139,15 +184,17 @@ Start by getting each extract down to one row per person:
 
 ## See also
 
-- [Functions: overview](guide_til_funktioner.qmd): all functions for transforming data
-- [Extract from LPR](09b_udtraek_fra_lpr.qmd): practical example of long register data and inner_join
-
+- [Functions: overview](guide_til_funktioner.qmd): all functions for
+  transforming data
+- [Extract from LPR](09b_udtraek_fra_lpr.qmd): practical example of long
+  register data and inner_join
 
 ::: {.callout-tip}
 ## Further information
 
 Further depth in *The Epidemiologist R Handbook*:
 
-- [Cleaning data and core functions](https://www.epirhandbook.com/en/new_pages/cleaning.html)
+- [Cleaning data and core
+  functions](https://www.epirhandbook.com/en/new_pages/cleaning.html)
 - [Grouping data](https://www.epirhandbook.com/en/new_pages/grouping.html)
 :::

@@ -8,48 +8,56 @@ date: last-modified
 **Under udvikling.** Flere eksempler (undergrupper, flere statistikker) kommer.
 :::
 
-En **"Table 1"** beskriver din studiepopulation: alder, køn og andre baseline-variable, typisk opdelt efter eksponering. Den er næsten altid den første tabel i en registerartikel. Her bruger vi pakken [`gtsummary`](https://www.danieldsjoberg.com/gtsummary/), der laver en publikationsklar tabel med få linjer.
+En **"Table 1"** beskriver din studiepopulation: alder, køn og andre
+baseline-variable, typisk opdelt efter eksponering. Den er næsten altid den
+første tabel i en registerartikel. Her bruger vi pakken
+[`gtsummary`](https://www.danieldsjoberg.com/gtsummary/), der laver en
+publikationsklar tabel med få linjer.
 
 ::: {.callout-note}
-Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. `gtsummary` (og `huxtable`, hvis du vil eksportere til Excel) skal være installeret i dit R-miljø på DST; er de ikke det, så kontakt din datamanager.
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt.
+`gtsummary` (og `huxtable`, hvis du vil eksportere til Excel) skal være
+installeret i dit R-miljø på DST; er de ikke det, så kontakt din datamanager.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Udgangspunkt
 
-Du starter fra dit **analyseklare datasæt** med én række per person ([Fase 12](12_data-manipulation.qmd)).
+Du starter fra dit **analyseklare datasæt** med én række per person ([Fase
+12](12_data-manipulation.qmd)).
 
 ```r
-library(dplyr)                         # %>% (rør)
-library(gtsummary)                     # tbl_summary() + eksport-funktioner
+library(dplyr) # %>% (rør)
+library(gtsummary) # tbl_summary() + eksport-funktioner
 
-df <- readRDS("sti/til/analyse.rds")   # analyseklart datasæt, én række per person
+df <- readRDS("sti/til/analyse.rds") # analyseklart datasæt, én række per person
 ```
 
 ## Eksempel
 
-`tbl_summary()` opsummerer de variable, du peger på. Med `by =` opdeler du tabellen i kolonner efter en gruppe (fx eksponering).
+`tbl_summary()` opsummerer de variable, du peger på. Med `by =` opdeler du
+tabellen i kolonner efter en gruppe (fx eksponering).
 
 ```r
 tabel1 <- df %>%
   tbl_summary(
-    by = eksponering,                       # én kolonne per gruppe (udelad for samlet tabel)
-    include = c(alder, koen, bmi),          # variable der skal med
+    by = eksponering, # én kolonne per gruppe (udelad for samlet tabel)
+    include = c(alder, koen, bmi), # variable der skal med
     statistic = list(
-      all_continuous()  ~ "{median} ({p25}, {p75})",
+      all_continuous() ~ "{median} ({p25}, {p75})",
       all_categorical() ~ "{n} ({p}%)"
     ),
-    digits  = all_continuous() ~ 1,          # antal decimaler for kontinuerte tal
-    label   = list(alder ~ "Alder (år)", koen ~ "Køn", bmi ~ "BMI"),  # pæne variabelnavne
-    missing = "ifany",                       # vis en "ukendt"-række hvis der mangler værdier
-    missing_text = "Mangler"                 # teksten for den række
+    digits = all_continuous() ~ 1, # antal decimaler for kontinuerte tal
+    label = list(alder ~ "Alder (år)", koen ~ "Køn", bmi ~ "BMI"), # pæne variabelnavne
+    missing = "ifany", # vis en "ukendt"-række hvis der mangler værdier
+    missing_text = "Mangler" # teksten for den række
   ) %>%
-  add_overall() %>%                           # tilføj en "I alt"-kolonne: ALLE personer samlet (begge grupper)
-  bold_labels() %>%                           # gør variabelnavnene fede
-  modify_header(label ~ "**Variabel**")       # tekst i overskriften på variabel-kolonnen (vælg selv)
+  add_overall() %>% # tilføj en "I alt"-kolonne: ALLE personer samlet (begge grupper)
+  bold_labels() %>% # gør variabelnavnene fede
+  modify_header(label ~ "**Variabel**") # tekst i overskriften på variabel-kolonnen (vælg selv)
 
-tabel1                                        # skriv tabellen ud (vis den)
+tabel1 # skriv tabellen ud (vis den)
 ```
 
 <details>
@@ -81,54 +89,68 @@ tabel1 %>%           # tag den allerede byggede tabel ...
 
 ## Crude incidensrate (per 1000 personår) {#crude-rate}
 
-Registerartikler rapporterer ofte den **rå (crude) incidensrate** per eksponeringsgruppe ved siden af Table 1: antal hændelser delt med samlet opfølgningstid (personår), skaleret til per 1000 personår. Det kræver `event` (1 = hændelse, 0 = censureret) og `followup_years` fra dit analyseklare datasæt (bygget i [Fase 12](12b_joins.qmd#opfoelgningstid)).
+Registerartikler rapporterer ofte den **rå (crude) incidensrate** per
+eksponeringsgruppe ved siden af Table 1: antal hændelser delt med samlet
+opfølgningstid (personår), skaleret til per 1000 personår. Det kræver `event` (1
+= hændelse, 0 = censureret) og `followup_years` fra dit analyseklare datasæt
+(bygget i [Fase 12](12b_joins.qmd#opfoelgningstid)).
 
 ```r
 df %>%
-  group_by(eksponering) %>%                                  # én linje per eksponeringsgruppe
+  group_by(eksponering) %>% # én linje per eksponeringsgruppe
   summarise(
-    haendelser   = sum(event),                                # antal udfald i gruppen
-    personaar    = sum(followup_years),                       # samlet opfølgningstid (personår)
-    rate_pr_1000 = sum(event) / sum(followup_years) * 1000    # rå rate per 1000 personår
+    haendelser = sum(event), # antal udfald i gruppen
+    personaar = sum(followup_years), # samlet opfølgningstid (personår)
+    rate_pr_1000 = sum(event) / sum(followup_years) * 1000 # rå rate per 1000 personår
   )
 ```
 
-Det er en **deskriptiv** rate uden justering, og tæller som aggregeret output (tjek for små celler inden eksport). Vil du sammenligne grupperne med kontrol for confounding, hører det til [regression](13d_regression.qmd) og [time-to-event](13e_time-to-event.qmd), hvor en Cox-model giver en hazard ratio.
+Det er en **deskriptiv** rate uden justering, og tæller som aggregeret output
+(tjek for små celler inden eksport). Vil du sammenligne grupperne med kontrol
+for confounding, hører det til [regression](13d_regression.qmd) og
+[time-to-event](13e_time-to-event.qmd), hvor en Cox-model giver en hazard ratio.
 
 ## Eksportér tabellen (til outputkontrol)
 
-Alt, der forlader DST, skal gennem outputkontrol. En tabel som denne er aggregeret, men tjek altid for **små celler** før eksport.
+Alt, der forlader DST, skal gennem outputkontrol. En tabel som denne er
+aggregeret, men tjek altid for **små celler** før eksport.
 
 ```r
 # Til Excel: as_hux_xlsx() kræver, at pakken huxtable er INSTALLERET
 # (du behøver ikke selv kalde library(huxtable) - gtsummary bruger den bag kulisserne).
-tabel1 %>% as_hux_xlsx(file = "tabel1.xlsx")   # skriv tabellen til en .xlsx-fil
+tabel1 %>% as_hux_xlsx(file = "tabel1.xlsx") # skriv tabellen til en .xlsx-fil
 
 # Til Word: kræver pakken flextable installeret
-tabel1 %>% as_flex_table()                     # giver et flextable-objekt til et Word-dokument
+tabel1 %>% as_flex_table() # giver et flextable-objekt til et Word-dokument
 
 # Virker ALTID uden ekstra pakker (base R): lav tabellen om til en data.frame og gem som CSV
 tabel1 %>%
-  as_tibble() %>%                              # tabellen som almindelig data.frame
-  write.csv("tabel1.csv", row.names = FALSE)   # en CSV kan åbnes direkte i Excel
+  as_tibble() %>% # tabellen som almindelig data.frame
+  write.csv("tabel1.csv", row.names = FALSE) # en CSV kan åbnes direkte i Excel
 ```
 
-Er `huxtable` eller `flextable` ikke tilgængelig på DST, så brug CSV-vejen (base R, ingen pakker nødvendige) eller kontakt din datamanager.
+Er `huxtable` eller `flextable` ikke tilgængelig på DST, så brug CSV-vejen (base
+R, ingen pakker nødvendige) eller kontakt din datamanager.
 
 ## Alternativ pakke
 
-`finalfit::summary_factorlist()` laver en lignende baseline-tabel og er populær i epidemiologi. `gtsummary` er valgt her, fordi eksport til Excel og Word er ligetil.
+`finalfit::summary_factorlist()` laver en lignende baseline-tabel og er populær
+i epidemiologi. `gtsummary` er valgt her, fordi eksport til Excel og Word er
+ligetil.
 
 ::: {.callout-note}
-Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun
+aggregerede resultater. Se [Fase 14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Læs mere
 
 Generel uddybning i *The Epidemiologist R Handbook* (på engelsk):
 
-- [Descriptive tables](https://www.epirhandbook.com/en/new_pages/tables_descriptive.html)
-- [Tables for presentation](https://www.epirhandbook.com/en/new_pages/tables_presentation.html)
+- [Descriptive
+  tables](https://www.epirhandbook.com/en/new_pages/tables_descriptive.html)
+- [Tables for
+  presentation](https://www.epirhandbook.com/en/new_pages/tables_presentation.html)
 :::

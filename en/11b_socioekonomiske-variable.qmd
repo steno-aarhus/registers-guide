@@ -4,163 +4,222 @@ subtitle: "Education, income and employment following the SEPLINE approach"
 date: last-modified
 ---
 
-You now know the pattern: `open_dataset → filter → collect → left_join`. That is exactly what you use here. Two things are **new** in this phase:
+You now know the pattern: `open_dataset → filter → collect → left_join`. That is
+exactly what you use here. Two things are **new** in this phase:
 
-1. **"Fetch for the year before index date":** SES registers are annual snapshots. You cannot just filter on `pnr`; you must also match on *which year* is relevant per person (`year(index_date) - 1`). This is done by calculating the baseline year per person and using it as a join key.
-2. **FAIK via `familie_id`:** Income is linked to the *household*, not the person directly. You need BEF as a bridge: fetch `familie_id` from BEF for the baseline year, then join to FAIK on `familie_id`.
+1. **"Fetch for the year before index date":** SES registers are annual
+   snapshots. You cannot just filter on `pnr`; you must also match on *which
+   year* is relevant per person (`year(index_date) - 1`). This is done by
+   calculating the baseline year per person and using it as a join key.
+2. **FAIK via `familie_id`:** Income is linked to the *household*, not the
+   person directly. You need BEF as a bridge: fetch `familie_id` from BEF for
+   the baseline year, then join to FAIK on `familie_id`.
 
 The rest is categorisation per SEPLINE guidelines.
 
----
+--------------------------------------------------------------------------------
 
-Socioeconomic position (SEP) is measured in register-based studies via three dimensions:
-education (UDDA), income (FAIK) and employment (AKM).
-This page shows how to extract and categorise them following the **SEPLINE** guideline.
+Socioeconomic position (SEP) is measured in register-based studies via three
+dimensions: education (UDDA), income (FAIK) and employment (AKM). This page
+shows how to extract and categorise them following the **SEPLINE** guideline.
 
 **SEPLINE article:** Hjorth et al. *Clinical Epidemiology* 2025 -
-[doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772).
-See the article for full justification, recommended reference groups and categorisations.
+[doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772). See the
+article for full justification, recommended reference groups and
+categorisations.
 
 ::: {.callout-important}
-**Under development - code examples, not validated code.**
-The categorisations below are **not** validated and should not be used directly in analyses without review. They are shown as structural examples of how to code the variables - not as an approved implementation.
-If you have code that already works, or input on the categorisations, please get in touch:
-**Sara Schwartz - [saras@clin.au.dk](mailto:saras@clin.au.dk)**
+**Under development - code examples, not validated code.** The categorisations
+below are **not** validated and should not be used directly in analyses without
+review. They are shown as structural examples of how to code the variables - not
+as an approved implementation. If you have code that already works, or input on
+the categorisations, please get in touch: **Sara Schwartz -
+[saras@clin.au.dk](mailto:saras@clin.au.dk)**
 :::
 
 ::: {.callout-note}
 **Accessing the registers - the ways:**
 
-1. **fastreg (recommended):** Use `read_register("akm")` - reads by name, fastreg knows the path (see [Phase 4](04_filformater.qmd#convert-sas-to-parquet)).
-2. **Parquet via `open_dataset()` (any project):** Use `open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/")` + `rename_with(tolower)`. The examples below use this pattern; swap in `read_register("akm")` if you use fastreg.
-3. **SAS files (if parquet is not ready):** Use `haven::read_sas("path/akm.sas7bdat")` - but this reads the entire file into RAM. **Recommended:** convert to parquet once and work from that (see [Phase 4 - Convert SAS to parquet](04_filformater.qmd#convert-sas-to-parquet)).
+1. **fastreg (recommended):** Use `read_register("akm")` - reads by name,
+   fastreg knows the path (see [Phase
+   4](04_filformater.qmd#convert-sas-to-parquet)).
+2. **Parquet via `open_dataset()` (any project):** Use
+   `open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/")` +
+   `rename_with(tolower)`. The examples below use this pattern; swap in
+   `read_register("akm")` if you use fastreg.
+3. **SAS files (if parquet is not ready):** Use
+   `haven::read_sas("path/akm.sas7bdat")` - but this reads the entire file into
+   RAM. **Recommended:** convert to parquet once and work from that (see [Phase
+   4 - Convert SAS to parquet](04_filformater.qmd#convert-sas-to-parquet)).
 
 Your columns may be named differently - check with `names(your_data)`.
 :::
 
 ::: {.callout-warning}
-**Fetch the variable for the year BEFORE index - not the index year itself.** All three registers are **annual**: each person has one value per calendar year. *When* in the year the value applies **depends on the register** - e.g. income (FAIK) is a sum over the whole calendar year, while education (UDDA) and employment (AKM) use a reference point during the year. Look it up for the specific register if the exact timing matters to you.
+**Fetch the variable for the year BEFORE index - not the index year itself.**
+All three registers are **annual**: each person has one value per calendar year.
+*When* in the year the value applies **depends on the register** - e.g. income
+(FAIK) is a sum over the whole calendar year, while education (UDDA) and
+employment (AKM) use a reference point during the year. Look it up for the
+specific register if the exact timing matters to you.
 
-Regardless of the exact timing, the point holds: if you take the value from the *index year*, you risk measuring status that falls **after** your exposure. Example: index = surgery date 15 June 2015. The 2015 value may reflect status after the surgery and be affected by the exposure itself (e.g. job loss after illness) - that gives reverse causation, whereas you want a **baseline** value from before the exposure.
+Regardless of the exact timing, the point holds: if you take the value from the
+*index year*, you risk measuring status that falls **after** your exposure.
+Example: index = surgery date 15 June 2015. The 2015 value may reflect status
+after the surgery and be affected by the exposure itself (e.g. job loss after
+illness) - that gives reverse causation, whereas you want a **baseline** value
+from before the exposure.
 
-So you fetch the value for `year(index_date) - 1` (here 2014). This is a safe, uniform rule for the whole cohort, regardless of when in the year index falls.
+So you fetch the value for `year(index_date) - 1` (here 2014). This is a safe,
+uniform rule for the whole cohort, regardless of when in the year index falls.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## The three dimensions
 
-| Dimension | Register | Variable |
-|---|---|---|
-| **Education** | UDDA | `hfaudd` - highest completed education (ISCED code) |
-| **Income** | FAIK | `famaekvivadisp_13` - household-equivalised disposable income |
-| **Employment** | AKM | `socio13` - labour market classification |
+  | Dimension      | Register | Variable                                                      |
+  | -------------- | -------- | ------------------------------------------------------------- |
+  | **Education**  | UDDA     | `hfaudd` - highest completed education (ISCED code)           |
+  | **Income**     | FAIK     | `famaekvivadisp_13` - household-equivalised disposable income |
+  | **Employment** | AKM      | `socio13` - labour market classification                      |
 
-SEPLINE specifies both **how** these variables are categorised and **when** in the follow-up they are measured.
+SEPLINE specifies both **how** these variables are categorised and **when** in
+the follow-up they are measured.
 
----
+--------------------------------------------------------------------------------
 
 ## Employment - AKM (`socio13`)
 
 ```r
-library(arrow)       # open_dataset()
-library(dplyr)       # filter, select, mutate, left_join, collect
-library(lubridate)   # year() to extract year from dates
+library(arrow) # open_dataset()
+library(dplyr) # filter, select, mutate, left_join, collect
+library(lubridate) # year() to extract year from dates
 
 # Replace the path with your project's parquet path - DARTER: read_register("akm")
-akm <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/") %>%
-  rename_with(tolower)   # standardise column names
+akm <- open_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/"
+) %>%
+  rename_with(tolower) # standardise column names
 
 # Fetch employment status for the year before index date
 # (assumes cohort has columns pnr and index_date)
-index_year <- unique(lubridate::year(kohort$index_date) - 1)   # baseline year = index year minus 1
+index_year <- unique(lubridate::year(kohort$index_date) - 1) # baseline year = index year minus 1
 
 akm_data <- akm %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
-  filter(aar %in% !!index_year) %>%                      # baseline year
-  select(pnr, aar, socio13) %>%                               # only the columns we use
-  collect()                                                   # fetch into R
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # only the cohort's pnr's
+  filter(aar %in% !!index_year) %>% # baseline year
+  select(pnr, aar, socio13) %>% # only the columns we use
+  collect() # fetch into R
 
 # Attach to cohort with index year as join key
 cohort_akm <- kohort %>%
-  mutate(aar_baseline = lubridate::year(index_date) - 1) %>%        # calculate baseline year
-  left_join(akm_data, by = c("pnr", "aar_baseline" = "aar"))        # join on pnr and year
+  mutate(aar_baseline = lubridate::year(index_date) - 1) %>% # calculate baseline year
+  left_join(akm_data, by = c("pnr", "aar_baseline" = "aar")) # join on pnr and year
 
 # Categorise per SEPLINE
 cohort_akm <- cohort_akm %>%
-  mutate(occupation_cat = case_when(
-    socio13 %in% c(110, 111, 112, 113, 114, 120, 131, 132, 133, 134, 135, 139) ~ "Employed",
-    socio13 == 310                              ~ "Student",
-    socio13 %in% c(210, 410)                   ~ "Unemployed",
-    socio13 %in% c(220, 321, 330)              ~ "Outside labour market",   # sick pay, disability pension, flex job
-    socio13 %in% c(322, 323)                   ~ "Retired",
-    TRUE                                        ~ "Unknown"                  # 0, 420 or missing
-  ))
+  mutate(
+    occupation_cat = case_when(
+      socio13 %in%
+        c(
+          110,
+          111,
+          112,
+          113,
+          114,
+          120,
+          131,
+          132,
+          133,
+          134,
+          135,
+          139
+        ) ~ "Employed",
+      socio13 == 310 ~ "Student",
+      socio13 %in% c(210, 410) ~ "Unemployed",
+      socio13 %in% c(220, 321, 330) ~ "Outside labour market", # sick pay, disability pension, flex job
+      socio13 %in% c(322, 323) ~ "Retired",
+      TRUE ~ "Unknown" # 0, 420 or missing
+    )
+  )
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## Education - UDDA (`hfaudd`)
 
-Categorised from the ISCED code in `hfaudd`: short (`10`/`15`), medium (`20`/`30`/`35`), long (`40`–`80`), unknown (`90` or missing).
+Categorised from the ISCED code in `hfaudd`: short (`10`/`15`), medium
+(`20`/`30`/`35`), long (`40`--`80`), unknown (`90` or missing).
 
 ```r
 # DARTER: read_register("udda")
-udda <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/udda/") %>%
-  rename_with(tolower)   # standardise column names
+udda <- open_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/udda/"
+) %>%
+  rename_with(tolower) # standardise column names
 
 udda_data <- udda %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
-  filter(aar %in% !!index_year) %>%                      # baseline year
-  select(pnr, aar, hfaudd) %>%                               # only the columns we use
-  collect()                                                   # fetch into R
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # only the cohort's pnr's
+  filter(aar %in% !!index_year) %>% # baseline year
+  select(pnr, aar, hfaudd) %>% # only the columns we use
+  collect() # fetch into R
 
 # Take the latest record if a person appears multiple times
 udda_data <- udda_data %>%
-  group_by(pnr) %>%           # group to find newest record per person
-  arrange(desc(aar)) %>%      # newest year first
-  slice(1) %>%                # keep only the newest record
-  ungroup()                   # release grouping
+  group_by(pnr) %>% # group to find newest record per person
+  arrange(desc(aar)) %>% # newest year first
+  slice(1) %>% # keep only the newest record
+  ungroup() # release grouping
 
 # Categorise per SEPLINE
 udda_data <- udda_data %>%
-  mutate(education_cat = case_when(
-    substr(as.character(hfaudd), 1, 2) %in% c("10", "15") ~ "Short",
-    substr(as.character(hfaudd), 1, 2) %in% c("20", "30", "35") ~ "Medium",
-    as.numeric(substr(as.character(hfaudd), 1, 2)) >= 40  ~ "Long",
-    is.na(hfaudd) | substr(as.character(hfaudd), 1, 2) == "90" ~ "Unknown",
-    TRUE ~ "Unknown"
-  ))
+  mutate(
+    education_cat = case_when(
+      substr(as.character(hfaudd), 1, 2) %in% c("10", "15") ~ "Short",
+      substr(as.character(hfaudd), 1, 2) %in% c("20", "30", "35") ~ "Medium",
+      as.numeric(substr(as.character(hfaudd), 1, 2)) >= 40 ~ "Long",
+      is.na(hfaudd) | substr(as.character(hfaudd), 1, 2) == "90" ~ "Unknown",
+      TRUE ~ "Unknown"
+    )
+  )
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## Income - FAIK via BEF (`famaekvivadisp_13`)
 
-Income is linked to the household, not the person. You need `familie_id` from BEF as a bridge.
-SEPLINE recommends a 3-year average divided into quintiles stratified by sex × 5-year age group × reference year.
+Income is linked to the household, not the person. You need `familie_id` from
+BEF as a bridge. SEPLINE recommends a 3-year average divided into quintiles
+stratified by sex × 5-year age group × reference year.
 
 ```r
 # DARTER: read_register("bef") and read_register("faik")
-bef  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/")  %>% rename_with(tolower)
-faik <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/faik/") %>% rename_with(tolower)
+bef <- open_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/"
+) %>%
+  rename_with(tolower)
+faik <- open_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/faik/"
+) %>%
+  rename_with(tolower)
 
 # Fetch familie_id from BEF for baseline year
 bef_family <- bef %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
-  filter(aar %in% !!index_year) %>%                      # baseline year
-  select(pnr, aar, familie_id) %>%                            # familie_id is the bridge to FAIK
-  collect()                                                   # fetch into R
+  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # only the cohort's pnr's
+  filter(aar %in% !!index_year) %>% # baseline year
+  select(pnr, aar, familie_id) %>% # familie_id is the bridge to FAIK
+  collect() # fetch into R
 
 # Fetch income from FAIK for baseline year
 faik_data <- faik %>%
-  filter(aar %in% !!index_year) %>%                           # only baseline year
-  select(familie_id, aar, famaekvivadisp_13) %>%              # only the columns we use
-  collect()                                                   # fetch into R
+  filter(aar %in% !!index_year) %>% # only baseline year
+  select(familie_id, aar, famaekvivadisp_13) %>% # only the columns we use
+  collect() # fetch into R
 
 # Join: pnr → familie_id → income
 income <- bef_family %>%
-  left_join(faik_data, by = c("familie_id", "aar"))           # two-key join: household and year
+  left_join(faik_data, by = c("familie_id", "aar")) # two-key join: household and year
 ```
 
 <details>
@@ -206,30 +265,35 @@ income_quintile <- income_mean %>%
 
 </details>
 
----
+--------------------------------------------------------------------------------
 
 ## Assemble all SES variables onto the cohort
 
 ```r
 cohort_ses <- kohort %>%
-  left_join(cohort_akm      %>% select(pnr, occupation_cat), by = "pnr") %>%   # attach employment
-  left_join(udda_data       %>% select(pnr, education_cat),  by = "pnr") %>%   # attach education
-  left_join(income_quintile %>% select(pnr, income_cat),     by = "pnr")        # attach income quintile
+  left_join(cohort_akm %>% select(pnr, occupation_cat), by = "pnr") %>% # attach employment
+  left_join(udda_data %>% select(pnr, education_cat), by = "pnr") %>% # attach education
+  left_join(income_quintile %>% select(pnr, income_cat), by = "pnr") # attach income quintile
 ```
 
----
+--------------------------------------------------------------------------------
 
 ## See also
 
-- [SEPLINE article (Hjorth et al. 2025)](https://doi.org/10.2147/CLEP.S520772): full methodology and recommended reference groups
-- [Format tables](formateringstabeller.qmd): DST's SAS files for label translation
-- [Overview of registers](register_reference.qmd): confirmed column names for AKM, FAIK and UDDA
+- [SEPLINE article (Hjorth et al. 2025)](https://doi.org/10.2147/CLEP.S520772):
+  full methodology and recommended reference groups
+- [Format tables](formateringstabeller.qmd): DST's SAS files for label
+  translation
+- [Overview of registers](register_reference.qmd): confirmed column names for
+  AKM, FAIK and UDDA
 
----
+--------------------------------------------------------------------------------
 
 ## Next steps
 
 You now have SES covariates. Next steps depend on what you still need:
 
-- **Specialist packages** (OSDC for diabetes classification, NMI for comorbidity score, analysis tools)? → [Algorithms & special packages](pakker-oversigt.qmd)
-- **Ready to export results?** → [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd)
+- **Specialist packages** (OSDC for diabetes classification, NMI for comorbidity
+  score, analysis tools)? → [Algorithms & special packages](pakker-oversigt.qmd)
+- **Ready to export results?** → [Phase 14 - Export and
+  repatriation](14_eksport-hjemsendelse.qmd)

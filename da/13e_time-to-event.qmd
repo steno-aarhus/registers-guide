@@ -1,6 +1,8 @@
 ---
 title: "![](images/icons/icon_14.png){.title-icon} Time-to-event"
-subtitle: "Overlevelsesanalyse: Kaplan-Meier, Cox-regression, antagelser og konkurrerende risici"
+subtitle: >-
+  Overlevelsesanalyse: Kaplan-Meier, Cox-regression, antagelser og konkurrerende
+  risici
 date: last-modified
 ---
 
@@ -8,29 +10,40 @@ date: last-modified
 **Under udvikling.**
 :::
 
-Time-to-event-analyse (overlevelsesanalyse) ser på **tiden indtil en hændelse** og håndterer, at ikke alle når at få hændelsen i opfølgningsperioden (censurering). Det er den typiske ramme for et kohortestudie med et udfald over tid.
+Time-to-event-analyse (overlevelsesanalyse) ser på **tiden indtil en hændelse**
+og håndterer, at ikke alle når at få hændelsen i opfølgningsperioden
+(censurering). Det er den typiske ramme for et kohortestudie med et udfald over
+tid.
 
 ::: {.callout-note}
-Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt. Pakkerne (`survival`, `survminer`, `tidycmprsk`) skal være installeret i dit R-miljø på DST.
+Kodeeksemplerne bruger generiske sti- og variabelnavne. Tilpas til dit projekt.
+Pakkerne (`survival`, `survminer`, `tidycmprsk`) skal være installeret i dit
+R-miljø på DST.
 :::
 
----
+--------------------------------------------------------------------------------
 
 ## Udgangspunkt
 
-Du skal bruge to ting per person: **opfølgningstid** (hvor længe personen blev fulgt) og **hændelsesstatus** (om hændelsen/udfaldet indtraf i den tid: 1 = ja, 0 = censureret, dvs. ikke set i opfølgningen). Opfølgningstiden er **stop-dato minus index-dato**, hvor stop-datoen er den første af udfald, død, emigration eller studieslut; se [Beregn opfølgningstid og hændelsesvariabel](12b_joins.qmd#opfoelgningstid) i Fase 12 for selve opbygningen.
+Du skal bruge to ting per person: **opfølgningstid** (hvor længe personen blev
+fulgt) og **hændelsesstatus** (om hændelsen/udfaldet indtraf i den tid: 1 = ja,
+0 = censureret, dvs. ikke set i opfølgningen). Opfølgningstiden er **stop-dato
+minus index-dato**, hvor stop-datoen er den første af udfald, død, emigration
+eller studieslut; se [Beregn opfølgningstid og
+hændelsesvariabel](12b_joins.qmd#opfoelgningstid) i Fase 12 for selve
+opbygningen.
 
 ```r
-library(survival)                          # Surv(), survfit(), coxph(), cox.zph()
+library(survival) # Surv(), survfit(), coxph(), cox.zph()
 
-df <- readRDS("sti/til/analyse.rds")       # analyseklart datasæt, én række per person
+df <- readRDS("sti/til/analyse.rds") # analyseklart datasæt, én række per person
 
 # Surv() samler tid + status i ét "overlevelsesobjekt", som alle modellerne bruger:
 #   tid_dage = dage fra index til hændelse ELLER censurering (det der kommer først)
 #   udfald   = 1 hvis hændelsen indtraf, 0 hvis personen blev censureret
 # Vi laver objektet her ALENE for at se, hvad Surv() producerer:
 overlevelse <- Surv(time = df$tid_dage, event = df$udfald)
-overlevelse                                # vis objektet: et "+" markerer en censureret person (fx 12+)
+overlevelse # vis objektet: et "+" markerer en censureret person (fx 12+)
 
 # I praksis behøver du ikke gemme objektet: i modellerne nedenfor skriver du
 # Surv(...) direkte i formlen. Det er kun vist her for forståelsens skyld.
@@ -38,79 +51,112 @@ overlevelse                                # vis objektet: et "+" markerer en ce
 
 ## Kaplan-Meier-kurver
 
-`survfit()` beregner Kaplan-Meier-estimatet (andelen uden hændelse over tid), og `ggsurvplot()` tegner det pænt.
+`survfit()` beregner Kaplan-Meier-estimatet (andelen uden hændelse over tid), og
+`ggsurvplot()` tegner det pænt.
 
 ```r
-library(survminer)                         # ggsurvplot()
+library(survminer) # ggsurvplot()
 
-fit <- survfit(Surv(tid_dage, udfald) ~ eksponering,  # én kurve per eksponeringsgruppe
-               data = df)
+fit <- survfit(
+  Surv(tid_dage, udfald) ~ eksponering, # én kurve per eksponeringsgruppe
+  data = df
+)
 
 ggsurvplot(
-  fit, data = df,
-  pval = TRUE,                             # vis log-rank-testens p-værdi
-  conf.int = TRUE,                         # vis konfidensbånd om kurverne
-  risk.table = TRUE,                       # tabel under figuren: antal i risiko over tid
-  xlab = "Dage siden index",               # akse-tekst
+  fit,
+  data = df,
+  pval = TRUE, # vis log-rank-testens p-værdi
+  conf.int = TRUE, # vis konfidensbånd om kurverne
+  risk.table = TRUE, # tabel under figuren: antal i risiko over tid
+  xlab = "Dage siden index", # akse-tekst
   ylab = "Andel uden udfald"
 )
 ```
 
-Med simulerede tal ser kurverne sådan ud (her falder de eksponerede hurtigere, dvs. de får oftere udfaldet):
+Med simulerede tal ser kurverne sådan ud (her falder de eksponerede hurtigere,
+dvs. de får oftere udfaldet):
 
 ![Kaplan-Meier-kurver med simuleret data. `ggsurvplot()` tilføjer typisk også en risikotabel under figuren.](images/km_eksempel.png)
 
 ::: {.callout-warning}
-Kaplan-Meier kan **overvurdere risikoen**, hvis en konkurrerende hændelse (typisk død) kan udelukke dit udfald - se [Konkurrerende risici](#konkurrerende-risici) nedenfor.
+Kaplan-Meier kan **overvurdere risikoen**, hvis en konkurrerende hændelse
+(typisk død) kan udelukke dit udfald - se [Konkurrerende
+risici](#konkurrerende-risici) nedenfor.
 :::
 
 ## Cox-regression (hazard ratio)
 
-`coxph()` giver hazard ratios (HR) justeret for covariater. `tbl_regression(exponentiate = TRUE)` viser dem som HR i stedet for log-hazard.
+`coxph()` giver hazard ratios (HR) justeret for covariater.
+`tbl_regression(exponentiate = TRUE)` viser dem som HR i stedet for log-hazard.
 
 ```r
-library(gtsummary)                         # tbl_regression()
+library(gtsummary) # tbl_regression()
 
 # Uden replacement (hver person optræder kun én gang): en helt almindelig Cox-model.
-cox <- coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,
-             data = df)
+cox <- coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen, data = df)
 
-cox %>%                                    # send modellen videre til en pæn tabel
-  tbl_regression(exponentiate = TRUE)      # exponentiate = TRUE -> hazard ratios
+cox %>% # send modellen videre til en pæn tabel
+  tbl_regression(exponentiate = TRUE) # exponentiate = TRUE -> hazard ratios
 ```
 
-En hazard ratio læses som OR/RR: **1 = ingen forskel**, over 1 = højere rate, under 1 = lavere. Se [Sådan læser du dit resultat](13d_regression.qmd#laes-resultat).
+En hazard ratio læses som OR/RR: **1 = ingen forskel**, over 1 = højere rate,
+under 1 = lavere. Se [Sådan læser du dit
+resultat](13d_regression.qmd#laes-resultat).
 
-**Forskellen med replacement.** Er sammenligningskohorten matchet **med replacement** (eller er der crossover), optræder samme person flere gange, og rækkerne er ikke uafhængige. Så tilføjer du **ét eneste argument** - `cluster = pnr` - til præcis samme model. Det ændrer **ikke** hazard ratio-estimatet (HR'en er den samme); det retter kun **standardfejlene og konfidensintervallerne**, som ellers ville blive kunstigt snævre. Samme idé som i [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
+**Forskellen med replacement.** Er sammenligningskohorten matchet **med
+replacement** (eller er der crossover), optræder samme person flere gange, og
+rækkerne er ikke uafhængige. Så tilføjer du **ét eneste argument** -
+`cluster = pnr` - til præcis samme model. Det ændrer **ikke** hazard
+ratio-estimatet (HR'en er den samme); det retter kun **standardfejlene og
+konfidensintervallerne**, som ellers ville blive kunstigt snævre. Samme idé som
+i [Regression](13d_regression.qmd#klyngebaserede-standardfejl).
 
 ```r
 # Med replacement (samme person flere gange): ENESTE forskel fra modellen ovenfor er cluster = pnr.
-coxph(Surv(tid_dage, udfald) ~ eksponering + alder + koen,
-      data    = df,
-      cluster = pnr) %>%                   # <- den eneste ændring: klynge på person-id
-  tbl_regression(exponentiate = TRUE)      # HR uændret; kun CI'erne bliver korrekte (typisk bredere)
+coxph(
+  Surv(tid_dage, udfald) ~ eksponering + alder + koen,
+  data = df,
+  cluster = pnr
+) %>% # <- den eneste ændring: klynge på person-id
+  tbl_regression(exponentiate = TRUE) # HR uændret; kun CI'erne bliver korrekte (typisk bredere)
 ```
 
-Bemærk skrivemåden: `coxph()` tager klyngevariablen som et **argument** uden tilde (`cluster = pnr`), mens `sandwich::vcovCL()` på [Regression](13d_regression.qmd#klyngebaserede-standardfejl) bruger en **formel** med tilde (`cluster = ~ pnr`). Det er samme idé (klynge på person-id), kun to funktioners forskellige måder at modtage variablen på.
+Bemærk skrivemåden: `coxph()` tager klyngevariablen som et **argument** uden
+tilde (`cluster = pnr`), mens `sandwich::vcovCL()` på
+[Regression](13d_regression.qmd#klyngebaserede-standardfejl) bruger en
+**formel** med tilde (`cluster = ~ pnr`). Det er samme idé (klynge på
+person-id), kun to funktioners forskellige måder at modtage variablen på.
 
 ::: {.callout-note}
-**Hvad er din tidsskala?** Tidsaksen (det, x-aksen viser på fx en Kaplan-Meier-kurve) er et valg. Som standard er den **tid siden index** - hvor længe hver person er fulgt siden sin egen startdato (det er `tid_dage` i eksemplerne). Men du kan også følge personerne i:
+**Hvad er din tidsskala?** Tidsaksen (det, x-aksen viser på fx en
+Kaplan-Meier-kurve) er et valg. Som standard er den **tid siden index** - hvor
+længe hver person er fulgt siden sin egen startdato (det er `tid_dage` i
+eksemplerne). Men du kan også følge personerne i:
 
-- **opnået alder** - så modellen sammenligner personer ved **samme alder**. Det justerer automatisk og fleksibelt for alder (en stærk confounder for de fleste udfald), uden at du selv skal modellere alderens form. Almindeligt i registerstudier.
-- **kalendertid** - hvis selve kalenderperioden betyder noget (fx behandling der har ændret sig over årene).
+- **opnået alder** - så modellen sammenligner personer ved **samme alder**. Det
+  justerer automatisk og fleksibelt for alder (en stærk confounder for de fleste
+  udfald), uden at du selv skal modellere alderens form. Almindeligt i
+  registerstudier.
+- **kalendertid** - hvis selve kalenderperioden betyder noget (fx behandling der
+  har ændret sig over årene).
 
-Tid siden index er enklest; alder-som-tidsskala er ofte stærkere, når risikoen drives kraftigt af alder. Teknisk vælger du tidsskalaen via, hvad du sætter ind som tid i `Surv()`.
+Tid siden index er enklest; alder-som-tidsskala er ofte stærkere, når risikoen
+drives kraftigt af alder. Teknisk vælger du tidsskalaen via, hvad du sætter ind
+som tid i `Surv()`.
 :::
 
 ## Tjek antagelsen: proportionale hazards
 
-Cox-modellen antager **proportionale hazards** (PH): at en variabels effekt er konstant over tid. Holder det ikke, er den samlede hazard ratio misvisende. Tjek det derfor altid med `cox.zph()`, der bygger på *Schoenfeld-residualer* (kort sagt et mål for, om effekten "driver" hen over tid).
+Cox-modellen antager **proportionale hazards** (PH): at en variabels effekt er
+konstant over tid. Holder det ikke, er den samlede hazard ratio misvisende. Tjek
+det derfor altid med `cox.zph()`, der bygger på *Schoenfeld-residualer* (kort
+sagt et mål for, om effekten "driver" hen over tid).
 
 ```r
-ph <- cox.zph(cox)                         # formel test af PH for hver variabel + samlet
-print(ph)                                  # lille p-værdi = tegn på BRUD på antagelsen
-plot(ph)                                   # residual-kurve per variabel; en kurve der
-                                           #   hælder = ikke-proportional hazard
+ph <- cox.zph(cox) # formel test af PH for hver variabel + samlet
+print(ph) # lille p-værdi = tegn på BRUD på antagelsen
+plot(ph) # residual-kurve per variabel; en kurve der
+#   hælder = ikke-proportional hazard
 ```
 
 <details>
@@ -125,64 +171,96 @@ Et tredje alternativ er at **droppe hazard ratio'en** og bruge **RMST** (*restri
 ## Konkurrerende risici (competing risks) {#konkurrerende-risici}
 
 ::: {.callout-warning}
-Hvis en anden hændelse kan **udelukke** dit udfald (klassisk: **død**, før udfaldet kan nå at ske), er det en *konkurrerende risiko*. En almindelig Kaplan-Meier **overvurderer** da risikoen, fordi den behandler de døde som blot censurerede. Det er reglen snarere end undtagelsen i registerkohorter med ældre personer eller lang opfølgning.
+Hvis en anden hændelse kan **udelukke** dit udfald (klassisk: **død**, før
+udfaldet kan nå at ske), er det en *konkurrerende risiko*. En almindelig
+Kaplan-Meier **overvurderer** da risikoen, fordi den behandler de døde som blot
+censurerede. Det er reglen snarere end undtagelsen i registerkohorter med ældre
+personer eller lang opfølgning.
 :::
 
-Idéen er enkel: hver person ender ét af tre steder, og kun det **første**, der sker, tæller - (1) de når aldrig en hændelse i opfølgningen (*censureret*), (2) de får dit **udfald**, eller (3) de rammes af den **konkurrerende hændelse** (fx død). En person, der dør først, kan aldrig nå udfaldet, og det skal analysen afspejle.
+Idéen er enkel: hver person ender ét af tre steder, og kun det **første**, der
+sker, tæller - (1) de når aldrig en hændelse i opfølgningen (*censureret*), (2)
+de får dit **udfald**, eller (3) de rammes af den **konkurrerende hændelse** (fx
+død). En person, der dør først, kan aldrig nå udfaldet, og det skal analysen
+afspejle.
 
 ### 1. Sæt data op
 
-Du skal bruge de samme to variable som ved almindelig Cox - men statusvariablen får nu **tre værdier** i stedet for to (vi kalder den derfor `status` i stedet for `udfald`):
+Du skal bruge de samme to variable som ved almindelig Cox - men statusvariablen
+får nu **tre værdier** i stedet for to (vi kalder den derfor `status` i stedet
+for `udfald`):
 
-- `tid_dage` - tiden fra index til det **første**, der sker (udfald, død eller opfølgningens slut).
+- `tid_dage` - tiden fra index til det **første**, der sker (udfald, død eller
+  opfølgningens slut).
 - `status` - **hvad** der skete: censureret, udfald eller død.
 
-`status` skal være en **faktor**, og `tidycmprsk` kræver, at **"censureret" er det første niveau**. Rækkefølgen af niveauerne er samtidig dér, du fortæller R, hvad der er dit udfald, og hvad der er den konkurrerende risiko:
+`status` skal være en **faktor**, og `tidycmprsk` kræver, at **"censureret" er
+det første niveau**. Rækkefølgen af niveauerne er samtidig dér, du fortæller R,
+hvad der er dit udfald, og hvad der er den konkurrerende risiko:
 
 ```r
-library(tidycmprsk)                        # cuminc(), crr()
+library(tidycmprsk) # cuminc(), crr()
 
 df <- df %>%
   mutate(
     status = factor(
-      status_kode,                         # din rå kode, én værdi per person (fx 0/1/2)
-      levels = c(0, 1, 2),                 # rækkefølgen bestemmer betydningen:
-      labels = c("censureret",             #   1. niveau = censureret (SKAL stå først)
-                 "udfald",                 #   2. niveau = dit udfald (det crr modellerer)
-                 "doed")                   #   3. niveau = den konkurrerende risiko
+      status_kode, # din rå kode, én værdi per person (fx 0/1/2)
+      levels = c(0, 1, 2), # rækkefølgen bestemmer betydningen:
+      labels = c(
+        "censureret", #   1. niveau = censureret (SKAL stå først)
+        "udfald", #   2. niveau = dit udfald (det crr modellerer)
+        "doed"
+      ) #   3. niveau = den konkurrerende risiko
     )
   )
 ```
 
-Selve `status_kode` (0/1/2) bygger du fra datoerne - hvad der skete *først*: 0 = censureret (fx opfølgningens slut, emigreret eller på anden vis tabt), 1 = udfald, 2 = død. Konstruktionen ligger i [Beregn opfølgningstid og hændelsesvariabel](12b_joins.qmd#opfoelgningstid) (Fase 12). Hvilket *tal* censurering får, er underordnet - det afgørende er, at det censurerede niveau står **først** i `levels =` (derfor er det kodet 0 her).
+Selve `status_kode` (0/1/2) bygger du fra datoerne - hvad der skete *først*: 0 =
+censureret (fx opfølgningens slut, emigreret eller på anden vis tabt), 1 =
+udfald, 2 = død. Konstruktionen ligger i [Beregn opfølgningstid og
+hændelsesvariabel](12b_joins.qmd#opfoelgningstid) (Fase 12). Hvilket *tal*
+censurering får, er underordnet - det afgørende er, at det censurerede niveau
+står **først** i `levels =` (derfor er det kodet 0 her).
 
 ### 2. Beskriv risikoen over tid (CIF)
 
-Brug **i stedet for Kaplan-Meier** den **kumulative incidensfunktion** (CIF, også kaldet Aalen-Johansen). Den fordeler personerne korrekt på de konkurrerende udfald, så død ikke "stjæler" risiko fra udfaldet. (Det handler om *kurven*; selve regressionen klares stadig med Cox, se trin 3.)
+Brug **i stedet for Kaplan-Meier** den **kumulative incidensfunktion** (CIF,
+også kaldet Aalen-Johansen). Den fordeler personerne korrekt på de konkurrerende
+udfald, så død ikke "stjæler" risiko fra udfaldet. (Det handler om *kurven*;
+selve regressionen klares stadig med Cox, se trin 3.)
 
 ```r
 # Surv(tid, status) med faktor-status -> kumulativ incidens for HVER hændelsestype:
-cuminc(Surv(tid_dage, status) ~ eksponering,   # én kurve per eksponeringsgruppe
-       data = df)                               # giver også Grays test for forskel mellem grupper
+cuminc(
+  Surv(tid_dage, status) ~ eksponering, # én kurve per eksponeringsgruppe
+  data = df
+) # giver også Grays test for forskel mellem grupper
 ```
 
 ### 3. Regression: vælg model efter dit spørgsmål
 
 Cox kan sagtens bruges - du skal bare vide, hvilket af to spørgsmål du stiller:
 
-- **Ætiologi (raten af udfaldet):** kør en **helt almindelig Cox**, men **censurér** den konkurrerende hændelse. Det gør du ved at sætte hændelsen til `status == "udfald"`: så bliver både censurerede og døde til "ingen hændelse". Det er den *årsagsspecifikke* hazard.
-- **Absolut/kumulativ risiko:** brug **Fine-Gray** (`crr`), hvor de døde **bliver** i risikomængden. `crr` modellerer som standard den første hændelsestype efter "censureret" (her "udfald") og behandler resten ("doed") som konkurrerende. Det er *subdistribution*-hazarden.
+- **Ætiologi (raten af udfaldet):** kør en **helt almindelig Cox**, men
+  **censurér** den konkurrerende hændelse. Det gør du ved at sætte hændelsen til
+  `status == "udfald"`: så bliver både censurerede og døde til "ingen hændelse".
+  Det er den *årsagsspecifikke* hazard.
+- **Absolut/kumulativ risiko:** brug **Fine-Gray** (`crr`), hvor de døde
+  **bliver** i risikomængden. `crr` modellerer som standard den første
+  hændelsestype efter "censureret" (her "udfald") og behandler resten ("doed")
+  som konkurrerende. Det er *subdistribution*-hazarden.
 
 ```r
 # Ætiologi - årsagsspecifik Cox: status == "udfald" gør død (og censureret) til "ingen hændelse"
-coxph(Surv(tid_dage, status == "udfald") ~ eksponering + alder + koen,
-      data = df) %>%
-  tbl_regression(exponentiate = TRUE)          # -> årsagsspecifik hazard ratio
+coxph(
+  Surv(tid_dage, status == "udfald") ~ eksponering + alder + koen,
+  data = df
+) %>%
+  tbl_regression(exponentiate = TRUE) # -> årsagsspecifik hazard ratio
 
 # Absolut risiko - Fine-Gray: bruger faktor-statussen direkte (udfald vs. konkurrerende)
-crr(Surv(tid_dage, status) ~ eksponering + alder + koen,
-    data = df) %>%
-  tbl_regression(exponentiate = TRUE)          # -> subdistribution hazard ratio
+crr(Surv(tid_dage, status) ~ eksponering + alder + koen, data = df) %>%
+  tbl_regression(exponentiate = TRUE) # -> subdistribution hazard ratio
 ```
 
 <details>
@@ -194,17 +272,23 @@ Vil du **beskrive eller forudsige risiko** (fx "hvad er 5-års-risikoen for udfa
 
 ## Tidsvarierende kovariater (kort)
 
-Ændrer en variabel sig under opfølgningen (fx en blodprøve eller BMI), kan den ikke stå som én værdi per person. Den skal i **start/stop-format** (én række per interval), som bygges med `survival::tmerge()` og analyseres med `coxph(Surv(tstart, tstop, udfald) ~ ...)`. Selve formningen ligger i [Tidsvarierende variable](12d_tidsvarierende.qmd).
+Ændrer en variabel sig under opfølgningen (fx en blodprøve eller BMI), kan den
+ikke stå som én værdi per person. Den skal i **start/stop-format** (én række per
+interval), som bygges med `survival::tmerge()` og analyseres med
+`coxph(Surv(tstart, tstop, udfald) ~ ...)`. Selve formningen ligger i
+[Tidsvarierende variable](12d_tidsvarierende.qmd).
 
 ::: {.callout-note}
-Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd).
+Husk: alt der forlader DST skal gennem **outputkontrol** - ingen små celler, kun
+aggregerede resultater. Se [Fase 14 - Eksport og
+hjemsendelse](14_eksport-hjemsendelse.qmd).
 :::
-
 
 ::: {.callout-tip}
 ## Læs mere
 
 Generel uddybning i *The Epidemiologist R Handbook* (på engelsk):
 
-- [Survival analysis](https://www.epirhandbook.com/en/new_pages/survival_analysis.html)
+- [Survival
+  analysis](https://www.epirhandbook.com/en/new_pages/survival_analysis.html)
 :::
