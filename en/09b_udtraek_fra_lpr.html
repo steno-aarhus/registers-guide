@@ -544,35 +544,29 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <p>This page shows how to extract diagnoses from LPR with code. It builds on the structure from <a href="../en/09a_forstaa_lpr.html">Understand LPR</a>: the periods (LPR2/LPR3), the D-prefix, the diagnosis types (A/B/G) and the filter for retracted diagnoses. Read that page first if you haven’t already.</p>
 <p>You use the same extraction pattern as in <a href="../en/05_udtraek-trin-for-trin.html">Phase 5</a> and <a href="../en/06_foerste-udtraek.html">Phase 6</a> - just applied to LPR’s two generations. It is the most important and probably the most complex part of the guide.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Circular dependency with Phase 10 - deliberate.</strong> To extract diagnoses (this page) we assume you already have a cohort; but you <em>build</em> the cohort in <a href="../en/10_byg-studiepopulation.html">Phase 10</a> using exactly the extraction pattern you learn here. Read the phases in order, and come back to the code when your cohort is ready. The code uses <code>inner_join()</code> and <code>bind_rows()</code>; if these are new, they are explained in detail in <a href="../en/12_data-manipulation.html">Phase 12</a>.</p>
 </div>
 </div>
-<div id="lpr-a-format" class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div id="lpr-a-format" class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>LPR3 files and column names - check before you load.</strong></p>
 <ul>
 <li><strong>Use the LPR_A files consistently.</strong> DST has switched LPR3 from the old <strong>LPR_F</strong> format (<code>kontakter</code>, <code>diagnoser</code>, <code>forloeb</code>) to the new <strong>LPR_A</strong> format (<code>lpr_a_kontakt</code>, <code>lpr_a_diagnose</code>). Both versions may sit in your folder and cover the same years - loading both (or mixing old and new) gives you <strong>duplicated rows</strong>. Use <code>lpr_a_*</code> as in the examples here, and leave the LPR_F files alone. Some projects also have older data <em>inside</em> <code>lpr_a_kontakt</code> that is already in LPR2; filter it out with <code>lprindberetningssystem == "LPR3"</code>. This is project-specific - on <strong>DARTER</strong> it is handled in <a href="../en/darter/02_darter-faldgruber.html#lpr3-lprindberetningssystem">pitfall 5</a>; otherwise check with your data manager.</li>
 <li><strong>Verify column names.</strong> The switch to LPR_A changed a number of variable names (often opaque Danish abbreviations). The examples use the names the registers typically have, but always check before relying on a column name. On a lazy <code>open_dataset()</code> object use <code>arrow::schema(your_data)</code> - it lists the column names <strong>and their types</strong> without reading data into RAM; <code>colnames(your_data)</code> also works (and is what you use for the DuckDB-backed objects from <code>read_register()</code>/<code>read_register()</code>). Look names up in <a href="../en/register_reference.html">Overview of registers</a>.</li>
 <li><strong>Mind the 2019-2020 diagnosis spike.</strong> The LPR3 contact model registers far more outpatient diagnoses than LPR2 did, producing a spike in diagnosis counts around 2019-2020 that matters for any count- or trend-based analysis. See <a href="../en/09a_forstaa_lpr.html#lpr3-spike">the diagnosis spike</a>.</li>
 </ul>
+</div>
 </div>
 </div>
 <section id="fetch-diagnoses-from-lpr---choose-your-approach" class="level2">
@@ -611,31 +605,25 @@ Warning
 </table>
 <p><strong>Approach 1</strong> is best for a smaller number of outcomes. Filter on specific ICD codes directly in the <code>filter()</code> step <em>before</em> <code>collect()</code>. DuckDB/Arrow pushes the filter down to the storage layer - only matching rows are loaded into RAM.</p>
 <p><strong>Approach 2</strong> is best when your study has multiple outcomes. You query LPR once and build <code>alle_dx</code>: a shared table with all A and B diagnoses. For each new outcome, filter <code>alle_dx</code> on the relevant codes - the only line you change is the code list.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>The examples require parquet files and a completed study population. <code>kohort</code> is the data.frame with <code>pnr</code> and <code>index_date</code> per person - see <a href="../en/10_byg-studiepopulation.html">Phase 10</a>.</p>
 <p><strong>Adapt the path</strong> in <code>open_dataset(...)</code> to your project’s data folder (the examples’ <code>E:/workdata/[projectnumber]/...</code> is project-specific). <strong>Note:</strong> LPR is one of the largest registers, so the data <strong>must</strong> be in parquet. That lets Arrow/DuckDB filter before loading and fetch only the rows you ask for; reading LPR directly from e.g.&nbsp;SAS pulls the whole register into RAM. Convert SAS to parquet first: <a href="../en/04_filformater.html#convert-sas-to-parquet">Phase 4 - SAS to Parquet</a>.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Why <code>semi_join(tibble(pnr = ...))</code> and not <code>filter(pnr %in% ...)</code>?</strong> Both keep only the cohort’s rows, but a <code>semi_join</code> against a small <code>tibble</code> of pnr’s pushes down into Arrow/DuckDB more efficiently and reliably. A large <code>%in%</code> filter with an R vector can get slow or be rejected outright (especially with an older <code>duckplyr</code>). It also frees you from <code>!!</code>: <code>semi_join</code> takes an ordinary local table as its argument. You still need <code>!!</code> when you pass a local R vector into a <code>filter()</code>, e.g.&nbsp;a code list (<code>substr(c_diag, 2, 4) %in% !!CODES</code>).</p>
+</div>
 </div>
 </div>
 <details>
@@ -702,46 +690,37 @@ Approach 1 - fetch specific diagnoses directly (start here for one outcome)
 <span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="co"># Works because we gave the two extracts the SAME column names above (date_contact, c_diag, ...):</span></span>
 <span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>dm_dx <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(lpr2_dm, lpr3_dm)                   <span class="co"># one combined extract (LPR2 + LPR3)</span></span>
 <span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a><span class="co"># Columns: pnr | date_contact | c_diag | c_diagtype | icd3</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>What is <code>date_contact = d_inddto</code>? (why is <code>date_contact</code> coloured?)</strong> Inside <code>select()</code>, <code>new_name = old_name</code> means you <strong>rename</strong> a column. <code>d_inddto</code> is LPR2’s actual date column, and <code>date_contact</code> is a name <strong>you choose</strong> - the editor colours it like an argument, but it’s just the new column name (not a function argument). We rename because LPR3 has a <em>different</em> date column (<code>kont_starttidspunkt</code>); giving both the name <code>date_contact</code> makes the two extracts share column names, so <code>bind_rows()</code> can stack them.</p>
 <p><strong>Must vs.&nbsp;choice:</strong> the register names (<code>pnr</code>, <code>recnum</code>, <code>d_inddto</code>, <code>c_diag</code>, <code>c_diagtype</code>, <code>dw_ek_kontakt</code>, <code>kont_starttidspunkt</code>, <code>diag_kode</code> …) <strong>must</strong> be spelled exactly as in the register. The new names (<code>date_contact</code>, <code>icd3</code>) and the object name (<code>lpr2_dm</code>) are <strong>yours to choose</strong> - just keep the harmonized names identical across LPR2 and LPR3.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Many specific codes?</strong> Build the regex programmatically:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"E10"</span>, <span class="st">"E11"</span>, <span class="st">"E12"</span>, <span class="st">"E13"</span>, <span class="st">"E14"</span>)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>CODES_REGEX <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"^D("</span>, <span class="fu">paste</span>(codes, <span class="at">collapse =</span> <span class="st">"|"</span>), <span class="st">")"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Do you have F-codes (e.g.&nbsp;dementia, depression)?</strong> Extend the regex to include them, e.g.&nbsp;<code>"^DE1[0-4]|^DF0[0-3]|^DG30"</code>, and add psychiatric LPR2 - see Approach 2 below for the code.</p>
+</div>
 </div>
 </div>
 <details>
@@ -819,16 +798,12 @@ Approach 2 - fetch all diagnoses + filter outcome (for multiple outcomes)
 <span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a><span class="co">#-----------------------------------------------------</span></span>
 <span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a>alle_dx <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(lpr2_dx, lpr3_dx)</span>
 <span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a><span class="co"># Columns: pnr | date_contact | c_diag | c_diagtype | icd3</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Do you have F-codes (e.g.&nbsp;dementia, depression)?</strong> Psychiatric diagnoses recorded <em>before</em> March 2019 are in separate registers. Add them before <code>bind_rows()</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>psyk_adm  <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_adm/"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span> <span class="fu">rename</span>(<span class="at">pnr =</span> v_cpr, <span class="at">recnum =</span> k_recnum)</span>
@@ -845,17 +820,15 @@ Note
 <span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>alle_dx <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(lpr2_dx, lpr2_psyk_dx, lpr3_dx)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Using duckplyr?</strong> <code>union_all()</code> combines tables before <code>collect()</code> and requires identical column names and types. Rename LPR3 columns to match the LPR2 format before combining - see the onboarding document for an example.</p>
+</div>
 </div>
 </div>
 <p><strong>Filter your extracted table for specific outcomes</strong></p>
@@ -877,17 +850,14 @@ Tip
 <span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(outcome, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
 <span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(result, <span class="st">"sti/til/extract_dementia.rds"</span>)   <span class="co"># change filename for each new outcome</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>Exclusion of prevalent cases - persons who already had the diagnosis before index date - happens in <a href="../en/10_byg-studiepopulation.html">Phase 10, Step 2</a>. Use <code>cohort_clean</code> instead of <code>cohort</code> in the code above after completing that step.</p>
+</div>
 </div>
 </div>
 </details>
@@ -895,17 +865,14 @@ Note
 <summary>
 Try it yourself - runnable example with synthetic data (Approach 1)
 </summary>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>This example requires <strong>RStudio installed locally on your computer</strong> - not the DST server. The synthetic dataset (<code>fakeregs</code>) is not available on DST. Download R: <a href="https://cran.r-project.org/">cran.r-project.org</a> · Download RStudio: <a href="https://posit.co/download/rstudio-desktop/">posit.co/download/rstudio-desktop</a> It uses <code>open_dataset()</code> on local <code>synth_data/</code> folders; fastreg’s <code>read_register()</code> is for a configured DST project, not ad-hoc local folders.</p>
+</div>
 </div>
 </div>
 <p>The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the complete pattern from the theory section above, but runnable locally with synthetic data. It follows <strong>Approach 1</strong>: specific codes are filtered out <em>before</em> <code>collect()</code>.</p>
@@ -935,17 +902,14 @@ Important
 <span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_diag_synth, <span class="st">"synth_data/lpr_diag/lpr_diag.parquet"</span>)</span>
 <span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_a_k_synth,  <span class="st">"synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet"</span>)</span>
 <span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_a_d_synth,  <span class="st">"synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>The path is relative to your working directory</strong> - check with <code>getwd()</code>. If you have already run the preparation block in <a href="../en/06_foerste-udtraek.html">Phase 6</a>, <code>synth_data/lpr_adm/</code> is already saved.</p>
+</div>
 </div>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">#=====================================================</span></span>
@@ -1010,17 +974,14 @@ Tip
 <h2 class="anchored" data-anchor-id="wrap-the-pattern-in-a-reusable-function-for-multiple-outcomes">Wrap the pattern in a reusable function (for multiple outcomes)</h2>
 <p>If you extract diagnoses for several outcomes, it pays off to encapsulate the Approach 2 pattern in one reusable function rather than copying ~40 lines for each new outcome. Define it at the top of your script or in a separate <code>functions.R</code> file. The function keeps the diagnosis-type column (<code>c_diagtype</code>) in its output, so you can later restrict the case definition for a sensitivity analysis (see <a href="../en/09a_forstaa_lpr.html#diagtype">Diagnosis types</a>) without re-querying LPR.</p>
 <p><strong>Advantages:</strong> - One place to fix if something changes (e.g.&nbsp;a new register or a new column) - The code block for each outcome is reduced from ~40 lines to one function call - Errors are introduced in one place instead of in each copy</p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Using fastreg, or working on DARTER?</strong> With <strong>fastreg</strong>, replace <code>open_dataset("E:/workdata/.../&lt;register&gt;/")</code> with <code>read_register("&lt;register&gt;")</code> (by name). On <strong>DARTER</strong> you use the same <code>read_register("&lt;register&gt;")</code> (fastreg). See <a href="../en/darter/00_index.html">DARTER - overview and pipeline</a> for the fully adapted variant - it is kept up to date with the current, confirmed register names (as of June 2026).</p>
+</div>
 </div>
 </div>
 <details>
@@ -1121,17 +1082,14 @@ See the full <code>get_lpr_diagnoses()</code> function and usage
 <section id="patienttype" class="level2">
 <h2 class="anchored" data-anchor-id="patienttype">Classify patient type: inpatient, outpatient or emergency</h2>
 <p>Many studies need to tell <strong>inpatient</strong> contacts apart from <strong>outpatient</strong> visits and <strong>emergency-room</strong> visits (e.g.&nbsp;only admissions as an outcome, or acute contacts as a marker). There is no single shared field across LPR2 and LPR3 - you derive the type.</p>
-<div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Column names and codes must be verified against your own extract.</strong> The logic itself is durable (the codes <code>ALCA00</code> and <code>ATA1</code> are confirmed LPR3 values as of 2025), but the exact column names in LPR_A may differ from the example. Check with <code>arrow::schema()</code>/<code>colnames()</code> and look them up in <a href="../en/register_reference.html">Overview of registers</a>. The pattern is adapted from <a href="https://osf.io/zhfyp/overview">the Plana-Ripoll group’s code on OSF</a>.</p>
+</div>
 </div>
 </div>
 <p><strong>LPR2 (up to March 2019).</strong> Patient type lives in <code>c_pattype</code>, but the emergency-room coding changed around 2014:</p>
@@ -1158,17 +1116,14 @@ Warning
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"outpatient"</span></span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>The 8-hour cut-off is a heuristic, not an official definition</strong> - LPR3 has no “inpatient” field. Pick and document your own threshold, and clarify with your data manager. The column names for start/end time and unit type vary between deliveries; verify them before use.</p>
+</div>
 </div>
 </div>
 </section>
@@ -1184,17 +1139,14 @@ Note
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="sc">!</span><span class="fu">substr</span>(<span class="fu">toupper</span>(c_diag), <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"DZ763"</span>, <span class="st">"DZ032"</span>, <span class="st">"DZ038"</span>, <span class="st">"DZ039"</span>),</span>
 <span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">substr</span>(<span class="fu">toupper</span>(c_diag), <span class="dv">1</span>, <span class="dv">4</span>) <span class="sc">!=</span> <span class="st">"Y719"</span></span>
 <span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>What to remove depends on project and question - <code>DZ03*</code> (observation for suspected disease) is for instance relevant in some studies and should be kept there. The pattern is adapted from <a href="https://osf.io/zhfyp/overview">the Plana-Ripoll group’s code on OSF</a>; verify against your own data.</p>
+</div>
 </div>
 </div>
 </section>

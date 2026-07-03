@@ -546,30 +546,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>In Phase 4 you saw that registers are loaded <em>lazily</em>: you open a connection, not data. This page shows <strong>the working method</strong> that follows from that - the same pattern you will use in every single extraction for the rest of the guide.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>This is the most important pattern in the entire guide.</strong> Every extraction from DST registers follows this structure. Learn it here once - you will recognise it everywhere from Phase 6 onwards.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Why can’t we just load a register like a CSV file?</strong> Because the registers are too large. A CSV (or <code>readRDS</code>) reads the entire file into memory at once - that works fine with your own small datasets, but BEF and LMDB have millions to hundreds of millions of rows and would crash your session. The lazy connection lets you filter <em>before</em> you fetch, so only the rows you actually need ever reach memory.</p>
+</div>
 </div>
 </div>
 <section id="the-pattern-open-connection-filter-select-fetch" class="level2">
@@ -603,17 +597,14 @@ Note
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. collect() - HERE the selected data is moved into R's memory</span></span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>bef_data <span class="ot">&lt;-</span> bef_filtered <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Steps 1–2 are pure <em>instructions</em> - they cost almost no memory. <code>collect()</code> in step 3 is the only line that actually moves data.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Why <code>rename_with(tolower)</code> as the first step?</strong> Raw column names in DST registers have inconsistent capitalisation - <code>PNR</code>, <code>pnr</code>, <code>Pnr</code>. By standardising to lower case immediately, the rest of your code can use <code>pnr</code> everywhere without thinking about it. Add it immediately after <code>open_dataset()</code> as the first step in your pipe - before filtering or selecting columns.</p>
+</div>
 </div>
 </div>
 </section>
@@ -630,43 +621,34 @@ Note
 <span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span> <span class="co"># everything into RAM - can crash the session</span></span>
 <span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(aar <span class="sc">==</span> <span class="dv">2020</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>BEF has millions of rows; LMDB has hundreds of millions. Calling <code>collect()</code> before you have narrowed the rows can crash your session - and because everyone shares the server’s RAM, it makes the server slow for <strong>everyone else</strong> at the same time. The more you have filtered and selected columns in advance, the faster and more stably it runs.</p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Rule of thumb:</strong> <code>filter()</code> limits rows. <code>select()</code> limits columns. Use both <em>before</em> <code>collect()</code>, never after.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Later: keeping just your cohort.</strong> Once you have built a study population, you will usually want to keep only <em>your cohort’s</em> people in a register. That is done with <code>semi_join</code> against your cohort’s <code>pnr</code> - introduced when you extract from LPR (<a href="../en/09b_udtraek_fra_lpr.html">Phase 9b</a>), once the cohort itself is built (<a href="../en/10_byg-studiepopulation.html">Phase 10</a>). You don’t need it yet.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Never write actual CPR numbers (pnr) in your code</strong> - only variable names and vectors. Hardcoding real CPR numbers in a script violates DST’s rules for handling microdata.</p>
+</div>
 </div>
 </div>
 <details>
@@ -677,17 +659,14 @@ In depth: what <code>!!</code> means, and when you need it (skip for now if this
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>my_codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"DE10"</span>, <span class="st">"DE11"</span>, <span class="st">"DE14"</span>)   <span class="co"># local R vector you created</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>register <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_diag <span class="sc">%in%</span> <span class="sc">!!</span>my_codes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs <em>separately</em> from R and does not know your local variables. Without <code>!!</code>, the engine would look for a <em>column</em> called <code>my_codes</code> inside the register. It does not exist - <code>my_codes</code> is an R vector you created locally. <code>!!</code> means: <em>“this is an R object, not a column name - look up its values in R and use them in the query.”</em></p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>Rule of thumb: if you refer to a <strong>column</strong> in the register, write the name directly. If you refer to an <strong>R variable</strong> you created yourself, put <code>!!</code> in front of it.</p>
+</div>
 </div>
 </div>
 <p>The other place this comes up is subsetting a register to your cohort’s <code>pnr</code> - but there you will use <code>semi_join</code>, which takes an ordinary local table and avoids <code>!!</code> entirely. See <a href="../en/09b_udtraek_fra_lpr.html">Phase 9b</a>.</p>

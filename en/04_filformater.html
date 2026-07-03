@@ -577,17 +577,14 @@ E:/workdata/[projectnumber]/
 <p>Think of the difference as two ways to do your grocery shopping. <strong>Full loading</strong> is driving the whole supermarket home and only then picking out the three items you needed. <strong>Lazy loading</strong> is sending a shopping list and getting just those three items delivered. When a register runs to millions of rows, that difference is decisive.</p>
 <p><strong>Full loading</strong> (<code>readRDS</code>, <code>read_sas</code>, <code>read_csv</code>, <code>read_xlsx</code>) The entire file is read into RAM (the computer’s working memory - it is limited and shared with everyone else on the server) immediately. For your own intermediate results this is fine - they are relatively small. But it would crash your session if you tried it on a whole register.</p>
 <p><strong>Lazy loading</strong> (parquet via <code>open_dataset()</code>) The file is opened as a <em>connection</em> to the data on disk, not as the data itself. You can filter and select columns (write your “shopping list”), and <strong>only when you call <code>collect()</code></strong> are the selected rows fetched into RAM. This is how you work with registers of millions of rows without running out of memory.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>SAS files are also large - and are shared with everyone on the server.</strong> On DST all users share the server’s RAM. <code>read_sas()</code> on a large SAS file burdens the server for everyone at the same time. DST <strong>automatically kills processes</strong> (RStudio sessions, jobs, etc.) when RAM is close to full - so an oversized extraction can cost you your unsaved work. If you use a SAS file repeatedly, it is worth converting it to parquet once - this saves significant RAM and makes loading much faster. See <a href="#convert-sas-to-parquet">Convert SAS to parquet</a> below for the procedure, and <a href="../en/god-kode-praksis.html#mind-your-ram">Mind your RAM in the shared environment</a> for the practical habits. DST’s official advice is collected in <a href="https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&amp;fo=0&amp;ext=forskning">DST guide: Reducing RAM use in the shared environment (PDF, Danish)</a>.</p>
+</div>
 </div>
 </div>
 </section>
@@ -648,30 +645,24 @@ Important
 <li>With <code>read_register()</code> (fastreg) you write just the register <strong>name</strong> - e.g. <code>read_register("bef")</code> - because fastreg already knows where your parquet lives (you set that once during conversion). It also hands you a DuckDB connection, so more dplyr functions work without an extra <code>to_duckdb()</code> step. It requires that the registers were set up with fastreg.</li>
 </ul>
 <p>The exact path depends on your project and server. Column names for each register are in <a href="../en/register_reference.html">Overview of registers</a>.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Didn’t convert the data yourself?</strong> If a colleague already converted the registers with fastreg, you only point fastreg at that folder once per script - set <code>options(fastreg.project_workdata_dir = "...")</code> to the converted folder (ask whoever set it up for the exact path, typically <code>cleaned-data/parquet-registers/</code>). After that, <code>read_register("bef")</code> works by name, with no conversion and no path in each call. The <a href="https://dp-next.github.io/fastreg/articles/fastreg.html">Getting started vignette</a> shows the option.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>A register often arrives as many yearly files</strong> (e.g.&nbsp;<code>bef2015.parquet</code>, <code>bef2016.parquet</code> … in the same folder, sometimes one subfolder per year). Both <code>open_dataset("path/to/bef/")</code> and fastreg’s <code>read_register("bef")</code> read the <strong>whole folder (including any per-year subfolders) as one combined dataset</strong>. Pick years by filtering on the year column <em>in the data</em>, e.g. <code>filter(year == 2015)</code> (some registers use <code>aar</code>).</p>
+</div>
 </div>
 </div>
 <p><strong>RDS is the format you write yourself most.</strong> You save intermediate results from one script and reload them in the next:</p>
@@ -760,17 +751,14 @@ When to use each format (Parquet, RDS, SAS, CSV)
 <section id="convert-sas-to-parquet" class="level2">
 <h2 class="anchored" data-anchor-id="convert-sas-to-parquet">Convert SAS files to Parquet</h2>
 <p>Most projects on DST receive registers as SAS files (<code>.sas7bdat</code>). Before you can use them with <code>open_dataset()</code> and lazy evaluation, they must be converted to Parquet <strong>once</strong>. After that you use them exactly like any other register.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Relevant for most projects outside DARTER.</strong> If you are working on a project where the registers have not already been converted to parquet, this step is necessary before you can run extractions. Done once per register - after that the normal extraction pattern applies.</p>
+</div>
 </div>
 </div>
 <details>
@@ -812,17 +800,14 @@ Why Parquet is worth it (SAS vs Parquet)
 <section id="recommended-convert-with-fastreg" class="level3">
 <h3 class="anchored" data-anchor-id="recommended-convert-with-fastreg">Recommended: convert with <code>fastreg</code></h3>
 <p>The recommended tool is the <a href="https://dp-next.github.io/fastreg/"><code>fastreg</code></a> package (dp-next, on CRAN). It converts SAS registers to Parquet (partitioned by year) and lets you read them back by <strong>name</strong>.</p>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Use fastreg’s own guide for the conversion code.</strong> The exact commands are documented - and kept up to date by the maintainers - in fastreg’s <a href="https://dp-next.github.io/fastreg/articles/fastreg.html">Getting started vignette</a>. We link to the relevant section below instead of reproducing code that could drift out of date. You install it once with <code>install.packages("fastreg")</code> and point it at your raw-data and output folders as shown there.</p>
+</div>
 </div>
 </div>
 <section id="convert-a-single-file" class="level4">
@@ -855,22 +840,19 @@ If fastreg is not available on your project: convert manually with haven + arrow
 <span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Verify - open it lazily like any other register</span></span>
 <span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="fu">open_dataset</span>(parq_path) <span class="sc">%&gt;%</span> <span class="fu">glimpse</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Read only what you need.</strong> Even before converting you can save RAM by limiting what is read in:</p>
 <ul>
 <li><code>read_sas()</code> (<code>haven</code>) takes <code>col_select = c(pnr, alder, civst)</code> (pick columns), <code>n_max = 10000</code> (first rows only - good for testing) and <code>skip =</code>.</li>
 <li><code>heaven::import_SAS()</code> (pre-installed on DST) is even more efficient for large files and can filter on values - e.g.&nbsp;<code>keep = c("pnr","atc")</code>, <code>where = "..."</code> (filter rows) or <code>obs = 1000</code>.</li>
 </ul>
 <p>You can also convert to Parquet (or <code>.dta</code>) in <strong>StatTransfer</strong>, available on every server in the shared environment.</p>
+</div>
 </div>
 </div>
 </details>
@@ -881,7 +863,7 @@ Tip
 <h2 class="anchored" data-anchor-id="next-step">Next step</h2>
 <p>Why lazy loading works, and how <code>collect()</code> functions, is the topic of the next phase.</p>
 <p>→ <a href="../en/05_udtraek-trin-for-trin.html">Phase 5 - Extracting data step by step</a></p>
-<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>

@@ -544,35 +544,29 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <p>Denne side viser, hvordan du trækker diagnoser ud af LPR med kode. Den bygger på strukturen fra <a href="../da/09a_forstaa_lpr.html">Forstå LPR</a>: perioderne (LPR2/LPR3), D-præfikset, diagnosetyperne (A/B/G) og filtret for tilbagekaldte diagnoser. Læs den side først, hvis du ikke allerede har.</p>
 <p>Du bruger det samme udtræksmønster som i <a href="../da/05_udtraek-trin-for-trin.html">Fase 5</a> og <a href="../da/06_foerste-udtraek.html">Fase 6</a> - bare anvendt på LPR’s to generationer. Det er den vigtigste og nok den mest komplekse del af guiden.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Cirkulær sammenhæng med Fase 10 - bevidst.</strong> For at udtrække diagnoser (denne side) tænker vi, at du allerede har en kohorte; men du <em>bygger</em> kohorten i <a href="../da/10_byg-studiepopulation.html">Fase 10</a> med præcis det udtræksmønster, du lærer her. Læs faserne i rækkefølge, og kom tilbage til koden, når din kohorte er klar. Koden bruger <code>inner_join()</code> og <code>bind_rows()</code>; er de nye, forklares de grundigt i <a href="../da/12_data-manipulation.html">Fase 12</a>.</p>
 </div>
 </div>
-<div id="lpr-a-format" class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div id="lpr-a-format" class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>LPR3-filer og kolonnenavne - tjek før du loader.</strong></p>
 <ul>
 <li><strong>Brug LPR_A-filerne konsekvent.</strong> DST har skiftet LPR3 fra det gamle <strong>LPR_F</strong>-format (<code>kontakter</code>, <code>diagnoser</code>, <code>forloeb</code>) til det nye <strong>LPR_A</strong>-format (<code>lpr_a_kontakt</code>, <code>lpr_a_diagnose</code>). Begge versioner kan ligge i din mappe og dække de samme år - loader du begge (eller blander gammelt og nyt), får du <strong>duplikerede rækker</strong>. Brug <code>lpr_a_*</code> som i eksemplerne her, og lad LPR_F-filerne ligge. Nogle projekter har desuden ældre data <em>inde i</em> <code>lpr_a_kontakt</code>, som allerede findes i LPR2; filtrér dem fra med <code>lprindberetningssystem == "LPR3"</code>. Det er projekt-specifikt - på <strong>DARTER</strong> er det håndteret i <a href="../da/darter/02_darter-faldgruber.html#lpr3-lprindberetningssystem">faldgrube 5</a>; ellers afklar med din datamanager.</li>
 <li><strong>Verificér kolonnenavne.</strong> Skiftet til LPR_A har ændret en række variabelnavne (ofte uigennemsigtige danske forkortelser). Eksemplerne bruger de navne registrene typisk har, men tjek altid, før du stoler på et kolonnenavn. På et dovent <code>open_dataset()</code>-objekt kan du bruge <code>arrow::schema(din_data)</code> - den viser kolonnenavnene <strong>og deres typer</strong> uden at læse data ind i RAM; <code>colnames(din_data)</code> virker også (og er det, du bruger til de DuckDB-baserede objekter fra <code>read_register()</code>/<code>read_register()</code>). Slå navnene op i <a href="../da/register_reference.html">Register-overblik</a>.</li>
 <li><strong>Vær opmærksom på diagnose-spiket 2019-2020.</strong> LPR3’s kontaktmodel registrerer langt flere ambulante diagnoser end LPR2 gjorde, hvilket giver et spike i antallet af diagnoser omkring 2019-2020, som betyder noget for enhver optællings- eller tendensbaseret analyse. Se <a href="../da/09a_forstaa_lpr.html#lpr3-spike">diagnose-spiket</a>.</li>
 </ul>
+</div>
 </div>
 </div>
 <section id="hent-diagnoser-fra-lpr---vælg-tilgang" class="level2">
@@ -611,31 +605,25 @@ Warning
 </table>
 <p><strong>Tilgang 1</strong> er bedst ved et mindre antal diagnoser du vil trække ud. Du filtrerer på specifikke ICD-koder direkte i <code>filter()</code>-steget <em>inden</em> <code>collect()</code>. DuckDB/Arrow sender filteret ned til lagringsformatet - kun relevante rækker hentes i RAM.</p>
 <p><strong>Tilgang 2</strong> er bedst når du har mange udfald du vil trække ud. Du forespørger LPR én enkelt gang og bygger <code>alle_dx</code>: en fælles tabel med alle A- og B-diagnoser. For hvert nyt udfald filtrerer du blot <code>alle_dx</code> på koderne - den eneste linje du ændrer er kode-listen.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. <code>kohort</code> er en data.frame med <code>pnr</code> og <code>index_date</code> per person - se <a href="../da/10_byg-studiepopulation.html">Fase 10</a>.</p>
 <p><strong>Tilpas stien</strong> i <code>open_dataset(...)</code> til dit projekts datamappe (eksemplernes <code>E:/workdata/[projektnummer]/...</code> er projektspecifik). <strong>OBS:</strong> LPR er et af de største registre, så data <strong>skal</strong> ligge i parquet. Så kan Arrow/DuckDB filtrere før indlæsning og kun hente de rækker du beder om; læser du LPR direkte fra fx SAS, hentes hele registret i RAM. Konverter SAS til parquet først: <a href="../da/04_filformater.html#konvertér-sas-til-parquet">Fase 4 - SAS til parquet</a>.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Hvorfor <code>semi_join(tibble(pnr = ...))</code> og ikke <code>filter(pnr %in% ...)</code>?</strong> Begge beholder kun kohortens rækker, men <code>semi_join</code> mod en lille <code>tibble</code> af pnr’er skubbes mere effektivt og pålideligt ned i Arrow/DuckDB. Et stort <code>%in%</code>-filter med en R-vektor kan blive langsomt eller helt afvist (især med en ældre <code>duckplyr</code>). Du slipper samtidig for <code>!!</code>: <code>semi_join</code> tager en almindelig lokal tabel som argument. <code>!!</code> skal du stadig bruge, når du sender en lokal R-vektor ind i et <code>filter()</code>, fx en kodeliste (<code>substr(c_diag, 2, 4) %in% !!KODER</code>).</p>
+</div>
 </div>
 </div>
 <details>
@@ -702,46 +690,37 @@ Tilgang 1 - hent bestemte diagnoser direkte (start her ved ét udfald)
 <span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="co"># Virker, fordi vi gav de to udtræk SAMME kolonnenavne ovenfor (date_contact, c_diag, ...):</span></span>
 <span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>dm_dx <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(lpr2_dm, lpr3_dm)                   <span class="co"># ét samlet udtræk (LPR2 + LPR3)</span></span>
 <span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a><span class="co"># Kolonner: pnr | date_contact | c_diag | c_diagtype | icd3</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Hvad er <code>date_contact = d_inddto</code>? (hvorfor farves <code>date_contact</code>?)</strong> Inde i <code>select()</code> betyder <code>nyt_navn = gammelt_navn</code>, at du <strong>omdøber</strong> en kolonne. <code>d_inddto</code> er LPR2’s faktiske datokolonne, og <code>date_contact</code> er et navn, <strong>du selv vælger</strong> - editoren farver det som et argument, men det er bare det nye kolonnenavn (ikke et funktionsargument). Vi omdøber, fordi LPR3 har en <em>anden</em> datokolonne (<code>kont_starttidspunkt</code>); ved at give begge navnet <code>date_contact</code> får de to udtræk ens kolonnenavne, så <code>bind_rows()</code> kan stable dem.</p>
 <p><strong>Skal vs.&nbsp;valg:</strong> registernavnene (<code>pnr</code>, <code>recnum</code>, <code>d_inddto</code>, <code>c_diag</code>, <code>c_diagtype</code>, <code>dw_ek_kontakt</code>, <code>kont_starttidspunkt</code>, <code>diag_kode</code> …) <strong>skal</strong> staves præcis som i registret. De nye navne (<code>date_contact</code>, <code>icd3</code>) og objektnavnet (<code>lpr2_dm</code>) <strong>vælger du selv</strong> - bare hold de harmoniserede navne ens på tværs af LPR2 og LPR3.</p>
 </div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Mange specifikke koder?</strong> Byg regex programmatisk:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>koder <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"E10"</span>, <span class="st">"E11"</span>, <span class="st">"E12"</span>, <span class="st">"E13"</span>, <span class="st">"E14"</span>)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>KODER_REGEX <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">"^D("</span>, <span class="fu">paste</span>(koder, <span class="at">collapse =</span> <span class="st">"|"</span>), <span class="st">")"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Har du F-koder (fx demens, depression)?</strong> Tilpas regex til at inkludere dem, fx <code>"^DE1[0-4]|^DF0[0-3]|^DG30"</code>, og tilføj psykiatrisk LPR2 - se Tilgang 2 nedenfor for kode.</p>
+</div>
 </div>
 </div>
 <details>
@@ -819,16 +798,12 @@ Tilgang 2 - hent alle diagnoser + filtrer udfald (ved flere udfald)
 <span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a><span class="co">#-----------------------------------------------------</span></span>
 <span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a>alle_dx <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(lpr2_dx, lpr3_dx)</span>
 <span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a><span class="co"># Kolonner: pnr | date_contact | c_diag | c_diagtype | icd3</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Har du F-koder (fx demens, depression)?</strong> Psykiatriske diagnoser stillet <em>inden</em> marts 2019 er i separate registre. Tilføj dem inden <code>bind_rows()</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>psyk_adm  <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_adm/"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span> <span class="fu">rename</span>(<span class="at">pnr =</span> v_cpr, <span class="at">recnum =</span> k_recnum)</span>
@@ -845,17 +820,15 @@ Note
 <span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>alle_dx <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(lpr2_dx, lpr2_psyk_dx, lpr3_dx)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+</div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Bruger du duckplyr?</strong> <code>union_all()</code> kombinerer tabellerne inden <code>collect()</code> og kræver identiske kolonnenavne og -typer. Omdøb LPR3-kolonnerne til LPR2-format inden kombination - se onboarding-dokumentet for eksempel.</p>
+</div>
 </div>
 </div>
 <p><strong>Filtrer din udtrukne tabel for specifikke udfald</strong></p>
@@ -877,17 +850,14 @@ Tip
 <span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(udfald, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
 <span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(resultat, <span class="st">"sti/til/extract_demens.rds"</span>)   <span class="co"># skift filnavn for hvert nyt udfald</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>Ekskludering af prævalente tilfælde - personer der allerede havde diagnosen inden index-dato - sker i <a href="../da/10_byg-studiepopulation.html">Fase 10, Trin 2</a>. Brug <code>kohort_renset</code> i stedet for <code>kohort</code> i koden ovenfor, efter at du har gennemført det trin.</p>
+</div>
 </div>
 </div>
 </details>
@@ -895,17 +865,14 @@ Note
 <summary>
 Prøv det selv - kørbart eksempel med syntetiske data (Tilgang 1)
 </summary>
-<div class="callout callout-style-default callout-important callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Important
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>Dette eksempel kræver <strong>RStudio installeret lokalt på din computer</strong> - ikke DST-serveren. Det syntetiske datasæt (<code>fakeregs</code>) er ikke tilgængeligt på DST. Download R: <a href="https://cran.r-project.org/">cran.r-project.org</a> · Download RStudio: <a href="https://posit.co/download/rstudio-desktop/">posit.co/download/rstudio-desktop</a> Det bruger <code>open_dataset()</code> på lokale <code>synth_data/</code>-mapper; fastregs <code>read_register()</code> er til et konfigureret DST-projekt, ikke ad-hoc lokale mapper.</p>
+</div>
 </div>
 </div>
 <p>Eksemplet trækker CVD-diagnoser (iskæmisk hjertesygdom, ICD-10 I20–I25) fra LPR2 og LPR3 kombineret - det komplette mønster fra teoriafsnittet ovenfor, men kørbart lokalt med syntetiske data. Det følger <strong>Tilgang 1</strong>: specifikke koder filtreres fra <em>inden</em> <code>collect()</code>.</p>
@@ -935,17 +902,14 @@ Important
 <span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_diag_synth, <span class="st">"synth_data/lpr_diag/lpr_diag.parquet"</span>)</span>
 <span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_a_k_synth,  <span class="st">"synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet"</span>)</span>
 <span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_a_d_synth,  <span class="st">"synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Stien er relativ til dit working directory</strong> - tjek med <code>getwd()</code>. Har du allerede kørt forberedelsesblokken i <a href="../da/06_foerste-udtraek.html">Fase 6</a>, er <code>synth_data/lpr_adm/</code> allerede gemt.</p>
+</div>
 </div>
 </div>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">#=====================================================</span></span>
@@ -1010,17 +974,14 @@ Tip
 <h2 class="anchored" data-anchor-id="pak-mønstret-i-en-genanvendelig-funktion-ved-mange-udfald">Pak mønstret i en genanvendelig funktion (ved mange udfald)</h2>
 <p>Henter du diagnoser for flere udfald, betaler det sig at samle Tilgang 2-mønstret i én genanvendelig funktion fremfor at kopiere ~40 linjer for hvert nyt udfald. Definer den øverst i dit script eller i en separat <code>functions.R</code>-fil. Funktionen beholder diagnosetype-kolonnen (<code>c_diagtype</code>) i sit output, så du senere kan stramme case-definitionen til en sensitivitetsanalyse (se <a href="../da/09a_forstaa_lpr.html#diagtype">Diagnosetyper</a>) uden at forespørge LPR igen.</p>
 <p><strong>Fordele:</strong> - Ét sted at rette, hvis noget ændres (fx et nyt register eller en ny kolonne) - Kodeblokken til hvert udfald reduceres fra ~40 linjer til ét funktionskald - Fejl introduceres ét sted i stedet for i hver kopi</p>
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Tip
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Bruger du fastreg, eller arbejder du på DARTER?</strong> Med <strong>fastreg</strong> bytter du <code>open_dataset("E:/workdata/.../&lt;register&gt;/")</code> ud med <code>read_register("&lt;register&gt;")</code> (via navn). På <strong>DARTER</strong> bruger du samme <code>read_register("&lt;register&gt;")</code> (fastreg). Se <a href="../da/darter/00_index.html">DARTER - oversigt og pipeline</a> for den fuldt tilpassede variant - den er opdateret med de aktuelle, bekræftede registernavne (pr. juni 2026).</p>
+</div>
 </div>
 </div>
 <details>
@@ -1121,17 +1082,14 @@ Se den fulde <code>get_lpr_diagnoses()</code>-funktion og brug
 <section id="patienttype" class="level2">
 <h2 class="anchored" data-anchor-id="patienttype">Klassificér patienttype: indlagt, ambulant eller skadestue</h2>
 <p>Mange studier skal skelne <strong>indlagte</strong> kontakter fra <strong>ambulante</strong> besøg og <strong>skadestue</strong>-besøg (fx kun indlæggelser som udfald, eller akutte kontakter som markør). Der findes ikke ét fælles felt på tværs af LPR2 og LPR3 - du udleder typen.</p>
-<div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Warning
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>Kolonnenavne og koder skal verificeres mod dit eget udtræk.</strong> Selve logikken er holdbar (koderne <code>ALCA00</code> og <code>ATA1</code> er bekræftede LPR3-værdier pr. 2025), men de præcise kolonnenavne i LPR_A kan afvige fra eksemplet. Tjek med <code>arrow::schema()</code>/<code>colnames()</code> og slå op i <a href="../da/register_reference.html">Register-overblik</a>. Mønstret er tilpasset fra <a href="https://osf.io/zhfyp/overview">Plana-Ripoll-gruppens kode på OSF</a>.</p>
+</div>
 </div>
 </div>
 <p><strong>LPR2 (frem til marts 2019).</strong> Patienttypen ligger i <code>c_pattype</code>, men skadestue-kodningen ændrede sig omkring 2014:</p>
@@ -1158,17 +1116,14 @@ Warning
 <span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"ambulant"</span></span>
 <span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p><strong>8-timers-grænsen er en heuristik, ikke en officiel definition</strong> - LPR3 har ikke et “indlagt”-felt. Vælg og dokumentér din egen grænse, og afklar med din datamanager. Kolonnenavnene for start-/sluttidspunkt og enhedstype varierer mellem leverancer; verificér dem før brug.</p>
+</div>
 </div>
 </div>
 </section>
@@ -1184,17 +1139,14 @@ Note
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="sc">!</span><span class="fu">substr</span>(<span class="fu">toupper</span>(c_diag), <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"DZ763"</span>, <span class="st">"DZ032"</span>, <span class="st">"DZ038"</span>, <span class="st">"DZ039"</span>),</span>
 <span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">substr</span>(<span class="fu">toupper</span>(c_diag), <span class="dv">1</span>, <span class="dv">4</span>) <span class="sc">!=</span> <span class="st">"Y719"</span></span>
 <span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container">
 <p>Hvad der skal renses, afhænger af projekt og spørgsmål - <code>DZ03*</code> (observation pga. mistanke) er fx relevant i nogle studier og bør beholdes der. Mønstret er tilpasset fra <a href="https://osf.io/zhfyp/overview">Plana-Ripoll-gruppens kode på OSF</a>; verificér mod dine egne data.</p>
+</div>
 </div>
 </div>
 </section>
