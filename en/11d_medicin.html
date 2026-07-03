@@ -554,7 +554,7 @@ Warning
 </div>
 <p>Prescription medication lives in <strong>LMDB</strong> (the Prescription Register). The register has <strong>one row per dispensed prescription</strong>, so the same person can have hundreds of rows. The two columns you almost always use are:</p>
 <ul>
-<li><strong><code>atc</code>:</strong> the drug’s ATC code (Anatomical Therapeutic Chemical), e.g.&nbsp;<code>"A10BA02"</code> for metformin.</li>
+<li><strong><code>atc</code>:</strong> the drug’s ATC code (Anatomical Therapeutic Chemical), e.g. <code>"A10BA02"</code> for metformin.</li>
 <li><strong><code>eksd</code>:</strong> the dispensing date (when the prescription was collected) - use it as the prescription date, just like <code>date_contact</code> in LPR.</li>
 </ul>
 <p>The full confirmed column list is in <a href="../en/register_reference.html#7-lmdb-prescription-register">Register reference</a>.</p>
@@ -615,19 +615,23 @@ Note
 <section id="the-pattern" class="level2">
 <h2 class="anchored" data-anchor-id="the-pattern">The pattern</h2>
 <p>ATC codes have <strong>no D-prefix</strong> (unlike ICD in LPR, see <a href="../en/09a_forstaa_lpr.html#icd-codes-and-the-d-prefix">Understand LPR</a>), so you match directly on the start of the code:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(arrow); <span class="fu">library</span>(dplyr)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)<span class="sc">$</span>pnr)   <span class="co"># your cohort from Phase 10</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>medication <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"path/to/lmdb/"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>   <span class="co"># ONLY your cohort</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">substr</span>(atc, <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">==</span> <span class="st">"A10BJ"</span>) <span class="sc">%&gt;%</span>               <span class="co"># GLP-1 analogues - filter BEFORE collect</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd, vnr) <span class="sc">%&gt;%</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span>                                          <span class="co"># only HERE is data pulled into RAM</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(eksd) <span class="sc">%&gt;%</span> <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>()   <span class="co"># first dispensing per person</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication, <span class="st">"path/to/extract_medication.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(arrow)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)<span class="sc">$</span>pnr) <span class="co"># your cohort from Phase 10</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>medication <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"path/to/lmdb/"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span> <span class="co"># ONLY your cohort</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">substr</span>(atc, <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">==</span> <span class="st">"A10BJ"</span>) <span class="sc">%&gt;%</span> <span class="co"># GLP-1 analogues - filter BEFORE collect</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd, vnr) <span class="sc">%&gt;%</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span> <span class="co"># only HERE is data pulled into RAM</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(eksd) <span class="sc">%&gt;%</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="co"># first dispensing per person</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication, <span class="st">"path/to/extract_medication.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>substr(atc, 1, 5) == "A10BJ"</code> matches the whole ATC level (all GLP-1 analogues). For several groups at once, use <a href="../en/09b_udtraek_fra_lpr.html">regex</a> as in LPR: <code>grepl("^A10BJ|^A10BA", atc)</code>. The code-matching pattern (regex, <code>%in%</code> with a code list, <code>!!</code>) is explained in <a href="../en/09b_udtraek_fra_lpr.html">Extract from LPR</a> and <a href="../en/guide_til_funktioner.html#filtrer-betingelser">Function guide</a>. Reducing to <strong>one row per person</strong> is explained in <a href="../en/12a_langt-bredt.html">Long ↔︎ wide format</a> - here <code>slice(1)</code> for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).</p>
 </section>
 <section id="atc-is-not-enough-same-substance-different-product" class="level2">
@@ -643,12 +647,12 @@ Note
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Build your own list of the varenumbers that belong to the product</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">#    (look them up in the medicine taxonomy - one product has several varenumbers):</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>ozempic_vnr <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"xxxxxx"</span>, <span class="st">"yyyyyy"</span>)   <span class="co"># placeholders - replace with your looked-up numbers</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>ozempic_vnr <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"xxxxxx"</span>, <span class="st">"yyyyyy"</span>) <span class="co"># placeholders - replace with your looked-up numbers</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Keep only the dispensings whose vnr is on your list:</span></span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>medication <span class="sc">%&gt;%</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(atc <span class="sc">==</span> <span class="st">"A10BJ06"</span>) <span class="sc">%&gt;%</span>         <span class="co"># semaglutide (Ozempic AND Wegovy)</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(vnr <span class="sc">%in%</span> <span class="sc">!!</span>ozempic_vnr)       <span class="co"># keep only rows with a vnr from your list</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(atc <span class="sc">==</span> <span class="st">"A10BJ06"</span>) <span class="sc">%&gt;%</span> <span class="co"># semaglutide (Ozempic AND Wegovy)</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(vnr <span class="sc">%in%</span> <span class="sc">!!</span>ozempic_vnr) <span class="co"># keep only rows with a vnr from your list</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Keep the two names in the last line apart: <strong><code>vnr</code></strong> (on its own) is the register’s <em>column</em> holding the varenummer - the product’s ID, just as <code>pnr</code> is the person’s ID. <strong><code>ozempic_vnr</code></strong> is your <em>own</em> R vector of the varenumbers you looked up for Ozempic; you choose the name yourself (same pattern as the code list in <a href="../en/05_udtraek-trin-for-trin.html">Extracting data step by step</a>). <code>%in%</code> keeps the rows where <code>vnr</code> is found in your list, and <code>!!</code> sends your local list into the lazy query (explained in <a href="../en/09b_udtraek_fra_lpr.html">Extract from LPR</a> and <a href="../en/guide_til_funktioner.html#filtrer-betingelser">Function guide</a>).</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">

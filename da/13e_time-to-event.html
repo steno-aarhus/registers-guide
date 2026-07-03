@@ -580,16 +580,16 @@ Note
 <section id="udgangspunkt" class="level2">
 <h2 class="anchored" data-anchor-id="udgangspunkt">Udgangspunkt</h2>
 <p>Du skal bruge to ting per person: <strong>opfølgningstid</strong> (hvor længe personen blev fulgt) og <strong>hændelsesstatus</strong> (om hændelsen/udfaldet indtraf i den tid: 1 = ja, 0 = censureret, dvs. ikke set i opfølgningen). Opfølgningstiden er <strong>stop-dato minus index-dato</strong>, hvor stop-datoen er den første af udfald, død, emigration eller studieslut; se <a href="../da/12b_joins.html#opfoelgningstid">Beregn opfølgningstid og hændelsesvariabel</a> i Fase 12 for selve opbygningen.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival)                          <span class="co"># Surv(), survfit(), coxph(), cox.zph()</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival) <span class="co"># Surv(), survfit(), coxph(), cox.zph()</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"sti/til/analyse.rds"</span>)       <span class="co"># analyseklart datasæt, én række per person</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"sti/til/analyse.rds"</span>) <span class="co"># analyseklart datasæt, én række per person</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Surv() samler tid + status i ét "overlevelsesobjekt", som alle modellerne bruger:</span></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   tid_dage = dage fra index til hændelse ELLER censurering (det der kommer først)</span></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   udfald   = 1 hvis hændelsen indtraf, 0 hvis personen blev censureret</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Vi laver objektet her ALENE for at se, hvad Surv() producerer:</span></span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>overlevelse <span class="ot">&lt;-</span> <span class="fu">Surv</span>(<span class="at">time =</span> df<span class="sc">$</span>tid_dage, <span class="at">event =</span> df<span class="sc">$</span>udfald)</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>overlevelse                                <span class="co"># vis objektet: et "+" markerer en censureret person (fx 12+)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>overlevelse <span class="co"># vis objektet: et "+" markerer en censureret person (fx 12+)</span></span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># I praksis behøver du ikke gemme objektet: i modellerne nedenfor skriver du</span></span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Surv(...) direkte i formlen. Det er kun vist her for forståelsens skyld.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -597,19 +597,22 @@ Note
 <section id="kaplan-meier-kurver" class="level2">
 <h2 class="anchored" data-anchor-id="kaplan-meier-kurver">Kaplan-Meier-kurver</h2>
 <p><code>survfit()</code> beregner Kaplan-Meier-estimatet (andelen uden hændelse over tid), og <code>ggsurvplot()</code> tegner det pænt.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survminer)                         <span class="co"># ggsurvplot()</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survminer) <span class="co"># ggsurvplot()</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">survfit</span>(<span class="fu">Surv</span>(tid_dage, udfald) <span class="sc">~</span> eksponering,  <span class="co"># én kurve per eksponeringsgruppe</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>               <span class="at">data =</span> df)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsurvplot</span>(</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  fit, <span class="at">data =</span> df,</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">pval =</span> <span class="cn">TRUE</span>,                             <span class="co"># vis log-rank-testens p-værdi</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">conf.int =</span> <span class="cn">TRUE</span>,                         <span class="co"># vis konfidensbånd om kurverne</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">risk.table =</span> <span class="cn">TRUE</span>,                       <span class="co"># tabel under figuren: antal i risiko over tid</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">"Dage siden index"</span>,               <span class="co"># akse-tekst</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylab =</span> <span class="st">"Andel uden udfald"</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">survfit</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(tid_dage, udfald) <span class="sc">~</span> eksponering, <span class="co"># én kurve per eksponeringsgruppe</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsurvplot</span>(</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  fit,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">pval =</span> <span class="cn">TRUE</span>, <span class="co"># vis log-rank-testens p-værdi</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">conf.int =</span> <span class="cn">TRUE</span>, <span class="co"># vis konfidensbånd om kurverne</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">risk.table =</span> <span class="cn">TRUE</span>, <span class="co"># tabel under figuren: antal i risiko over tid</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">xlab =</span> <span class="st">"Dage siden index"</span>, <span class="co"># akse-tekst</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">ylab =</span> <span class="st">"Andel uden udfald"</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Med simulerede tal ser kurverne sådan ud (her falder de eksponerede hurtigere, dvs. de får oftere udfaldet):</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
@@ -634,21 +637,22 @@ Warning
 <section id="cox-regression-hazard-ratio" class="level2">
 <h2 class="anchored" data-anchor-id="cox-regression-hazard-ratio">Cox-regression (hazard ratio)</h2>
 <p><code>coxph()</code> giver hazard ratios (HR) justeret for covariater. <code>tbl_regression(exponentiate = TRUE)</code> viser dem som HR i stedet for log-hazard.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gtsummary)                         <span class="co"># tbl_regression()</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gtsummary) <span class="co"># tbl_regression()</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Uden replacement (hver person optræder kun én gang): en helt almindelig Cox-model.</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(tid_dage, udfald) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen,</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> df)</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>cox <span class="sc">%&gt;%</span>                                    <span class="co"># send modellen videre til en pæn tabel</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>)      <span class="co"># exponentiate = TRUE -&gt; hazard ratios</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(tid_dage, udfald) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen, <span class="at">data =</span> df)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>cox <span class="sc">%&gt;%</span> <span class="co"># send modellen videre til en pæn tabel</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># exponentiate = TRUE -&gt; hazard ratios</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>En hazard ratio læses som OR/RR: <strong>1 = ingen forskel</strong>, over 1 = højere rate, under 1 = lavere. Se <a href="../da/13d_regression.html#laes-resultat">Sådan læser du dit resultat</a>.</p>
 <p><strong>Forskellen med replacement.</strong> Er sammenligningskohorten matchet <strong>med replacement</strong> (eller er der crossover), optræder samme person flere gange, og rækkerne er ikke uafhængige. Så tilføjer du <strong>ét eneste argument</strong> - <code>cluster = pnr</code> - til præcis samme model. Det ændrer <strong>ikke</strong> hazard ratio-estimatet (HR’en er den samme); det retter kun <strong>standardfejlene og konfidensintervallerne</strong>, som ellers ville blive kunstigt snævre. Samme idé som i <a href="../da/13d_regression.html#klyngebaserede-standardfejl">Regression</a>.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Med replacement (samme person flere gange): ENESTE forskel fra modellen ovenfor er cluster = pnr.</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(<span class="fu">Surv</span>(tid_dage, udfald) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen,</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>      <span class="at">data    =</span> df,</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>      <span class="at">cluster =</span> pnr) <span class="sc">%&gt;%</span>                   <span class="co"># &lt;- den eneste ændring: klynge på person-id</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>)      <span class="co"># HR uændret; kun CI'erne bliver korrekte (typisk bredere)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(tid_dage, udfald) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen,</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df,</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cluster =</span> pnr</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="co"># &lt;- den eneste ændring: klynge på person-id</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># HR uændret; kun CI'erne bliver korrekte (typisk bredere)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Bemærk skrivemåden: <code>coxph()</code> tager klyngevariablen som et <strong>argument</strong> uden tilde (<code>cluster = pnr</code>), mens <code>sandwich::vcovCL()</code> på <a href="../da/13d_regression.html#klyngebaserede-standardfejl">Regression</a> bruger en <strong>formel</strong> med tilde (<code>cluster = ~ pnr</code>). Det er samme idé (klynge på person-id), kun to funktioners forskellige måder at modtage variablen på.</p>
 <div class="callout callout-style-default callout-note callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -672,10 +676,10 @@ Note
 <section id="tjek-antagelsen-proportionale-hazards" class="level2">
 <h2 class="anchored" data-anchor-id="tjek-antagelsen-proportionale-hazards">Tjek antagelsen: proportionale hazards</h2>
 <p>Cox-modellen antager <strong>proportionale hazards</strong> (PH): at en variabels effekt er konstant over tid. Holder det ikke, er den samlede hazard ratio misvisende. Tjek det derfor altid med <code>cox.zph()</code>, der bygger på <em>Schoenfeld-residualer</em> (kort sagt et mål for, om effekten “driver” hen over tid).</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ph <span class="ot">&lt;-</span> <span class="fu">cox.zph</span>(cox)                         <span class="co"># formel test af PH for hver variabel + samlet</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(ph)                                  <span class="co"># lille p-værdi = tegn på BRUD på antagelsen</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(ph)                                   <span class="co"># residual-kurve per variabel; en kurve der</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>                                           <span class="co">#   hælder = ikke-proportional hazard</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ph <span class="ot">&lt;-</span> <span class="fu">cox.zph</span>(cox) <span class="co"># formel test af PH for hver variabel + samlet</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(ph) <span class="co"># lille p-værdi = tegn på BRUD på antagelsen</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(ph) <span class="co"># residual-kurve per variabel; en kurve der</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   hælder = ikke-proportional hazard</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <details>
 <summary>
 Hvad gør du, hvis antagelsen brydes?
@@ -708,26 +712,30 @@ Warning
 <li><code>status</code> - <strong>hvad</strong> der skete: censureret, udfald eller død.</li>
 </ul>
 <p><code>status</code> skal være en <strong>faktor</strong>, og <code>tidycmprsk</code> kræver, at <strong>“censureret” er det første niveau</strong>. Rækkefølgen af niveauerne er samtidig dér, du fortæller R, hvad der er dit udfald, og hvad der er den konkurrerende risiko:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidycmprsk)                        <span class="co"># cuminc(), crr()</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidycmprsk) <span class="co"># cuminc(), crr()</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span></span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">status =</span> <span class="fu">factor</span>(</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>      status_kode,                         <span class="co"># din rå kode, én værdi per person (fx 0/1/2)</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">levels =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>),                 <span class="co"># rækkefølgen bestemmer betydningen:</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"censureret"</span>,             <span class="co">#   1. niveau = censureret (SKAL stå først)</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"udfald"</span>,                 <span class="co">#   2. niveau = dit udfald (det crr modellerer)</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>                 <span class="st">"doed"</span>)                   <span class="co">#   3. niveau = den konkurrerende risiko</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>      status_kode, <span class="co"># din rå kode, én værdi per person (fx 0/1/2)</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">levels =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>), <span class="co"># rækkefølgen bestemmer betydningen:</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">labels =</span> <span class="fu">c</span>(</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"censureret"</span>, <span class="co">#   1. niveau = censureret (SKAL stå først)</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">"udfald"</span>, <span class="co">#   2. niveau = dit udfald (det crr modellerer)</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">"doed"</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>      ) <span class="co">#   3. niveau = den konkurrerende risiko</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Selve <code>status_kode</code> (0/1/2) bygger du fra datoerne - hvad der skete <em>først</em>: 0 = censureret (fx opfølgningens slut, emigreret eller på anden vis tabt), 1 = udfald, 2 = død. Konstruktionen ligger i <a href="../da/12b_joins.html#opfoelgningstid">Beregn opfølgningstid og hændelsesvariabel</a> (Fase 12). Hvilket <em>tal</em> censurering får, er underordnet - det afgørende er, at det censurerede niveau står <strong>først</strong> i <code>levels =</code> (derfor er det kodet 0 her).</p>
 </section>
 <section id="beskriv-risikoen-over-tid-cif" class="level3">
 <h3 class="anchored" data-anchor-id="beskriv-risikoen-over-tid-cif">2. Beskriv risikoen over tid (CIF)</h3>
 <p>Brug <strong>i stedet for Kaplan-Meier</strong> den <strong>kumulative incidensfunktion</strong> (CIF, også kaldet Aalen-Johansen). Den fordeler personerne korrekt på de konkurrerende udfald, så død ikke “stjæler” risiko fra udfaldet. (Det handler om <em>kurven</em>; selve regressionen klares stadig med Cox, se trin 3.)</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Surv(tid, status) med faktor-status -&gt; kumulativ incidens for HVER hændelsestype:</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cuminc</span>(<span class="fu">Surv</span>(tid_dage, status) <span class="sc">~</span> eksponering,   <span class="co"># én kurve per eksponeringsgruppe</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> df)                               <span class="co"># giver også Grays test for forskel mellem grupper</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cuminc</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(tid_dage, status) <span class="sc">~</span> eksponering, <span class="co"># én kurve per eksponeringsgruppe</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>) <span class="co"># giver også Grays test for forskel mellem grupper</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="regression-vælg-model-efter-dit-spørgsmål" class="level3">
 <h3 class="anchored" data-anchor-id="regression-vælg-model-efter-dit-spørgsmål">3. Regression: vælg model efter dit spørgsmål</h3>
@@ -737,14 +745,15 @@ Warning
 <li><strong>Absolut/kumulativ risiko:</strong> brug <strong>Fine-Gray</strong> (<code>crr</code>), hvor de døde <strong>bliver</strong> i risikomængden. <code>crr</code> modellerer som standard den første hændelsestype efter “censureret” (her “udfald”) og behandler resten (“doed”) som konkurrerende. Det er <em>subdistribution</em>-hazarden.</li>
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Ætiologi - årsagsspecifik Cox: status == "udfald" gør død (og censureret) til "ingen hændelse"</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(<span class="fu">Surv</span>(tid_dage, status <span class="sc">==</span> <span class="st">"udfald"</span>) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen,</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>      <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>)          <span class="co"># -&gt; årsagsspecifik hazard ratio</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Absolut risiko - Fine-Gray: bruger faktor-statussen direkte (udfald vs. konkurrerende)</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="fu">crr</span>(<span class="fu">Surv</span>(tid_dage, status) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen,</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>)          <span class="co"># -&gt; subdistribution hazard ratio</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(tid_dage, status <span class="sc">==</span> <span class="st">"udfald"</span>) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen,</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; årsagsspecifik hazard ratio</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Absolut risiko - Fine-Gray: bruger faktor-statussen direkte (udfald vs. konkurrerende)</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="fu">crr</span>(<span class="fu">Surv</span>(tid_dage, status) <span class="sc">~</span> eksponering <span class="sc">+</span> alder <span class="sc">+</span> koen, <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; subdistribution hazard ratio</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <details>
 <summary>
 Tommelfingerregel: hvilken vælger jeg?
