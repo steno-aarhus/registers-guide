@@ -985,7 +985,7 @@ See the full <code>get_lpr_diagnoses()</code> function and usage
 <span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">#=====================================================</span></span>
 <span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Function: get_lpr_diagnoses() - reusable LPR extract</span></span>
 <span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">#=====================================================</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>get_lpr_diagnoses <span class="ot">&lt;-</span> <span class="cf">function</span>(pnr_vector, <span class="at">diagtypes =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>), <span class="at">inpatient_only =</span> <span class="cn">FALSE</span>) {</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>get_lpr_diagnoses <span class="ot">&lt;-</span> <span class="cf">function</span>(pnr_vector, <span class="at">diagtypes =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>)) {</span>
 <span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  base <span class="ot">&lt;-</span> <span class="st">"E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"</span></span>
 <span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Open registers</span></span>
@@ -999,51 +999,45 @@ See the full <code>get_lpr_diagnoses()</code> function and usage
 <span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)                               <span class="co"># CRITICAL (DARTER): keep only rows from the LPR3 system - avoid overlapping rows</span></span>
 <span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  lpr3_d    <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="fu">paste0</span>(base, <span class="st">"lpr_a_diagnose/"</span>)) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower)  <span class="co"># LPR3 diagnoses</span></span>
 <span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Filter on admission type if desired</span></span>
-<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (inpatient_only) {</span>
-<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    lpr_adm <span class="ot">&lt;-</span> lpr_adm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_pattype <span class="sc">==</span> <span class="st">"0"</span>)          <span class="co"># "0" = inpatient (full-day) in LPR2</span></span>
-<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>    lpr3_k  <span class="ot">&lt;-</span> lpr3_k  <span class="sc">%&gt;%</span> <span class="fu">filter</span>(kont_type <span class="sc">==</span> <span class="st">"ALCA00"</span>)     <span class="co"># ALCA00 = physical attendance (NOT = inpatient) - see "Classify patient type" below</span></span>
-<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LPR2 somatic</span></span>
-<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>  lpr2_dx <span class="ot">&lt;-</span> lpr_adm <span class="sc">%&gt;%</span></span>
-<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vector), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, recnum, <span class="at">date_contact =</span> d_inddto) <span class="sc">%&gt;%</span></span>
-<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(</span>
-<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>      lpr_diag <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_diagtype <span class="sc">%in%</span> <span class="sc">!!</span>diagtypes) <span class="sc">%&gt;%</span> <span class="fu">select</span>(recnum, c_diag, c_diagtype),</span>
-<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>      <span class="at">by =</span> <span class="st">"recnum"</span></span>
-<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">icd3 =</span> <span class="fu">substr</span>(c_diag, <span class="dv">2</span>, <span class="dv">4</span>))                       <span class="co"># strip D-prefix</span></span>
-<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LPR2 psychiatric</span></span>
-<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>  lpr2_psyk_dx <span class="ot">&lt;-</span> psyk_adm <span class="sc">%&gt;%</span></span>
-<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vector), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, recnum, <span class="at">date_contact =</span> d_inddto) <span class="sc">%&gt;%</span></span>
-<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(</span>
-<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>      psyk_diag <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_diagtype <span class="sc">%in%</span> <span class="sc">!!</span>diagtypes) <span class="sc">%&gt;%</span> <span class="fu">select</span>(recnum, c_diag, c_diagtype),</span>
-<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a>      <span class="at">by =</span> <span class="st">"recnum"</span></span>
-<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">icd3 =</span> <span class="fu">substr</span>(c_diag, <span class="dv">2</span>, <span class="dv">4</span>))</span>
-<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LPR3</span></span>
-<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a>  lpr3_dx <span class="ot">&lt;-</span> lpr3_k <span class="sc">%&gt;%</span></span>
-<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vector), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, dw_ek_kontakt, <span class="at">date_contact =</span> kont_starttidspunkt) <span class="sc">%&gt;%</span></span>
-<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(</span>
-<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a>      lpr3_d <span class="sc">%&gt;%</span></span>
-<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a>        <span class="fu">filter</span>(diag_kode_type <span class="sc">%in%</span> <span class="sc">!!</span>diagtypes,</span>
-<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a>               <span class="fu">is.na</span>(senere_afkraeftet) <span class="sc">|</span> senere_afkraeftet <span class="sc">!=</span> <span class="st">"Ja"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a>        <span class="fu">select</span>(dw_ek_kontakt, <span class="at">c_diag =</span> diag_kode, <span class="at">c_diagtype =</span> diag_kode_type),</span>
-<span id="cb9-58"><a href="#cb9-58" aria-hidden="true" tabindex="-1"></a>      <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span></span>
-<span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb9-60"><a href="#cb9-60" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb9-61"><a href="#cb9-61" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">date_contact =</span> <span class="fu">as.Date</span>(date_contact),               <span class="co"># datetime → date</span></span>
-<span id="cb9-62"><a href="#cb9-62" aria-hidden="true" tabindex="-1"></a>           <span class="at">icd3 =</span> <span class="fu">substr</span>(c_diag, <span class="dv">2</span>, <span class="dv">4</span>))</span>
-<span id="cb9-63"><a href="#cb9-63" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-64"><a href="#cb9-64" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>(lpr2_dx, lpr2_psyk_dx, lpr3_dx)                   <span class="co"># return combined table</span></span>
-<span id="cb9-65"><a href="#cb9-65" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LPR2 somatic</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>  lpr2_dx <span class="ot">&lt;-</span> lpr_adm <span class="sc">%&gt;%</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vector), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, recnum, <span class="at">date_contact =</span> d_inddto) <span class="sc">%&gt;%</span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(</span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>      lpr_diag <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_diagtype <span class="sc">%in%</span> <span class="sc">!!</span>diagtypes) <span class="sc">%&gt;%</span> <span class="fu">select</span>(recnum, c_diag, c_diagtype),</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>      <span class="at">by =</span> <span class="st">"recnum"</span></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">icd3 =</span> <span class="fu">substr</span>(c_diag, <span class="dv">2</span>, <span class="dv">4</span>))                       <span class="co"># strip D-prefix</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LPR2 psychiatric</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>  lpr2_psyk_dx <span class="ot">&lt;-</span> psyk_adm <span class="sc">%&gt;%</span></span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vector), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, recnum, <span class="at">date_contact =</span> d_inddto) <span class="sc">%&gt;%</span></span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(</span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>      psyk_diag <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_diagtype <span class="sc">%in%</span> <span class="sc">!!</span>diagtypes) <span class="sc">%&gt;%</span> <span class="fu">select</span>(recnum, c_diag, c_diagtype),</span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>      <span class="at">by =</span> <span class="st">"recnum"</span></span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">icd3 =</span> <span class="fu">substr</span>(c_diag, <span class="dv">2</span>, <span class="dv">4</span>))</span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>  <span class="co"># LPR3</span></span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a>  lpr3_dx <span class="ot">&lt;-</span> lpr3_k <span class="sc">%&gt;%</span></span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vector), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, dw_ek_kontakt, <span class="at">date_contact =</span> kont_starttidspunkt) <span class="sc">%&gt;%</span></span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(</span>
+<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a>      lpr3_d <span class="sc">%&gt;%</span></span>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a>        <span class="fu">filter</span>(diag_kode_type <span class="sc">%in%</span> <span class="sc">!!</span>diagtypes,</span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a>               <span class="fu">is.na</span>(senere_afkraeftet) <span class="sc">|</span> senere_afkraeftet <span class="sc">!=</span> <span class="st">"Ja"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a>        <span class="fu">select</span>(dw_ek_kontakt, <span class="at">c_diag =</span> diag_kode, <span class="at">c_diagtype =</span> diag_kode_type),</span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>      <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span></span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">date_contact =</span> <span class="fu">as.Date</span>(date_contact),               <span class="co"># datetime → date</span></span>
+<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a>           <span class="at">icd3 =</span> <span class="fu">substr</span>(c_diag, <span class="dv">2</span>, <span class="dv">4</span>))</span>
+<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-58"><a href="#cb9-58" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>(lpr2_dx, lpr2_psyk_dx, lpr3_dx)                   <span class="co"># return combined table</span></span>
+<span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Use the function</strong> - one call per extraction, only change <code>CODES</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>cohort    <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"sti/til/full_cohort.rds"</span>)</span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>pnr_list  <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr)</span>
@@ -1051,23 +1045,22 @@ See the full <code>get_lpr_diagnoses()</code> function and usage
 <span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Fetch all diagnoses for the cohort (Phase 1 - see hospital contacts page)</span></span>
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>alle_dx <span class="ot">&lt;-</span> <span class="fu">get_lpr_diagnoses</span>(</span>
 <span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">pnr_vector    =</span> pnr_list,</span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">diagtypes     =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>),</span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">inpatient_only =</span> <span class="cn">FALSE</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: pnr | date_contact | c_diag | c_diagtype | icd3</span></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract one outcome - only change CODES (Phase 2)</span></span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>CODES <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"F00"</span>, <span class="st">"F01"</span>, <span class="st">"F02"</span>, <span class="st">"F03"</span>, <span class="st">"G30"</span>, <span class="st">"G31"</span>)   <span class="co"># dementia</span></span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>dementia <span class="ot">&lt;-</span> alle_dx <span class="sc">%&gt;%</span></span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(icd3 <span class="sc">%in%</span> CODES) <span class="sc">%&gt;%</span></span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span></span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(date_contact) <span class="sc">%&gt;%</span> <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">dementia_date =</span> date_contact)</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">left_join</span>(dementia, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
-<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(result, <span class="st">"sti/til/extract_dementia.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">diagtypes     =</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>)    <span class="co"># A=action, B=secondary. To also include grundmorbus, add "G" (LPR2 only): c("A", "B", "G")</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: pnr | date_contact | c_diag | c_diagtype | icd3</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract one outcome - only change CODES (Phase 2)</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>CODES <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"F00"</span>, <span class="st">"F01"</span>, <span class="st">"F02"</span>, <span class="st">"F03"</span>, <span class="st">"G30"</span>, <span class="st">"G31"</span>)   <span class="co"># dementia</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>dementia <span class="ot">&lt;-</span> alle_dx <span class="sc">%&gt;%</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(icd3 <span class="sc">%in%</span> CODES) <span class="sc">%&gt;%</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(date_contact) <span class="sc">%&gt;%</span> <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">dementia_date =</span> date_contact)</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">left_join</span>(dementia, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(result, <span class="st">"sti/til/extract_dementia.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </section>
 <section id="patienttype" class="level2">

@@ -506,7 +506,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul>
   <li><a href="#what-nmi-gives-you" id="toc-what-nmi-gives-you" class="nav-link active" data-scroll-target="#what-nmi-gives-you">What NMI gives you</a></li>
   <li><a href="#when-to-use-it-and-when-not" id="toc-when-to-use-it-and-when-not" class="nav-link" data-scroll-target="#when-to-use-it-and-when-not">When to use it (and when not)</a></li>
-  <li><a href="#r-implementation" id="toc-r-implementation" class="nav-link" data-scroll-target="#r-implementation">R implementation</a></li>
+  <li><a href="#r-implementation" id="toc-r-implementation" class="nav-link" data-scroll-target="#r-implementation">R implementation</a>
+  <ul class="collapse">
+  <li><a href="#extract-diagnoses-and-prescriptions" id="toc-extract-diagnoses-and-prescriptions" class="nav-link" data-scroll-target="#extract-diagnoses-and-prescriptions">1. Extract diagnoses and prescriptions</a></li>
+  <li><a href="#compute-the-nmi-score" id="toc-compute-the-nmi-score" class="nav-link" data-scroll-target="#compute-the-nmi-score">2. Compute the NMI score</a></li>
+  <li><a href="#look-at-and-describe-the-score" id="toc-look-at-and-describe-the-score" class="nav-link" data-scroll-target="#look-at-and-describe-the-score">3. Look at and describe the score</a></li>
+  </ul></li>
   <li><a href="#more-information" id="toc-more-information" class="nav-link" data-scroll-target="#more-information">More information</a></li>
   <li><a href="#next-steps" id="toc-next-steps" class="nav-link" data-scroll-target="#next-steps">Next steps</a></li>
   </ul>
@@ -551,7 +556,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="callout-body-container">
 <p><strong>Important: NMI is a mortality index, not a measure of comorbidity burden.</strong> NMI was developed and validated to predict <strong>5-year mortality</strong> (Kristensen et al.&nbsp;2022, ~425,000 Danish residents aged ≥40), and its predictors were selected for how much they added to the mortality model - not to cover disease burden. As a result:</p>
 <ul>
-<li>Several common chronic diseases are missing (e.g.&nbsp;<strong>no hypertension</strong>, and diabetes is narrowed to type 2 + antidiabetics).</li>
+<li>Several common chronic diseases are not included in the model (e.g.&nbsp;<strong>no hypertension</strong>, and diabetes appears only as type 2 (<code>DE11</code>) plus a separate antidiabetic-drug item - each weighted on its own, and type 1 is not a diagnosis predictor).</li>
 <li>Some items are <strong>mortality proxies</strong>, not diseases in their own right (e.g. laxatives, iron).</li>
 <li>Some weights are <strong>negative</strong> (e.g.&nbsp;statins -3, ACE/ARB inhibitors -2), which only makes sense in a mortality <em>model</em>, not in a measure of disease burden.</li>
 </ul>
@@ -576,20 +581,284 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="r-implementation" class="level2">
 <h2 class="anchored" data-anchor-id="r-implementation">R implementation</h2>
-<p>There is <strong>no official R package</strong>. SDU’s Pharmacoepidemiology Unit publishes a <strong>Stata</strong> implementation: <a href="https://pharmacoepi.sdu.dk/nmi/">pharmacoepi.sdu.dk/nmi/</a>. A study-specific R translation exists but is not yet generalised or packaged. If NMI is added to this project’s tooling later, it would be as an <strong>optional mortality-risk measure</strong>, separate from the comorbidity-burden index.</p>
-<p>If you implement it, NMI reads from:</p>
-<ul>
-<li><strong>LPR</strong> (LPR2 somatic + psychiatric, and LPR3) - a <strong>5-year</strong> lookback of diagnoses.</li>
-<li><strong>LMDB</strong> - a <strong>6-month</strong> lookback of filled prescriptions (ATC codes).</li>
-</ul>
-<p>Scores are assigned per predictor from the weights in Table 2 of the article.</p>
+<p>There is <strong>no official R package</strong> (SDU publishes a <a href="https://pharmacoepi.sdu.dk/nmi/">Stata implementation</a>). The R version below runs in <strong>two steps - extract, then compute</strong> - kept apart so you can restart R in between and free memory, since the extraction can pull a lot of rows.</p>
+<p><em>These code examples are based on <strong>Pernille Errebo Tonnesen</strong>’s translation of the SDU Stata code to R.</em></p>
+<section id="extract-diagnoses-and-prescriptions" class="level3">
+<h3 class="anchored" data-anchor-id="extract-diagnoses-and-prescriptions">1. Extract diagnoses and prescriptions</h3>
 <div class="callout callout-style-simple callout-important">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>The 5-year lookback can be an inclusion criterion.</strong> NMI’s diagnosis window needs at least <strong>5 years</strong> of register data before the index date. If you make full lookback an inclusion criterion (only people with at least 5 years of prior residency/coverage in Denmark), apply it <strong>already when you build your cohort</strong>, not here - and apply the same requirement to any <strong>comparison cohort</strong>, so both groups have the same depth of data before index. Decide it in <a href="../en/01_studieforberedelse.html">Phase 1</a> and apply it in <a href="../en/10_byg-studiepopulation.html">Phase 10</a>.</p>
+<p><strong>What NMI needs, and over which period:</strong></p>
+<ul>
+<li><strong>Diagnoses</strong>, a <strong>5-year</strong> lookback before index, from <strong>all</strong> of: LPR2 <strong>somatic</strong> and <strong>psychiatric</strong> (up to March 2019) <em>and</em> LPR3 (from March 2019), across all diagnosis types. A somatic-only pull (e.g.&nbsp;<code>lpr_adm</code> alone) misses the psychiatric predictors (F00-03, F10, F17) and everything after March 2019.</li>
+<li><strong>Prescriptions</strong> (ATC), a <strong>6-month</strong> lookback before index, from <strong>LMDB</strong> - only that window, not the whole register.</li>
+</ul>
+</div>
+</div>
+</div>
+<p>Both extractions <strong>filter to only the codes NMI needs before <code>collect()</code></strong>, so the saved <code>.rds</code> files stay small.</p>
+<p><strong>Diagnoses</strong> - reuse the <code>get_lpr_diagnoses()</code> pattern from <a href="../en/09b_udtraek_fra_lpr.html">Extract from LPR</a> (it combines LPR2 somatic + psychiatric and LPR3 across diagnosis types), passing NMI’s diagnosis codes so only those are returned:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#=============================================================</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. EXTRACT diagnoses and prescriptions</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#=============================================================</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"datasets/full_cohort.rds"</span>) <span class="co"># your study population from Phase 10 (pnr + index_date)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># NMI diagnosis codes (3-char ICD, no D-prefix).</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># paste0("C", 76:80) makes "C76".."C80" - glues the letter onto each number</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># in the range, so we don't type every code by hand.</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>nmi_icd <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="st">"B18"</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C34"</span>,</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C50"</span>,</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C61"</span>,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C67"</span>,</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C70"</span>,</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C71"</span>,</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C75"</span>,</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  <span class="st">"D32"</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  <span class="st">"D33"</span>,</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="st">"D35"</span>,</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="st">"D42"</span>,</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="st">"D43"</span>,</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="st">"D44"</span>,</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"C"</span>, <span class="dv">76</span><span class="sc">:</span><span class="dv">80</span>),</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"C"</span>, <span class="dv">91</span><span class="sc">:</span><span class="dv">95</span>),</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"D"</span>, <span class="dv">50</span><span class="sc">:</span><span class="dv">64</span>),</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  <span class="st">"E11"</span>,</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  <span class="st">"E86"</span>,</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"F0"</span>, <span class="dv">0</span><span class="sc">:</span><span class="dv">3</span>),</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>  <span class="st">"G30"</span>,</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>  <span class="st">"F10"</span>,</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>  <span class="st">"F17"</span>,</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"G"</span>, <span class="dv">20</span><span class="sc">:</span><span class="dv">22</span>),</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>  <span class="st">"G35"</span>,</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>  <span class="st">"G40"</span>,</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>  <span class="st">"G41"</span>,</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I05"</span>,</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I06"</span>,</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I34"</span>,</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I35"</span>,</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I11"</span>,</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I13"</span>,</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I42"</span>,</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I50"</span>,</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"I"</span>, <span class="dv">60</span><span class="sc">:</span><span class="dv">69</span>),</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I73"</span>,</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I74"</span>,</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I77"</span>,</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I71"</span>,</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>  <span class="st">"I72"</span>,</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"J1"</span>, <span class="dv">2</span><span class="sc">:</span><span class="dv">8</span>),</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J41"</span>,</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J42"</span>,</span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J43"</span>,</span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J44"</span>,</span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J47"</span>,</span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J96"</span>,</span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a>  <span class="st">"J84"</span>,</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a>  <span class="fu">paste0</span>(<span class="st">"K0"</span>, <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>, <span class="dv">8</span>)),</span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a>  <span class="st">"K70"</span>,</span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a>  <span class="st">"K72"</span>,</span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a>  <span class="st">"K74"</span>,</span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a>  <span class="st">"K76"</span>,</span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L89"</span>,</span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a>  <span class="st">"N18"</span>,</span>
+<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a>  <span class="st">"N19"</span></span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="co"># get_lpr_diagnoses() is the helper from Phase 9 (Extract from LPR) - you define it yourself there</span></span>
+<span id="cb1-74"><a href="#cb1-74" aria-hidden="true" tabindex="-1"></a>nmi_diagnoses <span class="ot">&lt;-</span> <span class="fu">get_lpr_diagnoses</span>(</span>
+<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a>  <span class="at">pnr_vector =</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr), <span class="co"># all the cohort's pnr</span></span>
+<span id="cb1-76"><a href="#cb1-76" aria-hidden="true" tabindex="-1"></a>  <span class="at">icd_codes =</span> nmi_icd <span class="co"># only NMI codes are collected</span></span>
+<span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-78"><a href="#cb1-78" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(nmi_diagnoses, <span class="st">"datasets/nmi_diagnoses.rds"</span>) <span class="co"># pnr, date_contact, c_diag, ...</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Prescriptions</strong> - extract LMDB for the cohort, keeping only NMI’s ATC classes:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(arrow)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>pnr_vec <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co"># NMI drug classes (ATC) as one regex</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>nmi_atc <span class="ot">&lt;-</span> <span class="st">"^(A06A|A07DA|A10A|B01AC|B03A|C01AA|C03C|C03EB|C03DA|C09[CD]|C10AA|H02AB|J01C|N02A|N02BE|N05BA|N05C[DF]|N05A[A-L]|N05AX|N06A|N06D|N07BC|R03AC0[2-5]|R03BB0[4-7])"</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>nmi_lmdb <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"path/to/lmdb/"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnr_vec), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(nmi_atc, atc)) <span class="sc">%&gt;%</span> <span class="co"># only NMI drug classes - BEFORE collect()</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(nmi_lmdb, <span class="st">"datasets/nmi_lmdb.rds"</span>) <span class="co"># pnr, eksd, atc</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>You started from <code>full_cohort.rds</code> (<a href="../en/10_byg-studiepopulation.html">Phase 10</a>: <code>pnr</code> + <code>index_date</code>) and now have <strong><code>nmi_diagnoses.rds</code></strong> and <strong><code>nmi_lmdb.rds</code></strong>. Save them. Because the extraction is filtered to only NMI’s codes, the files are small, so you rarely need to clean up. If memory is tight anyway, free it with <code>rm()</code> + <code>gc()</code> (see <a href="../en/05_udtraek-trin-for-trin.html">Phase 5</a>) rather than restarting the whole R session.</p>
+</section>
+<section id="compute-the-nmi-score" class="level3">
+<h3 class="anchored" data-anchor-id="compute-the-nmi-score">2. Compute the NMI score</h3>
+<details>
+<summary>
+See the full NMI computation (corrected against the Stata source)
+</summary>
+<p>Corrected vs the original translation: <strong>5-year</strong> diagnosis lookback (was 10), the <strong>liver-disease</strong> weight fixed (<code>dx_K70_K767</code>, was double-counting dental), and the <strong>atherosclerosis</strong> group aligned to Stata (<code>^DI7[347]</code>, I70 removed). For a <strong>type-2-diabetes study</strong>, exclude <code>dx_E11</code> and <code>rx_A10A</code> (comment them out) to avoid circularity, since diabetes would then be the study population. This version reads the diagnoses from <code>get_lpr_diagnoses()</code> (column <code>c_diag</code>, dates in <code>date_contact</code>).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">#=============================================================</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. COMPUTE the NMI score</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">#=============================================================</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(stringr)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lubridate)</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"datasets/full_cohort.rds"</span>)   <span class="co"># pnr, index_date</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>dx_raw <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"datasets/nmi_diagnoses.rds"</span>)  <span class="co"># from get_lpr_diagnoses(): pnr, date_contact, c_diag</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>rx_raw <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"datasets/nmi_lmdb.rds"</span>)       <span class="co"># pnr, eksd, atc</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Diagnoses: 5-year lookback before index (Stata: 1825 days)</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>dx <span class="ot">&lt;-</span> dx_raw <span class="sc">%&gt;%</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&gt;=</span> index_date <span class="sc">-</span> <span class="fu">days</span>(<span class="dv">1825</span>),</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>         date_contact <span class="sc">&lt;=</span> index_date <span class="sc">-</span> <span class="fu">days</span>(<span class="dv">1</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_B18      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DB18"</span>),</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C34      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC34"</span>),</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C50      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC50"</span>),</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C61      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC61"</span>),</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C67      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC67"</span>),</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C70_D432 =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC7[01]|^DC75[1-3]|^DD32|^DD33[0-2]|^DD35[2-4]|^DD42|^DD43[0-2]|^DD44[3-5]"</span>),</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C76_C80  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC7[6-9]|^DC80"</span>),</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_C91_C95  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DC9[1-5]"</span>),</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_D50_D64  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DD5[0-9]|^DD6[0-4]"</span>),</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_E11      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DE11"</span>),</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_E86      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DE86"</span>),</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_F00_G319 =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DF0[0-3]|^DG30"</span>),</span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_F10      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DF10"</span>),</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_F17      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DF17"</span>),</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_G20_22   =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DG2[0-2]"</span>),</span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_G35      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DG35"</span>),</span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_G40_G41  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DG4[0-1]"</span>),</span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_I05_35   =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI0[56]|^DI3[45]"</span>),</span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_I110_I50 =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI110|^DI13[02]|^DI42[06789]|^DI50"</span>),</span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_I60_I69  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI6[0-9]"</span>),</span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_I70_I77  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI7[347]"</span>),   <span class="co"># fixed: I70 removed (Stata ^I7[347])</span></span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_I71_I72  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI7[12]"</span>),</span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_J12_J18  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DJ1[2-8]"</span>),</span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_J41_J47  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DJ4[12347]|^DJ96[19]"</span>),</span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_J84      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DJ84"</span>),</span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_K02_K08  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DK0[234568]"</span>),</span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_K70_K767 =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DK7[024]|^DK76[76]"</span>),   <span class="co"># liver disease</span></span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_L89      =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DL89"</span>),</span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_N18_N19  =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DN1[89]"</span>)</span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="sc">~</span> <span class="fu">as.integer</span>(<span class="fu">any</span>(.))), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a><span class="co"># Prescriptions: 6-month lookback before index</span></span>
+<span id="cb3-56"><a href="#cb3-56" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a>rx <span class="ot">&lt;-</span> rx_raw <span class="sc">%&gt;%</span></span>
+<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(eksd <span class="sc">&gt;=</span> index_date <span class="sc">-</span> <span class="fu">days</span>(<span class="dv">180</span>),</span>
+<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>         eksd <span class="sc">&lt;=</span> index_date <span class="sc">-</span> <span class="fu">days</span>(<span class="dv">1</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-61"><a href="#cb3-61" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb3-62"><a href="#cb3-62" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_A06A            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^A06A"</span>),</span>
+<span id="cb3-63"><a href="#cb3-63" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_A07DA           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^A07DA"</span>),</span>
+<span id="cb3-64"><a href="#cb3-64" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_A10A            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^A10A"</span>),</span>
+<span id="cb3-65"><a href="#cb3-65" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_B01AC           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^B01AC"</span>),</span>
+<span id="cb3-66"><a href="#cb3-66" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_B03A            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^B03A"</span>),</span>
+<span id="cb3-67"><a href="#cb3-67" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_C01AA           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^C01AA"</span>),</span>
+<span id="cb3-68"><a href="#cb3-68" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_C03C_C03EB      =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^C03C|^C03EB"</span>),</span>
+<span id="cb3-69"><a href="#cb3-69" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_C03DA           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^C03DA"</span>),</span>
+<span id="cb3-70"><a href="#cb3-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_C09C_C09D       =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^C09[CD]"</span>),</span>
+<span id="cb3-71"><a href="#cb3-71" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_C10AA           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^C10AA"</span>),</span>
+<span id="cb3-72"><a href="#cb3-72" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_H02AB           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^H02AB"</span>),</span>
+<span id="cb3-73"><a href="#cb3-73" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_J01C            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^J01C"</span>),</span>
+<span id="cb3-74"><a href="#cb3-74" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N02A            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N02A"</span>),</span>
+<span id="cb3-75"><a href="#cb3-75" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N02BE           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N02BE"</span>),</span>
+<span id="cb3-76"><a href="#cb3-76" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N05BA_N05CF     =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N05BA|^N05C[DF]"</span>),</span>
+<span id="cb3-77"><a href="#cb3-77" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N05AA_N05AX     =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N05A[A-L]|^N05AX"</span>),</span>
+<span id="cb3-78"><a href="#cb3-78" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N06A            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N06A"</span>),</span>
+<span id="cb3-79"><a href="#cb3-79" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N06D            =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N06D"</span>),</span>
+<span id="cb3-80"><a href="#cb3-80" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_N07BC           =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^N07BC"</span>),</span>
+<span id="cb3-81"><a href="#cb3-81" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_R03AC02_R03AC05 =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^R03AC0[2-5]"</span>),</span>
+<span id="cb3-82"><a href="#cb3-82" aria-hidden="true" tabindex="-1"></a>    <span class="at">rx_R03BB04_R03BB07 =</span> <span class="fu">str_detect</span>(atc, <span class="st">"^R03BB0[4-7]"</span>)</span>
+<span id="cb3-83"><a href="#cb3-83" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb3-84"><a href="#cb3-84" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb3-85"><a href="#cb3-85" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"rx_"</span>), <span class="sc">~</span> <span class="fu">as.integer</span>(<span class="fu">any</span>(.))), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb3-86"><a href="#cb3-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-87"><a href="#cb3-87" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb3-88"><a href="#cb3-88" aria-hidden="true" tabindex="-1"></a><span class="co"># Combine and score (weights from Table 2)</span></span>
+<span id="cb3-89"><a href="#cb3-89" aria-hidden="true" tabindex="-1"></a><span class="co">#-------------------------------------------------------------</span></span>
+<span id="cb3-90"><a href="#cb3-90" aria-hidden="true" tabindex="-1"></a>nmi_data <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb3-91"><a href="#cb3-91" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(dx, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-92"><a href="#cb3-92" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(rx, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-93"><a href="#cb3-93" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="fu">starts_with</span>(<span class="st">"rx_"</span>)), <span class="sc">~</span> <span class="fu">replace_na</span>(., <span class="dv">0</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb3-94"><a href="#cb3-94" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb3-95"><a href="#cb3-95" aria-hidden="true" tabindex="-1"></a>    <span class="at">nmi =</span></span>
+<span id="cb3-96"><a href="#cb3-96" aria-hidden="true" tabindex="-1"></a>      <span class="dv">10</span> <span class="sc">*</span> dx_B18 <span class="sc">+</span> <span class="dv">19</span> <span class="sc">*</span> dx_C34 <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> dx_C50 <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> dx_C61 <span class="sc">+</span> <span class="dv">8</span> <span class="sc">*</span> dx_C67 <span class="sc">+</span></span>
+<span id="cb3-97"><a href="#cb3-97" aria-hidden="true" tabindex="-1"></a>      <span class="dv">8</span> <span class="sc">*</span> dx_C70_D432 <span class="sc">+</span> <span class="dv">22</span> <span class="sc">*</span> dx_C76_C80 <span class="sc">+</span> <span class="dv">8</span> <span class="sc">*</span> dx_C91_C95 <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> dx_D50_D64 <span class="sc">+</span></span>
+<span id="cb3-98"><a href="#cb3-98" aria-hidden="true" tabindex="-1"></a>      <span class="dv">2</span> <span class="sc">*</span> dx_E11 <span class="sc">+</span></span>
+<span id="cb3-99"><a href="#cb3-99" aria-hidden="true" tabindex="-1"></a>      <span class="dv">6</span> <span class="sc">*</span> dx_E86 <span class="sc">+</span> <span class="dv">9</span> <span class="sc">*</span> dx_F00_G319 <span class="sc">+</span> <span class="dv">12</span> <span class="sc">*</span> dx_F10 <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> dx_F17 <span class="sc">+</span></span>
+<span id="cb3-100"><a href="#cb3-100" aria-hidden="true" tabindex="-1"></a>      <span class="dv">7</span> <span class="sc">*</span> dx_G20_22 <span class="sc">+</span> <span class="dv">7</span> <span class="sc">*</span> dx_G35 <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> dx_G40_G41 <span class="sc">+</span></span>
+<span id="cb3-101"><a href="#cb3-101" aria-hidden="true" tabindex="-1"></a>      <span class="dv">2</span> <span class="sc">*</span> dx_I05_35 <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> dx_I110_I50 <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> dx_I60_I69 <span class="sc">+</span></span>
+<span id="cb3-102"><a href="#cb3-102" aria-hidden="true" tabindex="-1"></a>      <span class="dv">5</span> <span class="sc">*</span> dx_I70_I77 <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> dx_I71_I72 <span class="sc">+</span></span>
+<span id="cb3-103"><a href="#cb3-103" aria-hidden="true" tabindex="-1"></a>      <span class="dv">4</span> <span class="sc">*</span> dx_J12_J18 <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> dx_J41_J47 <span class="sc">+</span> <span class="dv">7</span> <span class="sc">*</span> dx_J84 <span class="sc">+</span></span>
+<span id="cb3-104"><a href="#cb3-104" aria-hidden="true" tabindex="-1"></a>      <span class="dv">5</span> <span class="sc">*</span> dx_K02_K08 <span class="sc">+</span>            <span class="co"># dental, weight 5</span></span>
+<span id="cb3-105"><a href="#cb3-105" aria-hidden="true" tabindex="-1"></a>      <span class="dv">13</span> <span class="sc">*</span> dx_K70_K767 <span class="sc">+</span>          <span class="co"># fixed: liver disease, weight 13 (was 13 * dx_K02_K08)</span></span>
+<span id="cb3-106"><a href="#cb3-106" aria-hidden="true" tabindex="-1"></a>      <span class="dv">11</span> <span class="sc">*</span> dx_L89 <span class="sc">+</span> <span class="dv">7</span> <span class="sc">*</span> dx_N18_N19 <span class="sc">+</span></span>
+<span id="cb3-107"><a href="#cb3-107" aria-hidden="true" tabindex="-1"></a>      <span class="dv">8</span> <span class="sc">*</span> rx_A06A <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> rx_A07DA <span class="sc">+</span></span>
+<span id="cb3-108"><a href="#cb3-108" aria-hidden="true" tabindex="-1"></a>      <span class="dv">4</span> <span class="sc">*</span> rx_A10A <span class="sc">+</span></span>
+<span id="cb3-109"><a href="#cb3-109" aria-hidden="true" tabindex="-1"></a>      <span class="dv">2</span> <span class="sc">*</span> rx_B01AC <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> rx_B03A <span class="sc">+</span> <span class="dv">4</span> <span class="sc">*</span> rx_C01AA <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> rx_C03C_C03EB <span class="sc">+</span> <span class="dv">3</span> <span class="sc">*</span> rx_C03DA <span class="sc">+</span></span>
+<span id="cb3-110"><a href="#cb3-110" aria-hidden="true" tabindex="-1"></a>      (<span class="sc">-</span><span class="dv">2</span>) <span class="sc">*</span> rx_C09C_C09D <span class="sc">+</span> (<span class="sc">-</span><span class="dv">3</span>) <span class="sc">*</span> rx_C10AA <span class="sc">+</span></span>
+<span id="cb3-111"><a href="#cb3-111" aria-hidden="true" tabindex="-1"></a>      <span class="dv">2</span> <span class="sc">*</span> rx_H02AB <span class="sc">+</span> <span class="dv">1</span> <span class="sc">*</span> rx_J01C <span class="sc">+</span> <span class="dv">2</span> <span class="sc">*</span> rx_N02A <span class="sc">+</span> <span class="dv">2</span> <span class="sc">*</span> rx_N02BE <span class="sc">+</span></span>
+<span id="cb3-112"><a href="#cb3-112" aria-hidden="true" tabindex="-1"></a>      <span class="dv">1</span> <span class="sc">*</span> rx_N05BA_N05CF <span class="sc">+</span> <span class="dv">7</span> <span class="sc">*</span> rx_N05AA_N05AX <span class="sc">+</span> <span class="dv">3</span> <span class="sc">*</span> rx_N06A <span class="sc">+</span> <span class="dv">11</span> <span class="sc">*</span> rx_N06D <span class="sc">+</span></span>
+<span id="cb3-113"><a href="#cb3-113" aria-hidden="true" tabindex="-1"></a>      <span class="dv">7</span> <span class="sc">*</span> rx_N07BC <span class="sc">+</span> <span class="dv">3</span> <span class="sc">*</span> rx_R03AC02_R03AC05 <span class="sc">+</span> <span class="dv">5</span> <span class="sc">*</span> rx_R03BB04_R03BB07</span>
+<span id="cb3-114"><a href="#cb3-114" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb3-115"><a href="#cb3-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-116"><a href="#cb3-116" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(nmi_data <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, nmi), <span class="st">"datasets/extract_nmi.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</section>
+<section id="look-at-and-describe-the-score" class="level3">
+<h3 class="anchored" data-anchor-id="look-at-and-describe-the-score">3. Look at and describe the score</h3>
+<p>The score is one number per person in <code>extract_nmi.rds</code>. Join it to your analysis dataset (Phase 12) and inspect it - NMI is right-skewed (many low, a few high), so median [IQR] often describes it better than the mean, though mean + CI is fine for comparing groups.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>nmi <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"datasets/extract_nmi.rds"</span>) <span class="co"># pnr, nmi</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>analysis <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"datasets/analysis.rds"</span>) <span class="sc">%&gt;%</span> <span class="co"># your assembled dataset (Phase 12)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(nmi, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Distribution overall</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(analysis<span class="sc">$</span>nmi)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(analysis<span class="sc">$</span>nmi)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co"># By group (e.g. exposed vs comparison cohort): mean + 95% CI and median [IQR]</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>analysis <span class="sc">%&gt;%</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(group) <span class="sc">%&gt;%</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_nmi =</span> <span class="fu">mean</span>(nmi, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_nmi =</span> <span class="fu">sd</span>(nmi, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_nmi =</span> <span class="fu">median</span>(nmi, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">q1 =</span> <span class="fu">quantile</span>(nmi, <span class="fl">0.25</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">q3 =</span> <span class="fu">quantile</span>(nmi, <span class="fl">0.75</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">ci_low =</span> mean_nmi <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> sd_nmi <span class="sc">/</span> <span class="fu">sqrt</span>(n),</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">ci_high =</span> mean_nmi <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> sd_nmi <span class="sc">/</span> <span class="fu">sqrt</span>(n)</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>For a formatted Table 1 across groups, <code>gtsummary::tbl_summary(by = group)</code> does this automatically - see <a href="../en/13b_deskriptive-tabeller.html">Descriptive tables</a>.</p>
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>Consider whether the 5-year lookback should be an inclusion criterion.</strong> NMI’s diagnosis window needs at least <strong>5 years</strong> of register data before the index date. If you make full lookback an inclusion criterion (only people with at least 5 years of prior residency/coverage in Denmark), apply it <strong>already when you build your cohort</strong>, not here - and apply the same requirement to any <strong>comparison cohort</strong>, so both groups have the same depth of data before index. Decide it in <a href="../en/01_studieforberedelse.html">Phase 1</a> and apply it in <a href="../en/10_byg-studiepopulation.html">Phase 10</a>.</p>
 </div>
 </div>
 </div>
@@ -598,12 +867,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 Example: make the 5-year lookback an inclusion criterion (conceptual)
 </summary>
 <p>The idea is to require that each person has resided in Denmark (and is therefore covered by the registers) for at least 5 years before their index date. You check this against residence/migration data (VNDS/BEF) and apply it as a filter <strong>before</strong> you match a comparison cohort:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Conceptual - adapt to your residence data</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>kohort <span class="ot">&lt;-</span> kohort <span class="sc">%&gt;%</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">lookback_ok =</span> <span class="fu">as.numeric</span>(index_date <span class="sc">-</span> residence_start) <span class="sc">&gt;=</span> <span class="fl">365.25</span> <span class="sc">*</span> <span class="dv">5</span>) <span class="sc">%&gt;%</span>  <span class="co"># at least 5 years before index</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lookback_ok)                                                               <span class="co"># keep only full lookback</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Conceptual - adapt to your residence data</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>kohort <span class="ot">&lt;-</span> kohort <span class="sc">%&gt;%</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">lookback_ok =</span> <span class="fu">as.numeric</span>(index_date <span class="sc">-</span> residence_start) <span class="sc">&gt;=</span> <span class="fl">365.25</span> <span class="sc">*</span> <span class="dv">5</span>) <span class="sc">%&gt;%</span>  <span class="co"># at least 5 years before index</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lookback_ok)                                                               <span class="co"># keep only full lookback</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Apply the same requirement to the comparison cohort’s assigned index dates, so the two groups are comparable.</p>
 </details>
+</section>
 </section>
 <section id="more-information" class="level2">
 <h2 class="anchored" data-anchor-id="more-information">More information</h2>
