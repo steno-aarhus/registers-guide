@@ -62,20 +62,172 @@ justerer for.
 
 ## R-implementering
 
-Der findes **ingen officiel R-pakke**. SDU's Pharmacoepidemiology Unit udgiver
-en **Stata**-implementering:
-[pharmacoepi.sdu.dk/nmi/](https://pharmacoepi.sdu.dk/nmi/). En studiespecifik
-R-oversættelse findes, men er endnu ikke generaliseret eller pakket. Hvis NMI
-senere kommer i projektets værktøjer, bliver det som et **valgfrit
-mortalitets-risikomål**, adskilt fra comorbiditets-byrde-indekset.
+Der findes **ingen officiel R-pakke** (SDU udgiver en
+[Stata-implementering](https://pharmacoepi.sdu.dk/nmi/)). R-versionen nedenfor
+kører i **to trin - udtræk, dernæst beregn** - holdt adskilt, så du kan
+genstarte R imellem og frigøre hukommelse, da udtrækket kan hente mange rækker.
 
-Hvis du implementerer den, læser NMI fra:
+*R-koden er oversat fra SDU's Stata-kode af **Pernille Errebo Tonnesen** og
+derefter tilpasset, rettet og integreret i denne vejledning af Sara Schwartz.*
 
-- **LPR** (LPR2 somatisk + psykiatrisk, og LPR3) - en **5-årig** lookback af
-  diagnoser.
-- **LMDB** - en **6-måneders** lookback af indløste recepter (ATC-koder).
+### 1. Udtræk diagnoser og recepter
 
-Scorer tildeles per prediktor ud fra vægtene i Tabel 2 i artiklen.
+::: {.callout-important}
+**Hvad NMI kræver, og over hvilken periode:**
+
+- **Diagnoser**, en **5-årig** lookback før index, fra **alle**: LPR2
+  **somatisk** og **psykiatrisk** (frem til marts 2019) *og* LPR3 (fra marts
+  2019), på tværs af alle diagnosetyper. Et rent somatisk udtræk (fx `lpr_adm`
+  alene) mangler de psykiatriske prediktorer (F00-03, F10, F17) og alt efter
+  marts 2019.
+- **Recepter** (ATC), en **6-måneders** lookback før index, fra **LMDB** - kun
+  det vindue, ikke hele registret.
+:::
+
+Til diagnoserne genbruger du **`get_lpr_diagnoses()`**-mønstret fra [Udtræk fra
+LPR](09b_udtraek_fra_lpr.qmd) - det kombinerer allerede LPR2 somatisk +
+psykiatrisk og LPR3 på tværs af diagnosetyper, hvilket er præcis den dækning NMI
+kræver. Til medicinen udtrækker du LMDB for kohorten og det relevante vindue:
+
+```r
+library(arrow)
+library(dplyr)
+
+pnr_vec <- unique(cohort$pnr)
+
+lmdb_cohort <- open_dataset("sti/til/lmdb/") %>%
+  rename_with(tolower) %>%
+  semi_join(tibble(pnr = pnr_vec), by = "pnr") %>% # kun kohorten - filtrér FØR collect
+  collect()
+saveRDS(lmdb_cohort, "datasets/lmdb_cohort.rds")
+```
+
+Gem udtrækkene, og **genstart R** (Session -> Restart R) for at rydde den
+hukommelse, udtrækket brugte, inden du kører beregningen nedenfor.
+
+### 2. Beregn NMI-scoren
+
+<details>
+<summary>Se hele NMI-beregningen (rettet mod Stata-kilden)</summary>
+
+Rettet ift. den oprindelige oversættelse: **5-års** diagnose-lookback (var 10),
+**leversygdoms**-vægten rettet (`dx_K70_K767`, tandsygdom blev talt dobbelt) og
+**aterosklerose**-gruppen bragt i overensstemmelse med Stata (`^DI7[347]`, I70 fjernet).
+`dx_E11` / `rx_A10A` er udkommenteret til et **type-2-diabetes-studie** (undgå cirkularitet)
+- fjern kommentaren, hvis du vil have dem med. Denne version læser diagnoserne fra
+`get_lpr_diagnoses()` (kolonne `c_diag`, datoer i `date_contact`).
+
+```r
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(tidyr)
+
+cohort <- readRDS("datasets/full_cohort.rds")   # pnr, index_date
+dx_raw <- readRDS("datasets/nmi_diagnoses.rds")  # fra get_lpr_diagnoses(): pnr, date_contact, c_diag
+rx_raw <- readRDS("datasets/lmdb_cohort.rds")    # pnr, eksd, atc
+
+# Diagnoser: 5-årig lookback før index (Stata: 1825 dage)
+dx <- dx_raw %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact >= index_date - days(1825),
+         date_contact <= index_date - days(1)) %>%
+  mutate(
+    dx_B18      = str_detect(c_diag, "^DB18"),
+    dx_C34      = str_detect(c_diag, "^DC34"),
+    dx_C50      = str_detect(c_diag, "^DC50"),
+    dx_C61      = str_detect(c_diag, "^DC61"),
+    dx_C67      = str_detect(c_diag, "^DC67"),
+    dx_C70_D432 = str_detect(c_diag, "^DC7[01]|^DC75[1-3]|^DD32|^DD33[0-2]|^DD35[2-4]|^DD42|^DD43[0-2]|^DD44[3-5]"),
+    dx_C76_C80  = str_detect(c_diag, "^DC7[6-9]|^DC80"),
+    dx_C91_C95  = str_detect(c_diag, "^DC9[1-5]"),
+    dx_D50_D64  = str_detect(c_diag, "^DD5[0-9]|^DD6[0-4]"),
+    # dx_E11    = str_detect(c_diag, "^DE11"),   # Diabetes - fravalgt (T2D-studie)
+    dx_E86      = str_detect(c_diag, "^DE86"),
+    dx_F00_G319 = str_detect(c_diag, "^DF0[0-3]|^DG30"),
+    dx_F10      = str_detect(c_diag, "^DF10"),
+    dx_F17      = str_detect(c_diag, "^DF17"),
+    dx_G20_22   = str_detect(c_diag, "^DG2[0-2]"),
+    dx_G35      = str_detect(c_diag, "^DG35"),
+    dx_G40_G41  = str_detect(c_diag, "^DG4[0-1]"),
+    dx_I05_35   = str_detect(c_diag, "^DI0[56]|^DI3[45]"),
+    dx_I110_I50 = str_detect(c_diag, "^DI110|^DI13[02]|^DI42[06789]|^DI50"),
+    dx_I60_I69  = str_detect(c_diag, "^DI6[0-9]"),
+    dx_I70_I77  = str_detect(c_diag, "^DI7[347]"),   # rettet: I70 fjernet (Stata ^I7[347])
+    dx_I71_I72  = str_detect(c_diag, "^DI7[12]"),
+    dx_J12_J18  = str_detect(c_diag, "^DJ1[2-8]"),
+    dx_J41_J47  = str_detect(c_diag, "^DJ4[12347]|^DJ96[19]"),
+    dx_J84      = str_detect(c_diag, "^DJ84"),
+    dx_K02_K08  = str_detect(c_diag, "^DK0[234568]"),
+    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[76]"),   # leversygdom
+    dx_L89      = str_detect(c_diag, "^DL89"),
+    dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
+  ) %>%
+  group_by(pnr) %>%
+  summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
+
+# Recepter: 6-måneders lookback før index
+rx <- rx_raw %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(eksd >= index_date - days(180),
+         eksd <= index_date - days(1)) %>%
+  mutate(
+    rx_A06A            = str_detect(atc, "^A06A"),
+    rx_A07DA           = str_detect(atc, "^A07DA"),
+    # rx_A10A          = str_detect(atc, "^A10A"),   # Antidiabetika - fravalgt (T2D-studie)
+    rx_B01AC           = str_detect(atc, "^B01AC"),
+    rx_B03A            = str_detect(atc, "^B03A"),
+    rx_C01AA           = str_detect(atc, "^C01AA"),
+    rx_C03C_C03EB      = str_detect(atc, "^C03C|^C03EB"),
+    rx_C03DA           = str_detect(atc, "^C03DA"),
+    rx_C09C_C09D       = str_detect(atc, "^C09[CD]"),
+    rx_C10AA           = str_detect(atc, "^C10AA"),
+    rx_H02AB           = str_detect(atc, "^H02AB"),
+    rx_J01C            = str_detect(atc, "^J01C"),
+    rx_N02A            = str_detect(atc, "^N02A"),
+    rx_N02BE           = str_detect(atc, "^N02BE"),
+    rx_N05BA_N05CF     = str_detect(atc, "^N05BA|^N05C[DF]"),
+    rx_N05AA_N05AX     = str_detect(atc, "^N05A[A-L]|^N05AX"),
+    rx_N06A            = str_detect(atc, "^N06A"),
+    rx_N06D            = str_detect(atc, "^N06D"),
+    rx_N07BC           = str_detect(atc, "^N07BC"),
+    rx_R03AC02_R03AC05 = str_detect(atc, "^R03AC0[2-5]"),
+    rx_R03BB04_R03BB07 = str_detect(atc, "^R03BB0[4-7]")
+  ) %>%
+  group_by(pnr) %>%
+  summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
+
+# Kombinér og scor (vægte fra Tabel 2)
+nmi_data <- cohort %>%
+  left_join(dx, by = "pnr") %>%
+  left_join(rx, by = "pnr") %>%
+  mutate(across(c(starts_with("dx_"), starts_with("rx_")), ~ replace_na(., 0))) %>%
+  mutate(
+    nmi =
+      10 * dx_B18 + 19 * dx_C34 + 4 * dx_C50 + 5 * dx_C61 + 8 * dx_C67 +
+      8 * dx_C70_D432 + 22 * dx_C76_C80 + 8 * dx_C91_C95 + 5 * dx_D50_D64 +
+    # 2 * dx_E11 +                                  # Diabetes - fravalgt
+      6 * dx_E86 + 9 * dx_F00_G319 + 12 * dx_F10 + 4 * dx_F17 +
+      7 * dx_G20_22 + 7 * dx_G35 + 5 * dx_G40_G41 +
+      2 * dx_I05_35 + 4 * dx_I110_I50 + 4 * dx_I60_I69 +
+      5 * dx_I70_I77 + 4 * dx_I71_I72 +
+      4 * dx_J12_J18 + 4 * dx_J41_J47 + 7 * dx_J84 +
+      5 * dx_K02_K08 +            # tandsygdom, vægt 5
+      13 * dx_K70_K767 +          # rettet: leversygdom, vægt 13 (var 13 * dx_K02_K08)
+      11 * dx_L89 + 7 * dx_N18_N19 +
+      8 * rx_A06A + 5 * rx_A07DA +
+    # 4 * rx_A10A +                                 # Antidiabetika - fravalgt
+      2 * rx_B01AC + 5 * rx_B03A + 4 * rx_C01AA + 5 * rx_C03C_C03EB + 3 * rx_C03DA +
+      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +
+      2 * rx_H02AB + 1 * rx_J01C + 2 * rx_N02A + 2 * rx_N02BE +
+      1 * rx_N05BA_N05CF + 7 * rx_N05AA_N05AX + 3 * rx_N06A + 11 * rx_N06D +
+      7 * rx_N07BC + 3 * rx_R03AC02_R03AC05 + 5 * rx_R03BB04_R03BB07
+  )
+
+saveRDS(nmi_data %>% select(pnr, nmi), "datasets/extract_nmi.rds")
+```
+
+</details>
 
 ::: {.callout-important}
 **5-års lookback kan være et inklusionskrav.** NMI's diagnosevindue kræver

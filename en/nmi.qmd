@@ -62,20 +62,173 @@ of the score you adjust for.
 
 ## R implementation
 
-There is **no official R package**. SDU's Pharmacoepidemiology Unit publishes a
-**Stata** implementation:
-[pharmacoepi.sdu.dk/nmi/](https://pharmacoepi.sdu.dk/nmi/). A study-specific R
-translation exists but is not yet generalised or packaged. If NMI is added to
-this project's tooling later, it would be as an **optional mortality-risk
-measure**, separate from the comorbidity-burden index.
+There is **no official R package** (SDU publishes a [Stata
+implementation](https://pharmacoepi.sdu.dk/nmi/)). The R version below runs in
+**two steps - extract, then compute** - kept apart so you can restart R in
+between and free memory, since the extraction can pull a lot of rows.
 
-If you implement it, NMI reads from:
+*The R code was translated from the SDU Stata code by **Pernille Errebo
+Tonnesen**, then adapted, corrected and integrated into this guide by Sara
+Schwartz.*
 
-- **LPR** (LPR2 somatic + psychiatric, and LPR3) - a **5-year** lookback of
-  diagnoses.
-- **LMDB** - a **6-month** lookback of filled prescriptions (ATC codes).
+### 1. Extract diagnoses and prescriptions
 
-Scores are assigned per predictor from the weights in Table 2 of the article.
+::: {.callout-important}
+**What NMI needs, and over which period:**
+
+- **Diagnoses**, a **5-year** lookback before index, from **all** of: LPR2
+  **somatic** and **psychiatric** (up to March 2019) *and* LPR3 (from March
+  2019), across all diagnosis types. A somatic-only pull (e.g. `lpr_adm` alone)
+  misses the psychiatric predictors (F00-03, F10, F17) and everything after
+  March 2019.
+- **Prescriptions** (ATC), a **6-month** lookback before index, from **LMDB** -
+  only that window, not the whole register.
+:::
+
+For the diagnoses, reuse the **`get_lpr_diagnoses()`** pattern from [Extract
+from LPR](09b_udtraek_fra_lpr.qmd) - it already combines LPR2 somatic +
+psychiatric and LPR3 across diagnosis types, which is exactly the coverage NMI
+needs. For the medications, extract LMDB for the cohort and the relevant window:
+
+```r
+library(arrow)
+library(dplyr)
+
+pnr_vec <- unique(cohort$pnr)
+
+lmdb_cohort <- open_dataset("path/to/lmdb/") %>%
+  rename_with(tolower) %>%
+  semi_join(tibble(pnr = pnr_vec), by = "pnr") %>% # only the cohort - filter BEFORE collect
+  collect()
+saveRDS(lmdb_cohort, "datasets/lmdb_cohort.rds")
+```
+
+Save the extracts, then **restart R** (Session -> Restart R) to clear the memory
+the extraction used, before running the computation below.
+
+### 2. Compute the NMI score
+
+<details>
+<summary>See the full NMI computation (corrected against the Stata source)</summary>
+
+Corrected vs the original translation: **5-year** diagnosis lookback (was 10), the
+**liver-disease** weight fixed (`dx_K70_K767`, was double-counting dental), and the
+**atherosclerosis** group aligned to Stata (`^DI7[347]`, I70 removed). `dx_E11` / `rx_A10A`
+are commented out for a **type-2-diabetes study** (to avoid circularity) - remove the
+comments if you want them. This version reads the diagnoses from `get_lpr_diagnoses()`
+(column `c_diag`, dates in `date_contact`).
+
+```r
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(tidyr)
+
+cohort <- readRDS("datasets/full_cohort.rds")   # pnr, index_date
+dx_raw <- readRDS("datasets/nmi_diagnoses.rds")  # from get_lpr_diagnoses(): pnr, date_contact, c_diag
+rx_raw <- readRDS("datasets/lmdb_cohort.rds")    # pnr, eksd, atc
+
+# Diagnoses: 5-year lookback before index (Stata: 1825 days)
+dx <- dx_raw %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact >= index_date - days(1825),
+         date_contact <= index_date - days(1)) %>%
+  mutate(
+    dx_B18      = str_detect(c_diag, "^DB18"),
+    dx_C34      = str_detect(c_diag, "^DC34"),
+    dx_C50      = str_detect(c_diag, "^DC50"),
+    dx_C61      = str_detect(c_diag, "^DC61"),
+    dx_C67      = str_detect(c_diag, "^DC67"),
+    dx_C70_D432 = str_detect(c_diag, "^DC7[01]|^DC75[1-3]|^DD32|^DD33[0-2]|^DD35[2-4]|^DD42|^DD43[0-2]|^DD44[3-5]"),
+    dx_C76_C80  = str_detect(c_diag, "^DC7[6-9]|^DC80"),
+    dx_C91_C95  = str_detect(c_diag, "^DC9[1-5]"),
+    dx_D50_D64  = str_detect(c_diag, "^DD5[0-9]|^DD6[0-4]"),
+    # dx_E11    = str_detect(c_diag, "^DE11"),   # Diabetes - excluded (T2D study)
+    dx_E86      = str_detect(c_diag, "^DE86"),
+    dx_F00_G319 = str_detect(c_diag, "^DF0[0-3]|^DG30"),
+    dx_F10      = str_detect(c_diag, "^DF10"),
+    dx_F17      = str_detect(c_diag, "^DF17"),
+    dx_G20_22   = str_detect(c_diag, "^DG2[0-2]"),
+    dx_G35      = str_detect(c_diag, "^DG35"),
+    dx_G40_G41  = str_detect(c_diag, "^DG4[0-1]"),
+    dx_I05_35   = str_detect(c_diag, "^DI0[56]|^DI3[45]"),
+    dx_I110_I50 = str_detect(c_diag, "^DI110|^DI13[02]|^DI42[06789]|^DI50"),
+    dx_I60_I69  = str_detect(c_diag, "^DI6[0-9]"),
+    dx_I70_I77  = str_detect(c_diag, "^DI7[347]"),   # fixed: I70 removed (Stata ^I7[347])
+    dx_I71_I72  = str_detect(c_diag, "^DI7[12]"),
+    dx_J12_J18  = str_detect(c_diag, "^DJ1[2-8]"),
+    dx_J41_J47  = str_detect(c_diag, "^DJ4[12347]|^DJ96[19]"),
+    dx_J84      = str_detect(c_diag, "^DJ84"),
+    dx_K02_K08  = str_detect(c_diag, "^DK0[234568]"),
+    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[76]"),   # liver disease
+    dx_L89      = str_detect(c_diag, "^DL89"),
+    dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
+  ) %>%
+  group_by(pnr) %>%
+  summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
+
+# Prescriptions: 6-month lookback before index
+rx <- rx_raw %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(eksd >= index_date - days(180),
+         eksd <= index_date - days(1)) %>%
+  mutate(
+    rx_A06A            = str_detect(atc, "^A06A"),
+    rx_A07DA           = str_detect(atc, "^A07DA"),
+    # rx_A10A          = str_detect(atc, "^A10A"),   # Antidiabetics - excluded (T2D study)
+    rx_B01AC           = str_detect(atc, "^B01AC"),
+    rx_B03A            = str_detect(atc, "^B03A"),
+    rx_C01AA           = str_detect(atc, "^C01AA"),
+    rx_C03C_C03EB      = str_detect(atc, "^C03C|^C03EB"),
+    rx_C03DA           = str_detect(atc, "^C03DA"),
+    rx_C09C_C09D       = str_detect(atc, "^C09[CD]"),
+    rx_C10AA           = str_detect(atc, "^C10AA"),
+    rx_H02AB           = str_detect(atc, "^H02AB"),
+    rx_J01C            = str_detect(atc, "^J01C"),
+    rx_N02A            = str_detect(atc, "^N02A"),
+    rx_N02BE           = str_detect(atc, "^N02BE"),
+    rx_N05BA_N05CF     = str_detect(atc, "^N05BA|^N05C[DF]"),
+    rx_N05AA_N05AX     = str_detect(atc, "^N05A[A-L]|^N05AX"),
+    rx_N06A            = str_detect(atc, "^N06A"),
+    rx_N06D            = str_detect(atc, "^N06D"),
+    rx_N07BC           = str_detect(atc, "^N07BC"),
+    rx_R03AC02_R03AC05 = str_detect(atc, "^R03AC0[2-5]"),
+    rx_R03BB04_R03BB07 = str_detect(atc, "^R03BB0[4-7]")
+  ) %>%
+  group_by(pnr) %>%
+  summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
+
+# Combine and score (weights from Table 2)
+nmi_data <- cohort %>%
+  left_join(dx, by = "pnr") %>%
+  left_join(rx, by = "pnr") %>%
+  mutate(across(c(starts_with("dx_"), starts_with("rx_")), ~ replace_na(., 0))) %>%
+  mutate(
+    nmi =
+      10 * dx_B18 + 19 * dx_C34 + 4 * dx_C50 + 5 * dx_C61 + 8 * dx_C67 +
+      8 * dx_C70_D432 + 22 * dx_C76_C80 + 8 * dx_C91_C95 + 5 * dx_D50_D64 +
+    # 2 * dx_E11 +                                  # Diabetes - excluded
+      6 * dx_E86 + 9 * dx_F00_G319 + 12 * dx_F10 + 4 * dx_F17 +
+      7 * dx_G20_22 + 7 * dx_G35 + 5 * dx_G40_G41 +
+      2 * dx_I05_35 + 4 * dx_I110_I50 + 4 * dx_I60_I69 +
+      5 * dx_I70_I77 + 4 * dx_I71_I72 +
+      4 * dx_J12_J18 + 4 * dx_J41_J47 + 7 * dx_J84 +
+      5 * dx_K02_K08 +            # dental, weight 5
+      13 * dx_K70_K767 +          # fixed: liver disease, weight 13 (was 13 * dx_K02_K08)
+      11 * dx_L89 + 7 * dx_N18_N19 +
+      8 * rx_A06A + 5 * rx_A07DA +
+    # 4 * rx_A10A +                                 # Antidiabetics - excluded
+      2 * rx_B01AC + 5 * rx_B03A + 4 * rx_C01AA + 5 * rx_C03C_C03EB + 3 * rx_C03DA +
+      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +
+      2 * rx_H02AB + 1 * rx_J01C + 2 * rx_N02A + 2 * rx_N02BE +
+      1 * rx_N05BA_N05CF + 7 * rx_N05AA_N05AX + 3 * rx_N06A + 11 * rx_N06D +
+      7 * rx_N07BC + 3 * rx_R03AC02_R03AC05 + 5 * rx_R03BB04_R03BB07
+  )
+
+saveRDS(nmi_data %>% select(pnr, nmi), "datasets/extract_nmi.rds")
+```
+
+</details>
 
 ::: {.callout-important}
 **The 5-year lookback can be an inclusion criterion.** NMI's diagnosis window
