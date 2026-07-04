@@ -1,62 +1,89 @@
 ---
 title: "![](images/icons/icon_14.png){.title-icon} NMI - Nordic Multimorbidity Index"
-subtitle: "Vægtet comorbiditetsscore til registerbaserede studier"
+subtitle: "Vægtet mortalitets-risikoscore fra nordiske registre"
 date: last-modified
 ---
 
-NMI (Nordic Multimorbidity Index) er en vægtet comorbiditetsscore udviklet til
-nordiske registerdata. Den kombinerer 50 prediktorer - 29 diagnosebaserede og 21
-receptbaserede - og giver en kontinuert score, der afspejler den samlede
-comorbiditetsbyrde.
+NMI (Nordic Multimorbidity Index) er en vægtet score bygget på nordiske
+hospitalsdiagnoser og indløste recepter. Den kombinerer 50
+mortalitetsprediktorer - 29 diagnosebaserede og 21 receptbaserede - til én
+kontinuert score.
 
 **Artikel:** Kristensen et al. *Clinical Epidemiology* 2022 -
 [doi:10.2147/CLEP.S353398](https://doi.org/10.2147/CLEP.S353398)
 
-## Hvad giver NMI dig?
-
-En **kontinuert score** per person, der kan bruges som: - Kovariat i
-regressionsmodeller (justerer for comorbiditet) - Deskriptiv variabel i Table 1
-
-NMI er valideret til at forudsige 5-årig mortalitet i nordiske populationer og
-er mere finkornet end fx Charlson Comorbidity Index.
-
-## Hvornår bruges det?
-
-- Når du vil **justere for comorbiditet** i en Cox- eller logistisk regression
-- Når du vil **beskrive comorbiditetsbyrden** i din population
-- Som alternativ til Charlson eller CCI, særligt i nordiske kohortestudier
-
-## Algoritme under udvikling
-
 ::: {.callout-warning}
-**En R-implementering af NMI-algoritmen til dette projekt er under udvikling og
-kommer snart.** Siden opdateres med kodeeksempler, når algoritmen er klar.
+**Vigtigt: NMI er et mortalitetsindeks, ikke et mål for comorbiditetsbyrde.**
+NMI blev udviklet og valideret til at forudsige **5-årig mortalitet**
+(Kristensen et al. 2022, \~425.000 danskere ≥40 år), og prædiktorerne blev
+udvalgt efter, hvor meget de bidrog til mortalitetsmodellen - ikke efter at
+dække sygdomsbyrden. Derfor:
+
+- Flere almindelige kroniske sygdomme mangler (fx **ingen hypertension**, og
+  diabetes er indsnævret til type 2 + antidiabetika).
+- Nogle items er **mortalitetsproxyer**, ikke selvstændige sygdomme (fx
+  laksantia, jern).
+- Nogle vægte er **negative** (fx statiner -3, ACE/AT-hæmmere -2), hvilket kun
+  giver mening i en dødeligheds*model*, ikke i et mål for sygdomsbyrde.
+
+**Skal du måle comorbiditets*byrde*, er NMI det forkerte værktøj** - brug i
+stedet et hospitals-ICD-baseret multimorbiditetsindeks. Et dedikeret et (ICD-10
++ ATC-koder) er under udvikling; se [Comorbiditet](11c_komorbiditet.qmd) for den
+generelle tilgang. Brug kun NMI, når dit mål specifikt er **mortalitetsrisiko**.
 :::
 
-::: {.callout-note}
-**Eksisterende implementering: Stata .do-fil** SDU's Pharmacoepidemiology Unit
-har publiceret en Stata-implementering af NMI:
-[pharmacoepi.sdu.dk/nmi/](https://pharmacoepi.sdu.dk/nmi/)
+## Hvad NMI giver dig
 
-Der kendes ikke til en officiel R-pakke. Overvej at kontakte SDU direkte for at
-høre, om de har R-kode under udvikling eller er interesserede i at samarbejde om
-en R-version.
-:::
+En **kontinuert mortalitets-risikoscore** per person, valideret til at forudsige
+**5-årig mortalitet** i nordiske populationer (og stærkere end Charlson- og
+Elixhauser-indekserne *til netop det udfald*). Brug den som:
 
-NMI kræver: - **LPR** (somatic + psykiatrisk LPR2, LPR3) - 5-årig lookback,
-A/B/G diagnoser - **LMDB:** 5-årig lookback, ATC-koder
+- En **kovariat**, der opsummerer mortalitetsassocieret sygdom i en Cox- eller
+  logistisk model.
+- En **oversigtsvariabel** for mortalitetsrisiko i Table 1.
 
-Scorer tildeles per prediktor ud fra vægte i Tabel 2 i artiklen. Én prediktor er
-ekskluderet i demens-studier: `dx_F00_G30` og `rx_N06D` undgås for at forhindre
-cirkulær logik, da demens er studieudfaldet.
+Den er ikke en ren optælling af kroniske sygdomme - vil du have
+comorbiditetsbyrde, se advarslen ovenfor.
+
+## Hvornår bruges det (og hvornår ikke)
+
+**Brug NMI, når dit spørgsmål handler om mortalitetsrisiko:** justering for
+mortalitetsassocieret sygdomsbyrde i en overlevelses- eller logistisk model,
+eller når du vil have en valideret 5-års-mortalitets-prædiktor.
+
+**Brug ikke NMI til at måle comorbiditetsbyrde** (en optælling eller et indeks
+over kroniske sygdomme) - det udelader almindelige tilstande by design (se
+ovenfor). Brug et hospitals-ICD-multimorbiditetsindeks til det.
+
+**Pas på over-justering:** dit eget udfald må ikke være en af scorens
+prediktorer. NMI håndterer fx demensstudier ved at droppe demens-prediktoren
+(`dx_F00_G30` og `rx_N06D`), da demens ellers ville være en del af den score, du
+justerer for.
+
+## R-implementering
+
+Der findes **ingen officiel R-pakke**. SDU's Pharmacoepidemiology Unit udgiver
+en **Stata**-implementering:
+[pharmacoepi.sdu.dk/nmi/](https://pharmacoepi.sdu.dk/nmi/). En studiespecifik
+R-oversættelse findes, men er endnu ikke generaliseret eller pakket. Hvis NMI
+senere kommer i projektets værktøjer, bliver det som et **valgfrit
+mortalitets-risikomål**, adskilt fra comorbiditets-byrde-indekset.
+
+Hvis du implementerer den, læser NMI fra:
+
+- **LPR** (LPR2 somatisk + psykiatrisk, og LPR3) - en **5-årig** lookback af
+  diagnoser.
+- **LMDB** - en **6-måneders** lookback af indløste recepter (ATC-koder).
+
+Scorer tildeles per prediktor ud fra vægtene i Tabel 2 i artiklen.
 
 ::: {.callout-important}
-**5-års lookback kan være et inklusionskrav.** NMI kræver mindst **5 års**
-registerdata før index-dato. Hvis du gør fuld lookback til et
-inklusionskriterium (kun personer med mindst 5 års forudgående bopæl/dækning i
-Danmark), skal det med **allerede når du bygger din kohorte**, ikke først her.
-Det samme krav skal anvendes på en eventuel **sammenligningskohorte**, så begge
-grupper har samme datadybde før index. Tag stilling til det i [Fase
+**5-års lookback kan være et inklusionskrav.** NMI's diagnosevindue kræver
+mindst **5 år** med registerdata før index-dato. Hvis du gør fuld lookback til
+et inklusionskriterium (kun personer med mindst 5 års forudgående bopæl/dækning
+i Danmark), skal det med **allerede når du bygger din kohorte**, ikke først her
+- og det samme krav skal anvendes på en eventuel **sammenligningskohorte**, så
+begge grupper har samme datadybde før index. Tag stilling til det i [Fase
 1](01_studieforberedelse.qmd) og anvend det i [Fase
 10](10_byg-studiepopulation.qmd).
 :::
