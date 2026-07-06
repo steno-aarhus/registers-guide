@@ -169,7 +169,7 @@ afledte variable (kategorisering, hændelses-indikator).
 library(arrow); library(dplyr); library(lubridate)
 
 #-----------------------------------------------------
-# Konstanter (det vi selv vælger og kan ændre)
+# 3.1 Konstanter (det vi selv vælger og kan ændre)
 #-----------------------------------------------------
 RATIO   <- 5L        # antal sammenligningspersoner per eksponeret
 AAR_FRA <- 2005L     # studievindue: FØRSTE BEF-år. Skal nå mindst 5 år før din tidligste index-dato (se fold-ud)
@@ -180,7 +180,7 @@ bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/
   rename_with(tolower)                          # kolonnenavne til små bogstaver
 
 #-----------------------------------------------------
-# Hent BEF person-år ÉN gang (genbruges til poolen i Trin 4)
+# 3.2 Hent BEF person-år ÉN gang (genbruges til poolen i Trin 4)
 #-----------------------------------------------------
 bef_py <- bef %>%
   filter(year >= AAR_FRA, year <= AAR_TIL) %>%  # kun studievinduet
@@ -204,7 +204,7 @@ earliest_bef <- bef_py %>%
   summarise(earliest_bef_year = min(year), .groups = "drop")  # første år personen ses i BEF
 
 #-----------------------------------------------------
-# Tilknyt demografi til de eksponerede (fra Fase 10: identificeret + prævalente ekskluderet)
+# 3.3 Tilknyt demografi til de eksponerede (fra Fase 10: identificeret + prævalente ekskluderet)
 #-----------------------------------------------------
 eksponerede <- eksponerede %>%
   left_join(demografi,    by = "pnr") %>%       # tilføj køn, fødselsdato, fødselsår
@@ -212,7 +212,7 @@ eksponerede <- eksponerede %>%
   mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)  # afledt: alder ved index i år
 
 #-----------------------------------------------------
-# Inklusionskriterier (de SAMME anvendes på poolen i Trin 4)
+# 3.4 Inklusionskriterier (de SAMME anvendes på poolen i Trin 4)
 #-----------------------------------------------------
 n_before <- nrow(eksponerede)                   # nrow() = antal rækker (her: personer) før eksklusion
 eksponerede <- eksponerede %>%
@@ -315,7 +315,7 @@ Hver dato-tabel ender som **én række per person** (kun den dato, eligibilitet 
 library(arrow); library(dplyr)
 
 #-----------------------------------------------------
-# Første outcome-dato for ALLE
+# 4.1 Første outcome-dato for ALLE
 #-----------------------------------------------------
 # 'diagnoser' er den SAMLEDE LPR-diagnosetabel fra Fase 9 (se noten ovenfor) - ikke en rå tabel.
 # Filtrér på outcome-koderne -> alle personer med diagnosen, uanset eksponering.
@@ -329,7 +329,7 @@ udfald <- diagnoser %>%
   select(pnr, first_outcome_date = date_contact)     # samme idiom som Fase 9 (arrange + slice)
 
 #-----------------------------------------------------
-# Første eksponeringsdato for ALLE
+# 4.2 Første eksponeringsdato for ALLE
 #-----------------------------------------------------
 # Samme kilde som da du DEFINEREDE eksponeringen i Trin 1, men uden at begrænse til de
 # eksponerede - også fremtidigt eksponerede (crossover) skal have en dato.
@@ -341,7 +341,7 @@ eksp_dt <- eksponering_raw %>%                        # dit eksponerings-udtræk
   select(pnr, exposure_date)
 
 #-----------------------------------------------------
-# Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE
+# 4.3 Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE
 #-----------------------------------------------------
 # Samme mønstre som i Fase 12 - bemærk: INGEN semi_join mod eksponerede (pnr).
 doed <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
@@ -357,7 +357,7 @@ udv <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/
   group_by(pnr) %>% arrange(emigration_date) %>% slice(1) %>% ungroup()  # første udvandring per person
 
 #-----------------------------------------------------
-# Gem som .rds (kan genbruges i Trin 2 og Trin 4)
+# 4.4 Gem som .rds (kan genbruges i Trin 2 og Trin 4)
 #-----------------------------------------------------
 saveRDS(udfald,  "sti/til/outcome_dates.rds")     # første outcome per person
 saveRDS(eksp_dt, "sti/til/exposure_dates.rds")    # første eksponering per person
