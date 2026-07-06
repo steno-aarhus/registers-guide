@@ -19,10 +19,8 @@ NMI blev udviklet og valideret til at forudsige **5-årig mortalitet**
 udvalgt efter, hvor meget de bidrog til mortalitetsmodellen - ikke efter at
 dække sygdomsbyrden. Derfor:
 
-- Flere almindelige kroniske sygdomme er ikke inkluderet i modellen (fx **ingen
-  hypertension**, og diabetes optræder kun som type 2 (`DE11`) plus et separat
-  antidiabetika-item - hver vægtes for sig, og type 1 er ikke en
-  diagnoseprediktor).
+- Flere almindelige kroniske sygdomme er ikke inkluderet i modellen (fx
+  hypertension og type 1-diabetes).
 - Nogle items er **mortalitetsproxyer**, ikke selvstændige sygdomme (fx
   laksantia, jern).
 - Nogle vægte er **negative** (fx statiner -3, ACE/AT-hæmmere -2), hvilket kun
@@ -66,12 +64,8 @@ justerer for.
 
 Der findes **ingen officiel R-pakke** (SDU udgiver en
 [Stata-implementering](https://pharmacoepi.sdu.dk/nmi/)). R-versionen nedenfor
-kører i **to trin - udtræk, dernæst beregn** - holdt adskilt, så det tunge
-udtræk kun køres (og gemmes) én gang, mens beregningen, som du kører igen hver
-gang du justerer prediktorer, forbliver hurtig.
-
-*Disse kodeeksempler bygger på **Pernille Errebo Tonnesens** oversættelse af
-SDU's Stata-kode til R.*
+kører i **to trin - udtræk, dernæst beregn.** Kodeeksemplerne bygger på
+**Pernille Errebo Tonnesens** oversættelse af SDU's Stata-kode til R.
 
 ### 1. Udtræk diagnoser og recepter
 
@@ -86,13 +80,14 @@ SDU's Stata-kode til R.*
   det vindue, ikke hele registret.
 :::
 
-Begge udtræk **filtrerer til kun de koder NMI skal bruge før `collect()`**, så
-de gemte `.rds`-filer holdes små.
+*Diagnoser* - Du kan bruge de to tilgange fra [Udtræk fra
+LPR](09b_udtraek_fra_lpr.qmd): enten udtrække **alle** diagnoser og ATC-koder
+for hele kohorten (anbefales ikke - tids-, RAM- og pladskrævende, især ved en
+stor kohorte), eller **filtrere til kun de koder NMI skal bruge før
+`collect()`**, så de gemte `.rds`-filer holdes små.
 
-**Diagnoser** - genbrug `get_lpr_diagnoses()`-mønstret fra [Udtræk fra
-LPR](09b_udtraek_fra_lpr.qmd) (det kombinerer LPR2 somatisk + psykiatrisk og
-LPR3 på tværs af diagnosetyper) og send NMI's diagnosekoder med, så kun de
-returneres:
+Du kan også benytte `get_lpr_diagnoses()`-mønstret fra [Udtræk fra
+LPR](09b_udtraek_fra_lpr.qmd) som i eksemplet herunder:
 
 <details>
 <summary>Se koden: udtræk NMI-diagnoser (LPR2 + LPR3)</summary>
@@ -258,18 +253,29 @@ library(stringr)
 library(lubridate)
 library(tidyr)
 
+#-------------------------------------------------------------
+# 2.0 Indlæs data
+#-------------------------------------------------------------
 cohort <- readRDS("datasets/full_cohort.rds")   # pnr, index_date
 dx_raw <- readRDS("datasets/nmi_diagnoses.rds")  # fra get_lpr_diagnoses(): pnr, date_contact, c_diag
 rx_raw <- readRDS("datasets/nmi_lmdb.rds")       # pnr, eksd, atc
 
 #-------------------------------------------------------------
-# Diagnoser: 5-årig lookback før index (Stata: 1825 dage)
+# 2.1 Diagnoser: 5-årig lookback før index (Stata: 1825 dage)
 #-------------------------------------------------------------
+# Fire trin, ét ad gangen - vi genbruger dx hele vejen.
+
+# 2.1.1 Kobl index-datoen på hver diagnose (inner join, så kun kohortens personer beholdes)
 dx <- dx_raw %>%
-  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact >= index_date - days(1825),  # 1825 dage = 5 år før index
-         date_contact <= index_date - days(1)) %>% # til og med dagen før index (ikke selve index-dagen)
-  # Ét TRUE/FALSE-flag per NMI-prediktor: str_detect() matcher c_diag (med D-præfiks) mod prediktorens ICD-koder
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr")
+
+# 2.1.2 Behold kun diagnoser i 5-års-vinduet før index
+dx <- dx %>%
+  filter(date_contact >= index_date - days(1825),  # 1825 dage = 5 år før index (date_contact = d_inddto i LPR2 / kont_starttidspunkt i LPR3, omdøbt i fase 9)
+         date_contact <= index_date - days(1))      # til og med dagen før index (ikke selve index-dagen)
+
+# 2.1.3 Sæt ét TRUE/FALSE-flag per NMI-prediktor (str_detect() matcher c_diag med D-præfiks mod prediktorens ICD-koder)
+dx <- dx %>%
   mutate(
     dx_B18      = str_detect(c_diag, "^DB18"),
     dx_C34      = str_detect(c_diag, "^DC34"),
@@ -300,16 +306,17 @@ dx <- dx_raw %>%
     dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[67]"),
     dx_L89      = str_detect(c_diag, "^DL89"),
     dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
-  ) %>%
-  # Kollaps til én række per person:
-  #   - én række per pnr, én kolonne per dx_-prediktor (~29 stk.), hver med værdien 0 eller 1
-  #   - any() = 1 hvis personen har mindst én matchende diagnose i 5-års-vinduet, ellers 0
+  )
+
+# 2.1.4 Kollaps til én række per person (én kolonne per dx_-prediktor med værdien 0/1; any() = 1 hvis mindst én matchende diagnose i 5-års-vinduet, ellers 0)
+dx <- dx %>%
   group_by(pnr) %>%
   summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
 
 #-------------------------------------------------------------
-# Recepter: 6-måneders lookback før index
+# 2.2 Recepter: 6-måneders lookback før index
 #-------------------------------------------------------------
+# Samme mønster som diagnoserne (kobl på, filtrér, flag, kollaps), her samlet i én kæde.
 rx <- rx_raw %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
   filter(eksd >= index_date - days(180),   # 180 dage = 6 måneder før index (eksd = indløsningsdato)
@@ -343,9 +350,9 @@ rx <- rx_raw %>%
   summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
 
 #-------------------------------------------------------------
-# Kombinér og scor (vægte fra Tabel 2)
+# 2.3 Kombinér og scor (vægte fra Tabel 2)
 #-------------------------------------------------------------
-nmi_data <- cohort %>%
+nmi_data <- cohort %>%   # indlæs din kohorte igen hvis nødvendigt (navnet kan være et andet end "cohort")
   left_join(dx, by = "pnr") %>%   # sæt diagnose-flag på hver person i kohorten
   left_join(rx, by = "pnr") %>%   # og lægemiddel-flag
   # personer uden nogen diagnose/recept er ikke i dx/rx -> left_join giver NA -> sæt til 0 (de har ingen)
@@ -384,6 +391,9 @@ Scoren er ét tal per person i `extract_nmi.rds`. Kobl den på dit analysedatas�
 [IKR] beskriver den ofte bedre end gennemsnittet, men gennemsnit + CI er fint
 til at sammenligne grupper.
 
+<details>
+<summary>Se koden: beskriv NMI-scoren</summary>
+
 ```r
 library(dplyr)
 
@@ -400,7 +410,7 @@ analyse %>%
   group_by(gruppe) %>%
   summarise(
     n = n(),
-    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: ignorér manglende scorer (NA)
+    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: fjern NA (manglende værdier) før beregningen
     sd_nmi = sd(nmi, na.rm = TRUE),
     median_nmi = median(nmi, na.rm = TRUE),
     q1 = quantile(nmi, 0.25, na.rm = TRUE),
@@ -412,6 +422,8 @@ analyse %>%
     ci_high = mean_nmi + 1.96 * sd_nmi / sqrt(n)
   )
 ```
+
+</details>
 
 Til en formateret Table 1 på tværs af grupper gør
 `gtsummary::tbl_summary(by = gruppe)` det automatisk - se [Deskriptive

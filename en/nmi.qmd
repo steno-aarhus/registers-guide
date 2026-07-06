@@ -64,12 +64,8 @@ of the score you adjust for.
 
 There is **no official R package** (SDU publishes a [Stata
 implementation](https://pharmacoepi.sdu.dk/nmi/)). The R version below runs in
-**two steps - extract, then compute** - kept apart so the slow extraction runs
-(and is saved) once, while the compute step, which you re-run each time you
-tweak predictors, stays fast.
-
-*These code examples are based on **Pernille Errebo Tonnesen**'s translation of
-the SDU Stata code to R.*
+**two steps - extract, then compute.** These code examples are based on
+**Pernille Errebo Tonnesen**'s translation of the SDU Stata code to R.
 
 ### 1. Extract diagnoses and prescriptions
 
@@ -84,13 +80,14 @@ the SDU Stata code to R.*
   only that window, not the whole register.
 :::
 
-Both extractions **filter to only the codes NMI needs before `collect()`**, so
-the saved `.rds` files stay small.
+*Diagnoses* - You can use the two approaches from [Extract from
+LPR](09b_udtraek_fra_lpr.qmd): either extract **all** diagnoses and ATC codes
+for the whole cohort (not recommended - time-, RAM- and space-heavy, especially
+for a large cohort), or **filter to only the codes NMI needs before
+`collect()`**, so the saved `.rds` files stay small.
 
-**Diagnoses** - reuse the `get_lpr_diagnoses()` pattern from [Extract from
-LPR](09b_udtraek_fra_lpr.qmd) (it combines LPR2 somatic + psychiatric and LPR3
-across diagnosis types), passing NMI's diagnosis codes so only those are
-returned:
+You can also use the `get_lpr_diagnoses()` pattern from [Extract from
+LPR](09b_udtraek_fra_lpr.qmd) as in the example here:
 
 <details>
 <summary>See the code: extract NMI diagnoses (LPR2 + LPR3)</summary>
@@ -256,18 +253,29 @@ library(stringr)
 library(lubridate)
 library(tidyr)
 
+#-------------------------------------------------------------
+# 2.0 Load data
+#-------------------------------------------------------------
 cohort <- readRDS("datasets/full_cohort.rds")   # pnr, index_date
 dx_raw <- readRDS("datasets/nmi_diagnoses.rds")  # from get_lpr_diagnoses(): pnr, date_contact, c_diag
 rx_raw <- readRDS("datasets/nmi_lmdb.rds")       # pnr, eksd, atc
 
 #-------------------------------------------------------------
-# Diagnoses: 5-year lookback before index (Stata: 1825 days)
+# 2.1 Diagnoses: 5-year lookback before index (Stata: 1825 days)
 #-------------------------------------------------------------
+# Four steps, one at a time - we keep reassigning dx all the way through.
+
+# 2.1.1 Attach the index date to each diagnosis (inner join, so only cohort members are kept)
 dx <- dx_raw %>%
-  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact >= index_date - days(1825),  # 1825 days = 5 years before index
-         date_contact <= index_date - days(1)) %>% # up to the day before index (not index day itself)
-  # One TRUE/FALSE flag per NMI predictor: str_detect() matches c_diag (with D-prefix) against the predictor's ICD codes
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr")
+
+# 2.1.2 Keep only diagnoses inside the 5-year window before index
+dx <- dx %>%
+  filter(date_contact >= index_date - days(1825),  # 1825 days = 5 years before index (date_contact = d_inddto in LPR2 / kont_starttidspunkt in LPR3, renamed in Phase 9)
+         date_contact <= index_date - days(1))      # up to the day before index (not index day itself)
+
+# 2.1.3 Set one TRUE/FALSE flag per NMI predictor (str_detect() matches c_diag with D-prefix against the predictor's ICD codes)
+dx <- dx %>%
   mutate(
     dx_B18      = str_detect(c_diag, "^DB18"),
     dx_C34      = str_detect(c_diag, "^DC34"),
@@ -298,16 +306,17 @@ dx <- dx_raw %>%
     dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[67]"),
     dx_L89      = str_detect(c_diag, "^DL89"),
     dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
-  ) %>%
-  # Collapse to one row per person:
-  #   - one row per pnr, one column per dx_ predictor (~29 of them), each valued 0 or 1
-  #   - any() = 1 if the person has at least one matching diagnosis in the 5-year window, else 0
+  )
+
+# 2.1.4 Collapse to one row per person (one column per dx_ predictor valued 0/1; any() = 1 if at least one matching diagnosis in the 5-year window, else 0)
+dx <- dx %>%
   group_by(pnr) %>%
   summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
 
 #-------------------------------------------------------------
-# Prescriptions: 6-month lookback before index
+# 2.2 Prescriptions: 6-month lookback before index
 #-------------------------------------------------------------
+# Same pattern as the diagnoses (attach, filter, flag, collapse), here in a single chain.
 rx <- rx_raw %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
   filter(eksd >= index_date - days(180),   # 180 days = 6 months before index (eksd = redemption date)
@@ -341,9 +350,9 @@ rx <- rx_raw %>%
   summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
 
 #-------------------------------------------------------------
-# Combine and score (weights from Table 2)
+# 2.3 Combine and score (weights from Table 2)
 #-------------------------------------------------------------
-nmi_data <- cohort %>%
+nmi_data <- cohort %>%   # reload your cohort here if needed (the name may be something other than "cohort")
   left_join(dx, by = "pnr") %>%   # attach the diagnosis flags to every cohort member
   left_join(rx, by = "pnr") %>%   # and the drug flags
   # people with no diagnosis/prescription aren't in dx/rx -> left_join gives NA -> set to 0 (they have none)
@@ -382,6 +391,9 @@ analysis dataset (Phase 12) and inspect it - NMI is right-skewed (many low, a
 few high), so median [IQR] often describes it better than the mean, though mean
 + CI is fine for comparing groups.
 
+<details>
+<summary>See the code: describe the NMI score</summary>
+
 ```r
 library(dplyr)
 
@@ -398,7 +410,7 @@ analysis %>%
   group_by(group) %>%
   summarise(
     n = n(),
-    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: ignore missing scores (NA)
+    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: remove NA (missing values) before computing
     sd_nmi = sd(nmi, na.rm = TRUE),
     median_nmi = median(nmi, na.rm = TRUE),
     q1 = quantile(nmi, 0.25, na.rm = TRUE),
@@ -410,6 +422,8 @@ analysis %>%
     ci_high = mean_nmi + 1.96 * sd_nmi / sqrt(n)
   )
 ```
+
+</details>
 
 For a formatted Table 1 across groups, `gtsummary::tbl_summary(by = group)` does
 this automatically - see [Descriptive tables](13b_deskriptive-tabeller.qmd).
