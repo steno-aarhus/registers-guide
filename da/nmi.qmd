@@ -66,8 +66,9 @@ justerer for.
 
 Der findes **ingen officiel R-pakke** (SDU udgiver en
 [Stata-implementering](https://pharmacoepi.sdu.dk/nmi/)). R-versionen nedenfor
-kører i **to trin - udtræk, dernæst beregn** - holdt adskilt, så du kan
-genstarte R imellem og frigøre hukommelse, da udtrækket kan hente mange rækker.
+kører i **to trin - udtræk, dernæst beregn** - holdt adskilt, så det tunge
+udtræk kun køres (og gemmes) én gang, mens beregningen, som du kører igen hver
+gang du justerer prediktorer, forbliver hurtig.
 
 *Disse kodeeksempler bygger på **Pernille Errebo Tonnesens** oversættelse af
 SDU's Stata-kode til R.*
@@ -80,8 +81,7 @@ SDU's Stata-kode til R.*
 - **Diagnoser**, en **5-årig** lookback før index, fra **alle**: LPR2
   **somatisk** og **psykiatrisk** (frem til marts 2019) *og* LPR3 (fra marts
   2019), på tværs af alle diagnosetyper. Et rent somatisk udtræk (fx `lpr_adm`
-  alene) mangler de psykiatriske prediktorer (F00-03, F10, F17) og alt efter
-  marts 2019.
+  alene) mangler de psykiatriske prediktorer (F00-03, F10, F17).
 - **Recepter** (ATC), en **6-måneders** lookback før index, fra **LMDB** - kun
   det vindue, ikke hele registret.
 :::
@@ -93,6 +93,9 @@ de gemte `.rds`-filer holdes små.
 LPR](09b_udtraek_fra_lpr.qmd) (det kombinerer LPR2 somatisk + psykiatrisk og
 LPR3 på tværs af diagnosetyper) og send NMI's diagnosekoder med, så kun de
 returneres:
+
+<details>
+<summary>Se koden: udtræk NMI-diagnoser (LPR2 + LPR3)</summary>
 
 ```r
 #=============================================================
@@ -108,74 +111,86 @@ cohort <- readRDS("datasets/full_cohort.rds") # studiepopulationen fra Fase 10 (
 # rækken, så vi slipper for at taste hver kode manuelt.
 #-------------------------------------------------------------
 nmi_icd <- c(
-  "B18",
-  "C34",
-  "C50",
-  "C61",
-  "C67",
-  "C70",
-  "C71",
-  "C75",
-  "D32",
-  "D33",
-  "D35",
-  "D42",
-  "D43",
-  "D44",
-  paste0("C", 76:80),
-  paste0("C", 91:95),
-  paste0("D", 50:64),
-  "E11",
-  "E86",
-  paste0("F0", 0:3),
-  "G30",
-  "F10",
-  "F17",
-  paste0("G", 20:22),
-  "G35",
-  "G40",
-  "G41",
-  "I05",
-  "I06",
-  "I34",
-  "I35",
-  "I11",
-  "I13",
-  "I42",
-  "I50",
-  paste0("I", 60:69),
-  "I73",
-  "I74",
-  "I77",
-  "I71",
-  "I72",
-  paste0("J1", 2:8),
-  "J41",
-  "J42",
-  "J43",
-  "J44",
-  "J47",
-  "J96",
-  "J84",
-  paste0("K0", c(2, 3, 4, 5, 6, 8)),
-  "K70",
-  "K72",
-  "K74",
-  "K76",
-  "L89",
-  "N18",
-  "N19"
+  "B18", # kronisk viral hepatitis
+  "C34", # lungekræft
+  "C50", # brystkræft
+  "C61", # prostatakræft
+  "C67", # blærekræft
+  # NMI-prediktor "hjerne-/hindetumor" (kun subkoderne nedenfor scorer, se beregningen):
+  "C70", # kræft i hjernehinderne
+  "C71", # hjernekræft
+  "C75", # kræft i andre endokrine kirtler (kun C751-753 scorer)
+  "D32", # godartet svulst i hjernehinder
+  "D33", # godartet svulst i hjerne/nervesystem (kun D330-332)
+  "D35", # godartet svulst i endokrine kirtler (kun D352-354)
+  "D42", # svulst i hjernehinder, usikker karakter
+  "D43", # svulst i hjerne/nervesystem, usikker karakter (kun D430-432)
+  "D44", # svulst i endokrine kirtler, usikker karakter (kun D443-445)
+  paste0("C", 76:80), # sekundær/metastatisk og dårligt defineret kræft (C76-C80)
+  paste0("C", 91:95), # leukæmi (C91-C95)
+  paste0("D", 50:64), # anæmier (D50-D64)
+  "E11", # type 2-diabetes
+  "E86", # væskemangel (dehydrering)
+  paste0("F0", 0:3), # demens (F00-F03, scorer sammen med G30)
+  "G30", # Alzheimers sygdom (demens-prediktoren)
+  "F10", # alkoholafhængighed/-misbrug
+  "F17", # tobaks-/nikotinafhængighed
+  paste0("G", 20:22), # Parkinsons sygdom og parkinsonisme (G20-G22)
+  "G35", # dissemineret sklerose
+  "G40", # epilepsi (G40-G41)
+  "G41", # status epilepticus (epilepsi-prediktoren)
+  # NMI-prediktor "aorta-/mitralklapsygdom" (I05/I06/I34/I35):
+  "I05", # reumatisk mitralklapsygdom
+  "I06", # reumatisk aortaklapsygdom
+  "I34", # ikke-reumatisk mitralklapsygdom
+  "I35", # ikke-reumatisk aortaklapsygdom
+  # NMI-prediktor "hjertesvigt" (kun subkoder I110/I13[02]/I42[06789]/I50 scorer):
+  "I11", # hypertensiv hjertesygdom (kun I110)
+  "I13", # hypertensiv hjerte- og nyresygdom (kun I130/I132)
+  "I42", # kardiomyopati (kun I420/I426-429)
+  "I50", # hjertesvigt
+  paste0("I", 60:69), # cerebrovaskulær sygdom / apopleksi (I60-I69)
+  # NMI-prediktor "aterosklerose/perifer arteriesygdom" (I70/I73/I74/I77):
+  "I70", # aterosklerose
+  "I73", # perifer karsygdom
+  "I74", # arteriel emboli og trombose
+  "I77", # andre arterielle sygdomme
+  "I71", # aortaaneurisme og -dissektion (I71-I72)
+  "I72", # andet aneurisme (aneurisme-prediktoren)
+  paste0("J1", 2:8), # lungebetændelse (J12-J18)
+  # NMI-prediktor "kronisk nedre luftvejssygdom" (J41-44, J47, J961/J969):
+  "J41", # simpel kronisk bronkitis
+  "J42", # uspecificeret kronisk bronkitis
+  "J43", # emfysem
+  "J44", # KOL (kronisk obstruktiv lungesygdom)
+  "J47", # bronkiektasi
+  "J96", # respirationssvigt (kun J961/J969)
+  "J84", # anden interstitiel lungesygdom
+  paste0("K0", c(2, 3, 4, 5, 6, 8)), # tand- og parodontalsygdom (K02-K06, K08)
+  # NMI-prediktor "alkoholisk leversygdom" (K70/K72/K74/K766/K767):
+  "K70", # alkoholisk leversygdom
+  "K72", # leversvigt
+  "K74", # leverfibrose og -cirrose
+  "K76", # anden leversygdom (kun K766/K767)
+  "L89", # tryksår
+  "N18", # kronisk nyresygdom (N18-N19)
+  "N19" # uspecificeret nyresvigt
 )
 
-# get_lpr_diagnoses() er hjælpefunktionen fra Fase 9 (Udtræk fra LPR) - du definerer den selv der
+# Du kan nu udtrække ICD og ATC koder ved hjælp af tilgang 1 eller 2, eller ved hjælp af get_lpr_diagnoses() hjælpefunktionen fra Fase 9 (Udtræk fra LPR). Vha. sidstnævnte vil koden se sådan ud:
 nmi_diagnoses <- get_lpr_diagnoses(
   pnr_vector = unique(cohort$pnr), # alle kohortens pnr
   icd_codes = nmi_icd # kun NMI-koder hentes
 )
-saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # pnr, date_contact, c_diag, ...
+saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # kolonner: pnr, date_contact, c_diag, c_diagtype, icd3
 ```
 
+</details>
+
 **Recepter** - udtræk LMDB for kohorten, behold kun NMI's ATC-klasser:
+
+<details>
+<summary>Se koden: udtræk NMI-recepter (LMDB)</summary>
 
 ```r
 library(arrow)
@@ -184,17 +199,43 @@ library(dplyr)
 pnr_vec <- unique(cohort$pnr)
 
 #-------------------------------------------------------------
-# NMI's lægemiddelklasser (ATC) som én regex
+# NMI's lægemiddelklasser (ATC) som én regex. Hver klasse:
+#   A06A       afføringsmidler (laksantia)
+#   A07DA      antipropulsiva (midler mod diarré)
+#   A10A       insuliner og analoger
+#   B01AC      trombocythæmmere (blodfortyndende)
+#   B03A       jernpræparater
+#   C01AA      digitalisglykosider (digoxin)
+#   C03C       loop-diuretika (kraftigt vanddrivende)
+#   C03EB      loop- + kaliumbesparende diuretika
+#   C03DA      aldosteronantagonister (fx spironolakton)
+#   C09C/C09D  angiotensin II-receptorblokkere (ARB), rene og kombinationer
+#   C10AA      statiner
+#   H02AB      systemiske glukokortikoider (binyrebarkhormon)
+#   J01C       penicilliner (beta-lactam-antibiotika)
+#   N02A       opioider
+#   N02BE      anilider (paracetamol)
+#   N05BA      benzodiazepiner (angstdæmpende)
+#   N05CD/CF   benzodiazepiner og beslægtede sovemidler (z-stoffer)
+#   N05AA-AL   antipsykotika
+#   N05AX      andre antipsykotika
+#   N06A       antidepressiva
+#   N06D       demensmidler
+#   N07BC      midler mod opioidafhængighed
+#   R03AC02-05 korttidsvirkende inhalerede beta-2-agonister
+#   R03BB04-07 langtidsvirkende inhalerede anti-muskarine midler (antikolinergika)
 #-------------------------------------------------------------
 nmi_atc <- "^(A06A|A07DA|A10A|B01AC|B03A|C01AA|C03C|C03EB|C03DA|C09[CD]|C10AA|H02AB|J01C|N02A|N02BE|N05BA|N05C[DF]|N05A[A-L]|N05AX|N06A|N06D|N07BC|R03AC0[2-5]|R03BB0[4-7])"
 
 nmi_lmdb <- open_dataset("sti/til/lmdb/") %>%
   rename_with(tolower) %>%
   semi_join(tibble(pnr = pnr_vec), by = "pnr") %>% # kun kohorten
-  filter(grepl(nmi_atc, atc)) %>% # kun NMI's lægemiddelklasser - FØR collect()
+  filter(grepl(nmi_atc, atc)) %>% # behold rækker hvor atc-kolonnen matcher nmi_atc-regexet (NMI's lægemiddelklasser) - FØR collect()
   collect()
 saveRDS(nmi_lmdb, "datasets/nmi_lmdb.rds") # pnr, eksd, atc
 ```
+
+</details>
 
 Du startede fra `full_cohort.rds` ([Fase 10](10_byg-studiepopulation.qmd): `pnr`
 + `index_date`) og har nu **`nmi_diagnoses.rds`** og **`nmi_lmdb.rds`**. Gem
@@ -207,12 +248,6 @@ genstarte hele R-sessionen.
 
 <details>
 <summary>Se hele NMI-beregningen (rettet mod Stata-kilden)</summary>
-
-Rettet ift. den oprindelige oversættelse: **5-års** diagnose-lookback (var 10),
-**leversygdoms**-vægten rettet (`dx_K70_K767`, tandsygdom blev talt dobbelt) og
-**aterosklerose**-gruppen bragt i overensstemmelse med Stata (`^DI7[347]`, I70 fjernet).
-Til et **type-2-diabetes-studie** udelader du `dx_E11` og `rx_A10A` (udkommentér dem) for at undgå cirkularitet, da diabetes så er studiepopulationen. Denne version læser diagnoserne fra
-`get_lpr_diagnoses()` (kolonne `c_diag`, datoer i `date_contact`).
 
 ```r
 #=============================================================
@@ -232,8 +267,9 @@ rx_raw <- readRDS("datasets/nmi_lmdb.rds")       # pnr, eksd, atc
 #-------------------------------------------------------------
 dx <- dx_raw %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact >= index_date - days(1825),
-         date_contact <= index_date - days(1)) %>%
+  filter(date_contact >= index_date - days(1825),  # 1825 dage = 5 år før index
+         date_contact <= index_date - days(1)) %>% # til og med dagen før index (ikke selve index-dagen)
+  # Ét TRUE/FALSE-flag per NMI-prediktor: str_detect() matcher c_diag (med D-præfiks) mod prediktorens ICD-koder
   mutate(
     dx_B18      = str_detect(c_diag, "^DB18"),
     dx_C34      = str_detect(c_diag, "^DC34"),
@@ -255,16 +291,19 @@ dx <- dx_raw %>%
     dx_I05_35   = str_detect(c_diag, "^DI0[56]|^DI3[45]"),
     dx_I110_I50 = str_detect(c_diag, "^DI110|^DI13[02]|^DI42[06789]|^DI50"),
     dx_I60_I69  = str_detect(c_diag, "^DI6[0-9]"),
-    dx_I70_I77  = str_detect(c_diag, "^DI7[347]"),   # rettet: I70 fjernet (Stata ^I7[347])
+    dx_I70_I77  = str_detect(c_diag, "^DI7[0347]"),  # I70, I73, I74, I77 (Stata: ^I7[0347])
     dx_I71_I72  = str_detect(c_diag, "^DI7[12]"),
     dx_J12_J18  = str_detect(c_diag, "^DJ1[2-8]"),
     dx_J41_J47  = str_detect(c_diag, "^DJ4[12347]|^DJ96[19]"),
     dx_J84      = str_detect(c_diag, "^DJ84"),
     dx_K02_K08  = str_detect(c_diag, "^DK0[234568]"),
-    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[76]"),
+    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[67]"),
     dx_L89      = str_detect(c_diag, "^DL89"),
     dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
   ) %>%
+  # Kollaps til én række per person:
+  #   - én række per pnr, én kolonne per dx_-prediktor (~29 stk.), hver med værdien 0 eller 1
+  #   - any() = 1 hvis personen har mindst én matchende diagnose i 5-års-vinduet, ellers 0
   group_by(pnr) %>%
   summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
 
@@ -273,8 +312,9 @@ dx <- dx_raw %>%
 #-------------------------------------------------------------
 rx <- rx_raw %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(eksd >= index_date - days(180),
-         eksd <= index_date - days(1)) %>%
+  filter(eksd >= index_date - days(180),   # 180 dage = 6 måneder før index (eksd = indløsningsdato)
+         eksd <= index_date - days(1)) %>% # til og med dagen før index
+  # Ét TRUE/FALSE-flag per lægemiddel-prediktor: matcher atc mod ATC-præfikset
   mutate(
     rx_A06A            = str_detect(atc, "^A06A"),
     rx_A07DA           = str_detect(atc, "^A07DA"),
@@ -298,6 +338,7 @@ rx <- rx_raw %>%
     rx_R03AC02_R03AC05 = str_detect(atc, "^R03AC0[2-5]"),
     rx_R03BB04_R03BB07 = str_detect(atc, "^R03BB0[4-7]")
   ) %>%
+  # Kollaps til én række per person: 1 = mindst én indløsning i 6-måneders-vinduet, ellers 0
   group_by(pnr) %>%
   summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
 
@@ -305,8 +346,9 @@ rx <- rx_raw %>%
 # Kombinér og scor (vægte fra Tabel 2)
 #-------------------------------------------------------------
 nmi_data <- cohort %>%
-  left_join(dx, by = "pnr") %>%
-  left_join(rx, by = "pnr") %>%
+  left_join(dx, by = "pnr") %>%   # sæt diagnose-flag på hver person i kohorten
+  left_join(rx, by = "pnr") %>%   # og lægemiddel-flag
+  # personer uden nogen diagnose/recept er ikke i dx/rx -> left_join giver NA -> sæt til 0 (de har ingen)
   mutate(across(c(starts_with("dx_"), starts_with("rx_")), ~ replace_na(., 0))) %>%
   mutate(
     nmi =
@@ -324,7 +366,7 @@ nmi_data <- cohort %>%
       8 * rx_A06A + 5 * rx_A07DA +
       4 * rx_A10A +
       2 * rx_B01AC + 5 * rx_B03A + 4 * rx_C01AA + 5 * rx_C03C_C03EB + 3 * rx_C03DA +
-      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +
+      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +   # negative vægte: beskyttende i mortalitetsmodellen (sænker scoren)
       2 * rx_H02AB + 1 * rx_J01C + 2 * rx_N02A + 2 * rx_N02BE +
       1 * rx_N05BA_N05CF + 7 * rx_N05AA_N05AX + 3 * rx_N06A + 11 * rx_N06D +
       7 * rx_N07BC + 3 * rx_R03AC02_R03AC05 + 5 * rx_R03BB04_R03BB07
@@ -358,13 +400,14 @@ analyse %>%
   group_by(gruppe) %>%
   summarise(
     n = n(),
-    mean_nmi = mean(nmi, na.rm = TRUE),
+    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: ignorér manglende scorer (NA)
     sd_nmi = sd(nmi, na.rm = TRUE),
     median_nmi = median(nmi, na.rm = TRUE),
     q1 = quantile(nmi, 0.25, na.rm = TRUE),
     q3 = quantile(nmi, 0.75, na.rm = TRUE)
   ) %>%
   mutate(
+    # 95% CI for gennemsnittet: mean ± 1.96 * standardfejl (SE = sd / sqrt(n))
     ci_low = mean_nmi - 1.96 * sd_nmi / sqrt(n),
     ci_high = mean_nmi + 1.96 * sd_nmi / sqrt(n)
   )

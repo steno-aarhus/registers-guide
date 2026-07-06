@@ -18,10 +18,8 @@ al. 2022, \~425,000 Danish residents aged ≥40), and its predictors were select
 for how much they added to the mortality model - not to cover disease burden. As
 a result:
 
-- Several common chronic diseases are not included in the model (e.g. **no
-  hypertension**, and diabetes appears only as type 2 (`DE11`) plus a separate
-  antidiabetic-drug item - each weighted on its own, and type 1 is not a
-  diagnosis predictor).
+- Several common chronic diseases are not included in the model (e.g.
+  hypertension and type 1 diabetes).
 - Some items are **mortality proxies**, not diseases in their own right (e.g.
   laxatives, iron).
 - Some weights are **negative** (e.g. statins -3, ACE/ARB inhibitors -2), which
@@ -66,8 +64,9 @@ of the score you adjust for.
 
 There is **no official R package** (SDU publishes a [Stata
 implementation](https://pharmacoepi.sdu.dk/nmi/)). The R version below runs in
-**two steps - extract, then compute** - kept apart so you can restart R in
-between and free memory, since the extraction can pull a lot of rows.
+**two steps - extract, then compute** - kept apart so the slow extraction runs
+(and is saved) once, while the compute step, which you re-run each time you
+tweak predictors, stays fast.
 
 *These code examples are based on **Pernille Errebo Tonnesen**'s translation of
 the SDU Stata code to R.*
@@ -80,8 +79,7 @@ the SDU Stata code to R.*
 - **Diagnoses**, a **5-year** lookback before index, from **all** of: LPR2
   **somatic** and **psychiatric** (up to March 2019) *and* LPR3 (from March
   2019), across all diagnosis types. A somatic-only pull (e.g. `lpr_adm` alone)
-  misses the psychiatric predictors (F00-03, F10, F17) and everything after
-  March 2019.
+  misses the psychiatric predictors (F00-03, F10, F17).
 - **Prescriptions** (ATC), a **6-month** lookback before index, from **LMDB** -
   only that window, not the whole register.
 :::
@@ -93,6 +91,9 @@ the saved `.rds` files stay small.
 LPR](09b_udtraek_fra_lpr.qmd) (it combines LPR2 somatic + psychiatric and LPR3
 across diagnosis types), passing NMI's diagnosis codes so only those are
 returned:
+
+<details>
+<summary>See the code: extract NMI diagnoses (LPR2 + LPR3)</summary>
 
 ```r
 #=============================================================
@@ -108,74 +109,86 @@ cohort <- readRDS("datasets/full_cohort.rds") # your study population from Phase
 # in the range, so we don't type every code by hand.
 #-------------------------------------------------------------
 nmi_icd <- c(
-  "B18",
-  "C34",
-  "C50",
-  "C61",
-  "C67",
-  "C70",
-  "C71",
-  "C75",
-  "D32",
-  "D33",
-  "D35",
-  "D42",
-  "D43",
-  "D44",
-  paste0("C", 76:80),
-  paste0("C", 91:95),
-  paste0("D", 50:64),
-  "E11",
-  "E86",
-  paste0("F0", 0:3),
-  "G30",
-  "F10",
-  "F17",
-  paste0("G", 20:22),
-  "G35",
-  "G40",
-  "G41",
-  "I05",
-  "I06",
-  "I34",
-  "I35",
-  "I11",
-  "I13",
-  "I42",
-  "I50",
-  paste0("I", 60:69),
-  "I73",
-  "I74",
-  "I77",
-  "I71",
-  "I72",
-  paste0("J1", 2:8),
-  "J41",
-  "J42",
-  "J43",
-  "J44",
-  "J47",
-  "J96",
-  "J84",
-  paste0("K0", c(2, 3, 4, 5, 6, 8)),
-  "K70",
-  "K72",
-  "K74",
-  "K76",
-  "L89",
-  "N18",
-  "N19"
+  "B18", # chronic viral hepatitis
+  "C34", # lung cancer
+  "C50", # breast cancer
+  "C61", # prostate cancer
+  "C67", # bladder cancer
+  # NMI predictor "tumour of brain or meninges" (only the subcodes below score, see the computation):
+  "C70", # cancer of the meninges
+  "C71", # brain cancer
+  "C75", # cancer of other endocrine glands (only C751-753 score)
+  "D32", # benign meningeal tumour
+  "D33", # benign brain/nervous-system tumour (only D330-332)
+  "D35", # benign endocrine-gland tumour (only D352-354)
+  "D42", # meningeal tumour, uncertain behaviour
+  "D43", # brain/nervous-system tumour, uncertain behaviour (only D430-432)
+  "D44", # endocrine-gland tumour, uncertain behaviour (only D443-445)
+  paste0("C", 76:80), # secondary/metastatic and ill-defined cancer (C76-C80)
+  paste0("C", 91:95), # leukaemia (C91-C95)
+  paste0("D", 50:64), # anaemias (D50-D64)
+  "E11", # type 2 diabetes
+  "E86", # volume depletion (dehydration)
+  paste0("F0", 0:3), # dementia (F00-F03, scores together with G30)
+  "G30", # Alzheimer's disease (dementia)
+  "F10", # alcohol use disorder
+  "F17", # tobacco/nicotine use disorder
+  paste0("G", 20:22), # Parkinson's disease and parkinsonism (G20-G22)
+  "G35", # multiple sclerosis
+  "G40", # epilepsy (G40-G41)
+  "G41", # status epilepticus (epilepsy predictor)
+  # NMI predictor "aortic and mitral valve disease" (I05/I06/I34/I35):
+  "I05", # rheumatic mitral valve disease
+  "I06", # rheumatic aortic valve disease
+  "I34", # non-rheumatic mitral valve disorder
+  "I35", # non-rheumatic aortic valve disorder
+  # NMI predictor "heart failure" (only subcodes I110/I13[02]/I42[06789]/I50 score):
+  "I11", # hypertensive heart disease (only I110)
+  "I13", # hypertensive heart and kidney disease (only I130/I132)
+  "I42", # cardiomyopathy (only I420/I426-429)
+  "I50", # heart failure
+  paste0("I", 60:69), # cerebrovascular disease / stroke (I60-I69)
+  # NMI predictor "atherosclerosis / peripheral arterial disease" (I70/I73/I74/I77):
+  "I70", # atherosclerosis
+  "I73", # peripheral vascular disease
+  "I74", # arterial embolism and thrombosis
+  "I77", # other arterial disorders
+  "I71", # aortic aneurysm and dissection (I71-I72)
+  "I72", # other aneurysm (aneurysm predictor)
+  paste0("J1", 2:8), # pneumonia (J12-J18)
+  # NMI predictor "chronic lower respiratory disease" (J41-44, J47, J961/J969):
+  "J41", # simple chronic bronchitis
+  "J42", # unspecified chronic bronchitis
+  "J43", # emphysema
+  "J44", # COPD (chronic obstructive pulmonary disease)
+  "J47", # bronchiectasis
+  "J96", # respiratory failure (only J961/J969)
+  "J84", # other interstitial lung disease
+  paste0("K0", c(2, 3, 4, 5, 6, 8)), # dental and periodontal disease (K02-K06, K08)
+  # NMI predictor "alcoholic liver disease" (K70/K72/K74/K766/K767):
+  "K70", # alcoholic liver disease
+  "K72", # hepatic failure
+  "K74", # fibrosis and cirrhosis of the liver
+  "K76", # other liver disease (only K766/K767)
+  "L89", # pressure ulcer
+  "N18", # chronic kidney disease (N18-N19)
+  "N19" # unspecified kidney failure
 )
 
-# get_lpr_diagnoses() is the helper from Phase 9 (Extract from LPR) - you define it yourself there
+# You can now extract the ICD and ATC codes using approach 1 or 2, or the get_lpr_diagnoses() helper from Phase 9 (Extract from LPR). With the latter, the code looks like this:
 nmi_diagnoses <- get_lpr_diagnoses(
   pnr_vector = unique(cohort$pnr), # all the cohort's pnr
   icd_codes = nmi_icd # only NMI codes are collected
 )
-saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # pnr, date_contact, c_diag, ...
+saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # columns: pnr, date_contact, c_diag, c_diagtype, icd3
 ```
 
+</details>
+
 **Prescriptions** - extract LMDB for the cohort, keeping only NMI's ATC classes:
+
+<details>
+<summary>See the code: extract NMI prescriptions (LMDB)</summary>
 
 ```r
 library(arrow)
@@ -184,17 +197,43 @@ library(dplyr)
 pnr_vec <- unique(cohort$pnr)
 
 #-------------------------------------------------------------
-# NMI drug classes (ATC) as one regex
+# NMI drug classes (ATC) as one regex. Each class:
+#   A06A       laxatives
+#   A07DA      antipropulsives (antidiarrhoeals)
+#   A10A       insulins and analogues
+#   B01AC      antiplatelet drugs
+#   B03A       iron preparations
+#   C01AA      digitalis glycosides (digoxin)
+#   C03C       loop (high-ceiling) diuretics
+#   C03EB      loop + potassium-sparing diuretics
+#   C03DA      aldosterone antagonists (e.g. spironolactone)
+#   C09C/C09D  angiotensin II receptor blockers (ARBs), plain and combinations
+#   C10AA      statins
+#   H02AB      systemic glucocorticoids
+#   J01C       penicillins (beta-lactam antibacterials)
+#   N02A       opioids
+#   N02BE      anilides (paracetamol)
+#   N05BA      benzodiazepine anxiolytics
+#   N05CD/CF   benzodiazepine and related hypnotics (z-drugs)
+#   N05AA-AL   antipsychotics
+#   N05AX      other antipsychotics
+#   N06A       antidepressants
+#   N06D       anti-dementia drugs
+#   N07BC      drugs used in opioid dependence
+#   R03AC02-05 short-acting inhaled beta-2 agonists
+#   R03BB04-07 long-acting inhaled anti-muscarinics (anticholinergics)
 #-------------------------------------------------------------
 nmi_atc <- "^(A06A|A07DA|A10A|B01AC|B03A|C01AA|C03C|C03EB|C03DA|C09[CD]|C10AA|H02AB|J01C|N02A|N02BE|N05BA|N05C[DF]|N05A[A-L]|N05AX|N06A|N06D|N07BC|R03AC0[2-5]|R03BB0[4-7])"
 
 nmi_lmdb <- open_dataset("path/to/lmdb/") %>%
   rename_with(tolower) %>%
   semi_join(tibble(pnr = pnr_vec), by = "pnr") %>% # only the cohort
-  filter(grepl(nmi_atc, atc)) %>% # only NMI drug classes - BEFORE collect()
+  filter(grepl(nmi_atc, atc)) %>% # keep rows where the atc column matches the nmi_atc regex (NMI drug classes) - BEFORE collect()
   collect()
 saveRDS(nmi_lmdb, "datasets/nmi_lmdb.rds") # pnr, eksd, atc
 ```
+
+</details>
 
 You started from `full_cohort.rds` ([Phase 10](10_byg-studiepopulation.qmd):
 `pnr` + `index_date`) and now have **`nmi_diagnoses.rds`** and
@@ -207,11 +246,6 @@ anyway, free it with `rm()` + `gc()` (see [Phase
 
 <details>
 <summary>See the full NMI computation (corrected against the Stata source)</summary>
-
-Corrected vs the original translation: **5-year** diagnosis lookback (was 10), the
-**liver-disease** weight fixed (`dx_K70_K767`, was double-counting dental), and the
-**atherosclerosis** group aligned to Stata (`^DI7[347]`, I70 removed). For a **type-2-diabetes study**, exclude `dx_E11` and `rx_A10A` (comment them out) to avoid circularity, since diabetes would then be the study population. This version reads the diagnoses from `get_lpr_diagnoses()`
-(column `c_diag`, dates in `date_contact`).
 
 ```r
 #=============================================================
@@ -231,8 +265,9 @@ rx_raw <- readRDS("datasets/nmi_lmdb.rds")       # pnr, eksd, atc
 #-------------------------------------------------------------
 dx <- dx_raw %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(date_contact >= index_date - days(1825),
-         date_contact <= index_date - days(1)) %>%
+  filter(date_contact >= index_date - days(1825),  # 1825 days = 5 years before index
+         date_contact <= index_date - days(1)) %>% # up to the day before index (not index day itself)
+  # One TRUE/FALSE flag per NMI predictor: str_detect() matches c_diag (with D-prefix) against the predictor's ICD codes
   mutate(
     dx_B18      = str_detect(c_diag, "^DB18"),
     dx_C34      = str_detect(c_diag, "^DC34"),
@@ -254,16 +289,19 @@ dx <- dx_raw %>%
     dx_I05_35   = str_detect(c_diag, "^DI0[56]|^DI3[45]"),
     dx_I110_I50 = str_detect(c_diag, "^DI110|^DI13[02]|^DI42[06789]|^DI50"),
     dx_I60_I69  = str_detect(c_diag, "^DI6[0-9]"),
-    dx_I70_I77  = str_detect(c_diag, "^DI7[347]"),   # fixed: I70 removed (Stata ^I7[347])
+    dx_I70_I77  = str_detect(c_diag, "^DI7[0347]"),  # I70, I73, I74, I77 (Stata: ^I7[0347])
     dx_I71_I72  = str_detect(c_diag, "^DI7[12]"),
     dx_J12_J18  = str_detect(c_diag, "^DJ1[2-8]"),
     dx_J41_J47  = str_detect(c_diag, "^DJ4[12347]|^DJ96[19]"),
     dx_J84      = str_detect(c_diag, "^DJ84"),
     dx_K02_K08  = str_detect(c_diag, "^DK0[234568]"),
-    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[76]"),   # liver disease
+    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[67]"),
     dx_L89      = str_detect(c_diag, "^DL89"),
     dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
   ) %>%
+  # Collapse to one row per person:
+  #   - one row per pnr, one column per dx_ predictor (~29 of them), each valued 0 or 1
+  #   - any() = 1 if the person has at least one matching diagnosis in the 5-year window, else 0
   group_by(pnr) %>%
   summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
 
@@ -272,8 +310,9 @@ dx <- dx_raw %>%
 #-------------------------------------------------------------
 rx <- rx_raw %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(eksd >= index_date - days(180),
-         eksd <= index_date - days(1)) %>%
+  filter(eksd >= index_date - days(180),   # 180 days = 6 months before index (eksd = redemption date)
+         eksd <= index_date - days(1)) %>% # up to the day before index
+  # One TRUE/FALSE flag per drug predictor: matches atc against the ATC prefix
   mutate(
     rx_A06A            = str_detect(atc, "^A06A"),
     rx_A07DA           = str_detect(atc, "^A07DA"),
@@ -297,6 +336,7 @@ rx <- rx_raw %>%
     rx_R03AC02_R03AC05 = str_detect(atc, "^R03AC0[2-5]"),
     rx_R03BB04_R03BB07 = str_detect(atc, "^R03BB0[4-7]")
   ) %>%
+  # Collapse to one row per person: 1 = at least one fill in the 6-month window, else 0
   group_by(pnr) %>%
   summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
 
@@ -304,8 +344,9 @@ rx <- rx_raw %>%
 # Combine and score (weights from Table 2)
 #-------------------------------------------------------------
 nmi_data <- cohort %>%
-  left_join(dx, by = "pnr") %>%
-  left_join(rx, by = "pnr") %>%
+  left_join(dx, by = "pnr") %>%   # attach the diagnosis flags to every cohort member
+  left_join(rx, by = "pnr") %>%   # and the drug flags
+  # people with no diagnosis/prescription aren't in dx/rx -> left_join gives NA -> set to 0 (they have none)
   mutate(across(c(starts_with("dx_"), starts_with("rx_")), ~ replace_na(., 0))) %>%
   mutate(
     nmi =
@@ -323,7 +364,7 @@ nmi_data <- cohort %>%
       8 * rx_A06A + 5 * rx_A07DA +
       4 * rx_A10A +
       2 * rx_B01AC + 5 * rx_B03A + 4 * rx_C01AA + 5 * rx_C03C_C03EB + 3 * rx_C03DA +
-      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +
+      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +   # negative weights: protective in the mortality model (lower the score)
       2 * rx_H02AB + 1 * rx_J01C + 2 * rx_N02A + 2 * rx_N02BE +
       1 * rx_N05BA_N05CF + 7 * rx_N05AA_N05AX + 3 * rx_N06A + 11 * rx_N06D +
       7 * rx_N07BC + 3 * rx_R03AC02_R03AC05 + 5 * rx_R03BB04_R03BB07
@@ -357,13 +398,14 @@ analysis %>%
   group_by(group) %>%
   summarise(
     n = n(),
-    mean_nmi = mean(nmi, na.rm = TRUE),
+    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: ignore missing scores (NA)
     sd_nmi = sd(nmi, na.rm = TRUE),
     median_nmi = median(nmi, na.rm = TRUE),
     q1 = quantile(nmi, 0.25, na.rm = TRUE),
     q3 = quantile(nmi, 0.75, na.rm = TRUE)
   ) %>%
   mutate(
+    # 95% CI for the mean: mean ± 1.96 * standard error (SE = sd / sqrt(n))
     ci_low = mean_nmi - 1.96 * sd_nmi / sqrt(n),
     ci_high = mean_nmi + 1.96 * sd_nmi / sqrt(n)
   )
