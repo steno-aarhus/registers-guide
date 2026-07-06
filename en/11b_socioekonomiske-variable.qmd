@@ -4,8 +4,9 @@ subtitle: "Education, income and employment following the SEPLINE approach"
 date: last-modified
 ---
 
-You now know the pattern: `open_dataset → filter → collect → left_join`. That is
-exactly what you use here. Two things are **new** in this phase:
+You now know the pattern:
+`read_register/open_dataset → filter → collect → left_join`. That is exactly
+what you use here. Two things are **new** in this phase:
 
 1. **"Fetch for the year before index date":** SES registers are annual
    snapshots. You cannot just filter on `pnr`; you must also match on *which
@@ -40,11 +41,10 @@ the categorisations, please get in touch: **Sara Schwartz -
 
 1. **fastreg (recommended):** Use `read_register("akm")` - reads by name,
    fastreg knows the path (see [Phase
-   4](04_filformater.qmd#convert-sas-to-parquet)).
+   4](04_filformater.qmd#convert-sas-to-parquet)). The examples below use this.
 2. **Parquet via `open_dataset()` (any project):** Use
    `open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/")` +
-   `rename_with(tolower)`. The examples below use this pattern; swap in
-   `read_register("akm")` if you use fastreg.
+   `rename_with(tolower)`, if fastreg is not set up on your project.
 3. **SAS files (if parquet is not ready):** Use
    `haven::read_sas("path/akm.sas7bdat")` - but this reads the entire file into
    RAM. **Recommended:** convert to parquet once and work from that (see [Phase
@@ -86,15 +86,15 @@ the follow-up they are measured.
 ## Employment - AKM (`socio13`)
 
 ```r
-library(arrow) # open_dataset()
+library(fastreg) # read_register() - reads registers by name
+library(arrow) # open_dataset() - fallback without fastreg
 library(dplyr) # filter, select, mutate, left_join, collect
 library(lubridate) # year() to extract year from dates
 
-# 1. Open AKM (replace the path; DARTER: read_register("akm"))
-akm <- open_dataset(
-  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/"
-) %>%
+# 1. Open AKM via fastreg (read_register gets the path from your project config)
+akm <- read_register("akm") %>%
   rename_with(tolower) # standardise column names
+# Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/") %>% rename_with(tolower)
 
 # 2. Fetch employment status for the year before index date
 # (assumes cohort has columns pnr and index_date)
@@ -145,11 +145,10 @@ Categorised from the ISCED code in `hfaudd`: short (`10`/`15`), medium
 (`20`/`30`/`35`), long (`40`--`80`), unknown (`90` or missing).
 
 ```r
-# 1. Open UDDA (DARTER: read_register("udda"))
-udda <- open_dataset(
-  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/udda/"
-) %>%
+# 1. Open UDDA via fastreg (read_register gets the path from your project config)
+udda <- read_register("udda") %>%
   rename_with(tolower) # standardise column names
+# Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/udda/") %>% rename_with(tolower)
 
 # 2. Fetch education for the baseline year
 udda_data <- udda %>%
@@ -185,15 +184,12 @@ BEF as a bridge. SEPLINE recommends a 3-year average divided into quintiles
 stratified by sex × 5-year age group × reference year.
 
 ```r
-# 1. Open BEF + FAIK (DARTER: read_register("bef") and read_register("faik"))
-bef <- open_dataset(
-  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/"
-) %>%
+# 1. Open BEF + FAIK via fastreg (read_register gets the path from your project config)
+bef <- read_register("bef") %>%
   rename_with(tolower)
-faik <- open_dataset(
-  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/faik/"
-) %>%
+faik <- read_register("faik") %>%
   rename_with(tolower)
+# Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>% rename_with(tolower)  (same for faik)
 
 # 2. Fetch familie_id from BEF for baseline year
 bef_family <- bef %>%
