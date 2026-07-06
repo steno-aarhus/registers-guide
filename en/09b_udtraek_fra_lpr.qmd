@@ -33,20 +33,18 @@ are explained in detail in [Phase 12](12_data-manipulation.qmd).
   format (`lpr_a_kontakt`, `lpr_a_diagnose`). Both versions may sit in your
   folder and cover the same years - loading both (or mixing old and new) gives
   you **duplicated rows**. Use `lpr_a_*` as in the examples here, and leave the
-  LPR_F files alone. Some projects also have older data *inside* `lpr_a_kontakt`
-  that is already in LPR2; filter it out with
-  `lprindberetningssystem == "LPR3"`. This is project-specific - on **DARTER**
-  it is handled in [pitfall
-  5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem); otherwise
-  check with your data manager.
+  LPR_F files alone. `lpr_a_kontakt` also contains older data that is already in
+  LPR2; filter it out with `lprindberetningssystem == "LPR3"`. This is a general
+  property of LPR_A - on **DARTER** it is spelled out in [pitfall
+  5](darter/02_darter-faldgruber.qmd#lpr3-lprindberetningssystem).
 - **Verify column names.** The switch to LPR_A changed a number of variable
   names (often opaque Danish abbreviations). The examples use the names the
   registers typically have, but always check before relying on a column name. On
   a lazy `open_dataset()` object use `arrow::schema(your_data)` - it lists the
   column names **and their types** without reading data into RAM;
   `colnames(your_data)` also works (and is what you use for the DuckDB-backed
-  objects from `read_register()`/`read_register()`). Look names up in [Overview
-  of registers](register_reference.qmd).
+  objects from `read_register()` (fastreg)). Look names up in [Overview of
+  registers](register_reference.qmd).
 - **Mind the 2019-2020 diagnosis spike.** The LPR3 contact model registers far
   more outpatient diagnoses than LPR2 did, producing a spike in diagnosis counts
   around 2019-2020 that matters for any count- or trend-based analysis. See [the
@@ -137,7 +135,8 @@ lpr2_dm <- lpr_adm %>%
 #-----------------------------------------------------
 # LPR3: lpr_a_kontakt + lpr_a_diagnose
 #-----------------------------------------------------
-lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
+lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3")   # keep only LPR3-system rows (avoid overlap - see warning at top)
 lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
 
 lpr3_dm <- lpr3_k %>%                                 # same pattern as LPR2 - but LPR3 tables and different column names
@@ -156,10 +155,31 @@ lpr3_dm <- lpr3_k %>%                                 # same pattern as LPR2 - b
          icd3 = substr(c_diag, 2, 4))                  # strip the D-prefix
 
 #-----------------------------------------------------
-# Combine LPR2 + LPR3 into one extract
+# LPR2 psychiatric (up to March 2019) - OPTIONAL: only if your outcome is an F-code (dementia, depression, ...)
 #-----------------------------------------------------
-# Works because we gave the two extracts the SAME column names above (date_contact, c_diag, ...):
-dm_dx <- bind_rows(lpr2_dm, lpr3_dm)                   # one combined extract (LPR2 + LPR3)
+psyk_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_adm/")  %>%
+  rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
+psyk_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
+  rename_with(tolower) %>% rename(recnum = v_recnum)
+
+lpr2_psyk_dm <- psyk_adm %>%
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%
+  inner_join(
+    psyk_diag %>%
+      filter(c_diagtype %in% c("A", "B"),
+             grepl(CODES_REGEX, c_diag)) %>%          # same codes as above
+      select(recnum, c_diag, c_diagtype),
+    by = "recnum"
+  ) %>%
+  collect() %>%
+  mutate(icd3 = substr(c_diag, 2, 4))
+
+#-----------------------------------------------------
+# Combine LPR2 (somatic + psych) + LPR3 into one extract
+#-----------------------------------------------------
+# Works because we gave the extracts the SAME column names above (date_contact, c_diag, ...):
+dm_dx <- bind_rows(lpr2_dm, lpr2_psyk_dm, lpr3_dm)     # drop lpr2_psyk_dm if you didn't pull psych
 # Columns: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
 
@@ -178,7 +198,7 @@ CODES_REGEX <- paste0("^D(", paste(codes, collapse = "|"), ")")
 :::
 
 ::: {.callout-note}
-**Do you have F-codes (e.g. dementia, depression)?** Extend the regex to include them, e.g. `"^DE1[0-4]|^DF0[0-3]|^DG30"`, and add psychiatric LPR2 - see Approach 2 below for the code.
+**Do you have F-codes (e.g. dementia, depression)?** Extend `CODES_REGEX` to include them, e.g. `"^DE1[0-4]|^DF0[0-3]|^DG30"`, and include the optional **LPR2 psychiatric** block above (F-diagnoses before March 2019 live only there).
 :::
 
 <details>
@@ -241,7 +261,8 @@ lpr2_dx <- lpr_adm %>%
 #-----------------------------------------------------
 # LPR3 (March 2019 and onwards)
 #-----------------------------------------------------
-lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower)
+lpr3_k <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3")   # keep only LPR3-system rows (avoid overlap - see warning at top)
 lpr3_d <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
 
 lpr3_dx <- lpr3_k %>%
@@ -258,17 +279,9 @@ lpr3_dx <- lpr3_k %>%
   mutate(date_contact = as.Date(date_contact), icd3 = substr(c_diag, 2, 4))
 
 #-----------------------------------------------------
-# Combine LPR2 + LPR3 into one extract
+# LPR2 psychiatric (up to March 2019) - only if you need F-codes
 #-----------------------------------------------------
-alle_dx <- bind_rows(lpr2_dx, lpr3_dx)
-# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
-```
-
-::: {.callout-note}
-**Do you have F-codes (e.g. dementia, depression)?** Psychiatric diagnoses recorded *before* March 2019 are in separate registers. Add them before `bind_rows()`:
-
-```r
-psyk_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_adm/") %>%
+psyk_adm  <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_adm/")  %>%
   rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
 psyk_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
   rename_with(tolower) %>% rename(recnum = v_recnum)
@@ -276,12 +289,29 @@ psyk_diag <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-regi
 lpr2_psyk_dx <- psyk_adm %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
   select(pnr, recnum, date_contact = d_inddto) %>%
-  inner_join(psyk_diag %>% filter(c_diagtype %in% c("A", "B")) %>%
-               select(recnum, c_diag, c_diagtype), by = "recnum") %>%
-  collect() %>% mutate(icd3 = substr(c_diag, 2, 4))
+  inner_join(
+    psyk_diag %>%
+      filter(c_diagtype %in% c("A", "B")) %>%
+      select(recnum, c_diag, c_diagtype),
+    by = "recnum"
+  ) %>%
+  collect() %>%
+  mutate(icd3 = substr(c_diag, 2, 4))
 
+#-----------------------------------------------------
+# Combine LPR2 (somatic + psych) + LPR3 into one extract
+#-----------------------------------------------------
 alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
+# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
+
+::: {.callout-note}
+**Why is LPR2 psychiatric included?** F-codes (dementia, depression,
+schizophrenia, alcohol/tobacco) recorded *before* March 2019 live in the separate
+psych registers `t_psyk_adm`/`t_psyk_diag`, which have different column names
+(`v_cpr`, `k_recnum`, `v_recnum`). They are included in the flow above. Omit them
+and your F-code outcomes miss everything before March 2019. If you don't need
+F-codes at all, drop the `lpr2_psyk_dx` block and leave it out of `bind_rows()`.
 :::
 
 ::: {.callout-tip}
@@ -460,8 +490,25 @@ library(dplyr)
 #=====================================================
 # Function: get_lpr_diagnoses() - reusable LPR extract
 #=====================================================
-get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B")) {
-  base <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"
+get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "B")) {
+  # Arguments:
+  #   pnr_vector : your cohort's pnr, e.g. unique(cohort$pnr)
+  #   icd_codes  : optional vector of ICD codes to pull, e.g. c("E11", "I50") or your
+  #                own code list. Matches on the D-prefix, so both 3-char
+  #                ("E11" -> all E11x) and 4-char ("I700") work.
+  #                Default NULL = pull ALL diagnoses (run once, save, filter locally).
+  #   diagtypes  : "A"=action, "B"=secondary, "G"=grundmorbus (LPR2 only)
+  base <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/" # path where the registers LIVE (read from here, not saved to) - shared prefix so open_dataset() doesn't repeat the long path
+
+  # keep_codes() applies the icd_codes filter to EACH of the three register queries
+  # below, BEFORE collect(), so only the wanted rows are pulled (that's why it appears
+  # three times). icd_codes = NULL -> no filter (pull everything).
+  keep_codes <- function(x) {
+    if (is.null(icd_codes)) return(x)                                # NULL = pull everything
+    pattern <- paste0("^D(", paste(icd_codes, collapse = "|"), ")")  # D-prefix + code (3 or 4 chars)
+    x %>% filter(grepl(pattern, c_diag))
+  }
+
 
   # Open registers
   lpr_adm   <- open_dataset(paste0(base, "lpr_adm/"))   %>% rename_with(tolower)   # LPR2 somatic contacts
@@ -471,7 +518,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B")) {
   psyk_diag <- open_dataset(paste0(base, "t_psyk_diag/")) %>% rename_with(tolower) %>%
     rename(recnum = v_recnum)                                          # LPR2 psychiatric diagnoses
   lpr3_k    <- open_dataset(paste0(base, "lpr_a_kontakt/"))  %>% rename_with(tolower) %>%
-    filter(lprindberetningssystem == "LPR3")                               # CRITICAL (DARTER): keep only rows from the LPR3 system - avoid overlapping rows
+    filter(lprindberetningssystem == "LPR3")
   lpr3_d    <- open_dataset(paste0(base, "lpr_a_diagnose/")) %>% rename_with(tolower)  # LPR3 diagnoses
 
   # LPR2 somatic
@@ -482,6 +529,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B")) {
       lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
       by = "recnum"
     ) %>%
+    keep_codes() %>% # filter to icd_codes (before collect)
     collect() %>%
     mutate(icd3 = substr(c_diag, 2, 4))                       # strip D-prefix
 
@@ -493,6 +541,7 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B")) {
       psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
       by = "recnum"
     ) %>%
+    keep_codes() %>% # filter to icd_codes (before collect)
     collect() %>%
     mutate(icd3 = substr(c_diag, 2, 4))
 
@@ -507,11 +556,13 @@ get_lpr_diagnoses <- function(pnr_vector, diagtypes = c("A", "B")) {
         select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
       by = "dw_ek_kontakt"
     ) %>%
+    keep_codes() %>% # filter to icd_codes (before collect)
     collect() %>%
     mutate(date_contact = as.Date(date_contact),               # datetime → date
            icd3 = substr(c_diag, 2, 4))
 
-  bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)                   # return combined table
+  bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx) %>%              # combine the three sources
+    select(pnr, date_contact, c_diag, c_diagtype, icd3)      # identical columns, drop join keys (recnum/dw_ek_kontakt)
 }
 ```
 
@@ -528,7 +579,7 @@ alle_dx <- get_lpr_diagnoses(
 )
 # Returns: pnr | date_contact | c_diag | c_diagtype | icd3
 
-# Extract one outcome - only change CODES (Phase 2)
+# Extract one outcome from alle_dx - repeat per outcome (only if you pulled ALL, i.e. no icd_codes)
 CODES <- c("F00", "F01", "F02", "F03", "G30", "G31")   # dementia
 
 dementia <- alle_dx %>%
@@ -542,7 +593,59 @@ result <- cohort %>% select(pnr) %>% left_join(dementia, by = "pnr")
 saveRDS(result, "sti/til/extract_dementia.rds")
 ```
 
+::: {.callout-tip}
+**Two ways to call the function (RAM).** For a **few codes**, pass them via
+`icd_codes` - they are filtered BEFORE `collect()`, so only those rows are pulled:
+`get_lpr_diagnoses(pnr_list, icd_codes = c("E11", "I50"))`. For **many different
+outcomes**, pull everything once (omit `icd_codes`), save with `saveRDS()`, free
+memory with `rm()` + `gc()` ([Phase 5](05_udtraek-trin-for-trin.qmd)), then filter
+locally with `readRDS() %>% filter(icd3 %in% ...)` - so you don't re-scan the
+registers for each outcome.
+:::
+
 </details>
+
+## From event log to one row per person {#one-row-per-person}
+
+`get_lpr_diagnoses()` (and the extracts above) return an **event log**: many
+rows per person, one per diagnosis. That is not analysis-ready. Two patterns
+turn it into one row per person:
+
+**A) One outcome with a date** (e.g. time-to-event): filter to the codes, and
+take each person's *first* contact - the `slice(1)` pattern above.
+
+**B) Many binary variables at once** (e.g. comorbidity flags): build the flags,
+collapse with `any()`, and merge onto the cohort. `any()` returns `TRUE` if the
+person has **at least one** matching diagnosis in the window (0/1, not a count):
+
+```r
+library(dplyr)
+library(stringr)
+library(tidyr) # replace_na
+
+# 1. Build your flags (one expression per variable)
+diagnosis_flags <- alle_dx %>%
+  filter(date_contact <= index_date) %>% # before index only (baseline covariate)
+  mutate(
+    dx_diabetes = icd3 %in% c("E10", "E11"),
+    dx_copd = str_detect(c_diag, "^DJ4[1-4]"),
+    dx_heart_failure = str_detect(c_diag, "^DI50")
+  )
+
+# 2. Collapse to one row per person: any() = does the person have at least one?
+diagnosis_flags_collapsed <- diagnosis_flags %>%
+  group_by(pnr) %>%
+  summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
+
+# 3. Merge onto the cohort; people with no diagnosis get NA -> set to 0
+cohort_diagnoses <- cohort %>%
+  left_join(diagnosis_flags_collapsed, by = "pnr") %>%
+  mutate(across(starts_with("dx_"), ~ replace_na(., 0)))
+```
+
+It gives one 0/1 flag per comorbidity per person, ready to enter your model as
+covariates. (The same `group_by(pnr) %>% summarise(any(.))` pattern is used on
+the [NMI](nmi.qmd) page, for example.)
 
 ## Classify patient type: inpatient, outpatient or emergency {#patienttype}
 
