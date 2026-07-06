@@ -90,13 +90,13 @@ library(arrow) # open_dataset()
 library(dplyr) # filter, select, mutate, left_join, collect
 library(lubridate) # year() til at trække årstal ud af datoer
 
-# Erstat stien med din projekts parquet-sti - DARTER: read_register("akm")
+# 1. Åbn AKM (erstat stien; DARTER: read_register("akm"))
 akm <- open_dataset(
   "E:/workdata/[projektnummer]/cleaned-data/parquet-registers/akm/"
 ) %>%
   rename_with(tolower) # standardisér kolonnenavne
 
-# Hent beskæftigelsesstatus for året inden index-dato
+# 2. Hent beskæftigelsesstatus for året inden index-dato
 # (antager at kohort har kolonnerne pnr og index_date)
 index_aar <- unique(lubridate::year(kohort$index_date) - 1) # baseline-år = index-år minus 1
 
@@ -106,12 +106,12 @@ akm_data <- akm %>%
   select(pnr, aar, socio13) %>% # kun de kolonner vi bruger
   collect() # hent ind i R
 
-# Tilknyt til kohort med index-år som join-nøgle
+# 3. Tilknyt til kohort med index-år som join-nøgle
 kohort_akm <- kohort %>%
   mutate(aar_baseline = lubridate::year(index_date) - 1) %>% # beregn baseline-år
   left_join(akm_data, by = c("pnr", "aar_baseline" = "aar")) # join på pnr og år
 
-# Kategorisér per SEPLINE
+# 4. Kategorisér per SEPLINE
 kohort_akm <- kohort_akm %>%
   mutate(
     occupation_cat = case_when(
@@ -145,26 +145,27 @@ Kategoriseres ud fra ISCED-koden i `hfaudd`: kort (`10`/`15`), mellemlang
 (`20`/`30`/`35`), lang (`40`--`80`), ukendt (`90` eller manglende).
 
 ```r
-# DARTER: read_register("udda")
+# 1. Åbn UDDA (DARTER: read_register("udda"))
 udda <- open_dataset(
   "E:/workdata/[projektnummer]/cleaned-data/parquet-registers/udda/"
 ) %>%
   rename_with(tolower) # standardisér kolonnenavne
 
+# 2. Hent uddannelse for baseline-året
 udda_data <- udda %>%
   semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # kun kohortens pnr'er
   filter(aar %in% !!index_aar) %>% # baseline-år
   select(pnr, aar, hfaudd) %>% # kun de kolonner vi bruger
   collect() # hent ind i R
 
-# Tag den seneste post hvis en person optræder flere gange
+# 3. Tag den seneste post hvis en person optræder flere gange
 udda_data <- udda_data %>%
   group_by(pnr) %>% # gruppér for at finde nyeste post per person
   arrange(desc(aar)) %>% # nyeste år først
   slice(1) %>% # behold kun den nyeste post
   ungroup() # frigiv gruppering
 
-# Kategorisér per SEPLINE
+# 4. Kategorisér per SEPLINE
 udda_data <- udda_data %>%
   mutate(
     education_cat = case_when(
@@ -185,7 +186,7 @@ fra BEF som bro. SEPLINE anbefaler 3-årsgennemsnit inddelt i kvintiler
 stratificeret på køn × 5-årsaldersgruppe × referenceår.
 
 ```r
-# DARTER: read_register("bef") og read_register("faik")
+# 1. Åbn BEF + FAIK (DARTER: read_register("bef") og read_register("faik"))
 bef <- open_dataset(
   "E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/"
 ) %>%
@@ -195,20 +196,20 @@ faik <- open_dataset(
 ) %>%
   rename_with(tolower)
 
-# Hent familie_id fra BEF for baseline-år
+# 2. Hent familie_id fra BEF for baseline-år
 bef_familie <- bef %>%
   semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # kun kohortens pnr'er
   filter(aar %in% !!index_aar) %>% # baseline-år
   select(pnr, aar, familie_id) %>% # familie_id er broen til FAIK
   collect() # hent ind i R
 
-# Hent indkomst fra FAIK for baseline-år
+# 3. Hent indkomst fra FAIK for baseline-år
 faik_data <- faik %>%
   filter(aar %in% !!index_aar) %>% # kun baseline-år
   select(familie_id, aar, famaekvivadisp_13) %>% # kun de kolonner vi bruger
   collect() # hent ind i R
 
-# Join: pnr → familie_id → indkomst
+# 4. Join: pnr → familie_id → indkomst
 indkomst <- bef_familie %>%
   left_join(faik_data, by = c("familie_id", "aar")) # to-nøgle join: husstand og år
 ```
