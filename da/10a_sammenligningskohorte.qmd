@@ -159,6 +159,10 @@ den, så match-alder og Table 1 altid er enige. Se [Fase
 afledte variable (kategorisering, hændelses-indikator).
 :::
 
+`read_register()` kræver, at fastreg er sat op med stien til dine registre - se
+[Fase 4](04_filformater.qmd#konvertér-sas-til-parquet), hvis du ikke selv har
+konverteret dem fra SAS.
+
 <details>
 <summary>Vis koden: klargør de eksponerede til matching</summary>
 
@@ -166,7 +170,7 @@ afledte variable (kategorisering, hændelses-indikator).
 #=====================================================
 # Trin 3: klargør de eksponerede til matching
 #=====================================================
-library(arrow); library(dplyr); library(lubridate)
+library(fastreg); library(arrow); library(dplyr); library(lubridate)  # read_register (arrow/open_dataset som fallback)
 
 #-----------------------------------------------------
 # 3.1 Konstanter (det vi selv vælger og kan ændre)
@@ -175,8 +179,8 @@ RATIO   <- 5L        # antal sammenligningspersoner per eksponeret
 AAR_FRA <- 2005L     # studievindue: FØRSTE BEF-år. Skal nå mindst 5 år før din tidligste index-dato (se fold-ud)
 AAR_TIL <- 2022L     # studievindue: sidste BEF-år
 
-# Åbn BEF (lazy: intet læses ind endnu)
-bef <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/") %>%
+# Åbn BEF via fastreg (read_register finder stien; lazy - intet læses ind endnu)
+bef <- read_register("bef") %>% # uden fastreg: open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/bef/")
   rename_with(tolower)                          # kolonnenavne til små bogstaver
 
 #-----------------------------------------------------
@@ -312,7 +316,7 @@ Hver dato-tabel ender som **én række per person** (kun den dato, eligibilitet 
 #=====================================================
 # Udtræk eligibilitets-datoer for HELE befolkningen
 #=====================================================
-library(arrow); library(dplyr)
+library(fastreg); library(arrow); library(dplyr)  # read_register (arrow/open_dataset som fallback)
 
 #-----------------------------------------------------
 # 4.1 Første outcome-dato for ALLE
@@ -344,12 +348,12 @@ eksp_dt <- eksponering_raw %>%                        # dit eksponerings-udtræk
 # 4.3 Dødsdato (DODSAARS) og udvandringsdato (VNDS) for ALLE
 #-----------------------------------------------------
 # Samme mønstre som i Fase 12 - bemærk: INGEN semi_join mod eksponerede (pnr).
-doed <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/") %>%
+doed <- read_register("dodsaars") %>% # uden fastreg: open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/dodsaars/")
   rename_with(tolower) %>%
   select(pnr, death_date = d_dodsdto) %>%            # eksakt dødsdato
   collect()
 
-udv <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/") %>%
+udv <- read_register("vnds") %>% # uden fastreg: open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/vnds/")
   rename_with(tolower) %>%
   filter(indud_kode == "U") %>%                      # U = udvandring
   select(pnr, emigration_date = haend_dato) %>%

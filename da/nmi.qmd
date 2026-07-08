@@ -182,13 +182,17 @@ saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # kolonner: pnr, date_conta
 
 </details>
 
-**Recepter** - udtræk LMDB for kohorten, behold kun NMI's ATC-klasser:
+**Recepter** - udtræk LMDB for kohorten, behold kun NMI's ATC-klasser.
+`read_register()` kræver, at fastreg er sat op med stien til dine registre - se
+[Fase 4](04_filformater.qmd#konvertér-sas-til-parquet), hvis du ikke selv har
+konverteret dem fra SAS:
 
 <details>
 <summary>Se koden: udtræk NMI-recepter (LMDB)</summary>
 
 ```r
-library(arrow)
+library(fastreg) # read_register()
+library(arrow)   # open_dataset() - fallback uden fastreg
 library(dplyr)
 
 pnr_vec <- unique(cohort$pnr)
@@ -222,7 +226,7 @@ pnr_vec <- unique(cohort$pnr)
 #-------------------------------------------------------------
 nmi_atc <- "^(A06A|A07DA|A10A|B01AC|B03A|C01AA|C03C|C03EB|C03DA|C09[CD]|C10AA|H02AB|J01C|N02A|N02BE|N05BA|N05C[DF]|N05A[A-L]|N05AX|N06A|N06D|N07BC|R03AC0[2-5]|R03BB0[4-7])"
 
-nmi_lmdb <- open_dataset("sti/til/lmdb/") %>%
+nmi_lmdb <- read_register("lmdb") %>% # uden fastreg: open_dataset("sti/til/lmdb/")
   rename_with(tolower) %>%
   semi_join(tibble(pnr = pnr_vec), by = "pnr") %>% # kun kohorten
   filter(grepl(nmi_atc, atc)) %>% # behold rækker hvor atc-kolonnen matcher nmi_atc-regexet (NMI's lægemiddelklasser) - FØR collect()

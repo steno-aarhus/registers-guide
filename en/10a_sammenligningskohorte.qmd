@@ -158,6 +158,10 @@ reuse it, so the matching age and Table 1 always agree. See [Phase
 derived variables (categorizing, event indicator).
 :::
 
+`read_register()` requires fastreg set up with the path to your registers - see
+[Phase 4](04_filformater.qmd#convert-sas-to-parquet) if you did not convert them
+from SAS yourself.
+
 <details>
 <summary>Show the code: prepare the exposed for matching</summary>
 
@@ -165,7 +169,7 @@ derived variables (categorizing, event indicator).
 #=====================================================
 # Step 3: prepare the exposed for matching
 #=====================================================
-library(arrow); library(dplyr); library(lubridate)
+library(fastreg); library(arrow); library(dplyr); library(lubridate)  # read_register (arrow/open_dataset as fallback)
 
 #-----------------------------------------------------
 # 3.1 Constants (what we choose and can change)
@@ -174,8 +178,8 @@ RATIO     <- 5L        # comparison persons per exposed
 YEAR_FROM <- 2005L     # study window: FIRST BEF year. Must reach at least 5 years before your earliest index (see fold-out)
 YEAR_TO   <- 2022L     # study window: last BEF year
 
-# Open BEF (lazy: nothing is read in yet)
-bef <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>%
+# Open BEF via fastreg (read_register gets the path; lazy - nothing is read in yet)
+bef <- read_register("bef") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/")
   rename_with(tolower)                          # column names to lower case
 
 #-----------------------------------------------------
@@ -311,7 +315,7 @@ Each date table ends up as **one row per person** (just the date eligibility dep
 #=====================================================
 # Extract eligibility dates for the WHOLE population
 #=====================================================
-library(arrow); library(dplyr)
+library(fastreg); library(arrow); library(dplyr)  # read_register (arrow/open_dataset as fallback)
 
 #-----------------------------------------------------
 # 4.1 First outcome date for EVERYONE
@@ -343,12 +347,12 @@ exp_dt <- exposure_raw %>%                            # your exposure extract, o
 # 4.3 Date of death (DODSAARS) and emigration date (VNDS) for EVERYONE
 #-----------------------------------------------------
 # Same patterns as in Phase 12 - note: NO semi_join against the exposed (pnr).
-death <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/") %>%
+death <- read_register("dodsaars") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/")
   rename_with(tolower) %>%
   select(pnr, death_date = d_dodsdto) %>%            # exact date of death
   collect()
 
-emig <- open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/") %>%
+emig <- read_register("vnds") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/")
   rename_with(tolower) %>%
   filter(indud_kode == "U") %>%                      # U = emigration
   select(pnr, emigration_date = haend_dato) %>%
