@@ -16,28 +16,37 @@ kan: *hvad sker der, hvis vi erstatter én enhed af A med én enhed af B, mens
 totalen holdes konstant?* A og B kan fx være fødevarer (A = rødt kød, B = fisk)
 eller lægemidler (A = NSAID, B = paracetamol).
 
-Det giver mening, når eksponeringen er **kompositionel**: delene er bundet af en
-helhed, så du ikke kan tilføje mere af én del uden at fjerne noget fra en anden
-- fødevarer inden for det totale energiindtag, minutter inden for et døgn, eller
-lægemiddelklasser inden for den samlede behandling.
+Det giver mening, når eksponeringen er en **samtidig komposition** - delene
+findes på samme tid og er bundet af en helhed, så du ikke kan tilføje mere af én
+uden at fjerne noget fra en anden (fødevarer inden for totalt energiindtag,
+eller minutter inden for et døgn). Lægemiddelklasser er undtagelsen: skift sker
+over tid, ikke som en samtidig komposition, så koden nedenfor gælder **ikke**
+for dem - se pointen under tabellen.
 
-Kodeeksemplerne nedenfor bruger kost-eksempler, men **substitutionsregressionen
-er den samme** på tværs af domæner. Det, der ændrer sig, er **constraint'en**
-("totalen"), hvordan du **bygger eksponeringen**, og - for lægemidler -
-studiedesignet:
+Kodeeksemplerne nedenfor bruger kost-eksempler, men **den samme substitutionsidé
+overføres til andre kompositionelle eksponeringer**. Det, der ændrer sig, er
+**constraint'en** ("totalen") og hvordan du **bygger eksponeringen** - og for
+lægemidler overtager studiedesignet helt (se pointen under tabellen):
 
-  |                         | Diætsubstitution            | Skift af lægemiddelklasse                             | Fysisk aktivitet / tidsforbrug    |
-  | ----------------------- | --------------------------- | ----------------------------------------------------- | --------------------------------- |
-  | Dele                    | fødevarer (g / portioner)   | lægemiddelklasser (DDD, indløsninger, dage på middel) | minutter i aktivitetstyper        |
-  | "Total" der holdes fast | totalt energiindtag         | samlet behandlingstid / eksponering                   | samlet tid (1440 min/døgn)        |
-  | Eksponeringstidspunkt   | typisk baseline-spørgeskema | tidsvarierende (LMDB-indløsninger -> episoder)        | baseline eller gentaget           |
-  | Naturligt design        | tværsnit + logistisk/Cox    | aktiv komparator, ny bruger / target trial            | regression / tidsforbrugsmodeller |
+  |                         | Diætsubstitution            | Fysisk aktivitet / tidsforbrug    | Skift af lægemiddelklasse                             |
+  | ----------------------- | --------------------------- | --------------------------------- | ----------------------------------------------------- |
+  | Dele                    | fødevarer (g / portioner)   | minutter i aktivitetstyper        | lægemiddelklasser (DDD, indløsninger, dage på middel) |
+  | "Total" der holdes fast | totalt energiindtag         | samlet tid (1440 min/døgn)        | samlet behandlingstid / eksponering                   |
+  | Eksponeringstidspunkt   | typisk baseline-spørgeskema | baseline eller gentaget           | tidsvarierende (LMDB-indløsninger -> episoder)        |
+  | Naturligt design        | tværsnit + logistisk/Cox    | regression / tidsforbrugsmodeller | aktiv komparator, ny bruger / target trial            |
 
-**Pointe:** behold substitutionsmodellen, skift constraint-variablen og
-eksponeringskonstruktionen. "Skift" af lægemiddelklasse er reelt et
-**tidsvarierende / aktiv-komparator**-problem - håndtér designet først (se
-litteraturen om aktiv-komparator/ny-bruger og target-trial-emulering), hvorefter
-substitutionskontrasten er den samme forskel mellem koefficienter.
+**Pointe.** Substitutionsregressionen overføres rent til en **samtidig
+komposition**, der holdes ved en total - fødevarer inden for totalt
+energiindtag, aktivitetsminutter inden for et døgn. Lægemidler er anderledes:
+**skift af lægemiddelklasse er en tidsvarierende behandlingsændring**, ikke en
+samtidig komposition, så koden ovenfor gælder **ikke** (den ville ignorere
+*hvornår* folk skifter - immortal time, behandlings-confounder-feedback). Her
+besvares substitutionsspørgsmålet ("effekten af at bruge lægemiddel B *i stedet
+for* A") af **designet**: et aktiv-komparator-, ny-bruger-studie, ideelt en
+target-trial-emulering, hvor B-vs-A-kontrasten i udfaldsmodellen allerede *er*
+substitutionseffekten. Partitions-/leave-one-out-koden overføres kun, hvis du
+reelt har en lægemiddel-*komposition* - samtidige andele af flere klasser inden
+for den samlede behandling - hvilket er ualmindeligt.
 
 ::: {.callout-note}
 **Kompositionelle data (CoDA).** Fysisk aktivitet over et døgn er en *lukket*
@@ -267,9 +276,23 @@ swap_effect(partition_cox, "fish100", "redmeat100") # HR: 100 g/dag fisk for rø
 ::: {.callout-tip}
 ## Læs mere
 
-- Ibsen DB, Laursen ASD, Würtz AML, Dahm CC, Rimm EB, Parner ET, Overvad K,
-  Jakobsen MU. "[Food substitution models for nutritional
+- **Fødevaresubstitution:** Ibsen DB, Laursen ASD, Würtz AML, Dahm CC, Rimm EB,
+  Parner ET, Overvad K, Jakobsen MU. "[Food substitution models for nutritional
   epidemiology](https://doi.org/10.1093/ajcn/nqaa315)", *Am J Clin Nutr*
   2021;113(2):294-303 - partitions- og leave-one-out-modellerne brugt ovenfor,
   med fortolkning og antagelser.
+- **Substitution og fysisk aktivitet:** Mekary RA, Willett WC, Hu FB, Ding EL.
+  "[Isotemporal Substitution Paradigm for Physical Activity Epidemiology and
+  Weight Change](https://doi.org/10.1093/aje/kwp163)", *Am J Epidemiol*
+  2009;170(4):519-527 - samme substitutionsidé for fysisk aktivitet: hold den
+  samlede tid konstant og omfordel tid fra én adfærd til en anden.
+- **Skift af lægemiddelklasse er ikke en substitutionsregression** - det er et
+  tidsvarierende, aktiv-komparator-problem. Se Lund JL, Richardson DB, Stürmer T.
+  "[The Active Comparator, New User Study Design in
+  Pharmacoepidemiology](https://doi.org/10.1007/s40471-015-0053-5)", *Curr
+  Epidemiol Rep* 2015;2(4):221-228, og ram kontrasten kausalt med
+  target-trial-emulering: Hernán MA, Robins JM. "[Using Big Data to Emulate a
+  Target Trial When a Randomized Trial Is Not
+  Available](https://doi.org/10.1093/aje/kwv254)", *Am J Epidemiol*
+  2016;183(8):758-764.
 :::
