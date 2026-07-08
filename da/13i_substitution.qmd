@@ -1,0 +1,221 @@
+---
+title: "Substitutionsanalyser"
+subtitle: >-
+  Kodeeksempler til "hvad nu hvis vi erstattede X med Y" -
+  diætsubstitutionsmodeller på en koblet kohorte
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under udvikling.** Dette er kodeeksempler, ikke en metodegennemgang - se
+referencen nederst for teori, antagelser og fortolkning.
+:::
+
+**Substitutionsanalyse** besvarer et spørgsmål, som almindelig regression ikke
+kan: *hvad sker der, hvis vi erstatter én enhed af A med én enhed af B, mens
+totalen holdes konstant?* A og B kan fx være fødevarer (A = rødt kød, B = fisk)
+eller lægemidler (A = NSAID, B = paracetamol).
+
+Det giver mening, når eksponeringen er **kompositionel**: delene er bundet af en
+helhed, så du ikke kan tilføje mere af én del uden at fjerne noget fra en anden
+- fødevarer inden for det totale energiindtag, minutter inden for et døgn, eller
+lægemiddelklasser inden for den samlede behandling.
+
+Kodeeksemplerne nedenfor bruger kost-eksempler, men **substitutionsregressionen
+er den samme** på tværs af domæner. Det, der ændrer sig, er **constraint'en**
+("totalen"), hvordan du **bygger eksponeringen**, og - for lægemidler -
+studiedesignet:
+
+  |                         | Diætsubstitution            | Skift af lægemiddelklasse                             | Fysisk aktivitet / tidsforbrug    |
+  | ----------------------- | --------------------------- | ----------------------------------------------------- | --------------------------------- |
+  | Dele                    | fødevarer (g / portioner)   | lægemiddelklasser (DDD, indløsninger, dage på middel) | minutter i aktivitetstyper        |
+  | "Total" der holdes fast | totalt energiindtag         | samlet behandlingstid / eksponering                   | samlet tid (1440 min/døgn)        |
+  | Eksponeringstidspunkt   | typisk baseline-spørgeskema | tidsvarierende (LMDB-indløsninger -> episoder)        | baseline eller gentaget           |
+  | Naturligt design        | tværsnit + logistisk/Cox    | aktiv komparator, ny bruger / target trial            | regression / tidsforbrugsmodeller |
+
+**Pointe:** behold substitutionsmodellen, skift constraint-variablen og
+eksponeringskonstruktionen. "Skift" af lægemiddelklasse er reelt et
+**tidsvarierende / aktiv-komparator**-problem - håndtér designet først (se
+litteraturen om aktiv-komparator/ny-bruger og target-trial-emulering), hvorefter
+substitutionskontrasten er den samme forskel mellem koefficienter.
+
+::: {.callout-note}
+**Kompositionelle data (CoDA).** Fysisk aktivitet over et døgn er en *lukket*
+komposition (søvn + stillesiddende + let + hård aktivitet = 1440 min), og her
+bruger man formel kompositionel dataanalyse (CoDA) med log-ratios (fx isometrisk
+log-ratio, ilr; R-pakken `compositions`). Kost er derimod ikke strengt lukket -
+totalt energiindtag varierer mellem personer - så ernæringsepidemiologi bruger
+de energi-justerede substitutionsmodeller nedenfor frem for formel ilr-CoDA.
+:::
+
+::: {.callout-important}
+**Dette ligger i udkanten af guidens scope - læs forbeholdene.**
+
+- **DST har ingen kost- (eller fysisk aktivitets-)data.** Disse eksponeringer
+  kommer fra en **koblet kohorte eller survey** (fx et kostspørgeskema), koblet
+  til register-udfald og -kovariater i [Fase 12](12_data-manipulation.qmd).
+  Koden nedenfor kører på det samlede analysedatasæt - den åbner altså en
+  `.rds`/`.dta`- fil, **ikke** et register (`readRDS`, ikke `read_register`).
+- **Dette er kodeeksempler, ikke en metodegennemgang.** For teori, antagelser og
+  fortolkning, se Ibsen et al. (reference nederst).
+- **Estimaterne er modelbaserede.** De antager, at du har justeret for den
+  rigtige **total** (her totalt energiindtag), ingen residual confounding,
+  linearitet og ingen væsentlig målefejl i kostvariablene.
+:::
+
+## Idéen, samlet ét sted
+
+En substitutionsmodel estimerer effekten af at **udskifte** én del med en anden,
+mens totalen holdes konstant. Efter [Ibsen et al.
+2021](https://doi.org/10.1093/ajcn/nqaa315) findes der to ækvivalente familier:
+
+- **Leave-one-out (ikke-specificeret) model:** læg fødevaren af interesse i
+  modellen sammen med **totalt energiindtag** og en **sammensat total** for
+  fødevaregruppen. Dens koefficient er effekten af et højere indtag af den
+  fødevare og et **tilsvarende lavere indtag af den udeladte fødevare** i
+  gruppen.
+- **Partitionsmodel (specificeret):** læg **alle** delfødevarer i modellen plus
+  totalt energiindtag. Substitutionen af fødevare A **for** fødevare B er så
+  **forskellen mellem deres koefficienter** (b~A~ − b~B~), hvis varians er
+  var(b~A~) + var(b~B~) − 2·cov(b~A~, b~B~).
+
+Begge veje rammer samme estimand - en udskiftning, hvor totalen holdes fast.
+Partitionsmodellen gør "for hvad?" eksplicit; gjort rigtigt giver de to samme
+svar.
+
+## Opsætning
+
+```r
+library(dplyr) # mutate, %>%
+# library(haven) # kun hvis den koblede kohorte leverer Stata-filer -> read_dta()
+
+# Det koblede analysedatasæt fra Fase 12: kost (fra kohorten/surveyet) plus
+# udfald og kovariater (fra registre), én række per person.
+df <- readRDS("sti/til/analysedatasaet.rds")
+# df <- haven::read_dta("sti/til/analysedatasaet.dta")  # hvis det er en Stata-.dta
+```
+
+## Metode 1 - partition (forskel mellem koefficienter)
+
+Læg hver delfødevare i modellen, og aflæs substitutionen som **forskellen**
+mellem to koefficienter. Det er R-modstykket til Statas `lincom`.
+
+```r
+library(dplyr)
+
+# 1. Sæt delfødevarerne på en fælles substitutionsenhed (her per 100 g/dag).
+df <- df %>%
+  mutate(
+    redmeat100 = redmeat_g / 100, # rødt kød, per 100 g/dag
+    fish100 = fish_g / 100, # fisk
+    poultry100 = poultry_g / 100, # fjerkræ
+    mixedmeat100 = mixedmeat_g / 100 # blandet kød
+  )
+
+# 2. Partitionsmodel: ALLE delfødevarer + totalt energiindtag i samme model.
+#    Justér for dine confoundere (alder, køn, ...); logistisk her, men for et
+#    overlevelsesudfald udskift glm() med survival::coxph() - logikken er den samme.
+partition <- glm(
+  diabetes ~ redmeat100 +
+    fish100 +
+    poultry100 +
+    mixedmeat100 +
+    total_energy +
+    age +
+    sex, # + dit confounder-sæt
+  family = binomial(link = "logit"),
+  data = df
+)
+
+# 3. Substitution af FISK for RØDT KØD = forskellen mellem deres koefficienter.
+#    Var(fisk - kød) = Var(fisk) + Var(kød) - 2*Cov(fisk, kød)
+b <- coef(partition)
+vc <- vcov(partition)
+
+diff_beta <- b["fish100"] - b["redmeat100"] # log-OR for udskiftningen
+se_diff <- sqrt(
+  vc["fish100", "fish100"] +
+    vc["redmeat100", "redmeat100"] -
+    2 * vc["fish100", "redmeat100"]
+)
+
+# 4. Odds ratio + 95% CI: at erstatte 100 g/dag rødt kød med 100 g/dag fisk.
+ci_logit <- diff_beta + c(-1, 1) * qnorm(0.975) * se_diff
+cbind(OR = exp(diff_beta), LCL = exp(ci_logit[1]), UCL = exp(ci_logit[2]))
+```
+
+## Metode 2 - leave-one-out
+
+Byg en **sammensat total** for fødevaregruppen, og inkludér hver fødevare
+undtagen den, du substituerer *for*. Den udeladte fødevare (her rødt kød) bliver
+den implicitte reference, så en fødevares koefficient er dens effekt **relativt
+til rødt kød**.
+
+```r
+library(dplyr)
+
+# 1. Fødevarer per 100 g + en sammensat total for hele gruppen (alle fire fødevarer).
+df <- df %>%
+  mutate(
+    fish100 = fish_g / 100,
+    poultry100 = poultry_g / 100,
+    mixedmeat100 = mixedmeat_g / 100,
+    totalmeat_g = redmeat_g + poultry_g + mixedmeat_g + fish_g, # gruppens total
+    meat100 = totalmeat_g / 100
+  )
+
+# 2. Leave-one-out-model: sammensat total + hver enkelt fødevare UNDTAGEN den, du
+#    substituerer for (rødt kød udelades). Totalt energiindtag justeres stadig for.
+leaveoneout <- glm(
+  diabetes ~ fish100 +
+    poultry100 +
+    mixedmeat100 +
+    meat100 +
+    total_energy +
+    age +
+    sex, # + dit confounder-sæt
+  family = binomial(link = "logit"),
+  data = df
+)
+
+# 3. fish100 = at erstatte 100 g/dag fisk med 100 g/dag af den udeladte fødevare
+#    (rødt kød) - samme udskiftning som Metode 1, så estimaterne bør stemme overens.
+OR <- exp(coef(leaveoneout)["fish100"])
+CI <- exp(confint(leaveoneout)["fish100", ])
+cbind(OR = OR, LCL = CI[1], UCL = CI[2])
+```
+
+## Fortolkning og finjustering
+
+- **Substitutionsenhed.** Estimatet er *per udskiftet enhed* (her 100 g/dag).
+  Vælg en enhed, der er meningsfuld og realistisk, og rapportér altid både
+  enheden og parringen ("100 g/dag rødt kød erstattet af 100 g/dag fisk").
+- **Hvad justering for totalt energiindtag gør.** At holde totalt energiindtag
+  fast er det, der gør "mere fisk" til "mere fisk *i stedet for* noget andet" i
+  stedet for "mere fisk *oven i* den nuværende kost".
+- **Ikke-linearitet.** Et lineært led antager en konstant udskiftningseffekt
+  over hele intervallet. Hvis det er urimeligt, modellér fødevarerne med splines
+  (`splines::ns()`, se [Regression](13d_regression.qmd)) og evaluér
+  udskiftningen ved valgte værdier.
+- **Overlevelsesudfald.** Udskift `glm()` med `survival::coxph()`;
+  forskellen-mellem- koefficienter-logikken i Metode 1 er uændret (den arbejder
+  så på log-hazard ratios). Se [Tid-til-hændelse](13e_time-to-event.qmd).
+
+## Se også
+
+- [Fase 12 - Saml & klargør datasættet](12_data-manipulation.qmd): hvor det
+  koblede kost + register-datasæt bygges.
+- [Regression](13d_regression.qmd) og [Tid-til-hændelse](13e_time-to-event.qmd):
+  de underliggende modeller (`glm`, `coxph`) og hvordan man tilføjer splines.
+- [Læringsressourcer](laeringsressourcer.qmd): henvisning til
+  regressionskalibrering for målefejl i kosteksponeringer.
+
+::: {.callout-tip}
+## Læs mere
+
+- Ibsen DB, Laursen ASD, Würtz AML, Dahm CC, Rimm EB, Parner ET, Overvad K,
+  Jakobsen MU. "[Food substitution models for nutritional
+  epidemiology](https://doi.org/10.1093/ajcn/nqaa315)", *Am J Clin Nutr*
+  2021;113(2):294-303 - partitions- og leave-one-out-modellerne brugt ovenfor,
+  med fortolkning og antagelser.
+:::

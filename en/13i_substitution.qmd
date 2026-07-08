@@ -1,0 +1,219 @@
+---
+title: "Substitution analyses"
+subtitle: >-
+  Coding examples for "what if we replaced X with Y" - dietary substitution
+  models on a linked cohort
+date: last-modified
+---
+
+::: {.callout-warning}
+**Under development.** These are coding examples, not a methods lecture - see
+the reference at the bottom for the theory, assumptions and interpretation.
+:::
+
+**Substitution analysis** answers a question ordinary regression cannot: *what
+happens if we replace one unit of A with one unit of B, while the total stays
+the same?* A and B can be foods (A = red meat, B = fish) or drugs (A = NSAID, B
+= paracetamol).
+
+It makes sense whenever the exposure is **compositional**: the parts are
+constrained by a whole, so you cannot add more of one part without taking away
+from another - foods within total energy, minutes within a 24-hour day, or drug
+classes within total treatment.
+
+The code examples below use dietary examples, but the **substitution regression
+is identical** across domains. What changes is the **constraint** ("total"), how
+you **build the exposure**, and - for drugs - the study design:
+
+  |                       | Dietary substitution           | Drug-class switching                      | Physical activity / time-use |
+  | --------------------- | ------------------------------ | ----------------------------------------- | ---------------------------- |
+  | Components            | foods (g / servings)           | drug classes (DDDs, fills, days on drug)  | minutes in activity types    |
+  | "Total" held constant | total energy intake            | total treatment time / exposure           | total time (1440 min/day)    |
+  | Exposure timing       | usually baseline questionnaire | time-varying (LMDB fills -> episodes)     | baseline or repeated         |
+  | Natural design        | cross-sectional + logistic/Cox | active-comparator new-user / target trial | regression / time-use models |
+
+**Takeaway:** keep the substitution model, change the constraint variable and
+the exposure construction. Drug-class "switching" is really a **time-varying /
+active-comparator** problem - handle the design first (see the active-comparator
+new-user literature and target-trial emulation), then the substitution contrast
+is the same difference of coefficients.
+
+::: {.callout-note}
+**Compositional data (CoDA).** Physical activity over a day is a *closed*
+composition (sleep + sedentary + light + vigorous = 1440 min), where you use
+formal compositional data analysis (CoDA) with log-ratios (e.g. the isometric
+log-ratio, ilr; the `compositions` R package). Diet is not strictly closed -
+total energy varies between people - so nutritional epidemiology uses the
+energy-adjusted substitution models below rather than formal ilr-CoDA.
+:::
+
+::: {.callout-important}
+**This sits at the edge of the guide's scope - read the disclaimers.**
+
+- **DST holds no diet (or physical-activity) data.** These exposures come from a
+  **linked cohort or survey** (e.g. a dietary questionnaire), joined to register
+  outcomes and covariates in [Phase 12](12_data-manipulation.qmd). The code
+  below runs on that assembled analysis dataset - so it opens an `.rds`/`.dta`
+  file, **not** a register (`readRDS`, not `read_register`).
+- **These are coding examples, not a methods lecture.** For the theory,
+  assumptions and interpretation, see Ibsen et al. (reference below).
+- **The estimates are model-based.** They assume you adjusted for the right
+  **total** (here total energy), no residual confounding, linearity, and no
+  substantial measurement error in the diet variables.
+:::
+
+## The idea, in one place
+
+A substitution model estimates the effect of **swapping** one component for
+another while holding the total constant. Following [Ibsen et al.
+2021](https://doi.org/10.1093/ajcn/nqaa315), there are two equivalent families:
+
+- **Leave-one-out (nonspecified) model:** put the food of interest in the model
+  together with **total energy** and a **composite total** of the food group.
+  Its coefficient is the effect of a higher intake of that food and a
+  **concomitantly lower intake of the omitted food** in the group.
+- **Partition (specified) model:** put **all** component foods in the model plus
+  total energy. The substitution of food A **for** food B is then the
+  **difference of their coefficients** (b~A~ − b~B~), whose variance is
+  var(b~A~) + var(b~B~) − 2·cov(b~A~, b~B~).
+
+Both routes target the same estimand - a swap holding the total fixed. The
+partition model makes the "for what?" explicit; done right, the two give the
+same answer.
+
+## Setup
+
+```r
+library(dplyr) # mutate, %>%
+# library(haven) # only if the linked cohort ships Stata files -> read_dta()
+
+# The linked analysis dataset from Phase 12: diet (from the cohort/survey) plus
+# outcome and covariates (from registers), one row per person.
+df <- readRDS("path/to/analysis_dataset.rds")
+# df <- haven::read_dta("path/to/analysis_dataset.dta")  # if it is a Stata .dta
+```
+
+## Method 1 - partition (difference of coefficients)
+
+Put every component food in the model, then read the substitution off as the
+**difference** between two coefficients. This is the R equivalent of Stata's
+`lincom`.
+
+```r
+library(dplyr)
+
+# 1. Put the component foods on a common substitution unit (here per 100 g/day).
+df <- df %>%
+  mutate(
+    redmeat100 = redmeat_g / 100, # red meat, per 100 g/day
+    fish100 = fish_g / 100, # fish
+    poultry100 = poultry_g / 100, # poultry
+    mixedmeat100 = mixedmeat_g / 100 # mixed meat
+  )
+
+# 2. Partition model: ALL component foods + total energy in the same model.
+#    Adjust for your confounders (age, sex, ...); logistic here, but for a
+#    survival outcome swap glm() for survival::coxph() - the logic is identical.
+partition <- glm(
+  diabetes ~ redmeat100 +
+    fish100 +
+    poultry100 +
+    mixedmeat100 +
+    total_energy +
+    age +
+    sex, # + your confounder set
+  family = binomial(link = "logit"),
+  data = df
+)
+
+# 3. Substitution of FISH for RED MEAT = difference of their coefficients.
+#    Var(fish - meat) = Var(fish) + Var(meat) - 2*Cov(fish, meat)
+b <- coef(partition)
+vc <- vcov(partition)
+
+diff_beta <- b["fish100"] - b["redmeat100"] # log-OR of the swap
+se_diff <- sqrt(
+  vc["fish100", "fish100"] +
+    vc["redmeat100", "redmeat100"] -
+    2 * vc["fish100", "redmeat100"]
+)
+
+# 4. Odds ratio + 95% CI: replacing 100 g/day red meat with 100 g/day fish.
+ci_logit <- diff_beta + c(-1, 1) * qnorm(0.975) * se_diff
+cbind(OR = exp(diff_beta), LCL = exp(ci_logit[1]), UCL = exp(ci_logit[2]))
+```
+
+## Method 2 - leave-one-out
+
+Build a **composite total** of the food group and include every food except the
+one you substitute *for*. That omitted food (here red meat) becomes the implicit
+reference, so a food's coefficient is its effect **relative to red meat**.
+
+```r
+library(dplyr)
+
+# 1. Per-100 g foods + a composite total of the whole group (all four foods).
+df <- df %>%
+  mutate(
+    fish100 = fish_g / 100,
+    poultry100 = poultry_g / 100,
+    mixedmeat100 = mixedmeat_g / 100,
+    totalmeat_g = redmeat_g + poultry_g + mixedmeat_g + fish_g, # group total
+    meat100 = totalmeat_g / 100
+  )
+
+# 2. Leave-one-out model: composite total + every individual food EXCEPT the food
+#    you substitute for (red meat is omitted). Total energy still adjusted for.
+leaveoneout <- glm(
+  diabetes ~ fish100 +
+    poultry100 +
+    mixedmeat100 +
+    meat100 +
+    total_energy +
+    age +
+    sex, # + your confounder set
+  family = binomial(link = "logit"),
+  data = df
+)
+
+# 3. fish100 = substituting 100 g/day fish for 100 g/day of the omitted food
+#    (red meat) - the same swap as Method 1, so the estimates should agree.
+OR <- exp(coef(leaveoneout)["fish100"])
+CI <- exp(confint(leaveoneout)["fish100", ])
+cbind(OR = OR, LCL = CI[1], UCL = CI[2])
+```
+
+## Interpreting and refining
+
+- **Substitution unit.** The estimate is *per unit swapped* (here 100 g/day).
+  Pick a unit that is meaningful and realistic, and always report both the unit
+  and the pairing ("100 g/day red meat replaced by 100 g/day fish").
+- **What total-energy adjustment does.** Holding total energy fixed is what
+  turns "more fish" into "more fish *instead of* something else" rather than
+  "more fish *on top of* the current diet".
+- **Non-linearity.** A linear term assumes a constant swap effect across the
+  whole range. If that is implausible, model the foods with splines
+  (`splines::ns()`, see [Regression](13d_regression.qmd)) and evaluate the swap
+  at chosen values.
+- **Survival outcomes.** Replace `glm()` with `survival::coxph()`; the
+  difference-of-coefficients logic in Method 1 is unchanged (it then works on
+  log hazard ratios). See [Time-to-event](13e_time-to-event.qmd).
+
+## See also
+
+- [Phase 12 - Assemble and prepare the dataset](12_data-manipulation.qmd): where
+  the linked diet + register dataset is built.
+- [Regression](13d_regression.qmd) and [Time-to-event](13e_time-to-event.qmd):
+  the underlying models (`glm`, `coxph`) and how to add splines.
+- [Learning resources](laeringsressourcer.qmd): pointer to regression
+  calibration for measurement error in dietary exposures.
+
+::: {.callout-tip}
+## Read more
+
+- Ibsen DB, Laursen ASD, Würtz AML, Dahm CC, Rimm EB, Parner ET, Overvad K,
+  Jakobsen MU. "[Food substitution models for nutritional
+  epidemiology](https://doi.org/10.1093/ajcn/nqaa315)", *Am J Clin Nutr*
+  2021;113(2):294-303 - the partition and leave-one-out models used above, with
+  their interpretation and assumptions.
+:::
