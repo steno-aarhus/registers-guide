@@ -185,6 +185,63 @@ CI <- exp(confint(leaveoneout)["fish100", ])
 cbind(OR = OR, LCL = CI[1], UCL = CI[2])
 ```
 
+## Flere udskiftninger på én gang, og overlevelsesudfald
+
+Begge udvidelser bygger på **partitionsmodellen** fra Metode 1: substitutionen
+af A for B er altid `b_A - b_B`, så én tilpasset model kan besvare mange
+udskiftninger.
+
+**En genbrugelig hjælpefunktion** laver enhver tilpasset model (`glm` *eller*
+`coxph`) om til et udskiftnings-estimat med 95% CI:
+
+```r
+library(purrr) # map()
+library(dplyr) # tibble(), bind_rows()
+
+# Effekten af at udskifte fødevare `a` FOR fødevare `b`, fra en partitionsmodel.
+# Returnerer en odds ratio (glm) eller en hazard ratio (coxph) med 95% CI.
+swap_effect <- function(model, a, b) {
+  est <- coef(model)[a] - coef(model)[b] # forskel mellem koefficienter
+  vc <- vcov(model)
+  se <- sqrt(vc[a, a] + vc[b, b] - 2 * vc[a, b])
+  tibble(
+    swap = paste(a, "for", b),
+    est = exp(est), # OR (glm) eller HR (coxph)
+    lcl = exp(est - qnorm(0.975) * se),
+    ucl = exp(est + qnorm(0.975) * se)
+  )
+}
+
+# Flere fødevarer udskiftet for rødt kød, fra den ENE partitionsmodel (Metode 1):
+pairs <- list(
+  c("fish100", "redmeat100"),
+  c("poultry100", "redmeat100"),
+  c("mixedmeat100", "redmeat100")
+)
+map(pairs, ~ swap_effect(partition, .x[1], .x[2])) %>% bind_rows()
+```
+
+**Overlevelsesudfald (Cox).** Tilpas den samme partitionsmodel med `coxph()`, så
+returnerer hjælpefunktionen hazard ratios i stedet for odds ratios:
+
+```r
+library(survival) # Surv(), coxph()
+
+partition_cox <- coxph(
+  Surv(followup_years, event) ~ redmeat100 +
+    fish100 +
+    poultry100 +
+    mixedmeat100 +
+    total_energy +
+    age +
+    sex, # + dit confounder-sæt
+  data = df,
+  ties = "breslow" # Breslow-håndtering af sammenfaldende hændelsestider
+)
+
+swap_effect(partition_cox, "fish100", "redmeat100") # HR: 100 g/dag fisk for rødt kød
+```
+
 ## Fortolkning og finjustering
 
 - **Substitutionsenhed.** Estimatet er *per udskiftet enhed* (her 100 g/dag).
@@ -197,9 +254,6 @@ cbind(OR = OR, LCL = CI[1], UCL = CI[2])
   over hele intervallet. Hvis det er urimeligt, modellér fødevarerne med splines
   (`splines::ns()`, se [Regression](13d_regression.qmd)) og evaluér
   udskiftningen ved valgte værdier.
-- **Overlevelsesudfald.** Udskift `glm()` med `survival::coxph()`;
-  forskellen-mellem- koefficienter-logikken i Metode 1 er uændret (den arbejder
-  så på log-hazard ratios). Se [Tid-til-hændelse](13e_time-to-event.qmd).
 
 ## Se også
 

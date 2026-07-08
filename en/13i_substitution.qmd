@@ -183,6 +183,62 @@ CI <- exp(confint(leaveoneout)["fish100", ])
 cbind(OR = OR, LCL = CI[1], UCL = CI[2])
 ```
 
+## Many swaps at once, and survival outcomes
+
+Both extensions build on the **partition model** from Method 1: the substitution
+of A for B is always `b_A - b_B`, so one fitted model can answer many swaps.
+
+**A reusable helper** turns any fitted model (`glm` *or* `coxph`) into a swap
+estimate with a 95% CI:
+
+```r
+library(purrr) # map()
+library(dplyr) # tibble(), bind_rows()
+
+# Effect of swapping food `a` FOR food `b`, from a fitted partition model.
+# Returns an odds ratio (glm) or a hazard ratio (coxph) with a 95% CI.
+swap_effect <- function(model, a, b) {
+  est <- coef(model)[a] - coef(model)[b] # difference of coefficients
+  vc <- vcov(model)
+  se <- sqrt(vc[a, a] + vc[b, b] - 2 * vc[a, b])
+  tibble(
+    swap = paste(a, "for", b),
+    est = exp(est), # OR (glm) or HR (coxph)
+    lcl = exp(est - qnorm(0.975) * se),
+    ucl = exp(est + qnorm(0.975) * se)
+  )
+}
+
+# Several foods swapped for red meat, from the ONE partition model (Method 1):
+pairs <- list(
+  c("fish100", "redmeat100"),
+  c("poultry100", "redmeat100"),
+  c("mixedmeat100", "redmeat100")
+)
+map(pairs, ~ swap_effect(partition, .x[1], .x[2])) %>% bind_rows()
+```
+
+**Survival outcome (Cox).** Fit the same partition model with `coxph()`, and the
+helper returns hazard ratios instead of odds ratios:
+
+```r
+library(survival) # Surv(), coxph()
+
+partition_cox <- coxph(
+  Surv(followup_years, event) ~ redmeat100 +
+    fish100 +
+    poultry100 +
+    mixedmeat100 +
+    total_energy +
+    age +
+    sex, # + your confounder set
+  data = df,
+  ties = "breslow" # Breslow handling of tied event times
+)
+
+swap_effect(partition_cox, "fish100", "redmeat100") # HR: 100 g/day fish for red meat
+```
+
 ## Interpreting and refining
 
 - **Substitution unit.** The estimate is *per unit swapped* (here 100 g/day).
@@ -195,9 +251,6 @@ cbind(OR = OR, LCL = CI[1], UCL = CI[2])
   whole range. If that is implausible, model the foods with splines
   (`splines::ns()`, see [Regression](13d_regression.qmd)) and evaluate the swap
   at chosen values.
-- **Survival outcomes.** Replace `glm()` with `survival::coxph()`; the
-  difference-of-coefficients logic in Method 1 is unchanged (it then works on
-  log hazard ratios). See [Time-to-event](13e_time-to-event.qmd).
 
 ## See also
 
