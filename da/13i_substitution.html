@@ -514,6 +514,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#opsætning" id="toc-opsætning" class="nav-link" data-scroll-target="#opsætning">Opsætning</a></li>
   <li><a href="#metode-1---partition-forskel-mellem-koefficienter" id="toc-metode-1---partition-forskel-mellem-koefficienter" class="nav-link" data-scroll-target="#metode-1---partition-forskel-mellem-koefficienter">Metode 1 - partition (forskel mellem koefficienter)</a></li>
   <li><a href="#metode-2---leave-one-out" id="toc-metode-2---leave-one-out" class="nav-link" data-scroll-target="#metode-2---leave-one-out">Metode 2 - leave-one-out</a></li>
+  <li><a href="#flere-udskiftninger-på-én-gang-og-overlevelsesudfald" id="toc-flere-udskiftninger-på-én-gang-og-overlevelsesudfald" class="nav-link" data-scroll-target="#flere-udskiftninger-på-én-gang-og-overlevelsesudfald">Flere udskiftninger på én gang, og overlevelsesudfald</a></li>
   <li><a href="#fortolkning-og-finjustering" id="toc-fortolkning-og-finjustering" class="nav-link" data-scroll-target="#fortolkning-og-finjustering">Fortolkning og finjustering</a></li>
   <li><a href="#se-også" id="toc-se-også" class="nav-link" data-scroll-target="#se-også">Se også</a></li>
   </ul>
@@ -728,13 +729,57 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>CI <span class="ot">&lt;-</span> <span class="fu">exp</span>(<span class="fu">confint</span>(leaveoneout)[<span class="st">"fish100"</span>, ])</span>
 <span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">OR =</span> OR, <span class="at">LCL =</span> CI[<span class="dv">1</span>], <span class="at">UCL =</span> CI[<span class="dv">2</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
+<section id="flere-udskiftninger-på-én-gang-og-overlevelsesudfald" class="level2">
+<h2 class="anchored" data-anchor-id="flere-udskiftninger-på-én-gang-og-overlevelsesudfald">Flere udskiftninger på én gang, og overlevelsesudfald</h2>
+<p>Begge udvidelser bygger på <strong>partitionsmodellen</strong> fra Metode 1: substitutionen af A for B er altid <code>b_A - b_B</code>, så én tilpasset model kan besvare mange udskiftninger.</p>
+<p><strong>En genbrugelig hjælpefunktion</strong> laver enhver tilpasset model (<code>glm</code> <em>eller</em> <code>coxph</code>) om til et udskiftnings-estimat med 95% CI:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(purrr) <span class="co"># map()</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># tibble(), bind_rows()</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Effekten af at udskifte fødevare `a` FOR fødevare `b`, fra en partitionsmodel.</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Returnerer en odds ratio (glm) eller en hazard ratio (coxph) med 95% CI.</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>swap_effect <span class="ot">&lt;-</span> <span class="cf">function</span>(model, a, b) {</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  est <span class="ot">&lt;-</span> <span class="fu">coef</span>(model)[a] <span class="sc">-</span> <span class="fu">coef</span>(model)[b] <span class="co"># forskel mellem koefficienter</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  vc <span class="ot">&lt;-</span> <span class="fu">vcov</span>(model)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  se <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(vc[a, a] <span class="sc">+</span> vc[b, b] <span class="sc">-</span> <span class="dv">2</span> <span class="sc">*</span> vc[a, b])</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">swap =</span> <span class="fu">paste</span>(a, <span class="st">"for"</span>, b),</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">est =</span> <span class="fu">exp</span>(est), <span class="co"># OR (glm) eller HR (coxph)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">lcl =</span> <span class="fu">exp</span>(est <span class="sc">-</span> <span class="fu">qnorm</span>(<span class="fl">0.975</span>) <span class="sc">*</span> se),</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">ucl =</span> <span class="fu">exp</span>(est <span class="sc">+</span> <span class="fu">qnorm</span>(<span class="fl">0.975</span>) <span class="sc">*</span> se)</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Flere fødevarer udskiftet for rødt kød, fra den ENE partitionsmodel (Metode 1):</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>pairs <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"fish100"</span>, <span class="st">"redmeat100"</span>),</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"poultry100"</span>, <span class="st">"redmeat100"</span>),</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"mixedmeat100"</span>, <span class="st">"redmeat100"</span>)</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="fu">map</span>(pairs, <span class="sc">~</span> <span class="fu">swap_effect</span>(partition, .x[<span class="dv">1</span>], .x[<span class="dv">2</span>])) <span class="sc">%&gt;%</span> <span class="fu">bind_rows</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Overlevelsesudfald (Cox).</strong> Tilpas den samme partitionsmodel med <code>coxph()</code>, så returnerer hjælpefunktionen hazard ratios i stedet for odds ratios:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival) <span class="co"># Surv(), coxph()</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>partition_cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(followup_years, event) <span class="sc">~</span> redmeat100 <span class="sc">+</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    fish100 <span class="sc">+</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    poultry100 <span class="sc">+</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    mixedmeat100 <span class="sc">+</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    total_energy <span class="sc">+</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">+</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    sex, <span class="co"># + dit confounder-sæt</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">ties =</span> <span class="st">"breslow"</span> <span class="co"># Breslow-håndtering af sammenfaldende hændelsestider</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="fu">swap_effect</span>(partition_cox, <span class="st">"fish100"</span>, <span class="st">"redmeat100"</span>) <span class="co"># HR: 100 g/dag fisk for rødt kød</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
 <section id="fortolkning-og-finjustering" class="level2">
 <h2 class="anchored" data-anchor-id="fortolkning-og-finjustering">Fortolkning og finjustering</h2>
 <ul>
 <li><strong>Substitutionsenhed.</strong> Estimatet er <em>per udskiftet enhed</em> (her 100 g/dag). Vælg en enhed, der er meningsfuld og realistisk, og rapportér altid både enheden og parringen (“100 g/dag rødt kød erstattet af 100 g/dag fisk”).</li>
 <li><strong>Hvad justering for totalt energiindtag gør.</strong> At holde totalt energiindtag fast er det, der gør “mere fisk” til “mere fisk <em>i stedet for</em> noget andet” i stedet for “mere fisk <em>oven i</em> den nuværende kost”.</li>
 <li><strong>Ikke-linearitet.</strong> Et lineært led antager en konstant udskiftningseffekt over hele intervallet. Hvis det er urimeligt, modellér fødevarerne med splines (<code>splines::ns()</code>, se <a href="../da/13d_regression.html">Regression</a>) og evaluér udskiftningen ved valgte værdier.</li>
-<li><strong>Overlevelsesudfald.</strong> Udskift <code>glm()</code> med <code>survival::coxph()</code>; forskellen-mellem- koefficienter-logikken i Metode 1 er uændret (den arbejder så på log-hazard ratios). Se <a href="../da/13e_time-to-event.html">Tid-til-hændelse</a>.</li>
 </ul>
 </section>
 <section id="se-også" class="level2">

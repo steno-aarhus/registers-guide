@@ -514,6 +514,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
   <li><a href="#method-1---partition-difference-of-coefficients" id="toc-method-1---partition-difference-of-coefficients" class="nav-link" data-scroll-target="#method-1---partition-difference-of-coefficients">Method 1 - partition (difference of coefficients)</a></li>
   <li><a href="#method-2---leave-one-out" id="toc-method-2---leave-one-out" class="nav-link" data-scroll-target="#method-2---leave-one-out">Method 2 - leave-one-out</a></li>
+  <li><a href="#many-swaps-at-once-and-survival-outcomes" id="toc-many-swaps-at-once-and-survival-outcomes" class="nav-link" data-scroll-target="#many-swaps-at-once-and-survival-outcomes">Many swaps at once, and survival outcomes</a></li>
   <li><a href="#interpreting-and-refining" id="toc-interpreting-and-refining" class="nav-link" data-scroll-target="#interpreting-and-refining">Interpreting and refining</a></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
   </ul>
@@ -728,13 +729,57 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>CI <span class="ot">&lt;-</span> <span class="fu">exp</span>(<span class="fu">confint</span>(leaveoneout)[<span class="st">"fish100"</span>, ])</span>
 <span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="fu">cbind</span>(<span class="at">OR =</span> OR, <span class="at">LCL =</span> CI[<span class="dv">1</span>], <span class="at">UCL =</span> CI[<span class="dv">2</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
+<section id="many-swaps-at-once-and-survival-outcomes" class="level2">
+<h2 class="anchored" data-anchor-id="many-swaps-at-once-and-survival-outcomes">Many swaps at once, and survival outcomes</h2>
+<p>Both extensions build on the <strong>partition model</strong> from Method 1: the substitution of A for B is always <code>b_A - b_B</code>, so one fitted model can answer many swaps.</p>
+<p><strong>A reusable helper</strong> turns any fitted model (<code>glm</code> <em>or</em> <code>coxph</code>) into a swap estimate with a 95% CI:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(purrr) <span class="co"># map()</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># tibble(), bind_rows()</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Effect of swapping food `a` FOR food `b`, from a fitted partition model.</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns an odds ratio (glm) or a hazard ratio (coxph) with a 95% CI.</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>swap_effect <span class="ot">&lt;-</span> <span class="cf">function</span>(model, a, b) {</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  est <span class="ot">&lt;-</span> <span class="fu">coef</span>(model)[a] <span class="sc">-</span> <span class="fu">coef</span>(model)[b] <span class="co"># difference of coefficients</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  vc <span class="ot">&lt;-</span> <span class="fu">vcov</span>(model)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  se <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(vc[a, a] <span class="sc">+</span> vc[b, b] <span class="sc">-</span> <span class="dv">2</span> <span class="sc">*</span> vc[a, b])</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">swap =</span> <span class="fu">paste</span>(a, <span class="st">"for"</span>, b),</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">est =</span> <span class="fu">exp</span>(est), <span class="co"># OR (glm) or HR (coxph)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">lcl =</span> <span class="fu">exp</span>(est <span class="sc">-</span> <span class="fu">qnorm</span>(<span class="fl">0.975</span>) <span class="sc">*</span> se),</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">ucl =</span> <span class="fu">exp</span>(est <span class="sc">+</span> <span class="fu">qnorm</span>(<span class="fl">0.975</span>) <span class="sc">*</span> se)</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Several foods swapped for red meat, from the ONE partition model (Method 1):</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>pairs <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"fish100"</span>, <span class="st">"redmeat100"</span>),</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"poultry100"</span>, <span class="st">"redmeat100"</span>),</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">"mixedmeat100"</span>, <span class="st">"redmeat100"</span>)</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="fu">map</span>(pairs, <span class="sc">~</span> <span class="fu">swap_effect</span>(partition, .x[<span class="dv">1</span>], .x[<span class="dv">2</span>])) <span class="sc">%&gt;%</span> <span class="fu">bind_rows</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Survival outcome (Cox).</strong> Fit the same partition model with <code>coxph()</code>, and the helper returns hazard ratios instead of odds ratios:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival) <span class="co"># Surv(), coxph()</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>partition_cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(followup_years, event) <span class="sc">~</span> redmeat100 <span class="sc">+</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    fish100 <span class="sc">+</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    poultry100 <span class="sc">+</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    mixedmeat100 <span class="sc">+</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    total_energy <span class="sc">+</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">+</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    sex, <span class="co"># + your confounder set</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">ties =</span> <span class="st">"breslow"</span> <span class="co"># Breslow handling of tied event times</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="fu">swap_effect</span>(partition_cox, <span class="st">"fish100"</span>, <span class="st">"redmeat100"</span>) <span class="co"># HR: 100 g/day fish for red meat</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
 <section id="interpreting-and-refining" class="level2">
 <h2 class="anchored" data-anchor-id="interpreting-and-refining">Interpreting and refining</h2>
 <ul>
 <li><strong>Substitution unit.</strong> The estimate is <em>per unit swapped</em> (here 100 g/day). Pick a unit that is meaningful and realistic, and always report both the unit and the pairing (“100 g/day red meat replaced by 100 g/day fish”).</li>
 <li><strong>What total-energy adjustment does.</strong> Holding total energy fixed is what turns “more fish” into “more fish <em>instead of</em> something else” rather than “more fish <em>on top of</em> the current diet”.</li>
 <li><strong>Non-linearity.</strong> A linear term assumes a constant swap effect across the whole range. If that is implausible, model the foods with splines (<code>splines::ns()</code>, see <a href="../en/13d_regression.html">Regression</a>) and evaluate the swap at chosen values.</li>
-<li><strong>Survival outcomes.</strong> Replace <code>glm()</code> with <code>survival::coxph()</code>; the difference-of-coefficients logic in Method 1 is unchanged (it then works on log hazard ratios). See <a href="../en/13e_time-to-event.html">Time-to-event</a>.</li>
 </ul>
 </section>
 <section id="see-also" class="level2">
