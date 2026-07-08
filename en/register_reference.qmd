@@ -34,11 +34,11 @@ Key columns - the ones you actually use in the code - are marked in bold.
 
 ::: {.callout-note}
 **Opening registers - two ways:** The code examples on this page use
-`open_dataset("path/to/register/")` as a generic placeholder - replace with the
-path to your project's parquet folder. **With fastreg**, use
-`read_register("registername")` instead (by name). **DARTER users** can use
-`read_register("registername")` - see [DARTER - Register paths and
-datastores](darter/01_registersti-datastores.qmd).
+`read_register("registername")` (fastreg, by name - recommended). It requires
+fastreg set up with the path to your registers - see [Phase
+4](04_filformater.qmd#convert-sas-to-parquet) if you did not convert them from
+SAS yourself. Without fastreg, use `open_dataset("path/to/register/")` instead
+and replace the path with your project's parquet folder.
 :::
 
 See [Pitfalls](dst_faldgruber.qmd) for special quirks with each register. Column
@@ -217,7 +217,7 @@ and remain in the cohort as false negatives.
 Column names differ from somatic LPR2 - **rename at load**:
 
 ```r
-psyk_adm <- open_dataset("path/to/t_psyk_adm/") %>%
+psyk_adm <- read_register("t_psyk_adm") %>%
   rename_with(tolower) %>%
   rename(pnr = v_cpr, recnum = k_recnum)
 ```
@@ -232,7 +232,7 @@ psyk_adm <- open_dataset("path/to/t_psyk_adm/") %>%
 ### t_psyk_diag - Psychiatric diagnoses
 
 ```r
-psyk_diag <- open_dataset("path/to/t_psyk_diag/") %>%
+psyk_diag <- read_register("t_psyk_diag") %>%
   rename_with(tolower) %>%
   rename(recnum = v_recnum)
 ```
@@ -323,7 +323,7 @@ both must be queried and the results bound together.
 Location (DARTER): `parquet-registers/lpr_sksopr`
 
 ```r
-lpr_sksopr <- open_dataset("path/to/lpr_sksopr/") %>%
+lpr_sksopr <- read_register("lpr_sksopr") %>%
   rename_with(tolower)
 ```
 
@@ -342,7 +342,7 @@ lpr_sksopr <- open_dataset("path/to/lpr_sksopr/") %>%
 Location (DARTER): `parquet-external/procedurer_kirurgi`
 
 ```r
-proc_kirurgi <- open_dataset("path/to/procedurer_kirurgi/") %>%
+proc_kirurgi <- read_register("procedurer_kirurgi") %>%
   rename_with(tolower)
 ```
 
@@ -388,14 +388,14 @@ and confirm with `colnames()`.
 
 ```r
 # Replace [projectnumber] with your own project number
-# DARTER: use read_register("registername") instead of open_dataset("path")
+# With fastreg: read_register("registername") instead of open_dataset("path/to/registername/")
 
 # SKS from LPR2 (up to 2018)
-surg_lpr2 <- open_dataset("path/to/lpr_sksopr/") %>%
+surg_lpr2 <- read_register("lpr_sksopr") %>%
   rename_with(tolower) %>%
   filter(toupper(c_opr) %in% !!SKS_CODES) %>%   # !! sends the local R vector to DuckDB
   left_join(
-    open_dataset("path/to/lpr_adm/") %>%
+    read_register("lpr_adm") %>%
       rename_with(tolower) %>%
       select(recnum, pnr, d_inddto),
     by = "recnum"
@@ -405,11 +405,11 @@ surg_lpr2 <- open_dataset("path/to/lpr_sksopr/") %>%
 
 # SKS from LPR3 (2019 and onwards) - join via dw_ek_forloeb
 # NOTE: the join is unresolved on DARTER (many NA) - see the warning above
-surg_lpr3 <- open_dataset("path/to/procedurer_kirurgi/") %>%
+surg_lpr3 <- read_register("procedurer_kirurgi") %>%
   rename_with(tolower) %>%
   filter(toupper(procedurekode) %in% !!SKS_CODES) %>%   # !! sends the local R vector to DuckDB
   left_join(
-    open_dataset("path/to/lpr_a_kontakt/") %>%
+    read_register("lpr_a_kontakt") %>%
       rename_with(tolower) %>%
       select(dw_ek_forloeb, pnr),
     by = "dw_ek_forloeb"

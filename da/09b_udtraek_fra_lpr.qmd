@@ -77,12 +77,13 @@ Eksemplerne kræver parquet-filer og en færdigbygget studiepopulation. `kohort`
 er en data.frame med `pnr` og `index_date` per person - se [Fase
 10](10_byg-studiepopulation.qmd).
 
-**Tilpas stien** i `open_dataset(...)` til dit projekts datamappe (eksemplernes
-`E:/workdata/[projektnummer]/...` er projektspecifik). **OBS:** LPR er et af de
-største registre, så data **skal** ligge i parquet. Så kan Arrow/DuckDB filtrere
-før indlæsning og kun hente de rækker du beder om; læser du LPR direkte fra fx
-SAS, hentes hele registret i RAM. Konverter SAS til parquet først: [Fase 4 - SAS
-til parquet](04_filformater.qmd#konvertér-sas-til-parquet).
+Eksemplerne bruger `read_register("navn")` (fastreg); uden fastreg bruger du
+`open_dataset("E:/workdata/[projektnummer]/.../<register>/")` med din egen sti.
+**OBS:** LPR er et af de største registre, så data **skal** ligge i parquet. Så
+kan Arrow/DuckDB filtrere før indlæsning og kun hente de rækker du beder om;
+læser du LPR direkte fra fx SAS, hentes hele registret i RAM. Konverter SAS til
+parquet først: [Fase 4 - SAS til
+parquet](04_filformater.qmd#konvertér-sas-til-parquet).
 :::
 
 ::: {.callout-tip}
@@ -104,7 +105,8 @@ Filtrer på specifikke koder **inden** `collect()`. Eksemplet henter diabetes me
 #=====================================================
 # Udtræk diabetes-diagnoser fra LPR (Tilgang 1)
 #=====================================================
-library(arrow)
+library(fastreg) # read_register - læs register via navn
+library(arrow)   # open_dataset - fallback uden fastreg
 library(dplyr)
 
 kohort_pnrs <- unique(kohort$pnr)
@@ -113,8 +115,8 @@ KODER_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10–E14) - med D-præfiks
 #-----------------------------------------------------
 # LPR2 (somatisk): lpr_adm + lpr_diag
 #-----------------------------------------------------
-lpr_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
-lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
+lpr_adm  <- read_register("lpr_adm")  %>% rename_with(tolower)
+lpr_diag <- read_register("lpr_diag") %>% rename_with(tolower)
 
 # Her samler vi LPR2's to tabeller: kontaktregistret lpr_adm (pnr + datoer) og diagnoseregistret
 # lpr_diag (ICD-koden), filtrerer på dine koder/diagnosetyper, og vælger de kolonner du skal bruge.
@@ -136,9 +138,9 @@ lpr2_dm <- lpr_adm %>%
 #-----------------------------------------------------
 # LPR3: lpr_a_kontakt + lpr_a_diagnose
 #-----------------------------------------------------
-lpr3_k <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower) %>%
+lpr3_k <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
   filter(lprindberetningssystem == "LPR3")   # kun LPR3-systemets rækker (undgå overlap - se advarsel øverst)
-lpr3_d <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
+lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower)
 
 lpr3_dm <- lpr3_k %>%                                 # samme mønster som LPR2 - men LPR3-tabeller og andre kolonnenavne
   semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%   # KUN din kohorte. UDELAD linjen for HELE befolkningen
@@ -158,9 +160,9 @@ lpr3_dm <- lpr3_k %>%                                 # samme mønster som LPR2 
 #-----------------------------------------------------
 # LPR2 psykiatrisk (frem til marts 2019) - VALGFRIT: kun hvis dit udfald er en F-kode (demens, depression ...)
 #-----------------------------------------------------
-psyk_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_adm/")  %>%
+psyk_adm  <- read_register("t_psyk_adm")  %>%
   rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
-psyk_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
+psyk_diag <- read_register("t_psyk_diag") %>%
   rename_with(tolower) %>% rename(recnum = v_recnum)
 
 lpr2_psyk_dm <- psyk_adm %>%
@@ -236,7 +238,8 @@ Den er kortere, men har tre faldgruber på DST:
 #=====================================================
 # Hent ALLE diagnoser fra LPR (Tilgang 2)
 #=====================================================
-library(arrow)
+library(fastreg) # read_register - læs register via navn
+library(arrow)   # open_dataset - fallback uden fastreg
 library(dplyr)
 
 kohort_pnrs <- unique(kohort$pnr)
@@ -244,8 +247,8 @@ kohort_pnrs <- unique(kohort$pnr)
 #-----------------------------------------------------
 # LPR2 somatisk (frem til marts 2019)
 #-----------------------------------------------------
-lpr_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_adm/")  %>% rename_with(tolower)
-lpr_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_diag/") %>% rename_with(tolower)
+lpr_adm  <- read_register("lpr_adm")  %>% rename_with(tolower)
+lpr_diag <- read_register("lpr_diag") %>% rename_with(tolower)
 
 lpr2_dx <- lpr_adm %>%
   semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
@@ -262,9 +265,9 @@ lpr2_dx <- lpr_adm %>%
 #-----------------------------------------------------
 # LPR3 (marts 2019 og frem)
 #-----------------------------------------------------
-lpr3_k <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_kontakt/")  %>% rename_with(tolower) %>%
+lpr3_k <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
   filter(lprindberetningssystem == "LPR3")   # kun LPR3-systemets rækker (undgå overlap - se advarsel øverst)
-lpr3_d <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/lpr_a_diagnose/") %>% rename_with(tolower)
+lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower)
 
 lpr3_dx <- lpr3_k %>%
   semi_join(tibble(pnr = kohort_pnrs), by = "pnr") %>%
@@ -282,9 +285,9 @@ lpr3_dx <- lpr3_k %>%
 #-----------------------------------------------------
 # LPR2 psykiatrisk (frem til marts 2019) - kun hvis du skal bruge F-koder
 #-----------------------------------------------------
-psyk_adm  <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_adm/")  %>%
+psyk_adm  <- read_register("t_psyk_adm")  %>%
   rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
-psyk_diag <- open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/t_psyk_diag/") %>%
+psyk_diag <- read_register("t_psyk_diag") %>%
   rename_with(tolower) %>% rename(recnum = v_recnum)
 
 lpr2_psyk_dx <- psyk_adm %>%
@@ -473,19 +476,22 @@ ny kolonne) - Kodeblokken til hvert udfald reduceres fra \~40 linjer til ét
 funktionskald - Fejl introduceres ét sted i stedet for i hver kopi
 
 ::: {.callout-tip}
-**Bruger du fastreg, eller arbejder du på DARTER?** Med **fastreg** bytter du
-`open_dataset("E:/workdata/.../<register>/")` ud med
-`read_register("<register>")` (via navn). På **DARTER** bruger du samme
-`read_register("<register>")` (fastreg). Se [DARTER - oversigt og
-pipeline](darter/00_index.qmd) for den fuldt tilpassede variant - den er
-opdateret med de aktuelle, bekræftede registernavne (pr. juni 2026).
+**Navn eller sti?** Eksemplerne bruger `read_register("<register>")` (fastreg,
+via navn). Det kræver, at fastreg er sat op med stien til dine registre - se
+[Fase 4](04_filformater.qmd#konvertér-sas-til-parquet), hvis du ikke selv har
+konverteret dem fra SAS. Uden fastreg bytter du `read_register("<register>")` ud
+med `open_dataset("E:/workdata/.../<register>/")` (via sti). På **DARTER** er
+fastreg allerede sat op; se [DARTER - oversigt og pipeline](darter/00_index.qmd)
+for den fuldt tilpassede variant - den er opdateret med de aktuelle, bekræftede
+registernavne (pr. juni 2026).
 :::
 
 <details>
 <summary>Se den fulde <code>get_lpr_diagnoses()</code>-funktion og brug</summary>
 
 ```r
-library(arrow)
+library(fastreg) # read_register - læs register via navn
+library(arrow)   # open_dataset - fallback uden fastreg
 library(dplyr)
 
 #=====================================================
@@ -499,7 +505,7 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   #                ("E11" -> alle E11x) og 4-tegns ("I700") virker.
   #                Standard NULL = hent ALLE diagnoser (kør én gang, gem, filtrér lokalt).
   #   diagtypes  : "A"=aktions-, "B"=bidiagnoser, "G"=grundmorbus (kun LPR2)
-  base <- "E:/workdata/[projektnummer]/cleaned-data/parquet-registers/" # sti hvor registrene LIGGER (læses herfra, ikke gemmes) - fælles præfiks, så open_dataset() ikke gentager den lange sti
+  # read_register (fastreg) læser hvert register via navn - uden fastreg: open_dataset("E:/workdata/[projektnummer]/cleaned-data/parquet-registers/<register>/") %>% rename_with(tolower)
 
   # keep_codes() anvender icd_codes-filteret på HVER af de tre register-forespørgsler
   # nedenfor, FØR collect(), så kun de ønskede rækker hentes (det er derfor det står tre steder).
@@ -510,16 +516,16 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
     x %>% filter(grepl(pattern, c_diag))
   }
 
-  # Åbn registre
-  lpr_adm   <- open_dataset(paste0(base, "lpr_adm/"))   %>% rename_with(tolower)   # LPR2 somatisk kontakter
-  lpr_diag  <- open_dataset(paste0(base, "lpr_diag/"))  %>% rename_with(tolower)   # LPR2 somatisk diagnoser
-  psyk_adm  <- open_dataset(paste0(base, "t_psyk_adm/"))  %>% rename_with(tolower) %>%
+  # Åbn registre (read_register via navn)
+  lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatisk kontakter
+  lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatisk diagnoser
+  psyk_adm  <- read_register("t_psyk_adm")  %>% rename_with(tolower) %>%
     rename(pnr = v_cpr, recnum = k_recnum)                            # LPR2 psykiatrisk kontakter
-  psyk_diag <- open_dataset(paste0(base, "t_psyk_diag/")) %>% rename_with(tolower) %>%
+  psyk_diag <- read_register("t_psyk_diag") %>% rename_with(tolower) %>%
     rename(recnum = v_recnum)                                          # LPR2 psykiatrisk diagnoser
-  lpr3_k    <- open_dataset(paste0(base, "lpr_a_kontakt/"))  %>% rename_with(tolower) %>%
+  lpr3_k    <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
     filter(lprindberetningssystem == "LPR3")
-  lpr3_d    <- open_dataset(paste0(base, "lpr_a_diagnose/")) %>% rename_with(tolower)  # LPR3 diagnoser
+  lpr3_d    <- read_register("lpr_a_diagnose") %>% rename_with(tolower)  # LPR3 diagnoser
 
   # LPR2 somatisk
   lpr2_dx <- lpr_adm %>%

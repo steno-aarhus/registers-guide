@@ -34,11 +34,12 @@ Nøglekolonner - dem du faktisk bruger i koden - er markeret med fed.
 
 ::: {.callout-note}
 **Åbning af registre - to veje:** Kodeeksemplerne på denne side bruger
-`open_dataset("sti/til/register/")` som generisk placeholder - erstat med stien
-til dit projekts parquet-mappe. **Med fastreg** bruger du i stedet
-`read_register("registernavn")` (via navn). **DARTER-brugere** kan bruge
-`read_register("registernavn")` - se [DARTER - Registersti og
-datastores](darter/01_registersti-datastores.qmd).
+`read_register("registernavn")` (fastreg, læser via navn - anbefalet). Det
+kræver, at fastreg er sat op med stien til dine registre - se [Fase
+4](04_filformater.qmd#konvertér-sas-til-parquet), hvis du ikke selv har
+konverteret dem fra SAS. Uden fastreg bruger du i stedet
+`open_dataset("sti/til/register/")` og erstatter stien med dit projekts
+parquet-mappe.
 :::
 
 Se [Faldgruber](dst_faldgruber.qmd) for særlige quirks ect. ved hvert register.
@@ -217,7 +218,7 @@ forblive i kohorten som falske negativer.
 Kolonnenavne afviger fra somatisk LPR2 - **omdøb ved load**:
 
 ```r
-psyk_adm <- open_dataset("sti/til/t_psyk_adm/") %>%
+psyk_adm <- read_register("t_psyk_adm") %>%
   rename_with(tolower) %>%
   rename(pnr = v_cpr, recnum = k_recnum)
 ```
@@ -232,7 +233,7 @@ psyk_adm <- open_dataset("sti/til/t_psyk_adm/") %>%
 ### t_psyk_diag - Psykiatriske diagnoser
 
 ```r
-psyk_diag <- open_dataset("sti/til/t_psyk_diag/") %>%
+psyk_diag <- read_register("t_psyk_diag") %>%
   rename_with(tolower) %>%
   rename(recnum = v_recnum)
 ```
@@ -320,7 +321,7 @@ skal begge forespørges og resultatet bindes sammen.
 Placering (DARTER): `parquet-registers/lpr_sksopr`
 
 ```r
-lpr_sksopr <- open_dataset("sti/til/lpr_sksopr/") %>%
+lpr_sksopr <- read_register("lpr_sksopr") %>%
   rename_with(tolower)
 ```
 
@@ -339,7 +340,7 @@ lpr_sksopr <- open_dataset("sti/til/lpr_sksopr/") %>%
 Placering (DARTER): `parquet-external/procedurer_kirurgi`
 
 ```r
-proc_kirurgi <- open_dataset("sti/til/procedurer_kirurgi/") %>%
+proc_kirurgi <- read_register("procedurer_kirurgi") %>%
   rename_with(tolower)
 ```
 
@@ -386,14 +387,14 @@ og bekræft med `colnames()`.
 
 ```r
 # Erstat [projektnummer] med dit eget projektnummer
-# DARTER: brug read_register("registernavn") i stedet for open_dataset("sti")
+# Med fastreg: read_register("registernavn") i stedet for open_dataset("sti/til/registernavn/")
 
 # SKS fra LPR2 (frem til 2018)
-opr_lpr2 <- open_dataset("sti/til/lpr_sksopr/") %>%
+opr_lpr2 <- read_register("lpr_sksopr") %>%
   rename_with(tolower) %>%
   filter(toupper(c_opr) %in% !!SKS_KODER) %>%   # !! sender den lokale R-vektor til DuckDB
   left_join(
-    open_dataset("sti/til/lpr_adm/") %>%
+    read_register("lpr_adm") %>%
       rename_with(tolower) %>%
       select(recnum, pnr, d_inddto),
     by = "recnum"
@@ -403,11 +404,11 @@ opr_lpr2 <- open_dataset("sti/til/lpr_sksopr/") %>%
 
 # SKS fra LPR3 (2019 og frem) - join via dw_ek_forloeb
 # BEMÆRK: join'et er uafklaret på DARTER (mange NA) - se advarslen ovenfor
-opr_lpr3 <- open_dataset("sti/til/procedurer_kirurgi/") %>%
+opr_lpr3 <- read_register("procedurer_kirurgi") %>%
   rename_with(tolower) %>%
   filter(toupper(procedurekode) %in% !!SKS_KODER) %>%   # !! sender den lokale R-vektor til DuckDB
   left_join(
-    open_dataset("sti/til/lpr_a_kontakt/") %>%
+    read_register("lpr_a_kontakt") %>%
       rename_with(tolower) %>%
       select(dw_ek_forloeb, pnr),
     by = "dw_ek_forloeb"
