@@ -5,7 +5,15 @@
 run-all: check-all format-md build-all
 
 # Run all check-related recipes
-check-all: check-spelling check-urls
+check-all: check-spelling check-urls check-guide
+
+# The weekly once-over: everything that can rot without the build noticing
+check-weekly: check-guide check-urls check-spelling
+
+# Check the guide itself: R code parses, functions exist, da/en parity, house style
+# Sub-checks: just check-guide code | functions | parity | style
+check-guide check="all":
+  Rscript tools/check-guide.R {{check}}
 
 # Run all build-related recipes
 build-all: build-contributors build-website build-readme
