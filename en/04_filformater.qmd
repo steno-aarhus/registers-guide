@@ -119,13 +119,28 @@ register are in [Overview of registers](register_reference.qmd).
 
 ::: {.callout-note}
 **Didn't convert the data yourself?** If a colleague already converted the
-registers with fastreg, you only point fastreg at that folder once per script -
-set `options(fastreg.project_workdata_dir = "...")` to the converted folder (ask
-whoever set it up for the exact path, typically
-`cleaned-data/parquet-registers/`). After that, `read_register("bef")` works by
-name, with no conversion and no path in each call. The [Getting started
-vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) shows the
-option.
+registers with fastreg, you only point fastreg at the folders once per script
+(ask whoever set it up for the exact paths):
+
+```r
+library(fastreg)
+
+options(
+  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/",
+  fastreg.project_rawdata_dir = "E:/rawdata/[projectnumber]/"
+)
+```
+
+After that, `read_register("bef")` works by name, with no conversion and no path
+in each call. Two things that otherwise cost you time:
+
+- **Write `E:/` with the colon**: the DST server is Windows, also when you log
+  in from a Mac. fastreg's own guide shows `E` without the colon, but only
+  because the example writes to a temporary folder with `fs::path_temp()`.
+- **The folder does not have to be the innermost one**: you can set the path to
+  `cleaned-data/` even though it holds several subfolders (`parquet-registers/`,
+  `parquet-external/`). `read_register()` searches further down for the register
+  name.
 :::
 
 ::: {.callout-note}
@@ -193,6 +208,75 @@ write_csv(my_table, "output/table1.csv")
 **Never** save raw register data as CSV - only aggregated results. See [Phase 14 - Export and repatriation](14_eksport-hjemsendelse.qmd) for the rules.
 
 </details>
+
+## When `read_register()` cannot find the register {#when-read-register-fails}
+
+`read_register()` can **only** read registers that sit in fastreg's own format:
+
+```
+<register>/year=YYYY/part-XXX.parquet
+```
+
+Both halves count: the `year=` subfolder and the `part-` filename. This is not a
+bug but a deliberate choice. The function is built for data converted with
+fastreg's `convert()`, and is not meant to guess every way parquet files might
+otherwise be named. If the register is laid out differently - say as one flat
+folder of parquet files, or with filenames without `part-` - `read_register()`
+cannot see it, no matter how correctly you set the path.
+
+In that case you use one of fastreg's two other reading functions:
+
+  | Function                                    | You write                       | Used for                         |
+  | ------------------------------------------- | ------------------------------- | -------------------------------- |
+  | `read_register("name")`                     | the register **name**           | registers converted with fastreg |
+  | `read_parquet_dataset("path/to/folder")`    | the **full path** to the folder | a folder of parquet files        |
+  | `read_parquet_file("path/to/file.parquet")` | the **full path** to the file   | a single parquet file            |
+
+All three hand you a **DuckDB table**, so the rest of your code is exactly the
+same whichever one you use.
+
+::: {.callout-important}
+**`read_parquet_dataset()` does not use your `options()` path.** Only
+`read_register()` looks names up under the folders you set. The two
+`read_parquet_*()` functions need the **full path**, including any subfolders
+below the folder you set. So if you set the path to `cleaned-data/`, you still
+have to write the whole way down:
+`"E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"`.
+:::
+
+```r
+library(fastreg)
+library(dplyr)
+
+# 1. Which names does read_register() know? It lists the datasets it can find
+#    under the paths you set with options() - always start here.
+list_parquet_datasets()
+
+# 2. If the register is not on the list, point at the folder with the full path
+lmdb <- read_parquet_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"
+)
+
+# 3. If it is a single file rather than a folder, use read_parquet_file()
+table <- read_parquet_file(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-external/my_table.parquet"
+)
+
+# From there the code is the same as after read_register()
+lmdb %>%
+  rename_with(tolower) %>%
+  filter(eksd >= as.Date("2010-01-01")) %>%
+  select(pnr, atc, eksd) %>%
+  collect()
+```
+
+::: {.callout-note}
+**On DARTER (project 708421)** the remaining registers are being converted to
+fastreg format during **August 2026**. Until then a few registers may need
+`read_parquet_dataset()` even though they are listed with `read_register()` in
+[DARTER - Register paths and datastores](darter/01_registersti-datastores.qmd).
+After that, the name lookup works for all of them. *(Noted July 2026.)*
+:::
 
 ## Convert SAS files to Parquet {#convert-sas-to-parquet}
 

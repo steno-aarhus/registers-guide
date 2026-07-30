@@ -117,13 +117,28 @@ for hvert register finder du i [Register-overblik](register_reference.qmd).
 
 ::: {.callout-note}
 **Har du ikke selv konverteret dataene?** Hvis en kollega allerede har
-konverteret registrene med fastreg, peger du bare fastreg på den mappe én gang
-per script - sæt `options(fastreg.project_workdata_dir = "...")` til den
-konverterede mappe (spørg den der satte det op om den præcise sti, typisk
-`cleaned-data/parquet-registers/`). Derefter virker `read_register("bef")` via
-navn, uden konvertering og uden en sti i hvert kald. [Getting
-started-vignetten](https://dp-next.github.io/fastreg/articles/fastreg.html)
-viser optionen.
+konverteret registrene med fastreg, peger du bare fastreg på mapperne én gang
+per script (spørg den, der satte det op, om de præcise stier):
+
+```r
+library(fastreg)
+
+options(
+  fastreg.project_workdata_dir = "E:/workdata/[projektnummer]/cleaned-data/",
+  fastreg.project_rawdata_dir = "E:/rawdata/[projektnummer]/"
+)
+```
+
+Derefter virker `read_register("bef")` via navn, uden konvertering og uden en
+sti i hvert kald. To ting, der ellers koster tid:
+
+- **Skriv `E:/` med kolon**: DST-serveren er Windows, også når du logger ind fra
+  en Mac. fastregs egen vejledning viser `E` uden kolon, men det skyldes kun, at
+  eksemplet skriver til en midlertidig mappe med `fs::path_temp()`.
+- **Mappen behøver ikke være den inderste**: du kan sætte stien til
+  `cleaned-data/`, selvom den indeholder flere undermapper
+  (`parquet-registers/`, `parquet-external/`). `read_register()` leder videre
+  nedad efter registrets navn.
 :::
 
 ::: {.callout-note}
@@ -191,6 +206,75 @@ write_csv(min_tabel, "output/tabel1.csv")
 Gem **aldrig** rå registerdata som CSV - kun aggregerede resultater. Se [Fase 14 - Eksport og hjemsendelse](14_eksport-hjemsendelse.qmd) for reglerne.
 
 </details>
+
+## Når `read_register()` ikke kan finde registret {#naar-read-register-ikke-finder}
+
+`read_register()` kan **kun** læse registre, der ligger i fastregs eget format:
+
+```
+<register>/year=YYYY/part-XXX.parquet
+```
+
+Begge dele tæller: både `year=`-undermappen og `part-`-filnavnet. Det er ikke en
+fejl, men et bevidst valg. Funktionen er lavet til data, der er konverteret med
+fastregs `convert()`, og skal ikke gætte alle de måder, parquet-filer ellers kan
+være navngivet på. Ligger registret anderledes - fx som én flad mappe med
+parquet-filer, eller med filnavne uden `part-` - kan `read_register()` ikke se
+det, uanset hvor rigtigt du har sat stien.
+
+Så bruger du en af de to andre indlæsningsfunktioner fra fastreg:
+
+  | Funktion                                   | Du skriver              | Bruges til                       |
+  | ------------------------------------------ | ----------------------- | -------------------------------- |
+  | `read_register("navn")`                    | registrets **navn**     | registre konverteret med fastreg |
+  | `read_parquet_dataset("sti/til/mappe")`    | **fuld sti** til mappen | en mappe med parquet-filer       |
+  | `read_parquet_file("sti/til/fil.parquet")` | **fuld sti** til filen  | én enkelt parquet-fil            |
+
+Alle tre giver dig en **DuckDB-tabel**, så resten af din kode er præcis den
+samme, uanset hvilken du bruger.
+
+::: {.callout-important}
+**`read_parquet_dataset()` bruger ikke din `options()`-sti.** Kun
+`read_register()` slår navne op under de mapper, du har sat. De to
+`read_parquet_*()`-funktioner skal have den **fulde sti** - også de undermapper,
+der ligger under den mappe, du har sat. Har du sat stien til `cleaned-data/`,
+skal du altså stadig skrive hele vejen ned:
+`"E:/workdata/[projektnummer]/cleaned-data/parquet-external/lmdb"`.
+:::
+
+```r
+library(fastreg)
+library(dplyr)
+
+# 1. Hvilke navne kender read_register()? Den lister de datasæt, den kan finde
+#    under de stier, du har sat med options() - start altid her.
+list_parquet_datasets()
+
+# 2. Er registret ikke på listen, så peg direkte på mappen med den fulde sti
+lmdb <- read_parquet_dataset(
+  "E:/workdata/[projektnummer]/cleaned-data/parquet-external/lmdb"
+)
+
+# 3. Er det én enkelt fil og ikke en mappe, så brug read_parquet_file()
+tabel <- read_parquet_file(
+  "E:/workdata/[projektnummer]/cleaned-data/parquet-external/min_tabel.parquet"
+)
+
+# Derfra er koden den samme som efter read_register()
+lmdb %>%
+  rename_with(tolower) %>%
+  filter(eksd >= as.Date("2010-01-01")) %>%
+  select(pnr, atc, eksd) %>%
+  collect()
+```
+
+::: {.callout-note}
+**På DARTER (projekt 708421)** bliver de sidste registre konverteret til
+fastreg-format i løbet af **august 2026**. Indtil da kan enkelte registre kræve
+`read_parquet_dataset()`, selvom de står med `read_register()` i [DARTER -
+Registersti og datastores](darter/01_registersti-datastores.qmd). Derefter
+virker navneopslaget for dem alle. *(Noteret juli 2026.)*
+:::
 
 ## Konvertér SAS-filer til Parquet {#konvertér-sas-til-parquet}
 
