@@ -1,0 +1,233 @@
+---
+title: "DARTER - Project 708421"
+subtitle: "Project-specific guide to the BS & Dementia cohort study"
+date: last-modified
+---
+
+**DARTER** - *Diabetes And inteRgenerational Transmission of hEalth determinants
+over the life couRse* (project 708421).
+
+This section is **only** for those working on the DARTER project. The content
+here builds on the general DST guide and adds the project-specific material.
+
+::: {.callout-tip}
+**Searchable variable and register overview for DARTER** All variables and
+registers applied for in the project are collected in a searchable table:
+[steno-aarhus.github.io/darter-project
+→](https://steno-aarhus.github.io/darter-project/)
+:::
+
+New to the project? Start with the general guide and return here: → [Phase 1 -
+Plan your study](../01_plan-your-study.qmd) → [Phase 2 - R: the bare
+essentials](../02_r-intro.qmd) → [Phase 3 - Log in to DST](../03_log-in-dst.qmd)
+
+### In this section
+
+  | Page                                                              | Contents                                                              |
+  | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
+  | This page                                                         | Setup (`fastreg` + `duckplyr`) and a reusable LPR extraction function |
+  | [Register paths and datastores](01_register-paths-datastores.qmd) | Confirmed paths and access methods for all registers on 708421        |
+  | [DARTER-specific pitfalls](02_darter-pitfalls.qmd)                | Quirks specific to this project                                       |
+
+## Initial setup for DARTER
+
+Register data on DARTER is loaded with **`fastreg::read_register("name")`** -
+exactly as in the general guide. You just point fastreg at DARTER's parquet
+folder once per script; see [Loading
+templates](01_register-paths-datastores.qmd#load-templates).
+
+::: {.callout-important}
+**Install the latest `duckplyr` at the start of each session**
+
+DST has `duckplyr` **pre-installed, but in an old version** that is missing
+functionality - several of the patterns in this guide will not work with it. So
+get the latest version from CRAN, and **repeat after every log-out / server
+reset** (the reset reverts the package to the old, pre-installed version).
+`duckplyr` provides the DuckDB engine behind `compute()` (see [Large
+registers](#store-registre) below).
+
+```r
+install.packages("duckplyr") # get the latest CRAN version - run before library()
+packageVersion("duckplyr") # check the version in your session; >= 1.1 is fine
+```
+:::
+
+**Before running a script:** verify that `path_output` at the top of each script
+points to your workspace folder (defined under [Base paths in Register paths and
+datastores](01_register-paths-datastores.qmd#base-paths)).
+
+### Recommendation: create a helper function for LPR extractions
+
+LPR extractions require combining LPR2 somatic, LPR2 psychiatric and LPR3 - and
+doing the same for each new outcome in the project. It pays off to encapsulate
+this in one reusable function rather than copying the code repeatedly.
+
+**Advantages:** - One place to fix if something changes (e.g. a new register or
+a new column) - The code block for each outcome is reduced from \~40 lines to
+one function call - Errors are introduced in one place instead of in each copy
+
+**How to create the function** - define it at the top of your script or in a
+separate `functions.R` file:
+
+<details>
+<summary>See the full <code>get_lpr_diagnoses()</code> function</summary>
+
+```r
+library(fastreg)
+library(dplyr)
+
+# icd_codes: 3-character ICD codes WITHOUT the D-prefix, e.g. c("F03", "G30"). REQUIRED (see warning).
+# diagtypes: diagnosis TYPE - "A"=action, "B"=secondary, "G"=underlying/grundmorbus (LPR2 only). Default c("A", "B").
+get_lpr_diagnoses <- function(pnr_vector, icd_codes, diagtypes = c("A", "B")) {
+  #-------------------------------------------------------------
+  # Open registers (LPR2 somatic + psychiatric + LPR3)
+  #-------------------------------------------------------------
+  lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts
+  lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatic diagnoses
+  psyk_adm  <- read_register("t_psyk_adm")  %>% rename_with(tolower) %>%
+    rename(pnr = v_cpr, recnum = k_recnum)                            # LPR2 psychiatric contacts
+  psyk_diag <- read_register("t_psyk_diag") %>% rename_with(tolower) %>%
+    rename(recnum = v_recnum)                                          # LPR2 psychiatric diagnoses
+  lpr3_k    <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
+    filter(lprindberetningssystem == "LPR3")                               # CRITICAL: keep only rows from the LPR3 system - avoid overlapping rows
+  lpr3_d    <- read_register("lpr_a_diagnose") %>% rename_with(tolower)  # LPR3 diagnoses
+
+  #-------------------------------------------------------------
+  # LPR2 somatic
+  #-------------------------------------------------------------
+  lpr2_dx <- lpr_adm %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # only the cohort - the pattern is explained in Phase 9 (Hospital contacts)
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      lpr_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
+      by = "recnum"
+    ) %>%
+    filter(substr(c_diag, 2, 4) %in% !!icd_codes) %>%        # filter on codes BEFORE collect() - only relevant rows are pulled into R
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))                       # "DF03" -> "F03": strip the D-prefix
+
+  #-------------------------------------------------------------
+  # LPR2 psychiatric
+  #-------------------------------------------------------------
+  lpr2_psyk_dx <- psyk_adm %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # only the cohort - see Phase 9
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      psyk_diag %>% filter(c_diagtype %in% !!diagtypes) %>% select(recnum, c_diag, c_diagtype),
+      by = "recnum"
+    ) %>%
+    filter(substr(c_diag, 2, 4) %in% !!icd_codes) %>%
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))
+
+  #-------------------------------------------------------------
+  # LPR3
+  #-------------------------------------------------------------
+  lpr3_dx <- lpr3_k %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr") %>%   # only the cohort - see Phase 9
+    select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
+    inner_join(
+      lpr3_d %>%
+        filter(diag_kode_type %in% !!diagtypes,               # NB: "G" (grundmorbus) exists only in LPR2, not LPR3
+               is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+        select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
+      by = "dw_ek_kontakt"
+    ) %>%
+    filter(substr(c_diag, 2, 4) %in% !!icd_codes) %>%
+    collect() %>%
+    mutate(date_contact = as.Date(date_contact),               # datetime → date
+           icd3 = substr(c_diag, 2, 4))
+
+  bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)                   # return combined table
+}
+```
+
+</details>
+
+::: {.callout-note}
+**`semi_join` or `filter(... %in% ...)`?** Both select rows, but each has its
+use:
+
+- **`semi_join(tibble(pnr = pnr_vector), by = "pnr")`**: for your **cohort**. A
+  large R vector of pnrs pushes down into Arrow/DuckDB more reliably as a small
+  table than a `filter(pnr %in% ...)`, which can be slow or rejected outright
+  (especially with older `duckplyr`).
+- **`filter(substr(c_diag, 2, 4) %in% !!icd_codes)`**: for a **short code
+  list**. Here `filter` is fine - but remember `!!`, which injects the local R
+  vector into the query (without `!!` DuckDB looks for a column of that name).
+  The background is in [Extract from LPR](../09b_extract-from-lpr.qmd).
+:::
+
+<details>
+<summary>Use the function - one call per extraction, only change <code>icd_codes</code></summary>
+
+```r
+kohort     <- readRDS("datasets/full_cohort.rds")
+pnr_list   <- unique(kohort$pnr)
+
+# Specify the ICD codes you want (3 chars, no D). The function filters BEFORE data is pulled into R.
+dementia_dx <- get_lpr_diagnoses(
+  pnr_vector = pnr_list,
+  icd_codes  = c("F00", "F01", "F02", "F03", "G30", "G31"),  # dementia (G30/G31 are ICD G-codes)
+  diagtypes  = c("A", "B")         # "A"=action, "B"=secondary, "G"=underlying/grundmorbus (LPR2 only). Extend e.g. to c("A","B","G")
+)
+# Returns one row per diagnosis: pnr | date_contact | c_diag | icd3 | c_diagtype (A/B/G)
+# c_diagtype enables sensitivity analyses, e.g. action diagnoses only: filter(c_diagtype == "A")
+# Multiple outcomes? Pass the union of all codes here and split by icd3 in R afterwards - one register scan only.
+
+# First occurrence after index date per person
+dementia <- dementia_dx %>%
+  inner_join(kohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact > index_date) %>%
+  group_by(pnr) %>% arrange(date_contact) %>% slice(1) %>% ungroup() %>%
+  select(pnr, dementia_date = date_contact)
+
+result <- kohort %>% select(pnr) %>% left_join(dementia, by = "pnr")
+saveRDS(result, "datasets/extract_dementia.rds")
+```
+
+</details>
+
+::: {.callout-warning}
+**Always specify `icd_codes` - never fetch all diagnoses.** The function filters
+on your codes **before `collect()`**, so only the relevant rows are pulled into
+R's RAM. That is why `icd_codes` is a required argument.
+
+Do not remove the code filter to "grab everything": every A/B/G diagnosis for a
+whole cohort across LPR2 and LPR3 can be **millions of rows**. It fills R's
+memory, and such a heavy extraction can get you **kicked off the DST server**.
+:::
+
+::: {.callout-note}
+This is the DARTER variant (using `read_register()` and the confirmed register
+names for 708421, as of June 2026). The general `open_dataset()` version and the
+explanation behind the pattern are in [Extract from
+LPR](../09b_extract-from-lpr.qmd).
+:::
+
+## Large registers - `compute()` vs `collect()` {#store-registre}
+
+`get_lpr_diagnoses()` ends each extraction with `collect()` (pulls into R). On a
+very large register (e.g. LMDB or laboratory results) you can pipe to
+`compute()` instead, which materialises the result in DuckDB without filling R's
+RAM - always reduce with `semi_join()`/`filter()`/`select()` **before**
+`compute()`. The technique and the difference between `compute()` and
+`collect()` are explained generally in [Phase 5 - Extracting data step by
+step](../05_extraction-step-by-step.qmd#filtrer-foer-hent).
+
+## See also
+
+`get_lpr_diagnoses()` above wraps the pattern from the general guide:
+
+- [Phase 8 - Find your registers](../08_find-your-registers.qmd): which register
+  contains what
+- [Phase 9 - Hospital contacts (LPR)](../09a_understand-lpr.qmd): the
+  explanation behind the two-phase strategy, LPR2/LPR3 and the D-prefix
+- [Phase 10 - Build your cohort](../10_build-study-population.qmd): where you
+  create `full_cohort.rds`, which the function above reads
+- [Register paths and datastores](01_register-paths-datastores.qmd): confirmed
+  paths on 708421
+
+**Further down the pipeline:** [Phase 7 - Inspect data](../07_inspect-data.qmd)
+· [Phase 12 - Assemble and prepare the dataset](../12_data-manipulation.qmd) ·
+[Phase 14 - Export and repatriation](../14_export.qmd)

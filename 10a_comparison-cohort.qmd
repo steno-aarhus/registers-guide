@@ -1,0 +1,824 @@
+---
+title: "Comparison cohort"
+subtitle: "Matched cohort study - theory and code flow for building a comparison group"
+date: last-modified
+---
+
+This page continues from [Build your study
+population](10_build-study-population.qmd), where you identified your
+**exposed** and excluded prevalent cases (the object `exposed` with `pnr`,
+`index_date` and `exposed = 1`). This page shows the **matched** comparison
+group: people who are *not* exposed but resemble the exposed on the variables
+you match on, and who were at risk on the assigned index date.
+
+::: {.callout-tip}
+**Not matching the group?** You can also use an **unmatched** comparison group
+and instead adjust for the confounders in the analysis. In that case, skip to
+the section [Without matching](#without-matching-an-unmatched-comparison-group)
+at the bottom of the page.
+:::
+
+::: {.callout-warning}
+**Still under development.** The code needs further review and testing before
+being used directly. Use it as structural guidance and adapt to your own
+project. Also confirm package names (`heaven::exposureMatch`) on your own
+project.
+:::
+
+::: {.callout-note}
+**Functions used here.** `left_join()` (attach a variable) and `semi_join()`
+(keep only rows *with* a match) are explained in [Link your
+extracts](12b_joins.qmd#joins-link-two-tables). `mutate()` (create a new
+variable) is shown in [Phase 2](02_r-intro.qmd). New here: a `for` loop +
+`set.seed()` for the matching itself (explained in Step 5). Functions like
+`slice_sample()`, `count()` and `nrow()` are in the [Function
+guide](function-guide.qmd).
+:::
+
+## A little theory before you match
+
+A comparison group gives you the **counterfactual** experience: what would have
+happened to the exposed had they not been exposed.
+
+**The most important rule:** a comparison person is **assigned the exposed
+person's index date** and must be **at risk on exactly that date** - alive,
+resident in Denmark, free of your outcome and meeting your criteria. This is the
+core of **risk-set (incidence-density) sampling**, and it is what prevents
+*immortal time bias* (assigning someone follow-up time during which they could
+not possibly have had the outcome). A person can be a comparison person now and
+become exposed themselves later - that is correct (see *Crossover* below).
+
+Before you match, you make a few **design choices**. The matching variables are
+typically sex and birth year, but can also be index date/calendar year, SES and
+municipality. Expand each box:
+
+<details>
+<summary>**Risk-set / incidence-density sampling** - in depth</summary>
+
+**Study start vs. index date.** Study start is the common date when the study begins to look at data (e.g. 1 January 2010) - the same for everyone. Index date is a person's *own* start of follow-up and is individual: for an exposed person it is the exposure date, and a comparison person is assigned the exposed person's index date. The index date therefore varies per exposed person, and each comparison person is matched on *exactly that date*. Requiring "at risk" on the index date (not just at study start) is what prevents you from e.g. including someone who had already died or emigrated by the time the exposed person was exposed.
+
+**What does "risk set" mean?** The term comes from survival analysis: at each index date the "risk set" is everyone still at risk right then (alive, outcome-free, under observation). Comparison persons are sampled from that set. An unexposed person is in the risk set until they themselves become exposed; then they leave it (and can become a case). Risk-set sampling captures this dynamic, because eligibility is judged ON the index date, not once and for all.
+
+![Risk-set sampling: on the case's index date (dashed line) comparison persons are sampled from those still at risk. A person who later becomes exposed can be a comparison person until their own exposure (crossover) and is then censored; someone who died or emigrated before index is not at risk.](images/risk_set_example.svg){fig-alt="Timeline with six people. A vertical dashed line marks the case's index date. People whose lifeline crosses the index date and are still alive form the risk set and can be sampled as comparison persons. One person later becomes exposed (crossover) and is then censored; another died or emigrated before index and is not at risk." width="100%"}
+
+</details>
+
+<details>
+<summary>**Crossover** - a comparison person who later becomes exposed</summary>
+
+In a risk-set design a future-exposed person is allowed to be a comparison person UNTIL their own exposure date. **So do NOT exclude everyone who ever becomes exposed** - that conditions on the future and can overestimate the effect (immortal-time / selection bias). Instead store a `crossover_date` = the date the person themselves becomes exposed, and decide how to handle it: censor at crossover, or let the person switch group.
+
+Crossover is explained briefly here; the full treatment (censoring) is in [Outcomes](11a_outcomes.qmd).
+
+</details>
+
+<details>
+<summary>**Matched vs. unmatched comparison group** - matching is not mandatory</summary>
+
+Matching and adjustment are **two ways to handle the same confounders** - at the design stage or in the analysis:
+
+- **Matched:** balance at the design stage (sex, age, calendar time) via risk-set sampling. The index date is assigned naturally by the match. Easy balance on strong confounders, but matched variables can no longer be studied as an exposure, and the pool can be depleted.
+- **Unmatched:** take a broader eligible unexposed population and adjust for the same confounders in the analysis (regression, IPTW in [Phase 13](13_analysis.qmd)). Retains all information, but requires correct index assignment (otherwise immortal time), and confounding is handled purely analytically.
+
+Many register studies use an unmatched comparison group + adjustment. Match only if it makes design sense. See the section [Without matching](#without-matching-an-unmatched-comparison-group) for how.
+
+</details>
+
+<details>
+<summary>**Choice of comparison group** - general population vs. active comparison</summary>
+
+- **General population:** maximal contrast, but a risk of confounding by indication (the exposed differ systematically from the background population).
+- **Active comparison:** unexposed individuals WITH the same underlying indication (e.g. people with the same underlying disease but a different or no treatment). Reduces confounding by indication, but the group is smaller and may itself be selected, depending on how the indication is identified.
+
+Choose based on your research question; some studies report both. If you use **more than one** comparison group, they can share individuals - analyze each group separately against the same exposed, and do not pool them.
+
+</details>
+
+<details>
+<summary>**Matching variables and ratio** - match only on confounders</summary>
+
+Match only on what you want to adjust for by design (typically sex, age, calendar time). **Avoid over-matching** (matching on a mediator or on a consequence of the exposure itself). At best it just costs precision; at worst you risk introducing bias.
+
+Ratio (e.g. 1:5): more comparison persons give more precision, but with **diminishing returns** - each extra comparison person raises precision less and less, so at some point the gain is not worth the extra data. A large ratio + a narrow pool can also deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 6).
+
+**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** captures most of the statistical power. [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) concludes exactly that "it is questionable if there is much to gain in statistical power when the sampling ratio exceeds four". Choose a higher ratio if the outcome is rare or the pool is plentiful.
+
+</details>
+
+<details>
+<summary>**With or without replacement** - can a person be used more than once?</summary>
+
+In short: replacement increases the effective sample size but gives **correlated observations** that must be handled in the analysis. See the dedicated section [With or without replacement](#with-or-without-replacement) below for when it is needed, packages and the analysis consequence.
+
+</details>
+
+For a thorough review of sampling strategies for comparison cohorts, see
+[Heide-Jørgensen et al. (2018), *Clinical
+Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/).
+
+<details>
+<summary>**Pitfalls - quick checklist**</summary>
+
+- **At risk ON the assigned index date** (not just at study start) - otherwise immortal time bias.
+- **Exclusion BEFORE sampling and on both groups** (exposed + pool).
+- **Exposure-free ON index, not "never exposed":** do not exclude everyone ever exposed (crossover).
+- **Exclude prevalent outcome** in both groups, each relative to its own index date.
+- **`set.seed()` before sampling:** otherwise the matching is not reproducible.
+- **Compute age ONCE** (`/365.25`) and reuse the variable, so matching age and Table 1 agree.
+- **One row per person:** deduplicate (duplicate person-year rows produce duplicate matches).
+- **Avoid over-matching:** match only on confounders.
+- **With replacement** (or crossover) → clustered standard errors in the analysis.
+- **Several comparison cohorts** can share individuals - analyze each separately, do not pool them.
+
+</details>
+
+## Step 3 - Prepare the exposed for matching {.step-heading}
+
+*(Steps 1 and 2 - identify the exposed and exclude prevalent cases - are on the
+[landing page](10_build-study-population.qmd).)*
+
+Attach sex and birth date from BEF (needed if you want to match on age or birth
+year), **derive** the variables you need (e.g. age at index), and apply your
+inclusion criteria. The same criteria are applied to the pool in Step 4.
+
+::: {.callout-note}
+**Create a derived variable.** A new variable is computed from existing columns
+with `mutate()` (expanded in the [Function guide](function-guide.qmd)). Age at
+index = number of days between index and birth, divided by 365.25 (a year is
+365.25 days because of leap years):
+
+```r
+mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)
+```
+
+The same principle applies to other derived measures, e.g. BMI from height and
+weight: `mutate(bmi = weight_kg / (height_m^2))`. Compute the variable ONCE and
+reuse it, so the matching age and Table 1 always agree. See [Phase
+12](12_data-manipulation.qmd#derived-variables-create-new-columns) for more
+derived variables (categorizing, event indicator).
+:::
+
+`read_register()` requires fastreg set up with the path to your registers - see
+[Phase 4](04_file-formats.qmd#convert-sas-to-parquet) if you did not convert
+them from SAS yourself.
+
+<details>
+<summary>Show the code: prepare the exposed for matching</summary>
+
+```r
+#=====================================================
+# Step 3: prepare the exposed for matching
+#=====================================================
+library(fastreg); library(arrow); library(dplyr); library(lubridate)  # read_register (arrow/open_dataset as fallback)
+
+#-----------------------------------------------------
+# 3.1 Constants (what we choose and can change)
+#-----------------------------------------------------
+RATIO     <- 5L        # comparison persons per exposed
+YEAR_FROM <- 2005L     # study window: FIRST BEF year. Must reach at least 5 years before your earliest index (see fold-out)
+YEAR_TO   <- 2022L     # study window: last BEF year
+
+# Open BEF via fastreg (read_register gets the path; lazy - nothing is read in yet)
+bef <- read_register("bef") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/")
+  rename_with(tolower)                          # column names to lower case
+
+#-----------------------------------------------------
+# 3.2 Pull BEF person-years ONCE (reused for the pool in Step 4)
+#-----------------------------------------------------
+bef_py <- bef %>%
+  filter(year >= YEAR_FROM, year <= YEAR_TO) %>%  # study window only
+  select(pnr, foed_dag, koen, year) %>%           # only the columns we need
+  collect()                                       # pull into RAM - one concrete table (not lazy)
+
+# Demographics: ONE (newest) row per person - sex/birth date do not change over time
+demographics <- bef_py %>%
+  arrange(pnr, desc(year)) %>%                  # newest BEF year on top per person (desc = descending)
+  distinct(pnr, .keep_all = TRUE) %>%           # keep the top = newest row per person
+  mutate(
+    foed_dag   = as.Date(foed_dag),             # turn the text into a real date, so we can compute (e.g. age)
+    birth_year = year(foed_dag),                # extract birth year - used as a matching variable
+    sex        = if_else(koen == 1L, "Male", "Female")  # translate the sex code (1/2) to readable text (matching variable)
+  ) %>%
+  select(pnr, foed_dag, birth_year, sex)        # keep only what we need going forward
+
+# Migration events: ONE row per entry/exit. Used both here and on the pool in
+# Step 4. We keep the events - NOT one date per person - because a person can
+# have left and come back, and which one applies depends on the index date.
+vnds_ev <- read_register("vnds") %>%
+  rename_with(tolower) %>%
+  select(pnr, indud_kode, haend_dato) %>%
+  collect()
+
+# Residence at index: the latest event BEFORE the index date decides it.
+# See Phase 10, Step 1 for the rule and its pitfalls.
+residence <- exposed %>%
+  select(pnr, index_date) %>%
+  left_join(vnds_ev, by = "pnr", relationship = "many-to-many") %>%
+  filter(is.na(haend_dato) | haend_dato <= index_date) %>%   # only events before index
+  group_by(pnr, index_date) %>%
+  slice_max(haend_dato, n = 1, with_ties = FALSE) %>%        # the latest of them
+  ungroup() %>%
+  select(pnr, index_date, last_code = indud_kode, last_date = haend_dato)
+
+#-----------------------------------------------------
+# 3.3 Attach demographics to the exposed (from Phase 10: identified + prevalent cases excluded)
+#-----------------------------------------------------
+exposed <- exposed %>%
+  left_join(demographics, by = "pnr") %>%       # add sex, birth date, birth year
+  left_join(residence, by = c("pnr", "index_date")) %>%   # add latest migration event
+  mutate(
+    age_at_index = as.numeric(index_date - foed_dag) / 365.25,  # derived: age at index in years
+    # No event = never left = resident since birth. That is the default rule:
+    # VNDS holds ONLY migrations, so most people have no rows at all.
+    resident       = is.na(last_code) | last_code == "I",
+    resident_since = if_else(is.na(last_code), foed_dag, last_date),
+    years_resident = as.numeric(index_date - resident_since) / 365.25  # continuous residence at index
+  )
+
+#-----------------------------------------------------
+# 3.4 Inclusion criteria (the SAME are applied to the pool in Step 4)
+#-----------------------------------------------------
+n_before <- nrow(exposed)                       # nrow() = number of rows (here: persons) before exclusion
+exposed <- exposed %>%
+  filter(age_at_index >= 18) %>%                          # e.g. adults only - adapt
+  filter(resident) %>%                                    # resident in Denmark ON the index date
+  filter(years_resident >= 5)                             # 5 years CONTINUOUS residence; see fold-out below
+cat("After inclusion criteria:", nrow(exposed),
+    "| excluded:", n_before - nrow(exposed), "\n")
+# cat() just prints a readable line in the console; see the Function guide (15a) for cat() and nrow()
+
+stopifnot(n_distinct(exposed$pnr) == nrow(exposed))  # STOPS with an error if NOT one row per person (see 15a)
+```
+
+</details>
+
+<details>
+<summary>How does the 5-year lookback work?</summary>
+
+The requirement is that the person has lived in Denmark **continuously** for at
+least 5 years up to their index date:
+
+`years_resident >= 5`, where `resident_since` is the start of the current
+residence period.
+
+`resident_since` is the date of the latest **immigration** before index - or the
+date of birth, if the person never left. The **same** requirement is used on the
+exposed (Step 3) and on the pool at match time (Step 5), so both groups are
+treated identically.
+
+::: {.callout-important}
+**Why not just use the earliest BEF year?** Because BEF is snapshots and says
+nothing about whether residence was continuous. Someone seen in BEF in 2005, but
+living abroad 2006-2012 and moving home in 2013, has an earliest BEF year of 2005
+and would satisfy a 5-year requirement at index in 2015 - even though they have
+really only lived here for two years. A BEF-based lookback is also always bounded
+by `YEAR_FROM` and can therefore never look further back than your study window.
+The residence period from VNDS has neither problem. See [Phase 10, Step
+1](10_build-study-population.qmd) for the rule and the five things to check before
+trusting it.
+:::
+
+And yes: `bef` is loaded lazily (`open_dataset`), but `bef_py` is pulled into RAM with `collect()` - it is a concrete table we compute on, not a lazy filter.
+
+</details>
+
+## Step 4 - Build the comparison pool {.step-heading}
+
+Now we build the **pool** that the comparison group will be drawn from. A member
+must satisfy two things: (1) be in BEF in the relevant years (i.e. resident in
+Denmark), and (2) meet your inclusion and exclusion criteria. The criteria
+depend on dates from several registers (death, emigration, exposure, outcome),
+so we **join** different datasets together to assemble the match pool.
+
+::: {.callout-note}
+**Here the focus shifts from the exposed to the whole population.** In Steps 1-2
+you only pulled data for the PNRs you had identified as exposed. A comparison
+person, by contrast, can be *anyone* in the background population, so the
+variables that decide eligibility (demographics, death date, migration events,
+exposure date, outcome date, lookback) must now be available **for the whole
+population** - not just the exposed. That is why `bef_py`/`demographics` (Step
+3) were pulled for the whole population, and why the dates here in Step 4 are
+extracted for the population too.
+:::
+
+The time-varying criteria (alive, exposure-free and outcome-free ON the assigned
+index date) cannot be filtered out here - they are decided at match time in Step
+5: in Path A via `end_fu` (the date a person stops being eligible as a control),
+in Path B via the eligibility filters in the loop. So in this step we make sure
+the pool *carries all the dates* needed to apply them.
+
+We build the pool **on top of `demographics` from Step 3** (the same BEF extract
+- we do not pull it again) and attach everything eligibility depends on: **death
+date**, **exposure date** and **outcome date** (so the outcome before the
+assigned index date can be excluded for the comparison person, exactly as for
+the exposed in Step 3). Residence and lookback are instead decided from the
+**migration events** (`vnds_ev`) at match time, because the answer depends on
+the index date. The dates are extracted directly for the population using the
+same patterns as [9b: Extract from LPR](09b_extract-from-lpr.qmd) (shown here as
+finished tables).
+
+::: {.callout-important}
+**The comparison person must be exposure-free ON index - not "never exposed".**
+Attach each person's FIRST exposure date to the pool, and decide eligibility at
+match time with `exposure_date > index_date`. This automatically excludes an
+exposed person at their own index, but allows a future-exposed person to be a
+comparison person for an earlier index date (correct - they were unexposed
+then). Removing everyone who is ever exposed conditions on the future and
+introduces bias.
+:::
+
+<details>
+<summary>Show the code: extract the dates for the WHOLE population</summary>
+
+Each date table ends up as **one row per person** (just the date eligibility depends on), so the pool join below keys on `pnr`.
+
+**You must first build `diagnoses` (and the exposure source) as shown in [9b: Extract from LPR](09b_extract-from-lpr.qmd) - it is not a raw table.** The diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, so you cannot just open them and filter. You extract **one register at a time** and **combine** them at the end, exactly as in 9b:
+
+1. **LPR2:** `lpr_adm` + `lpr_diag` joined on `recnum`.
+2. **LPR3:** `lpr_a_kontakt` + `lpr_a_diagnose` joined on `dw_ek_kontakt`.
+3. Optionally **psychiatry** (LPR2 psych) the same way.
+4. Harmonize the date to `date_contact` (from `d_inddto` / `kont_starttidspunkt`), strip the D-prefix to `icd3`, and bind the registers together with `bind_rows()` into one table = `diagnoses`.
+
+**The only difference from 9b:** you omit `semi_join(tibble(pnr = cohort_pnrs), by = "pnr")`, so you keep the WHOLE population - not just the exposed. (So the join keys `recnum`/`dw_ek_kontakt` belong to the LPR extract itself in 9b; here in the pool join the key is `pnr`, because the tables are now one row per person.)
+
+```r
+#=====================================================
+# Extract eligibility dates for the WHOLE population
+#=====================================================
+library(fastreg); library(arrow); library(dplyr)  # read_register (arrow/open_dataset as fallback)
+
+#-----------------------------------------------------
+# 4.1 First outcome date for EVERYONE
+#-----------------------------------------------------
+# 'diagnoses' is the COMBINED LPR diagnosis table from Phase 9 (see the note above) - not a raw table.
+# Filter on the outcome codes -> all persons with the diagnosis, regardless of exposure.
+# (In Step 2 we joined to the exposed; here we aggregate for everyone.)
+outcome <- diagnoses %>%
+  filter(icd3 %in% OUTCOME_CODES) %>%                # same outcome codes as in Step 2
+  group_by(pnr) %>%
+  arrange(date_contact) %>%
+  slice(1) %>%                                       # earliest outcome contact per person
+  ungroup() %>%
+  select(pnr, first_outcome_date = date_contact)     # same idiom as Phase 9 (arrange + slice)
+
+#-----------------------------------------------------
+# 4.2 First exposure date for EVERYONE
+#-----------------------------------------------------
+# Same source you used to DEFINE exposure in Step 1, but without restricting to the exposed -
+# future-exposed people (crossover) also need a date.
+exp_dt <- exposure_raw %>%                            # your exposure extract, one row per exposure event
+  group_by(pnr) %>%
+  arrange(exposure_date) %>%
+  slice(1) %>%                                        # first exposure per person
+  ungroup() %>%
+  select(pnr, exposure_date)
+
+#-----------------------------------------------------
+# 4.3 Date of death (DODSAARS) for EVERYONE - migration events are pulled in Step 3
+#-----------------------------------------------------
+# Same patterns as in Phase 12 - note: NO semi_join against the exposed (pnr).
+death <- read_register("dodsaars") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/")
+  rename_with(tolower) %>%
+  select(pnr, death_date = d_dodsdto) %>%            # exact date of death
+  collect()
+
+# VNDS: keep ALL events, not just the first exit. A person can have left and come
+# back, so whether they are resident depends on the index date. vnds_ev is already
+# extracted in Step 3 and reused here.
+# Do NOT take the first emigration as "the date the person leaves the study": it
+# can fall BEFORE index for someone who has moved back.
+
+#-----------------------------------------------------
+# 4.4 Save as .rds (can be reused in Step 2 and Step 4)
+#-----------------------------------------------------
+saveRDS(outcome, "path/to/outcome_dates.rds")     # first outcome per person
+saveRDS(exp_dt,  "path/to/exposure_dates.rds")    # first exposure per person
+saveRDS(death,   "path/to/death_dates.rds")       # date of death
+saveRDS(vnds_ev, "path/to/migration_events.rds")  # ALL entries/exits (not one date per person)
+```
+
+**Tip:** extract these dates ONCE for the whole population and reuse them for both Step 2 (restricted to the exposed) and Step 4 (the pool) - so you don't query the registers twice.
+
+</details>
+
+<details>
+<summary>Show the code: build the pool</summary>
+
+```r
+#=====================================================
+# Build the comparison pool (demographics + the dates)
+#=====================================================
+# death, emig, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
+# (or loaded with readRDS if you saved them). Each is one row per person.
+
+# The pool REUSES demographics from Step 3 (we do NOT pull BEF again) and adds the dates.
+# demographics already has one row per person (pnr, foed_dag, birth_year, sex).
+# Note: the migration events (vnds_ev) are NOT joined in here. They are one row
+# per event, and which one applies depends on the index date - so they are looked
+# up at match time in Step 5, not here.
+
+# For censoring (Path A) we do need ONE exit date per person: the first exit
+# within the study window. See the warning about Path A below.
+first_exit <- vnds_ev %>%
+  filter(indud_kode == "U", haend_dato >= as.Date(paste0(YEAR_FROM, "-01-01"))) %>%
+  group_by(pnr) %>%
+  summarise(first_exit = min(haend_dato), .groups = "drop")
+
+pool <- demographics %>%
+  left_join(death,      by = "pnr") %>%           # date of death;     NA = no registered death
+  left_join(outcome,    by = "pnr") %>%           # first outcome;     NA = never outcome
+  left_join(exp_dt,     by = "pnr") %>%           # first exposure;    NA = never exposed
+  left_join(first_exit, by = "pnr")               # first exit;        NA = never emigrated
+# Note: we do NOT remove all exposed - exposure-free status is decided ON index in Step 5.
+```
+
+</details>
+
+::: {.callout-important}
+**Exclusion happens BEFORE sampling - and on both groups.** This is not a
+separate step but a rule: all inclusion and exclusion criteria (age, residency,
+prevalent outcome) must be applied to BOTH the exposed and the pool, each
+relative to its own/assigned index date, BEFORE you sample. Excluding after
+matching changes the population the exposed are matched to and introduces
+selection bias. See [Heide-Jørgensen et al.
+2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) on correct comparison-cohort
+sampling.
+:::
+
+## Step 5 - Match the comparison group {.step-heading}
+
+Always set a seed before sampling, so the matching is reproducible.
+
+::: {.callout-note}
+**Route A and Route B do the same single step (the matching itself) - pick
+one.** A package like `exposureMatch()` replaces ONLY the sampling loop.
+Everything else (prepare the exposed, build the pool, exclusions,
+assemble/validate) you do regardless of which route you choose. If you use Route
+A, you can skip the manual loop and the performance fold-out.
+:::
+
+**Route A - `heaven::exposureMatch()` (recommended for most).** It is built
+precisely for a comparison cohort: a case is a person who becomes exposed at
+index, and a control is one who is *not yet* exposed at the case's index.
+(`incidenceMatch()` is the sibling for [case-control](10b_case-control.qmd);
+`riskSetMatch()` is the internal engine under both.)
+
+First we combine the exposed and the pool into ONE table (`all_persons`) in the
+format `exposureMatch()` needs: an `event` indicator (1/0), a `case.index` date
+and an `end.followup` date. This is really **getting the match pool ready** -
+the actual sampling is only the function call afterwards. (The manual Route B
+uses `exposed` and `pool` directly and does not need this assembly.)
+
+<details>
+<summary>Show the code (Route A): match with exposureMatch()</summary>
+
+```r
+#=====================================================
+# Step 5 (Route A): match with exposureMatch()
+#=====================================================
+library(heaven)   # exposureMatch
+STUDY_END <- as.Date("2022-12-31")   # we choose: last day of the study
+
+# Assemble ONE table with both exposed and pool. transmute() = like mutate(), but keeps
+# ONLY the columns we name here (the rest are dropped) - so the table is clean for matching.
+all_persons <- bind_rows(
+  exposed %>% transmute(
+    pnr,                                           # person id (kept)
+    event      = 1L,                               # NEW column 'event' = 1: these are cases (exposed)
+    sex, birth_year,                               # matching variables (kept)
+    case_index = index_date,                       # NEW column: the case index = exposure date
+    end_fu     = STUDY_END                         # NEW column: end of follow-up (optionally refine w. death/outcome)
+  ),
+  pool %>% transmute(
+    pnr,
+    event      = 0L,                               # 'event' = 0: potential controls
+    sex, birth_year,
+    case_index = as.Date(NA),                      # controls have no event date (NA)
+    # end_fu for a control = the date they can no longer be selected as a control: the EARLIEST of
+    # death, first exit AFTER study start, own exposure (= crossover), outcome or
+    # study end. pmin = smallest/earliest.
+    end_fu     = pmin(death_date, first_exit, exposure_date,
+                      first_outcome_date, STUDY_END, na.rm = TRUE)   # na.rm: ignore missing dates
+  )
+) %>%
+  mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' MUST be factor/character
+
+#-----------------------------------------------------
+# The matching itself: call exposureMatch()
+#-----------------------------------------------------
+# In the call below: the name LEFT of = is the function's ARGUMENT (fixed, defined by exposureMatch);
+# the value on the RIGHT is what WE set it to (usually the name of a column in 'all_persons', in quotes).
+matched <- exposureMatch(
+  ptid         = "pnr",                  # argument 'ptid'  <- the person-id column
+  event        = "event",                # argument 'event' <- the column that is 1 for case, 0 for control
+  terms        = c("sex", "birth_year"), # argument 'terms' <- columns to match exactly on
+  data         = all_persons,            # argument 'data'  <- the dataset itself (not in quotes)
+  n.controls   = RATIO,                  # argument 'n.controls' <- controls per case
+  case.index   = "case_index",           # argument 'case.index'  <- the column with the case index date
+  end.followup = "end_fu",               # argument 'end.followup' <- the column with end-of-follow-up
+  seed         = 20260620                # argument 'seed' <- fixed number => reproducible result
+)
+# Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
+```
+
+</details>
+
+::: {.callout-warning}
+**Path A cannot model someone moving back.** `exposureMatch()` gives each person
+**one** `end_fu`, i.e. a single continuous risk interval. Someone who emigrates
+in 2008 and moves back in 2010 therefore leaves the risk set in 2008 and never
+re-enters, even though they were genuinely resident from 2010. The consequence
+is lost person-time, not a wrong inclusion, so the direction is conservative -
+but it is there.
+
+If return migration matters in your population (e.g. many migrants or long
+follow-up), use **Path B** below: the loop decides residence at each individual
+index date and therefore handles both exit and return correctly.
+:::
+
+::: {.callout-note}
+**What can `exposureMatch()` handle itself?** A great deal: it matches exactly
+on `terms`, and via `case.index` + `end.followup` it handles the risk-set time
+dimension - who was still at risk at the case's index. **`end.followup`** is
+exactly the date a person stops being eligible as a control (death, emigration,
+**own exposure = crossover**, or outcome), so the function handles crossover and
+competing risks. Time-dependent comorbidities can be matched with `date.terms`.
+Only quite unusual criteria require the manual loop.
+
+**Argument vs. value.** In a function call, the argument's **name** is on the
+left of `=` (fixed, defined by the function, cannot be changed), and the
+**value** you give it is on the right (usually the name of one of your columns,
+in quotes). E.g. `event = "event"`: the argument is called `event`, and we set
+it to our column `"event"`. Note the difference between `transmute(event = 1L)`
+(here we *create* a column called `event`) and `exposureMatch(event = "event")`
+(here we *point* the function's argument at that column). The arguments here:
+`ptid` = person id, `event` = 0/1 indicator, `terms` = matching variables (MUST
+be factor/character; categorize e.g. age), `data` = the dataset, `n.controls` =
+controls per case, `case.index` = the case's index date, `end.followup`, and
+`seed`. What an argument is, is explained in the [Function
+guide](function-guide.qmd).
+
+**See a function's arguments and help in R:** type `?exposureMatch` or
+`help(exposureMatch)`, use `args(exposureMatch)` for a quick list, or place the
+cursor in the function name and press `F1` in RStudio. For CRAN packages (e.g.
+[`MatchIt`](https://cran.r-project.org/package=MatchIt),
+[`Epi`](https://cran.r-project.org/package=Epi)) there is also an online page
+with vignettes. `heaven` is on GitHub
+([tagteam/heaven](https://github.com/tagteam/heaven)) - confirm availability and
+arguments on your own project (argument names have varied between versions). The
+design choice behind matching is in [Phase
+1](01_plan-your-study.qmd#comparator-cohort).
+:::
+
+<details>
+<summary>Route B - manual risk-set loop (full control over eligibility)</summary>
+
+It also shows what `exposureMatch()` does under the hood. The manual loop gives full control, but you handle every step yourself, so there are more places it can go wrong - so Route A is often a safe starting point. **When is Route B necessary?** When Route A cannot express what you need, e.g.:
+
+- **Interval / caliper matching.** `exposureMatch()` only matches *exactly* on fixed factor variables (e.g. same birth year). If you want to match within an **interval** around the case's value - e.g. birth year ±1, age ±2 years or BMI ±5 - that cannot be written as exact matching, so you have to loop yourself. (You can put e.g. age into groups and match exactly on the group in Route A; only a rolling ± around each case's value needs the loop.)
+- **Matching criteria computed relative to the case** beyond what `date.terms`/`duration.terms` cover.
+- **Custom sampling** (e.g. counter-matching or special replacement rules) or your own per-matched-set variables.
+- **The package is not available** on your project.
+
+For standard register matching (sex, birth year, calendar time, alive/resident/outcome-free/exposure-free at index, comorbidity timing) Route A is enough.
+
+**Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. Without replacement, the order also ensures each person is still at risk when used, and that the sampling is reproducible.
+
+```r
+#=====================================================
+# Step 5 (Route B): manual risk-set loop
+#=====================================================
+set.seed(20260620)                                       # fixed seed => reproducible sampling
+exp_sorted  <- exposed %>% arrange(index_date)           # earliest exposed first (chronological)
+used        <- character(0)                              # empty list of already-used pnr (without replacement)
+match_list  <- vector("list", nrow(exp_sorted))          # empty list to collect each matched set
+
+for (i in seq_len(nrow(exp_sorted))) {                   # loop one exposed person at a time
+  idx <- exp_sorted$index_date[i]                        # this exposed person's index date
+  age <- floor(as.numeric(idx - exp_sorted$foed_dag[i]) / 365.25)  # integer age at index
+
+  # Residence ON this index date: the latest migration event before idx. It has to
+  # be looked up here inside the loop, not once for everyone, precisely because the
+  # answer depends on idx (a person can have left and come back). See Phase 10, Step 1.
+  status_idx <- vnds_ev %>%
+    filter(haend_dato <= idx) %>%
+    group_by(pnr) %>%
+    slice_max(haend_dato, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(pnr, last_code = indud_kode, last_date = haend_dato)
+
+  eligible <- pool %>%                                                 # find possible controls in the pool
+    filter(sex == exp_sorted$sex[i]) %>%                               # same sex
+    filter(floor(as.numeric(idx - foed_dag) / 365.25) == age) %>%      # same integer age ON idx
+    filter(is.na(death_date)         | death_date         >  idx) %>%  # alive on index
+    filter(is.na(exposure_date)      | exposure_date      >  idx) %>%  # exposure-free ON index
+    filter(is.na(first_outcome_date) | first_outcome_date >= idx) %>%  # outcome-free on index
+    left_join(status_idx, by = "pnr") %>%                              # latest event before idx
+    filter(is.na(last_code) | last_code == "I") %>%                    # resident on index (no event = never left)
+    filter(as.numeric(idx - if_else(is.na(last_code), foed_dag, last_date)) / 365.25 >= 5) %>%  # 5 years continuous residence
+    filter(!pnr %in% used)                                             # not already used
+
+  n <- min(RATIO, nrow(eligible))                        # draw up to RATIO (fewer if the pool is thin)
+  if (n == 0L) next                                      # none eligible? skip to the next exposed
+
+  chosen <- eligible %>%
+    slice_sample(n = n) %>%                              # draw n random controls
+    mutate(
+      match_id       = exp_sorted$pnr[i],                # bind the controls to this case (matched set)
+      index_date     = idx,                              # controls are assigned the case's index date
+      crossover_date = if_else(!is.na(exposure_date) & exposure_date > idx,
+                               exposure_date, as.Date(NA))   # censoring date if the control is later exposed
+    )
+  match_list[[i]] <- chosen                              # store this matched set
+  used <- c(used, chosen$pnr)                            # mark the chosen as used (without replacement)
+}
+comparison_group <- bind_rows(match_list)                # combine all matched sets into one table
+```
+
+</details>
+
+<details>
+<summary>Performance: pre-split the pool (large datasets)</summary>
+
+With a pool of millions of rows it is expensive to filter the whole pool in every iteration (= one pass of the loop, i.e. one exposed person at a time). Pre-split it into a **named list** keyed by `sex + birth_year`, and pull only the neighbouring birth cohorts per iteration (birth year ±1). It is the same logic as the loop above, just faster.
+
+```r
+pool <- pool %>% mutate(pool_key = paste(sex, birth_year))   # build a key string per stratum
+pool_split <- split(pool, pool$pool_key)        # named list; one element (a sub-table) per stratum
+
+# Inside the loop: pull only the candidate strata instead of the whole pool
+cand_keys   <- paste(exp_sorted$sex[i], exp_sorted$birth_year[i] + c(-1L, 0L, 1L))  # same sex, birth year ±1
+cand_frames <- pool_split[cand_keys]            # look up the relevant strata in the list
+candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%  # combine them (drop empty strata)
+  distinct(pnr, .keep_all = TRUE)               # one row per person across the 3 birth cohorts
+# then apply the SAME eligibility filters as above on 'candidates'
+```
+
+Remove the chosen ones from their strata after each sampling (`pool_split[[k]] <- filter(pool_split[[k]], !pnr %in% chosen$pnr)`) to speed up later iterations. If you keep person-year rows (one per BEF year) to require a BEF record in the index year as a residency proxy, add the BEF year to the key.
+
+</details>
+
+## With or without replacement
+
+When you sample comparison persons, decide whether the **same person may be used
+more than once** - a choice that affects both the matching and the **analysis
+afterwards**. Decide BEFORE you match.
+
+- **If you have a large group to draw from** (e.g. the whole background
+  population), sampling **without replacement** is rarely a problem: there are
+  plenty of candidates, and each is used at most once (that is what the `used`
+  vector does in the manual loop).
+- **If the group is small** (rare matching strata, narrow age/sex bands, or a
+  high ratio like 1:25), the pool can be depleted. Then **replacement** may be
+  necessary to get enough comparison persons per exposed: a person can then be
+  matched to several exposed (and themselves become exposed/a case later). It is
+  also standard for pure incidence-density sampling.
+
+::: {.callout-important}
+**With replacement, be careful in the analysis.** Standard models assume each
+row is an **independent** observation. When the same person appears several
+times (reuse or crossover), that does not hold - the rows are **correlated**,
+and the model "thinks" it has more independent information than it does. The
+result is **confidence intervals that are too narrow** (and p-values too small).
+The fix is **clustered (robust) standard errors**: you tell the model which rows
+belong to the same person (clustering on person id), so the uncertainty is
+computed correctly - or you use a model that handles it. This is an **analysis
+step** to remember; it is expanded in [Robust (clustered) standard
+errors](13d_regression.qmd#klyngebaserede-standardfejl).
+:::
+
+  | Package                    | Used for                                                   | Replacement                                                   |
+  | -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------- |
+  | `heaven::exposureMatch()`  | risk-set matching for a comparison cohort                  | see note below + `matchReport()`                              |
+  | `heaven::incidenceMatch()` | risk-set matching for [case-control](10b_case-control.qmd) | see note below + `matchReport()`                              |
+  | `MatchIt::matchit()`       | general matching (e.g. propensity score)                   | explicit via `replace = TRUE/FALSE`                           |
+  | `Epi::ccwc()`              | nested case-control sampling                               | risk-set sampling, see [Case-control](10b_case-control.qmd)   |
+  | manual loop                | full control                                               | you control it yourself (`used` vector = without replacement) |
+
+That a control can be used for several cases IS exactly **replacement** (the
+control is "returned to the pool" and can be drawn again for another case). In
+`heaven`'s current version there is no on/off argument for it; the function does
+risk-set matching, where a not-yet-exposed person can be chosen as a control,
+and a future case can be a control until their own exposure (governed by
+`end.followup`). **Confirm the actual behaviour** with `heaven::matchReport()`,
+which shows how often each control is used (and thus whether there really is
+replacement). Also confirm package names and arguments on your own project.
+
+## Without matching: an unmatched comparison group
+
+A comparison group does not have to be matched. **Matching and adjustment are
+two ways to handle the same confounders:**
+
+- **Matching (design):** you balance the groups on e.g. sex, age and calendar
+  year before you look at the outcome (that is what Step 5 does).
+- **Adjustment (analysis):** you take a broader unexposed group *without*
+  matching and instead control for the same variables in the analysis.
+
+If you "just" want a comparison group that is not matched on anything:
+
+1. **Define the eligible unexposed group** with the same inclusion and exclusion
+   criteria as the exposed (alive, resident, outcome-free and exposure-free at
+   their index). This is still the pool from Step 4.
+2. **You need no matching function:** just combine exposed and unexposed with an
+   `exposed` indicator (1/0).
+3. **Assign a start of follow-up (index)** to the unexposed, so follow-up begins
+   at a comparable point. This is the hard part: do it so you avoid immortal
+   time (e.g. using calendar time as the time axis, or assigning index dates
+   from the exposed persons' distribution).
+4. **Adjust in the analysis** for the variables you would otherwise have matched
+   on (sex, age, calendar year, SES ...) - either as covariates in a regression
+   model or with weighting (IPTW). See [Phase 13](13_analysis.qmd).
+
+Neither matching nor adjustment removes confounding from variables you have not
+measured. Choose based on your study: matching balances strong confounders at
+the design stage and is easy to communicate; adjustment retains all information
+and lets you study more variables. You can also combine the two (match on a few,
+adjust for the rest).
+
+## Step 6 - Assemble, validate and save {.step-heading}
+
+```r
+# matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:
+kohort <- bind_rows(
+  exposed %>% mutate(exposed = 1L), # exposed = 1: the exposed
+  comparison_group %>% mutate(exposed = 0L) # exposed = 0: the comparison group
+)
+
+# The exposed must have exactly one row each
+stopifnot(n_distinct(exposed$pnr) == nrow(exposed))
+
+# Bug check: same comparison person used twice in the SAME matched set (should be 0 rows;
+# the usual cause is duplicate person-year rows in the pool, cf. Step 4)
+comparison_group %>% count(match_id, pnr) %>% filter(n > 1)
+
+# Info (not an error): a person can appear in several matched sets (replacement) or
+# both as a comparison person and later as exposed (crossover). Expected in a risk-set
+# design, but requires clustered standard errors in the analysis (Phase 13).
+kohort %>% count(pnr) %>% filter(n > 1) %>% nrow()
+table(kohort$exposed) # group sizes
+
+# Match rate: how many exposed got fewer than RATIO comparison persons?
+n_per_exp <- comparison_group %>% count(match_id)
+sum(n_per_exp$n < RATIO) # exposed without full ratio
+sum(!exposed$pnr %in% n_per_exp$match_id) # exposed without ANY comparison person
+
+saveRDS(kohort, "path/to/full_cohort.rds")
+```
+
+::: {.callout-tip}
+`bind_rows()` here (stacking the exposed and the comparison group) and the
+`left_join()` you use next to attach outcomes and covariates are explained in
+[Link your extracts](12b_joins.qmd#joins-link-two-tables).
+:::
+
+::: {.callout-note}
+**Keep the matched-set id** (`match_id` in the manual loop; `exposureMatch()`
+calls it `case.id`). It tells you which comparison persons belong to which
+exposed person. This matters when the analysis must **respect the matching**:
+stratified or conditional analysis (e.g. stratified Cox by matched set, or
+conditional logistic regression in [case-control](10b_case-control.qmd)), or at
+least clustered standard errors. Without `match_id` you cannot run a correct
+matched analysis. See [Phase 13](13_analysis.qmd).
+:::
+
+If you do not want to match, see the section [Without
+matching](#without-matching-an-unmatched-comparison-group) above.
+
+## What now?
+
+You have `full_cohort.rds` - one row per person with `pnr` and `index_date` for
+**both groups** (exposed + comparison group). Use it in all subsequent
+extractions:
+
+```r
+kohort <- readRDS("path/to/full_cohort.rds")
+cohort_pnrs <- unique(kohort$pnr) # vector with all pnr's - both exposed and comparison persons
+```
+
+`cohort_pnrs` thus contains the pnr's for **both exposed and comparison
+persons** - not just the exposed. Extraction of outcomes and covariates must
+cover the entire study population.
+
+  | Extraction                                      | Phase                                                                          |
+  | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+  | Outcomes (diagnoses, date of death, emigration) | [9b: Extract from LPR](09b_extract-from-lpr.qmd), [Outcomes](11a_outcomes.qmd) |
+  | Covariates from BEF (age, sex)                  | [Phase 6](06_first-extraction.qmd)                                             |
+  | Socioeconomic variables                         | [Socioeconomic variables](11b_socioeconomic-variables.qmd)                     |
+  | Comorbidity                                     | [Comorbidity](11c_comorbidity.qmd)                                             |
+  | Assemble into one analysis dataset              | [Phase 12](12_data-manipulation.qmd)                                           |
+
+## See also
+
+- [Build your study population](10_build-study-population.qmd): identify the
+  exposed (Step 1) and exclude prevalent cases (Step 2)
+- [Case-control](10b_case-control.qmd): same risk-set mechanic, but the "event"
+  is the outcome
+- [Phase 1 - Study preparation](01_plan-your-study.qmd): design choices behind
+  cohort and matching
+- [Outcomes](11a_outcomes.qmd): outcome dates, censoring and crossover
+- [Phase 12 - Assemble and prepare the dataset](12_data-manipulation.qmd):
+  assemble all extracts into one dataset
+- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*
+  10:1325-1337](https://pubmed.ncbi.nlm.nih.gov/30310326/): sampling strategies
+  for comparison cohorts (ratio, with/without replacement, chronological vs.
+  random)

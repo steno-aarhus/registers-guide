@@ -1,0 +1,469 @@
+---
+title: "NMI - Nordic Multimorbidity Index"
+subtitle: "Weighted mortality-risk score from Nordic registers"
+date: last-modified
+---
+
+NMI (Nordic Multimorbidity Index) is a weighted score built from Nordic hospital
+diagnoses and filled prescriptions. It combines 50 mortality predictors - 29
+diagnosis-based and 21 prescription-based - into a single continuous score.
+
+**Article:** Kristensen et al. *Clinical Epidemiology* 2022 -
+[doi:10.2147/CLEP.S353398](https://doi.org/10.2147/CLEP.S353398)
+
+::: {.callout-warning}
+**Important: NMI is a mortality index, not a measure of comorbidity burden.**
+NMI was developed and validated to predict **5-year mortality** (Kristensen et
+al. 2022, \~425,000 Danish residents aged ≥40), and its predictors were selected
+for how much they added to the mortality model - not to cover disease burden. As
+a result:
+
+- Several common chronic diseases are not included in the model (e.g.
+  hypertension and type 1 diabetes).
+- Some items are **mortality proxies**, not diseases in their own right (e.g.
+  laxatives, iron).
+- Some weights are **negative** (e.g. statins -3, ACE/ARB inhibitors -2), which
+  only makes sense in a mortality *model*, not in a measure of disease burden.
+
+**If your goal is comorbidity *burden*, NMI is the wrong tool** - use a
+hospital-ICD-based multimorbidity index instead. A dedicated one (ICD-10 + ATC
+codes) is in development; see [Comorbidity](11c_comorbidity.qmd) for the general
+approach. Use NMI only when your goal is specifically **mortality risk**.
+:::
+
+## What NMI gives you
+
+A **continuous mortality-risk score** per person, validated to predict **5-year
+mortality** in Nordic populations (and stronger than the Charlson and Elixhauser
+indices *for that outcome*). Use it as:
+
+- A **covariate** summarising mortality-associated illness in a Cox or logistic
+  model.
+- A **summary variable** for mortality risk in Table 1.
+
+It is not a clean count of chronic diseases - for comorbidity burden, see the
+warning above.
+
+## When to use it (and when not)
+
+**Use NMI when your question is mortality risk:** adjusting for
+mortality-associated illness burden in a survival or logistic model, or wanting
+a validated 5-year-mortality predictor.
+
+**Do not use NMI to measure comorbidity burden** (a count or index of chronic
+disease) - it omits common conditions by design (see above). Use a hospital-ICD
+multimorbidity index for that.
+
+**Watch for over-adjustment:** your own outcome must not be one of the score's
+predictors. NMI handles dementia studies, for example, by dropping the dementia
+predictor (`dx_F00_G30` and `rx_N06D`), since dementia would otherwise be part
+of the score you adjust for.
+
+## R implementation
+
+There is **no official R package** (SDU publishes a [Stata
+implementation](https://pharmacoepi.sdu.dk/nmi/)). The R version below runs in
+**two steps - extract, then compute.** These code examples are based on
+**Pernille Errebo Tonnesen**'s translation of the SDU Stata code to R.
+
+### 1. Extract diagnoses and prescriptions
+
+::: {.callout-important}
+**What NMI needs, and over which period:**
+
+- **Diagnoses**, a **5-year** lookback before index, from **all** of: LPR2
+  **somatic** and **psychiatric** (up to March 2019) *and* LPR3 (from March
+  2019), across all diagnosis types. A somatic-only pull (e.g. `lpr_adm` alone)
+  misses the psychiatric predictors (F00-03, F10, F17).
+- **Prescriptions** (ATC), a **6-month** lookback before index, from **LMDB** -
+  only that window, not the whole register.
+:::
+
+*Diagnoses* - You can use the two approaches from [Extract from
+LPR](09b_extract-from-lpr.qmd): either extract **all** diagnoses and ATC codes
+for the whole cohort (not recommended - time-, RAM- and space-heavy, especially
+for a large cohort), or **filter to only the codes NMI needs before
+`collect()`**, so the saved `.rds` files stay small.
+
+You can also use the `get_lpr_diagnoses()` pattern from [Extract from
+LPR](09b_extract-from-lpr.qmd) as in the example here:
+
+<details>
+<summary>See the code: extract NMI diagnoses (LPR2 + LPR3)</summary>
+
+```r
+#=============================================================
+# 1. EXTRACT diagnoses and prescriptions
+#=============================================================
+library(dplyr)
+
+cohort <- readRDS("datasets/full_cohort.rds") # your study population from Phase 10 (pnr + index_date)
+
+#-------------------------------------------------------------
+# NMI diagnosis codes (3-char ICD, no D-prefix).
+# paste0("C", 76:80) makes "C76".."C80" - glues the letter onto each number
+# in the range, so we don't type every code by hand.
+#-------------------------------------------------------------
+nmi_icd <- c(
+  "B18", # chronic viral hepatitis
+  "C34", # lung cancer
+  "C50", # breast cancer
+  "C61", # prostate cancer
+  "C67", # bladder cancer
+  # NMI predictor "tumour of brain or meninges" (only the subcodes below score, see the computation):
+  "C70", # cancer of the meninges
+  "C71", # brain cancer
+  "C75", # cancer of other endocrine glands (only C751-753 score)
+  "D32", # benign meningeal tumour
+  "D33", # benign brain/nervous-system tumour (only D330-332)
+  "D35", # benign endocrine-gland tumour (only D352-354)
+  "D42", # meningeal tumour, uncertain behaviour
+  "D43", # brain/nervous-system tumour, uncertain behaviour (only D430-432)
+  "D44", # endocrine-gland tumour, uncertain behaviour (only D443-445)
+  paste0("C", 76:80), # secondary/metastatic and ill-defined cancer (C76-C80)
+  paste0("C", 91:95), # leukaemia (C91-C95)
+  paste0("D", 50:64), # anaemias (D50-D64)
+  "E11", # type 2 diabetes
+  "E86", # volume depletion (dehydration)
+  paste0("F0", 0:3), # dementia (F00-F03, scores together with G30)
+  "G30", # Alzheimer's disease (dementia)
+  "F10", # alcohol use disorder
+  "F17", # tobacco/nicotine use disorder
+  paste0("G", 20:22), # Parkinson's disease and parkinsonism (G20-G22)
+  "G35", # multiple sclerosis
+  "G40", # epilepsy (G40-G41)
+  "G41", # status epilepticus (epilepsy predictor)
+  # NMI predictor "aortic and mitral valve disease" (I05/I06/I34/I35):
+  "I05", # rheumatic mitral valve disease
+  "I06", # rheumatic aortic valve disease
+  "I34", # non-rheumatic mitral valve disorder
+  "I35", # non-rheumatic aortic valve disorder
+  # NMI predictor "heart failure" (only subcodes I110/I13[02]/I42[06789]/I50 score):
+  "I11", # hypertensive heart disease (only I110)
+  "I13", # hypertensive heart and kidney disease (only I130/I132)
+  "I42", # cardiomyopathy (only I420/I426-429)
+  "I50", # heart failure
+  paste0("I", 60:69), # cerebrovascular disease / stroke (I60-I69)
+  # NMI predictor "atherosclerosis / peripheral arterial disease" (I70/I73/I74/I77):
+  "I70", # atherosclerosis
+  "I73", # peripheral vascular disease
+  "I74", # arterial embolism and thrombosis
+  "I77", # other arterial disorders
+  "I71", # aortic aneurysm and dissection (I71-I72)
+  "I72", # other aneurysm (aneurysm predictor)
+  paste0("J1", 2:8), # pneumonia (J12-J18)
+  # NMI predictor "chronic lower respiratory disease" (J41-44, J47, J961/J969):
+  "J41", # simple chronic bronchitis
+  "J42", # unspecified chronic bronchitis
+  "J43", # emphysema
+  "J44", # COPD (chronic obstructive pulmonary disease)
+  "J47", # bronchiectasis
+  "J96", # respiratory failure (only J961/J969)
+  "J84", # other interstitial lung disease
+  paste0("K0", c(2, 3, 4, 5, 6, 8)), # dental and periodontal disease (K02-K06, K08)
+  # NMI predictor "alcoholic liver disease" (K70/K72/K74/K766/K767):
+  "K70", # alcoholic liver disease
+  "K72", # hepatic failure
+  "K74", # fibrosis and cirrhosis of the liver
+  "K76", # other liver disease (only K766/K767)
+  "L89", # pressure ulcer
+  "N18", # chronic kidney disease (N18-N19)
+  "N19" # unspecified kidney failure
+)
+
+# You can now extract the ICD and ATC codes using approach 1 or 2, or the get_lpr_diagnoses() helper from Phase 9 (Extract from LPR). With the latter, the code looks like this:
+nmi_diagnoses <- get_lpr_diagnoses(
+  pnr_vector = unique(cohort$pnr), # all the cohort's pnr
+  icd_codes = nmi_icd # only NMI codes are collected
+)
+saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # columns: pnr, date_contact, c_diag, c_diagtype, icd3
+```
+
+</details>
+
+**Prescriptions** - extract LMDB for the cohort, keeping only NMI's ATC classes.
+`read_register()` requires fastreg set up with the path to your registers - see
+[Phase 4](04_file-formats.qmd#convert-sas-to-parquet) if you did not convert
+them from SAS yourself:
+
+<details>
+<summary>See the code: extract NMI prescriptions (LMDB)</summary>
+
+```r
+library(fastreg) # read_register()
+library(arrow)   # open_dataset() - fallback without fastreg
+library(dplyr)
+
+pnr_vec <- unique(cohort$pnr)
+
+#-------------------------------------------------------------
+# NMI drug classes (ATC) as one regex. Each class:
+#   A06A       laxatives
+#   A07DA      antipropulsives (antidiarrhoeals)
+#   A10A       insulins and analogues
+#   B01AC      antiplatelet drugs
+#   B03A       iron preparations
+#   C01AA      digitalis glycosides (digoxin)
+#   C03C       loop (high-ceiling) diuretics
+#   C03EB      loop + potassium-sparing diuretics
+#   C03DA      aldosterone antagonists (e.g. spironolactone)
+#   C09C/C09D  angiotensin II receptor blockers (ARBs), plain and combinations
+#   C10AA      statins
+#   H02AB      systemic glucocorticoids
+#   J01C       penicillins (beta-lactam antibacterials)
+#   N02A       opioids
+#   N02BE      anilides (paracetamol)
+#   N05BA      benzodiazepine anxiolytics
+#   N05CD/CF   benzodiazepine and related hypnotics (z-drugs)
+#   N05AA-AL   antipsychotics
+#   N05AX      other antipsychotics
+#   N06A       antidepressants
+#   N06D       anti-dementia drugs
+#   N07BC      drugs used in opioid dependence
+#   R03AC02-05 short-acting inhaled beta-2 agonists
+#   R03BB04-07 long-acting inhaled anti-muscarinics (anticholinergics)
+#-------------------------------------------------------------
+nmi_atc <- "^(A06A|A07DA|A10A|B01AC|B03A|C01AA|C03C|C03EB|C03DA|C09[CD]|C10AA|H02AB|J01C|N02A|N02BE|N05BA|N05C[DF]|N05A[A-L]|N05AX|N06A|N06D|N07BC|R03AC0[2-5]|R03BB0[4-7])"
+
+nmi_lmdb <- read_register("lmdb") %>% # without fastreg: open_dataset("path/to/lmdb/")
+  rename_with(tolower) %>%
+  semi_join(tibble(pnr = pnr_vec), by = "pnr") %>% # only the cohort
+  filter(grepl(nmi_atc, atc)) %>% # keep rows where the atc column matches the nmi_atc regex (NMI drug classes) - BEFORE collect()
+  collect()
+saveRDS(nmi_lmdb, "datasets/nmi_lmdb.rds") # pnr, eksd, atc
+```
+
+</details>
+
+You started from `full_cohort.rds` ([Phase 10](10_build-study-population.qmd):
+`pnr` + `index_date`) and now have **`nmi_diagnoses.rds`** and
+**`nmi_lmdb.rds`**. Save them. Because the extraction is filtered to only NMI's
+codes, the files are small, so you rarely need to clean up. If memory is tight
+anyway, free it with `rm()` + `gc()` (see [Phase
+5](05_extraction-step-by-step.qmd)) rather than restarting the whole R session.
+
+### 2. Compute the NMI score
+
+<details>
+<summary>See the full NMI computation (corrected against the Stata source)</summary>
+
+```r
+#=============================================================
+# 2. COMPUTE the NMI score
+#=============================================================
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(tidyr)
+
+#-------------------------------------------------------------
+# 2.0 Load data
+#-------------------------------------------------------------
+cohort <- readRDS("datasets/full_cohort.rds")   # pnr, index_date
+dx_raw <- readRDS("datasets/nmi_diagnoses.rds")  # from get_lpr_diagnoses(): pnr, date_contact, c_diag
+rx_raw <- readRDS("datasets/nmi_lmdb.rds")       # pnr, eksd, atc
+
+#-------------------------------------------------------------
+# 2.1 Diagnoses: 5-year lookback before index (Stata: 1825 days)
+#-------------------------------------------------------------
+# Four steps, one at a time - we keep reassigning dx all the way through.
+
+# 2.1.1 Attach the index date to each diagnosis (inner join, so only cohort members are kept)
+dx <- dx_raw %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr")
+
+# 2.1.2 Keep only diagnoses inside the 5-year window before index
+dx <- dx %>%
+  filter(date_contact >= index_date - days(1825),  # 1825 days = 5 years before index (date_contact = d_inddto in LPR2 / kont_starttidspunkt in LPR3, renamed in Phase 9)
+         date_contact <= index_date - days(1))      # up to the day before index (not index day itself)
+
+# 2.1.3 Set one TRUE/FALSE flag per NMI predictor (str_detect() matches c_diag with D-prefix against the predictor's ICD codes)
+dx <- dx %>%
+  mutate(
+    dx_B18      = str_detect(c_diag, "^DB18"),
+    dx_C34      = str_detect(c_diag, "^DC34"),
+    dx_C50      = str_detect(c_diag, "^DC50"),
+    dx_C61      = str_detect(c_diag, "^DC61"),
+    dx_C67      = str_detect(c_diag, "^DC67"),
+    dx_C70_D432 = str_detect(c_diag, "^DC7[01]|^DC75[1-3]|^DD32|^DD33[0-2]|^DD35[2-4]|^DD42|^DD43[0-2]|^DD44[3-5]"),
+    dx_C76_C80  = str_detect(c_diag, "^DC7[6-9]|^DC80"),
+    dx_C91_C95  = str_detect(c_diag, "^DC9[1-5]"),
+    dx_D50_D64  = str_detect(c_diag, "^DD5[0-9]|^DD6[0-4]"),
+    dx_E11      = str_detect(c_diag, "^DE11"),
+    dx_E86      = str_detect(c_diag, "^DE86"),
+    dx_F00_G319 = str_detect(c_diag, "^DF0[0-3]|^DG30"),
+    dx_F10      = str_detect(c_diag, "^DF10"),
+    dx_F17      = str_detect(c_diag, "^DF17"),
+    dx_G20_22   = str_detect(c_diag, "^DG2[0-2]"),
+    dx_G35      = str_detect(c_diag, "^DG35"),
+    dx_G40_G41  = str_detect(c_diag, "^DG4[0-1]"),
+    dx_I05_35   = str_detect(c_diag, "^DI0[56]|^DI3[45]"),
+    dx_I110_I50 = str_detect(c_diag, "^DI110|^DI13[02]|^DI42[06789]|^DI50"),
+    dx_I60_I69  = str_detect(c_diag, "^DI6[0-9]"),
+    dx_I70_I77  = str_detect(c_diag, "^DI7[0347]"),  # I70, I73, I74, I77 (Stata: ^I7[0347])
+    dx_I71_I72  = str_detect(c_diag, "^DI7[12]"),
+    dx_J12_J18  = str_detect(c_diag, "^DJ1[2-8]"),
+    dx_J41_J47  = str_detect(c_diag, "^DJ4[12347]|^DJ96[19]"),
+    dx_J84      = str_detect(c_diag, "^DJ84"),
+    dx_K02_K08  = str_detect(c_diag, "^DK0[234568]"),
+    dx_K70_K767 = str_detect(c_diag, "^DK7[024]|^DK76[67]"),
+    dx_L89      = str_detect(c_diag, "^DL89"),
+    dx_N18_N19  = str_detect(c_diag, "^DN1[89]")
+  )
+
+# 2.1.4 Collapse to one row per person (one column per dx_ predictor valued 0/1; any() = 1 if at least one matching diagnosis in the 5-year window, else 0)
+dx <- dx %>%
+  group_by(pnr) %>%
+  summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
+
+#-------------------------------------------------------------
+# 2.2 Prescriptions: 6-month lookback before index
+#-------------------------------------------------------------
+# Same pattern as the diagnoses (attach, filter, flag, collapse), here in a single chain.
+rx <- rx_raw %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(eksd >= index_date - days(180),   # 180 days = 6 months before index (eksd = redemption date)
+         eksd <= index_date - days(1)) %>% # up to the day before index
+  # One TRUE/FALSE flag per drug predictor: matches atc against the ATC prefix
+  mutate(
+    rx_A06A            = str_detect(atc, "^A06A"),
+    rx_A07DA           = str_detect(atc, "^A07DA"),
+    rx_A10A            = str_detect(atc, "^A10A"),
+    rx_B01AC           = str_detect(atc, "^B01AC"),
+    rx_B03A            = str_detect(atc, "^B03A"),
+    rx_C01AA           = str_detect(atc, "^C01AA"),
+    rx_C03C_C03EB      = str_detect(atc, "^C03C|^C03EB"),
+    rx_C03DA           = str_detect(atc, "^C03DA"),
+    rx_C09C_C09D       = str_detect(atc, "^C09[CD]"),
+    rx_C10AA           = str_detect(atc, "^C10AA"),
+    rx_H02AB           = str_detect(atc, "^H02AB"),
+    rx_J01C            = str_detect(atc, "^J01C"),
+    rx_N02A            = str_detect(atc, "^N02A"),
+    rx_N02BE           = str_detect(atc, "^N02BE"),
+    rx_N05BA_N05CF     = str_detect(atc, "^N05BA|^N05C[DF]"),
+    rx_N05AA_N05AX     = str_detect(atc, "^N05A[A-L]|^N05AX"),
+    rx_N06A            = str_detect(atc, "^N06A"),
+    rx_N06D            = str_detect(atc, "^N06D"),
+    rx_N07BC           = str_detect(atc, "^N07BC"),
+    rx_R03AC02_R03AC05 = str_detect(atc, "^R03AC0[2-5]"),
+    rx_R03BB04_R03BB07 = str_detect(atc, "^R03BB0[4-7]")
+  ) %>%
+  # Collapse to one row per person: 1 = at least one fill in the 6-month window, else 0
+  group_by(pnr) %>%
+  summarise(across(starts_with("rx_"), ~ as.integer(any(.))), .groups = "drop")
+
+#-------------------------------------------------------------
+# 2.3 Combine and score (weights from Table 2)
+#-------------------------------------------------------------
+nmi_data <- cohort %>%   # reload your cohort here if needed (the name may be something other than "cohort")
+  left_join(dx, by = "pnr") %>%   # attach the diagnosis flags to every cohort member
+  left_join(rx, by = "pnr") %>%   # and the drug flags
+  # people with no diagnosis/prescription aren't in dx/rx -> left_join gives NA -> set to 0 (they have none)
+  mutate(across(c(starts_with("dx_"), starts_with("rx_")), ~ replace_na(., 0))) %>%
+  mutate(
+    nmi =
+      10 * dx_B18 + 19 * dx_C34 + 4 * dx_C50 + 5 * dx_C61 + 8 * dx_C67 +
+      8 * dx_C70_D432 + 22 * dx_C76_C80 + 8 * dx_C91_C95 + 5 * dx_D50_D64 +
+      2 * dx_E11 +
+      6 * dx_E86 + 9 * dx_F00_G319 + 12 * dx_F10 + 4 * dx_F17 +
+      7 * dx_G20_22 + 7 * dx_G35 + 5 * dx_G40_G41 +
+      2 * dx_I05_35 + 4 * dx_I110_I50 + 4 * dx_I60_I69 +
+      5 * dx_I70_I77 + 4 * dx_I71_I72 +
+      4 * dx_J12_J18 + 4 * dx_J41_J47 + 7 * dx_J84 +
+      5 * dx_K02_K08 +            # dental, weight 5
+      13 * dx_K70_K767 +          # fixed: liver disease, weight 13 (was 13 * dx_K02_K08)
+      11 * dx_L89 + 7 * dx_N18_N19 +
+      8 * rx_A06A + 5 * rx_A07DA +
+      4 * rx_A10A +
+      2 * rx_B01AC + 5 * rx_B03A + 4 * rx_C01AA + 5 * rx_C03C_C03EB + 3 * rx_C03DA +
+      (-2) * rx_C09C_C09D + (-3) * rx_C10AA +   # negative weights: protective in the mortality model (lower the score)
+      2 * rx_H02AB + 1 * rx_J01C + 2 * rx_N02A + 2 * rx_N02BE +
+      1 * rx_N05BA_N05CF + 7 * rx_N05AA_N05AX + 3 * rx_N06A + 11 * rx_N06D +
+      7 * rx_N07BC + 3 * rx_R03AC02_R03AC05 + 5 * rx_R03BB04_R03BB07
+  )
+
+saveRDS(nmi_data %>% select(pnr, nmi), "datasets/extract_nmi.rds")
+```
+
+</details>
+
+### 3. Look at and describe the score
+
+The score is one number per person in `extract_nmi.rds`. Join it to your
+analysis dataset (Phase 12) and inspect it - NMI is right-skewed (many low, a
+few high), so median [IQR] often describes it better than the mean, though mean
++ CI is fine for comparing groups.
+
+<details>
+<summary>See the code: describe the NMI score</summary>
+
+```r
+library(dplyr)
+
+nmi <- readRDS("datasets/extract_nmi.rds") # pnr, nmi
+analysis <- readRDS("datasets/analysis.rds") %>% # your assembled dataset (Phase 12)
+  left_join(nmi, by = "pnr")
+
+# Distribution overall
+summary(analysis$nmi)
+hist(analysis$nmi)
+
+# By group (e.g. exposed vs comparison cohort): mean + 95% CI and median [IQR]
+analysis %>%
+  group_by(group) %>%
+  summarise(
+    n = n(),
+    mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: remove NA (missing values) before computing
+    sd_nmi = sd(nmi, na.rm = TRUE),
+    median_nmi = median(nmi, na.rm = TRUE),
+    q1 = quantile(nmi, 0.25, na.rm = TRUE),
+    q3 = quantile(nmi, 0.75, na.rm = TRUE)
+  ) %>%
+  mutate(
+    # 95% CI for the mean: mean ± 1.96 * standard error (SE = sd / sqrt(n))
+    ci_low = mean_nmi - 1.96 * sd_nmi / sqrt(n),
+    ci_high = mean_nmi + 1.96 * sd_nmi / sqrt(n)
+  )
+```
+
+</details>
+
+For a formatted Table 1 across groups, `gtsummary::tbl_summary(by = group)` does
+this automatically - see [Descriptive tables](13b_descriptive-tables.qmd).
+
+::: {.callout-important}
+**Consider whether the 5-year lookback should be an inclusion criterion.** NMI's
+diagnosis window needs at least **5 years** of register data before the index
+date. If you make full lookback an inclusion criterion (only people with at
+least 5 years of prior residency/coverage in Denmark), apply it **already when
+you build your cohort**, not here - and apply the same requirement to any
+**comparison cohort**, so both groups have the same depth of data before index.
+Decide it in [Phase 1](01_plan-your-study.qmd) and apply it in [Phase
+10](10_build-study-population.qmd).
+:::
+
+<details>
+<summary>Example: make the 5-year lookback an inclusion criterion (conceptual)</summary>
+
+The idea is to require that each person has resided in Denmark (and is therefore covered by the registers) for at least 5 years before their index date. You check this against residence/migration data (VNDS/BEF) and apply it as a filter **before** you match a comparison cohort:
+
+```r
+# Conceptual - adapt to your residence data
+kohort <- kohort %>%
+  mutate(lookback_ok = as.numeric(index_date - residence_start) >= 365.25 * 5) %>%  # at least 5 years before index
+  filter(lookback_ok)                                                               # keep only full lookback
+```
+
+Apply the same requirement to the comparison cohort's assigned index dates, so the two groups are comparable.
+
+</details>
+
+## More information
+
+See the [article](https://doi.org/10.2147/CLEP.S353398) for the full predictor
+list and weights. See [Overview of registers](register-reference.qmd) for
+confirmed column names in LPR and LMDB.
+
+## Next steps
+
+→ [Phase 14 - Export and repatriation](14_export.qmd)
