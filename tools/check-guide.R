@@ -3,14 +3,13 @@
 #-----------------------------------------------------
 # check-guide.R - ugentligt tjek af guiden
 #-----------------------------------------------------
-# Kører fire tjek, som Quarto-bygningen IKKE fanger:
+# Kører tre tjek, som Quarto-bygningen IKKE fanger:
 #
 #   code      Kan hver ```r-blok overhovedet parses som R?
 #   functions Findes de funktioner, vi kalder, rent faktisk?
-#   parity    Har da/ og en/ samme struktur?
 #   style     Overholder vi husreglerne (ingen em-dash, %>% ikke |>, kolon efter labels)?
 #
-# Brug:  Rscript tools/check-guide.R [all|code|functions|parity|style]
+# Brug:  Rscript tools/check-guide.R [all|code|functions|style]
 #        just check-guide
 #
 # Kun base R, ingen pakker at installere.
@@ -36,10 +35,13 @@ warn <- function(...) FINDINGS$warnings <- c(FINDINGS$warnings, paste0(...))
 header <- function(txt) cat("\n", txt, "\n", strrep("-", nchar(txt)), "\n", sep = "")
 
 qmd_files <- function() {
-  c(
-    list.files(file.path(ROOT, "da"), pattern = "\\.qmd$", full.names = TRUE),
-    list.files(file.path(ROOT, "en"), pattern = "\\.qmd$", full.names = TRUE)
+  # Guidens sider ligger i roden; darter/ er en undermappe. README/404 er ikke
+  # guideindhold og tjekkes ikke.
+  files <- c(
+    list.files(ROOT, pattern = "\\.qmd$", full.names = TRUE),
+    list.files(file.path(ROOT, "darter"), pattern = "\\.qmd$", full.names = TRUE)
   )
+  files[!basename(files) %in% c("README.qmd", "404.qmd")]
 }
 
 rel <- function(path) sub(paste0("^", ROOT, "/"), "", path)
@@ -378,77 +380,39 @@ check_functions <- function() {
 }
 
 #-----------------------------------------------------
-# 3. parity - har da/ og en/ samme struktur?
-#-----------------------------------------------------
-# 161.000 ord holdt i spejl i hånden. Det driver fra hinanden, og det skal
-# opdages den dag det sker, ikke et halvt år efter.
-PAIR_EXCEPTIONS <- c(
-  "00_index.qmd" = "index.qmd",
-  "bidrag.qmd" = "contribute.qmd"
-)
-
-check_parity <- function() {
-  header("3. Er da/ og en/ strukturelt ens?")
-
-  da <- basename(list.files(file.path(ROOT, "da"), pattern = "\\.qmd$"))
-  en <- basename(list.files(file.path(ROOT, "en"), pattern = "\\.qmd$"))
-
-  counts <- function(path) {
-    lines <- readLines(path, warn = FALSE)
-    prose <- prose_lines(lines)
-    blocks <- extract_blocks(lines)
-    c(
-      fences = length(blocks),
-      r_blocks = sum(vapply(blocks, function(b) is_r_block(b$info), logical(1))),
-      headings = sum(grepl("^#{1,6} ", prose)),
-      callouts = sum(grepl("^:::", prose)),
-      table_rows = sum(grepl("^\\|", prose))
-    )
-  }
-
-  n_bad <- 0L
-  paired_en <- character()
-
-  for (f in da) {
-    counterpart <- if (f %in% names(PAIR_EXCEPTIONS)) PAIR_EXCEPTIONS[[f]] else f
-    en_path <- file.path(ROOT, "en", counterpart)
-
-    if (!file.exists(en_path)) {
-      n_bad <- n_bad + 1L
-      fail("da/", f, " har ingen engelsk modpart (forventede en/", counterpart, ")")
-      next
-    }
-    paired_en <- c(paired_en, counterpart)
-
-    a <- counts(file.path(ROOT, "da", f))
-    b <- counts(en_path)
-    diff <- names(a)[a != b]
-
-    if (length(diff)) {
-      n_bad <- n_bad + 1L
-      detail <- paste0(diff, ": da=", a[diff], " en=", b[diff], collapse = ", ")
-      fail("da/", f, " vs en/", counterpart, " - strukturen matcher ikke (", detail, ")")
-    }
-  }
-
-  # Engelske sider uden dansk modpart.
-  for (f in setdiff(en, paired_en)) {
-    n_bad <- n_bad + 1L
-    fail("en/", f, " har ingen dansk modpart")
-  }
-
-  cat("Sammenlignede ", length(da), " sidepar, ", n_bad, " matcher ikke.\n", sep = "")
-}
-
-#-----------------------------------------------------
-# 4. style - husreglerne fra CLAUDE.md
+# 3. style - husreglerne fra CLAUDE.md
 #-----------------------------------------------------
 check_style <- function() {
-  header("4. Husregler (em-dash, %>%, kolon efter labels)")
+  header("3. Husregler (em-dash, %>%, kolon efter labels, formatter-skader)")
 
   n <- 0L
   for (f in qmd_files()) {
     lines <- readLines(f, warn = FALSE)
+
+    # Formatter-skader. panache-cli v3.0.0 escaper link-brackets og rykker
+    # callouts ind under den foregående liste, så linket renderer som rå tekst
+    # og callouten bliver til list-continuation. Begge dele er tavse i bygningen,
+    # så de skal fanges her. Se _ignore/TODO.md.
+    hits <- grep("\\\\\\[|\\\\\\]", lines)
+    for (i in hits) {
+      n <- n + 1L
+      fail(rel(f), ":", i, " - escapet link-bracket (\\[ eller \\]). Renderer som rå tekst, ikke som link.")
+    }
+    hits <- grep("^\\s+:::", lines)
+    for (i in hits) {
+      n <- n + 1L
+      fail(rel(f), ":", i, " - indrykket ::: (callout slugt af en liste). Skal stå i kolonne 0.")
+    }
+
+    # Liste, der er fladet til prosa. Kendetegnet er en indledning, der ender på
+    # kolon, efterfulgt af " - " midt i afsnittet: pandoc renderer det som ét
+    # afsnit, ikke som en liste, så punkterne forsvinder tavst.
+    prose <- prose_lines(lines)
+    flat <- grep(":\\s+- (\\*\\*|\\[|`|[A-Z])", prose, value = TRUE)
+    for (b in flat) {
+      n <- n + 1L
+      fail(rel(f), " - liste fladet til prosa (mangler tom linje efter kolon): ", substr(trimws(b), 1, 55), "...")
+    }
 
     # Ingen em-dash (U+2014). Gælder alt indhold, begge sprog.
     hits <- grep("—", lines)
@@ -489,7 +453,6 @@ what <- if (length(args)) args[1] else "all"
 
 if (what %in% c("all", "code")) check_code()
 if (what %in% c("all", "functions")) check_functions()
-if (what %in% c("all", "parity")) check_parity()
 if (what %in% c("all", "style")) check_style()
 
 header("Resultat")
