@@ -65,10 +65,10 @@ check-r:
 # PINNED ON PURPOSE. Unpinned, uvx pulls the latest panache-cli, and 3.3.0
 # destroys content: formatting is not idempotent, so a second run pulls a :::
 # callout into the preceding list and a third flattens the block. It also
-# escapes link brackets. 3.0.0 is the same version the pre-commit hook pins and
-# is verified clean on this repo. Do not drop the ==3.0.0.
+# escapes link brackets. 3.0.2 is the same version the pre-commit hook pins and
+# is verified clean on this repo. Do not drop the ==3.0.2.
 format-md:
-  uvx --from panache-cli==3.0.0 panache format .
+  uvx --from panache-cli==3.0.2 panache format .
 
 # Re-build the README file from the Quarto version
 build-readme:
