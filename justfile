@@ -10,8 +10,8 @@ check-all: check-spelling check-urls check-guide
 # The weekly once-over: everything that can rot without the build noticing
 check-weekly: check-guide check-urls check-spelling
 
-# Check the guide itself: R code parses, functions exist, da/en parity, house style
-# Sub-checks: just check-guide code | functions | parity | style
+# Check the guide itself: R code parses, functions exist, house style
+# Sub-checks: just check-guide code | functions | style
 check-guide check="all":
   Rscript tools/check-guide.R {{check}}
 
@@ -55,16 +55,19 @@ check-urls:
     --extensions md,qmd \
     --exclude "github\.com" \
     --exclude-path "_badges.qmd" \
-    --exclude-path "README.md" \
-    --exclude-path "da/_parked_content.md"
+    --exclude-path "README.md"
 
 # Lint R code with jarl
 check-r:
   uvx --from jarl-linter jarl check .
 
-# Format the docs: markdown + R code cells (panache runs air on the R)
+# DO NOT RUN. panache-cli v3 destroys content: it flattens bullet lists that sit
+# just before a ::: callout, and escapes link brackets so links render as raw
+# text. Both are silent in the build. Re-enable when fixed upstream, and verify
+# with `just check-guide style` afterwards.
 format-md:
-  uvx --from panache-cli panache format .
+  @echo "format-md is disabled: panache-cli v3 destroys content. See .pre-commit-config.yaml"
+  @exit 1
 
 # Re-build the README file from the Quarto version
 build-readme:
