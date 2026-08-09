@@ -150,22 +150,23 @@ model %>%
   tbl_regression(exponentiate = TRUE) # OR for each term, including the interaction term
 ```
 
+- `exposure * sex` means "both variables plus their interplay". It is the
+  **interaction term** `exposure:sex` that you read off.
+- If the interaction term's OR sits close to 1 (and p is large), the exposure
+  works **the same** in the two groups. If it differs clearly from 1, the
+  **effect depends on sex**, and you should then report **group-specific**
+  estimates (e.g. by running the model separately for each sex, or with
+  `emmeans` / `marginaleffects`).
+
 ::: {.callout-note}
 **Multiplicative vs. additive scale.** A product term tests interaction on the
 **multiplicative** (ratio) scale: does the exposure change the *odds ratio*
 differently between groups? At the public-health level the **additive** scale
 (differences in absolute risk) is often more relevant, and it is measured with
 **RERI** (relative excess risk due to interaction). The two scales can give
-different answers, so be explicit about which you report. See \[Read
-more\](#laes-mere).
+different answers, so be explicit about which you report. See [Read
+more](#laes-mere).
 :::
-
-`exposure * sex` means "both variables plus their interplay". It is the
-**interaction term** `exposure:sex` that you read off. If the interaction term's
-OR sits close to 1 (and p is large), the exposure works **the same** in the two
-groups. If it differs clearly from 1, the **effect depends on sex**, and you
-should then report **group-specific** estimates (e.g. by running the model
-separately for each sex, or with `emmeans` / `marginaleffects`).
 
 ::: {.callout-warning}
 **A subgroup analysis is not an interaction test.** Running the model separately
@@ -214,6 +215,16 @@ glm(
 )
 ```
 
+- `ns(age, df = 3)` replaces the straight line for `age` with a smooth curve.
+  `df = 3` controls the bendiness: more degrees of freedom = a more flexible
+  curve. **3-4** is a common starting point.
+- It works in all the models on these pages (logistic, linear, Cox, Poisson) -
+  just wrap the continuous variable in `ns(...)`.
+- Especially useful when the variable is your **exposure** (so you see the
+  dose-response shape itself) or a **strong confounder** (so a too-rigid
+  straight line does not leave *residual confounding*, i.e. confounding left
+  after adjustment).
+
 ::: {.callout-note}
 **You no longer read off a single number.** A spline variable has no single odds
 ratio, because the effect changes across the values. Instead you **plot** the
@@ -221,19 +232,27 @@ fitted curve (e.g. predicted risk against age) to show the relationship. The
 `ggeffects` or `marginaleffects` packages do this in a few lines.
 :::
 
-`ns(age, df = 3)` replaces the straight line for `age` with a smooth curve.
-`df = 3` controls the bendiness: more degrees of freedom = a more flexible
-curve. **3-4** is a common starting point. It works in all the models on these
-pages (logistic, linear, Cox, Poisson) - just wrap the continuous variable in
-`ns(...)`. Especially useful when the variable is your **exposure** (so you see
-the dose-response shape itself) or a **strong confounder** (so a too-rigid
-straight line does not leave *residual confounding*, i.e. confounding left after
-adjustment).
-
 ## Reading your result {#laes-resultat}
 
 For each variable the regression table gives an **estimate**, a **confidence
 interval** and a **p-value**:
+
+- **The estimate** is the effect measure. For logistic regression it is an
+  **odds ratio (OR)**, for log-binomial a **relative risk (RR)**, and for Cox
+  ([Time-to-event](13e_time-to-event.qmd)) a **hazard ratio (HR)** - all are
+  *ratios*, where **1 means no difference** (above 1 = higher odds/risk/rate,
+  below 1 = lower). For **linear** regression the estimate is instead a
+  difference in means, where **0** means no difference. Example: OR = 1.5 → 50%
+  higher odds; OR = 0.8 → 20% lower.
+- **The 95% confidence interval** is the range the true effect can plausibly lie
+  in: narrow = precise, wide = much uncertainty. For a ratio: if the interval
+  **crosses 1**, the effect is not statistically significant at the 5% level.
+- **The p-value** is the probability of seeing an effect at least as large as
+  yours *if there were truly none*. A small p (typically < 0.05) argues against
+  "no effect", but does **not** tell you how large or important the effect is -
+  the estimate and confidence interval do. In very large register datasets even
+  tiny, unimportant differences often become "significant", so always look at
+  the **size** (the estimate), not just p.
 
 ::: {.callout-note}
 **OR and HR are non-collapsible.** Unlike a risk difference or relative risk, an
@@ -244,22 +263,6 @@ population-average effect, and "adjusted ≠ crude" is not by itself evidence of
 confounding. If you need a marginal (population-average) effect, standardization
 or IPTW gives one - see [IP weighting](13g_weighting-iptw.qmd).
 :::
-
-**The estimate** is the effect measure. For logistic regression it is an **odds
-ratio (OR)**, for log-binomial a **relative risk (RR)**, and for Cox
-([Time-to-event](13e_time-to-event.qmd)) a **hazard ratio (HR)** - all are
-*ratios*, where **1 means no difference** (above 1 = higher odds/risk/rate,
-below 1 = lower). For **linear** regression the estimate is instead a difference
-in means, where **0** means no difference. Example: OR = 1.5 → 50% higher odds;
-OR = 0.8 → 20% lower. **The 95% confidence interval** is the range the true
-effect can plausibly lie in: narrow = precise, wide = much uncertainty. For a
-ratio: if the interval **crosses 1**, the effect is not statistically
-significant at the 5% level. **The p-value** is the probability of seeing an
-effect at least as large as yours *if there were truly none*. A small p
-(typically < 0.05) argues against "no effect", but does **not** tell you how
-large or important the effect is - the estimate and confidence interval do. In
-very large register datasets even tiny, unimportant differences often become
-"significant", so always look at the **size** (the estimate), not just p.
 
 <details id="klyngebaserede-standardfejl">
 <summary>**Advanced:** robust (clustered) standard errors - skip if each person appears only once</summary>
