@@ -61,13 +61,14 @@ check-urls:
 check-r:
   uvx --from jarl-linter jarl check .
 
-# DO NOT RUN. panache-cli v3 destroys content: it flattens bullet lists that sit
-# just before a ::: callout, and escapes link brackets so links render as raw
-# text. Both are silent in the build. Re-enable when fixed upstream, and verify
-# with `just check-guide style` afterwards.
+# Format the docs: markdown + R code cells (panache runs air on the R)
+# PINNED ON PURPOSE. Unpinned, uvx pulls the latest panache-cli, and 3.3.0
+# destroys content: formatting is not idempotent, so a second run pulls a :::
+# callout into the preceding list and a third flattens the block. It also
+# escapes link brackets. 3.0.0 is the same version the pre-commit hook pins and
+# is verified clean on this repo. Do not drop the ==3.0.0.
 format-md:
-  @echo "format-md is disabled: panache-cli v3 destroys content. See .pre-commit-config.yaml"
-  @exit 1
+  uvx --from panache-cli==3.0.0 panache format .
 
 # Re-build the README file from the Quarto version
 build-readme:
