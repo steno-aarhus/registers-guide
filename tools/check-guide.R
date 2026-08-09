@@ -3,13 +3,14 @@
 #-----------------------------------------------------
 # check-guide.R - ugentligt tjek af guiden
 #-----------------------------------------------------
-# Kører tre tjek, som Quarto-bygningen IKKE fanger:
+# Kører fire tjek, som Quarto-bygningen IKKE fanger:
 #
 #   code      Kan hver ```r-blok overhovedet parses som R?
 #   functions Findes de funktioner, vi kalder, rent faktisk?
+#   links     Peger de interne .qmd-links på filer, der findes?
 #   style     Overholder vi husreglerne (ingen em-dash, %>% ikke |>, kolon efter labels)?
 #
-# Brug:  Rscript tools/check-guide.R [all|code|functions|style]
+# Brug:  Rscript tools/check-guide.R [all|code|functions|style|links]
 #        just check-guide
 #
 # Kun base R, ingen pakker at installere.
@@ -446,6 +447,56 @@ check_style <- function() {
 }
 
 #-----------------------------------------------------
+# 4. links - peger de interne .qmd-links på filer, der findes?
+#-----------------------------------------------------
+# lychee (just check-urls) tjekker KUN http/mailto, ikke interne links, og
+# Quarto rapporterer et dødt internt link som en advarsel, ikke en fejl - så
+# bygningen lykkes, og linket peger bare ingen steder hen. Efter en omdøbning er
+# det den fejl, der er lettest at lave og sværest at opdage.
+check_links <- function() {
+  header("4. Peger de interne .qmd-links på filer, der findes?")
+
+  n_checked <- 0L
+  n_bad <- 0L
+
+  # Eksterne URL'er og rod-absolutte stier (som Quarto selv opløser) er ikke
+  # vores bord. Guarden skal ligge på det RÅ link, ikke på den opløste sti -
+  # den er altid absolut og ville ellers springe alt over.
+  skip_target <- function(raw) grepl("^(https?:|mailto:|/)", raw)
+
+  check_target <- function(raw, resolved, where) {
+    if (skip_target(raw)) return(invisible(NULL))
+    n_checked <<- n_checked + 1L
+    if (!file.exists(resolved)) {
+      n_bad <<- n_bad + 1L
+      fail(where, " - dødt internt link: ", raw)
+    }
+  }
+
+  for (f in qmd_files()) {
+    lines <- readLines(f, warn = FALSE)
+    prose <- prose_lines(lines)   # kodeblokke tæller ikke med
+    dir <- dirname(f)
+    for (i in seq_along(prose)) {
+      hits <- gregexpr("\\]\\(([^)[:space:]#]+\\.qmd)", prose[i])[[1]]
+      if (hits[1] == -1) next
+      for (j in seq_along(hits)) {
+        raw <- substr(prose[i], hits[j], hits[j] + attr(hits, "match.length")[j] - 1L)
+        target <- sub("^\\]\\(", "", raw)
+        check_target(target, file.path(dir, target), paste0(rel(f), ":", i))
+      }
+    }
+  }
+
+  # sidebar og navbar i _quarto.yml peger også på filer
+  yml <- readLines(file.path(ROOT, "_quarto.yml"), warn = FALSE)
+  hits <- regmatches(yml, regexpr("[[:alnum:]._/-]+\\.qmd", yml))
+  for (h in hits) check_target(h, file.path(ROOT, h), "_quarto.yml")
+
+  cat("Tjekkede ", n_checked, " interne links, ", n_bad, " døde.\n", sep = "")
+}
+
+#-----------------------------------------------------
 # Kør
 #-----------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
@@ -454,6 +505,7 @@ what <- if (length(args)) args[1] else "all"
 if (what %in% c("all", "code")) check_code()
 if (what %in% c("all", "functions")) check_functions()
 if (what %in% c("all", "style")) check_style()
+if (what %in% c("all", "links")) check_links()
 
 header("Resultat")
 

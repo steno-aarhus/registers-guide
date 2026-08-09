@@ -10,8 +10,8 @@ check-all: check-spelling check-urls check-guide
 # The weekly once-over: everything that can rot without the build noticing
 check-weekly: check-guide check-urls check-spelling
 
-# Check the guide itself: R code parses, functions exist, house style
-# Sub-checks: just check-guide code | functions | style
+# Check the guide itself: R code parses, functions exist, internal links, house style
+# Sub-checks: just check-guide code | functions | links | style
 check-guide check="all":
   Rscript tools/check-guide.R {{check}}
 
@@ -47,7 +47,7 @@ install-precommit:
 check-spelling:
   uvx typos --config .config/typos.toml
 
-# Check that URLs work
+# Check that external URLs work (internal .qmd links: just check-guide links)
 check-urls:
   lychee . \
     --config .config/lychee.toml \
