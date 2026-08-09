@@ -547,6 +547,72 @@ also holds if you extend the events (e.g. GLP1-RAs) or change the thresholds.
 :::::
 :::
 
+::: {.callout-tip collapse="true"}
+## Change the algorithm's rules without reinstalling the package
+
+On DST you cannot install a modified version of `osdc`: there is no internet on
+the server, and you cannot edit an installed package. You can still change the
+rules, because `algorithm()` is **not** the classifier. It is a plain function
+that **rebuilds the rule list on every call**, and `classify_diabetes()` looks
+the rules up live: `logic_as_expression("is_gld_code")` →
+`get_algorithm_logic()` → `algorithm()`. Replace that function in the package's
+namespace and the classifier follows.
+
+The example below counts **all** ATC A10 drugs as inclusion events, including
+the GLP1-RAs that the published algorithm deliberately excludes.
+
+```r
+library(osdc)
+
+# 1. Get the current rule list and look at the rule you want to change.
+rules <- algorithm()
+rules$is_gld_code$logic
+# "atc =~ '^A10' AND NOT (atc =~ '^(A10BJ|A10BK01|A10BK03)')"
+#   ^ everything under A10, MINUS GLP1-RAs (A10BJ) and plain
+#     dapagliflozin/empagliflozin (A10BK01/A10BK03)
+
+# 2. Edit the rule. The logic is a plain string in osdc's own mini-syntax
+#    (AND / OR / NOT / =~), which get_algorithm_logic() translates into R.
+rules$is_gld_code$logic <- "atc =~ '^A10'"
+
+# 3. Wrap it in a function that returns your list.
+my_algorithm <- function() rules
+
+# 4. Swap it into osdc's namespace.
+assignInNamespace("algorithm", my_algorithm, ns = "osdc")
+
+# 5. Confirm it took effect BEFORE you run the classifier.
+osdc::algorithm()$is_gld_code$logic # must show your new string
+
+# [CHECK ON DST] Verify that the internal call sites still look the rules up
+# live. get_algorithm_logic() accepts an `algorithm` argument, and if a future
+# osdc version starts passing its own list there, this override stops working
+# SILENTLY - you would get the published rules back without any error. Check
+# with: print(osdc:::keep_gld_purchases) and look for logic_as_expression()
+# being called WITHOUT an algorithm argument.
+```
+
+After this, run step 3 of the script above as usual.
+
+::::: {.callout-warning}
+**Three things you have to know before you use this.**
+
+- **The change disappears when you restart R.** This is a runtime patch, not an
+  installation. The `assignInNamespace()` call has to sit at the top of your
+  script and be re-run every single session, including after the server's
+  weekly reset. If you forget it, the script runs to completion with the
+  *published* rules and nothing warns you.
+- **The published validation no longer applies.** The article's sensitivity and
+  specificity were measured on the original rules. Changing which drugs count
+  as events makes your classification a new, unvalidated algorithm. Say so in
+  your methods section, and state exactly which rule you changed.
+- **Verify that the override actually took.** Step 5 above is not optional.
+  Print the logic after the swap, and ideally compare the number of classified
+  persons with and without the override: if the two are identical, the override
+  did not work.
+:::::
+:::
+
 ## Coverage and limitations
 
 - The DARTER dataset has a cohort built with osdc; the new 2024 population is
@@ -584,11 +650,13 @@ on the future** (immortal time bias).
 **Workaround:** run the algorithm **yourself** and filter the input registers to
 only data **before your index date**, so `classify_diabetes()` only sees
 pre-index information. Then the type classification is not contaminated by
-future events. See step 8 of the script above ("Complete script: prepare the
+future events. See step 4 of the script above ("Complete script: prepare the
 data and run osdc yourself").
 
 Note that if you modify the algorithm, e.g. if you want to include GLP1-RAs as
-events, the **published validation no longer applies**.
+events, the **published validation no longer applies**. How to do it on DST,
+where the package cannot be reinstalled, is described in "Change the algorithm's
+rules without reinstalling the package" above.
 :::
 
 See the full methodology in the article and documentation site.
