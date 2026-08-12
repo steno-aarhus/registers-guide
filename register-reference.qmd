@@ -90,7 +90,7 @@ determine whether a person was alive on a specific date.
 BEF **cannot on its own** answer whether a person was resident in Denmark on a
 given date: between two snapshots people can both leave and come back. To decide
 residence on an index date, combine BEF with VNDS - see [Phase 10, Step
-1](10_build-study-population.qmd#step-1-define-the-source-population).
+1](10_build-study-population.qmd#step-1).
 
   | Column           | Type      | Contents                            |
   | ---------------- | --------- | ----------------------------------- |
@@ -135,6 +135,30 @@ the modification date and ask your data manager about current coverage.
 **`dodsaasg`** is the classification register for causes of death - it is
 **not** the source for individual death dates. Always use `dodsaars` with the
 column `d_dodsdto`.
+:::
+
+::: {.callout-important}
+**`dodsaars` may stop around 2001 - check before you rely on it.** On some
+projects `dodsaars` only covers \~1970-2001, and deaths after that sit in a
+separate register, **DOD**, where the date column is called **`doddato`**, not
+`d_dodsdto`. DOD is often not converted to parquet, so it is read from the raw
+SAS file with `haven::read_sas()` rather than `read_register()`. Ask your data
+manager where it lives on your project.
+
+Stack the two on `pnr` and rename so the date column matches:
+
+```r
+deaths <- bind_rows(
+  dodsaars %>% select(pnr, d_dodsdto),
+  dod %>% rename(d_dodsdto = doddato) %>% select(pnr, d_dodsdto)
+) %>%
+  mutate(d_dodsdto = as.Date(d_dodsdto)) %>%
+  distinct(pnr, .keep_all = TRUE)
+```
+
+If you skip this, everyone who dies after 2001 is silently treated as alive, and
+your censoring is wrong. On DARTER both files are readable directly - see
+[Register paths and datastores](darter/01_register-paths-datastores.qmd).
 :::
 
 ### VNDS - Migration Register
@@ -345,7 +369,7 @@ lpr_sksopr <- read_register("lpr_sksopr") %>%
   | `c_tilopr`   | character | Supplementary procedure code                                 |
   | `year`       | integer   | Year (partition column)                                      |
 
-### procedurer_kirurgi - LPR3 SKS procedures (2019 and onwards)
+### procedurer_kirurgi - LPR3 SKS procedures (2019 and onwards) {#lpr3-procedures}
 
 Location (DARTER): `parquet-external/procedurer_kirurgi`
 
@@ -379,6 +403,48 @@ lookup isn't solved yet. Applies to DARTER/project 708421 - check on your own
 project. We'll update the page with a solution once one is found. Column names
 are mixed case in raw data - call `rename_with(tolower)` immediately after
 loading.
+:::
+
+::: {.callout-important}
+**Look for `lpr_a_procregistrering` first.** `procedurer_kirurgi` is a
+**project-specific delivery** of the LPR3 procedures, and on DARTER its join key
+is the broken one described above. `lpr_a_procregistrering` is the general LPR3
+procedure table, sits alongside `lpr_a_kontakt` and `lpr_a_diagnose`, and joins
+to contacts on `dw_ek_kontakt` exactly like the diagnosis table does. If your
+project has it, use it.
+
+The column names differ, so the code is not interchangeable:
+
+  | `procedurer_kirurgi`   | `lpr_a_procregistrering`                       |
+  | ---------------------- | ---------------------------------------------- |
+  | `procedurekode`        | `proc_kode`                                    |
+  | `dato_start`           | `proc_starttidspunkt` (datetime - `as.Date()`) |
+  | `dw_ek_forloeb` (join) | `dw_ek_kontakt` (join)                         |
+
+```r
+# [CHECK ON DST] This table is reported to work on DARTER, but we have not
+# verified it ourselves. Before you rely on it, run:
+#   proc <- read_register("lpr_a_procregistrering") %>% rename_with(tolower)
+#   names(proc)                                  # do the columns match the table above?
+#   proc %>% summarise(n = n(), na = sum(is.na(dw_ek_kontakt))) %>% collect()
+# A small share of rows is expected to lack dw_ek_kontakt and carry only
+# dw_ek_forloeb. Count them before you decide to drop them - dropping rows
+# silently is how procedures go missing from a cohort.
+proc <- read_register("lpr_a_procregistrering") %>%
+  rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3") %>% # same duplicate filter as the contacts
+  filter(proc_kode %in% !!MY_CODES) %>%
+  select(dw_ek_kontakt, proc_starttidspunkt)
+
+surg_lpr3 <- read_register("lpr_a_kontakt") %>%
+  rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3") %>%
+  select(dw_ek_kontakt, pnr) %>%
+  inner_join(proc, by = "dw_ek_kontakt") %>% # the join that procedurer_kirurgi cannot do
+  mutate(date_procedure = as.Date(proc_starttidspunkt)) %>%
+  select(pnr, date_procedure) %>%
+  collect()
+```
 :::
 
 ### lpr_sksube - SKS examinations and treatments (ZZ codes)
@@ -502,7 +568,7 @@ recent DRG years). The pattern is inspired by [the Plana-Ripoll group's code on
 OSF](https://osf.io/zhfyp/overview), but the variable names there are from a
 2022 delivery and should not be assumed current.
 
-## 7. LMDB - Prescription Register
+## 7. LMDB - Prescription Register {#lmdb}
 
 One row per dispensed prescription. Covers approximately 1994 onwards.
 
