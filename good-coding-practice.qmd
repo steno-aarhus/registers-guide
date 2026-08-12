@@ -93,7 +93,7 @@ workflow and reruns only the steps whose inputs changed - reproducible, and fast
 to re-run.
 :::
 
-## 2. Run scripts top to bottom - never across
+## 2. Run scripts top to bottom - never across {#run-top-to-bottom}
 
 A script should run from line 1 to the end without interruption and give the
 same result every time. Avoid running two lines from one file, jumping to
@@ -318,6 +318,81 @@ compute_age(as.Date("1950-03-01"), as.Date("2020-01-01")) # 69
 
 You can read more about functions - arguments, default values and when they pay
 off - in [Functions: overview](function-guide.qmd).
+
+### Share functions across scripts with a separate file
+
+A function only helps within the script it is defined in. As soon as a
+**second** script needs it, you copy it over - and now you have two versions
+that drift apart. You fix a bug in one of them, months pass, and you can no
+longer tell which analysis was run with which version.
+
+The fix is one shared file that both scripts read. Three steps:
+
+**1. Put the definitions in their own file**, e.g. `00_functions.R`. The `00_`
+prefix places it first, before the numbered scripts (see [section
+2](#run-top-to-bottom)).
+
+```r
+# 00_functions.R ----------------------------------------------------------
+# Shared helper functions and constants for the dementia project.
+# Sourced by 01_build_cohorts.R, 02_extract_outcomes.R and later scripts.
+# This file must contain ONLY definitions - nothing that runs on its own.
+
+# Constants the functions depend on - they have to live here too, see below
+dementia_icd3 <- c("F00", "F01", "F02", "F03", "G30", "G31")
+n_controls_per_case <- 5L
+
+get_prior_dementia_pnrs <- function(pnr_vector, before_date) {
+  # ... body ...
+}
+
+get_earliest_dementia_dates <- function(pnr_vector) {
+  # ... body ...
+}
+```
+
+**2. Delete the definitions from the scripts** and read the file instead, right
+after the `library()` calls:
+
+```r
+library(dplyr)
+library(fastreg)
+
+source("00_functions.R") # loads the shared helpers and constants
+```
+
+**3. Verify it before you trust it.** Restart R completely first (**Session →
+Restart R**, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F10</kbd>) so you know an
+old copy is not still sitting in memory:
+
+```r
+source("00_functions.R")
+
+exists("get_earliest_dementia_dates") # must be TRUE
+dementia_icd3 # must print the six codes
+```
+
+::: {.callout-warning}
+**Move the constants too.** `get_prior_dementia_pnrs()` uses `dementia_icd3`. If
+you move the function but leave the constant behind in the old script, the
+function does not fail when you source it - it fails **later**, at a random
+point deep inside a run, with `object 'dementia_icd3' not found`. Anything a
+function refers to but does not take as an argument has to move with it.
+:::
+
+::: {.callout-important}
+**`source()` runs the whole file, top to bottom.** Everything at the top level
+is executed, not just the `function() {}` blocks. So the file must contain
+**definitions only**: no `read_register()`, no `saveRDS()`, no `cat()`, no test
+calls. Otherwise you re-run the data loading every single time you source it,
+and a ten-second step becomes ten minutes.
+:::
+
+**The path is relative to your working directory.** `source("00_functions.R")`
+looks in the folder R is currently standing in. Open your work through the
+`.Rproj` file and that folder is fixed to the project folder, so the short path
+always works - see [Phase 3 - Log in to DST](03_log-in-dst.qmd). If `getwd()`
+shows something else, you opened R without the project.
 
 ## 9. Fail early - check your data before the analysis
 
