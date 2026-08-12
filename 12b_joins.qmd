@@ -146,6 +146,28 @@ If instead you join two extracts that each have **one row per person** (e.g.
 finished person-level extracts onto the cohort), `pnr` alone is enough - there
 is no extra dimension to keep track of.
 
+::: {.callout-warning}
+**Do not assume "one row per person per year" - check it.** BEF on DARTER does
+contain duplicate `(pnr, year)` rows, and adding the year as a key does not save
+you from those: a person with two 2018 rows still doubles. Count first, and
+reduce to one row per person per year if you find any.
+
+```r
+# Are there duplicates? n > 1 means the same person appears twice in one year.
+bef %>%
+  count(pnr, aar) %>%
+  filter(n > 1) %>%
+  count() %>%
+  collect()
+
+bef <- bef %>% distinct(pnr, aar, .keep_all = TRUE) # keep one row per person-year
+```
+
+`left_join()` will not warn you. It just returns more rows than you started
+with, which is why check 1 in [Validate your join](#validate-your-join) is to
+compare `nrow()` before and after.
+:::
+
 ## Validate your join {#validate-your-join}
 
 Joins rarely fail with an error message - but they can produce silently wrong

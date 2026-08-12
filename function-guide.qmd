@@ -565,10 +565,21 @@ atc %in% !!my_atc # TRUE for all ATC codes on your local list (!! - see below)
 You will see `%in%` in almost every `filter()` call in the project.
 
 ::: {.callout-note}
-To filter on **pnr** against the whole cohort, use
-`semi_join(tibble(pnr = cohort_pnrs), by = "pnr")` instead of
-`filter(pnr %in% ...)` - it pushes down into the database more efficiently and
-needs no `!!`.
+**Sending a local list into a lazy query - two ways.** The register is not in R
+yet, so the backend cannot see an R object you wrote yourself.
+`filter(c_diag %in% my_codes)` therefore fails or, worse, quietly matches
+nothing.
+
+- **`!!`** forces the vector's contents into the query:
+  `filter(c_diag %in% !!my_codes)`. Short, and what this guide uses throughout.
+- **`semi_join()`** sends the list over as a temporary table:
+  `semi_join(tibble(c_diag = my_codes), by = "c_diag", copy = TRUE)`. Needs no
+  `!!`, and holds up better for very long lists, where `!!` writes the whole
+  vector into the SQL as one enormous `IN (...)`.
+
+For **pnr** against the whole cohort, prefer the `semi_join()` form - it is the
+same idea, and cohort lists are long:
+`semi_join(tibble(pnr = cohort_pnrs), by = "pnr")`.
 :::
 
 ### `distinct(col1, col2)`
