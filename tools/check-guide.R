@@ -7,7 +7,7 @@
 #
 #   code      Kan hver ```r-blok overhovedet parses som R?
 #   functions Findes de funktioner, vi kalder, rent faktisk?
-#   links     Peger de interne .qmd-links på filer, der findes?
+#   links     Peger interne .qmd-links og ankre på noget, der findes?
 #   style     Overholder vi husreglerne (ingen em-dash, %>% ikke |>, kolon efter labels)?
 #
 # Brug:  Rscript tools/check-guide.R [all|code|functions|style|links]
@@ -447,17 +447,90 @@ check_style <- function() {
 }
 
 #-----------------------------------------------------
-# 4. links - peger de interne .qmd-links på filer, der findes?
+# 4. links - peger de interne .qmd-links på filer og ankre, der findes?
 #-----------------------------------------------------
 # lychee (just check-urls) tjekker KUN http/mailto, ikke interne links, og
 # Quarto rapporterer et dødt internt link som en advarsel, ikke en fejl - så
 # bygningen lykkes, og linket peger bare ingen steder hen. Efter en omdøbning er
 # det den fejl, der er lettest at lave og sværest at opdage.
+#
+# Ankre er værre endnu: side.qmd#anker-der-ikke-findes lander på toppen af den
+# rigtige side, så det ser ud til at virke. Derfor udleder vi id'et for hver
+# overskrift efter pandocs regler og slår linkets anker op i den liste.
+
+# Pandocs auto_identifiers, i den rækkefølge pandoc selv gør det:
+#   1) fjern formatering og links (behold linkets tekst)
+#   2) fjern alt der ikke er alfanumerisk, understreg, bindestreg eller punktum
+#   3) mellemrum -> bindestreger
+#   4) små bogstaver
+#   5) fjern alt frem til første bogstav (et id må ikke starte med tal)
+# Bemærk rækkefølgen i 2-3: " - " bliver til "---", ikke til "-".
+heading_id <- function(txt) {
+  x <- sub("\\{[^}]*\\}\\s*$", "", txt)                  # eksplicitte attributter
+  x <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", x)        # [tekst](url) -> tekst
+  x <- gsub("[*_`]", "", x)                              # fed, kursiv, kode
+  x <- gsub("[^[:alnum:] _.-]", "", x)
+  x <- gsub("[[:space:]]+", "-", trimws(x))
+  x <- tolower(x)
+  sub("^[^a-z]+", "", x)
+}
+
+# Alle id'er en side tilbyder: eksplicitte {#id} (overskrifter, divs, figurer)
+# plus de udledte overskrifts-id'er. Gentagne id'er får -1, -2 ... som i pandoc.
+page_ids <- function(lines) {
+  prose <- prose_lines(lines)
+  # {#id}, {#id .class} - id'et slutter ved mellemrum eller }. Punktum er
+  # tilladt INDE i et id (fx {#as.integer-x-1l}), så det må ikke afgrænse.
+  explicit <- unlist(regmatches(prose, gregexpr("\\{#[^}[:space:]]+", prose)))
+  explicit <- sub("^\\{#", "", explicit)
+
+  # rå HTML tæller også: <details id="..."> og <div id="...">
+  html <- unlist(regmatches(prose, gregexpr("id=\"[^\"]+\"", prose)))
+  html <- gsub("^id=\"|\"$", "", html)
+  explicit <- c(explicit, html)
+
+  ids <- character()
+  seen <- character()
+  for (l in prose) {
+    if (!grepl("^#{1,6} ", l)) next
+    if (grepl("\\{#[^}]*\\}\\s*$", l)) next                # har allerede et eksplicit id
+    id <- heading_id(sub("^#{1,6} ", "", l))
+    if (!nzchar(id)) next
+    n <- sum(seen == id)
+    seen <- c(seen, id)
+    if (n > 0) id <- paste0(id, "-", n)
+    ids <- c(ids, id)
+  }
+  unique(c(explicit, ids))
+}
+
 check_links <- function() {
-  header("4. Peger de interne .qmd-links på filer, der findes?")
+  header("4. Peger de interne .qmd-links på filer og ankre, der findes?")
 
   n_checked <- 0L
   n_bad <- 0L
+  n_anchors <- 0L
+
+  ids_cache <- new.env(parent = emptyenv())
+  ids_for <- function(path) {
+    key <- normalizePath(path, mustWork = FALSE)
+    if (is.null(ids_cache[[key]])) {
+      ids_cache[[key]] <- if (file.exists(key)) page_ids(readLines(key, warn = FALSE)) else character()
+    }
+    ids_cache[[key]]
+  }
+
+  check_anchor <- function(target_file, anchor, where, shown) {
+    if (!nzchar(anchor)) return(invisible(NULL))
+    # Quarto genererer selv ankre til krydsreferencer (fig-, tbl-, eq-, sec-,
+    # lst-, thm-) og til kodeceller - dem kan vi ikke se i kilden.
+    if (grepl("^(fig|tbl|eq|sec|lst|thm|cell)-", anchor)) return(invisible(NULL))
+    n_anchors <<- n_anchors + 1L
+    if (!anchor %in% ids_for(target_file)) {
+      n_bad <<- n_bad + 1L
+      fail(where, " - anker findes ikke: ", shown)
+    }
+  }
 
   # Eksterne URL'er og rod-absolutte stier (som Quarto selv opløser) er ikke
   # vores bord. Guarden skal ligge på det RÅ link, ikke på den opløste sti -
@@ -478,12 +551,31 @@ check_links <- function() {
     prose <- prose_lines(lines)   # kodeblokke tæller ikke med
     dir <- dirname(f)
     for (i in seq_along(prose)) {
-      hits <- gregexpr("\\]\\(([^)[:space:]#]+\\.qmd)", prose[i])[[1]]
-      if (hits[1] == -1) next
-      for (j in seq_along(hits)) {
-        raw <- substr(prose[i], hits[j], hits[j] + attr(hits, "match.length")[j] - 1L)
-        target <- sub("^\\]\\(", "", raw)
-        check_target(target, file.path(dir, target), paste0(rel(f), ":", i))
+      where <- paste0(rel(f), ":", i)
+
+      # links til en anden side, evt. med anker: ](side.qmd) / ](side.qmd#anker)
+      hits <- gregexpr("\\]\\([^)[:space:]]+\\.qmd(#[^)[:space:]]*)?\\)", prose[i])[[1]]
+      if (hits[1] != -1) {
+        for (j in seq_along(hits)) {
+          raw <- substr(prose[i], hits[j], hits[j] + attr(hits, "match.length")[j] - 1L)
+          link <- sub("^\\]\\(", "", sub("\\)$", "", raw))
+          target <- sub("#.*$", "", link)
+          anchor <- if (grepl("#", link)) sub("^[^#]*#", "", link) else ""
+          check_target(target, file.path(dir, target), where)
+          if (!skip_target(target) && file.exists(file.path(dir, target))) {
+            check_anchor(file.path(dir, target), anchor, where, link)
+          }
+        }
+      }
+
+      # links på samme side: ](#anker)
+      hits <- gregexpr("\\]\\(#[^)[:space:]]+\\)", prose[i])[[1]]
+      if (hits[1] != -1) {
+        for (j in seq_along(hits)) {
+          raw <- substr(prose[i], hits[j], hits[j] + attr(hits, "match.length")[j] - 1L)
+          anchor <- sub("^\\]\\(#", "", sub("\\)$", "", raw))
+          check_anchor(f, anchor, where, paste0("#", anchor))
+        }
       }
     }
   }
@@ -493,7 +585,7 @@ check_links <- function() {
   hits <- regmatches(yml, regexpr("[[:alnum:]._/-]+\\.qmd", yml))
   for (h in hits) check_target(h, file.path(ROOT, h), "_quarto.yml")
 
-  cat("Tjekkede ", n_checked, " interne links, ", n_bad, " døde.\n", sep = "")
+  cat("Tjekkede ", n_checked, " interne links og ", n_anchors, " ankre, ", n_bad, " døde.\n", sep = "")
 }
 
 #-----------------------------------------------------
