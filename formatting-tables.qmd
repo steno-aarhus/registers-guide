@@ -81,7 +81,25 @@ Format tables are loaded directly into R's memory (not lazy evaluation). You
 must `collect()` DuckDB data before joining with them.
 :::
 
-## The three tables you will use most often
+::: {.callout-tip}
+**Two of these lookups already exist in R.** The
+[`heaven`](packages-overview.qmd#heaven---danish-register-data-toolkit) package
+ships them as data, so you do not have to read a SAS format file at all:
+
+- **`data(edu_code)`:** 4,621 education codes with `hfaudd` mapped to categories
+  in English and Danish, a 5-level grouping and ISCED codes.
+- **`kommuneRegion(kommune)`:** converts a numeric 3-digit municipality code
+  straight to one of the five regions (valid from 2007). It gives you the
+  *region*, not the municipality name - for the name you still need the format
+  table below.
+
+`heaven` is pre-installed on DST, and elsewhere it installs from GitHub with
+`pak::pak("tagteam/heaven")` (it is not on CRAN, so `install.packages()` will
+not find it). The format tables below are still the route for every code
+`heaven` does not cover, and they are what DST itself publishes.
+:::
+
+## The tables you will use most often
 
 ### Municipality names
 
@@ -131,27 +149,18 @@ akm_categorised <- akm_data %>%
   )
 ```
 
-### Education level (hfaudd)
+### Education (hfaudd)
 
-```r
-# Duration of education in months (standard duration + entry requirements):
-udda_table <- read_sas(
-  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Disced/n_audd_pria_l1lx_k.sas7bdat"
-)
-# Columns: START (hfaudd code), AUDD_PRIA_L1LX_K (duration in months)
+The `Disced/` folder holds the format tables for education codes. What most
+analyses need from `hfaudd` is the **level** (short / medium / long), and that
+has its own recipe - see [Socioeconomic
+variables](11b_socioeconomic-variables.qmd#education).
 
-# Categorisation per SEPLINE guidelines:
-udda_categorised <- udda_data %>%
-  left_join(udda_table, by = c("hfaudd" = "START")) %>%
-  mutate(
-    education_cat = case_when(
-      substr(as.character(hfaudd), 1, 2) %in% c("10", "15") ~ "Short",
-      substr(as.character(hfaudd), 1, 2) %in% c("20", "30", "35") ~ "Medium",
-      as.numeric(substr(as.character(hfaudd), 1, 2)) >= 40 ~ "Long",
-      TRUE ~ "Unknown"
-    )
-  )
-```
+Note that `hfaudd` identifies the *specific* education, not its level, so every
+route to the level goes through a lookup table. The digits of the code will not
+tell you - see [Overview of
+registers](register-reference.qmd#udda---education-register) for why that fails
+and what it costs.
 
 ## Tips for finding the right table
 

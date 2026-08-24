@@ -38,8 +38,9 @@ diagnoses - both are on DST.
 
 Functions built specifically for Danish register data by Thomas Gerds
 (University of Copenhagen, Biostatistics): Lexis-splitting for time-varying
-covariates, drug exposure windows from LMDB, risk-set matching and Charlson
-score.
+covariates, drug exposure windows from LMDB, risk-set matching, Charlson score,
+average income, hypertension from prescriptions, and built-in lookup tables for
+education and ATC codes.
 
 <details>
 <summary>What heaven can do - and when to use it</summary>
@@ -88,8 +89,64 @@ matched <- riskSetMatch(ptid = "pnr", event = "event",
 # Returns: matched dataset with matchID linking cases and controls.
 ```
 
+**Average income over the years before a date** - what [Socioeconomic variables](11b_socioeconomic-variables.qmd#faik-income) does by hand:
+
+```r
+income <- averageIncome(
+  data       = kohort,                          # id + the date to look back from
+  income     = faik_linked,                     # id + year + income, already linked to pnr
+  datvars    = c("pnr", "index_date"),
+  incomevars = c("pnr", "aar", "famaekvivadisp_13"),
+  numyears   = 3                                # default is 5; SEPLINE uses 3
+)
+# Returns: one row per person with the averaged income.
+# It uses only years STRICTLY BEFORE the index year, and it keeps one row per
+# person-year, so repeated rows for the same person and year collapse.
+# It does NOT build the familie_id bridge for you - the income table you pass in
+# must already be linked to pnr.
+```
+
+**Hypertension from prescriptions** - `hypertensionMedication(data, vars, index.date, medication.definition = hypertensionATC)`. Defines hypertension from ATC codes, either at a given index date or across the whole period. Arguments are not self-explanatory - run `help(hypertensionMedication)` before using it.
+
+**Find records by partial code match** - `findCondition(data, vars, keep, conditions, exclusions, match = "contain")`. The packaged version of "keep the rows whose code starts with one of these" - the pattern used throughout [Extract from LPR](09b_extract-from-lpr.qmd). Run `help(findCondition)` for the argument order.
+
+**Municipality to region** - `kommuneRegion(kommune)` converts a numeric 3-digit municipality code to one of the five regions. Valid from 2007. Input must be numeric, not character.
+
+**Built-in lookup tables** - two of them replace hand-written code lists:
+
+```r
+data(edu_code)  # 4,621 rows: hfaudd -> education category
+# Columns: hfaudd, edu_uk / edu_dk (15 categories), code5 / code5txt (5 levels),
+# isced / isced_code (ISCED 0-9). Join it on hfaudd instead of writing your own
+# case_when() over the digits of hfaudd, which does not give the level.
+
+data(hypertensionATC)  # ATC codes per class of antihypertensive drug
+```
+
 ::: {.callout-note}
-`heaven` is confirmed available on DST - use `library(heaven)` directly. It is not on CRAN, so outside DST it must be fetched from [GitHub](https://github.com/tagteam/heaven).
+`heaven` is confirmed available on DST - use `library(heaven)` directly. It is not on CRAN, so outside DST it must be fetched from [GitHub](https://github.com/tagteam/heaven). Function documentation lives in the package itself (`help(name)`); the maintainers also keep a worked walkthrough at [examples/user-heaven.org](https://github.com/tagteam/heaven/blob/master/examples/user-heaven.org).
+:::
+
+::: {.callout-note}
+**`heaven` is built with a different package than the rest of this guide.**
+
+This guide uses `dplyr` (part of the tidyverse) for handling tables. `heaven` is
+written with `data.table`, which is another package that does the same job in a
+different style. That means the tables `heaven` hands back are `data.table`
+tables rather than the ones you are used to.
+
+**You do not need to learn `data.table` to use `heaven`.** A `data.table` is
+still an ordinary table, so `filter()`, `mutate()`, `select()` and
+`left_join()` all work on it exactly as before. The only thing you will notice
+is that it looks a little different when you print it in the console: it numbers
+the rows and shows the column types differently.
+
+If you want to be completely sure you are back on familiar ground, convert the
+result once with `as_tibble()` and carry on:
+
+```r
+income <- averageIncome(...) %>% as_tibble()
+```
 :::
 
 </details>
