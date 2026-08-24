@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-08-12">
+<meta name="dcterms.date" content="2026-08-24">
 
 <title>Overview of registers – Register-based research at Statistics Denmark</title>
 <style>
@@ -83,7 +83,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-bb62276ab45c84d9efd712f51ff97b5a.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-2e149c374e58782663e15eabedc54f26.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-d784fe5dcbbf6cc2372587860e5b103f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -636,7 +636,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 12, 2026</p>
+      <p class="date">August 24, 2026</p>
     </div>
   </div>
   
@@ -1847,9 +1847,9 @@ All confirmed columns in LMDB
 <p>One record per person per year - updated when the education level changes.</p>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 15%">
-<col style="width: 11%">
-<col style="width: 73%">
+<col style="width: 12%">
+<col style="width: 9%">
+<col style="width: 77%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -1867,7 +1867,7 @@ All confirmed columns in LMDB
 <tr class="even">
 <td><strong><code>hfaudd</code></strong></td>
 <td>character</td>
-<td>ISCED education code (e.g.&nbsp;<code>"35"</code> = vocational education)</td>
+<td>DISCED-15 code for the <strong>specific education</strong> (e.g.&nbsp;<code>4112</code> = electrician)</td>
 </tr>
 <tr class="odd">
 <td><strong><code>aar</code></strong></td>
@@ -1876,11 +1876,66 @@ All confirmed columns in LMDB
 </tr>
 </tbody>
 </table>
-<p>Categorisation (SEPLINE): <code>substr(as.character(hfaudd), 1, 2)</code> → <code>"10"</code>/<code>"15"</code> = short, <code>"20"</code>–<code>"35"</code> = medium, <code>"40"</code>–<code>"80"</code> = long, <code>"90"</code> = unknown.</p>
+<div class="callout callout-style-simple callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span><code>hfaudd</code> is not an education level - do not read the digits
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This is the single easiest mistake to make with UDDA, and it produces wrong numbers without any error message. There are <strong>two different code systems</strong>, and they look confusingly alike:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 43%">
+<col style="width: 30%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>What it identifies</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Education code</strong> (<code>hfaudd</code>)</td>
+<td><em>Which</em> education, as a four-digit DISCED-15 code</td>
+<td><code>4112</code> = electrician</td>
+</tr>
+<tr class="even">
+<td><strong>Level code</strong></td>
+<td><em>How long/high</em> the education is, two digits</td>
+<td><code>30</code> = vocational, <code>70</code> = master’s</td>
+</tr>
+</tbody>
+</table>
+<p><code>hfaudd</code> is an <strong>identifier</strong>, not a scale. The first two digits are simply the start of a serial number, and there is no arithmetic relationship between the two systems. Taking <code>substr(hfaudd, 1, 2)</code> and treating it as the level is wrong, and it fails in both directions:</p>
+<ul>
+<li><code>hfaudd = 4112</code> is an <strong>electrician</strong> - vocational, level 30. Reading <code>41</code> and comparing it to 40 makes it a <em>long higher education</em>.</li>
+<li><code>hfaudd = 141</code> is genuinely level 40, <em>short cycle higher education</em>. Reading <code>14</code> matches no level at all, so a real education becomes <em>missing data</em>.</li>
+</ul>
+<p>Tested against the full DISCED-15 list, the <code>substr()</code> rule gets <strong>58% of the 4,621 codes right</strong>, and 1,149 of them land in a confidently wrong category rather than in “unknown”. It looks plausible because the level codes (10, 15, 20, 30, 40, 70, 90) have the same shape as the first two digits of an education code.</p>
+<p><strong>UDDA does not contain the level.</strong> DST’s education register holds only <code>HFAUDD</code>, <code>HF_KILDE</code>, <code>HF_VFRA</code>, <code>HF_VTIL</code> and <code>INSTNR</code> - there is no level column to read. The level has to come from a <strong>lookup table</strong> that maps each education code to its level. See <a href="./11b_socioeconomic-variables.html#education">Socioeconomic variables</a> for how to do it.</p>
+</div>
+</div>
 </section>
 <section id="faik---family-income" class="level3">
 <h3 class="anchored" data-anchor-id="faik---family-income">FAIK - Family Income</h3>
 <p>Household-equivalised disposable income per year. Link: join BEF (<code>pnr</code>, <code>familie_id</code>, <code>aar</code>) with FAIK (<code>familie_id</code>, <code>aar</code>).</p>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>The structure can differ between years.</strong> On DARTER, FAIK from <strong>2022 onward</strong> also carries <code>pnr</code>, and the family’s row is repeated once per family member instead of appearing once. Joining on <code>familie_id</code> alone then multiplies your rows silently. Check your own delivery before you rely on the join - how, and what to do about it, is in <a href="./11b_socioeconomic-variables.html#faik-income">Socioeconomic variables</a>.</p>
+</div>
+</div>
+</div>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 32%">
