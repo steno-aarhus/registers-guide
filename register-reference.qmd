@@ -611,19 +611,60 @@ separate dimensions.
 
 One record per person per year - updated when the education level changes.
 
-  | Column       | Type      | Contents                                                  |
-  | ------------ | --------- | --------------------------------------------------------- |
-  | **`pnr`**    | character | Personal identifier                                       |
-  | **`hfaudd`** | character | ISCED education code (e.g. `"35"` = vocational education) |
-  | **`aar`**    | integer   | Register year                                             |
+  | Column       | Type      | Contents                                                                  |
+  | ------------ | --------- | ------------------------------------------------------------------------- |
+  | **`pnr`**    | character | Personal identifier                                                       |
+  | **`hfaudd`** | character | DISCED-15 code for the **specific education** (e.g. `4112` = electrician) |
+  | **`aar`**    | integer   | Register year                                                             |
 
-Categorisation (SEPLINE): `substr(as.character(hfaudd), 1, 2)` → `"10"`/`"15"` =
-short, `"20"`--`"35"` = medium, `"40"`--`"80"` = long, `"90"` = unknown.
+::: {.callout-important}
+## `hfaudd` is not an education level - do not read the digits
+
+This is the single easiest mistake to make with UDDA, and it produces wrong
+numbers without any error message. There are **two different code systems**, and
+they look confusingly alike:
+
+  |                               | What it identifies                                | Example                            |
+  | ----------------------------- | ------------------------------------------------- | ---------------------------------- |
+  | **Education code** (`hfaudd`) | *Which* education, as a four-digit DISCED-15 code | `4112` = electrician               |
+  | **Level code**                | *How long/high* the education is, two digits      | `30` = vocational, `70` = master's |
+
+`hfaudd` is an **identifier**, not a scale. The first two digits are simply the
+start of a serial number, and there is no arithmetic relationship between the
+two systems. Taking `substr(hfaudd, 1, 2)` and treating it as the level is
+wrong, and it fails in both directions:
+
+- `hfaudd = 4112` is an **electrician** - vocational, level 30. Reading `41` and
+  comparing it to 40 makes it a *long higher education*.
+- `hfaudd = 141` is genuinely level 40, *short cycle higher education*. Reading
+  `14` matches no level at all, so a real education becomes *missing data*.
+
+Tested against the full DISCED-15 list, the `substr()` rule gets **58% of the
+4,621 codes right**, and 1,149 of them land in a confidently wrong category
+rather than in "unknown". It looks plausible because the level codes (10, 15,
+20, 30, 40, 70, 90) have the same shape as the first two digits of an education
+code.
+
+**UDDA does not contain the level.** DST's education register holds only
+`HFAUDD`, `HF_KILDE`, `HF_VFRA`, `HF_VTIL` and `INSTNR` - there is no level
+column to read. The level has to come from a **lookup table** that maps each
+education code to its level. See [Socioeconomic
+variables](11b_socioeconomic-variables.qmd#education) for how to do it.
+:::
 
 ### FAIK - Family Income
 
 Household-equivalised disposable income per year. Link: join BEF (`pnr`,
 `familie_id`, `aar`) with FAIK (`familie_id`, `aar`).
+
+::: {.callout-warning}
+**The structure can differ between years.** On DARTER, FAIK from **2022 onward**
+also carries `pnr`, and the family's row is repeated once per family member
+instead of appearing once. Joining on `familie_id` alone then multiplies your
+rows silently. Check your own delivery before you rely on the join - how, and
+what to do about it, is in [Socioeconomic
+variables](11b_socioeconomic-variables.qmd#faik-income).
+:::
 
   | Column                  | Type      | Contents                                |
   | ----------------------- | --------- | --------------------------------------- |

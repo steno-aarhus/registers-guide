@@ -139,10 +139,23 @@ cohort_akm <- cohort_akm %>%
   )
 ```
 
-## Education - UDDA (`hfaudd`)
+## Education - UDDA (`hfaudd`) {#education}
 
-Categorised from the ISCED code in `hfaudd`: short (`10`/`15`), medium
-(`20`/`30`/`35`), long (`40`--`80`), unknown (`90` or missing).
+`hfaudd` is a four-digit DISCED-15 code for the **specific education** a person
+completed - `4112` is "electrician". It is an identifier, not a scale, so the
+level (short / medium / long) has to be **looked up**, not read off the digits.
+UDDA itself does not carry the level.
+
+::: {.callout-warning}
+**Do not derive the level from `substr(hfaudd, 1, 2)`.** It is the obvious thing
+to try, because the level codes (10, 15, 20, 30, 40, 70, 90) look just like the
+first two digits of an education code. It is wrong, and it fails silently:
+`4112` (electrician, vocational) becomes a *long higher education* because
+`41 >= 40`, while `141` (short cycle higher education) matches nothing and
+becomes *unknown*. Across the full code list that rule is right 58% of the time.
+The reasoning is spelled out in [Overview of
+registers](register-reference.qmd#udda---education-register).
+:::
 
 ```r
 # 1. Open UDDA via fastreg (read_register gets the path from your project config)
@@ -164,20 +177,70 @@ udda_data <- udda_data %>%
   slice(1) %>% # keep only the newest record
   ungroup() # release grouping
 
-# 4. Categorise per SEPLINE
+# 4. Look the level up - one row per education code, joined on hfaudd
+library(heaven) # edu_code: 4,621 DISCED-15 codes with their level
+data(edu_code)
+
+udda_data <- udda_data %>%
+  mutate(hfaudd = as.character(hfaudd)) %>% # match the type in edu_code
+  left_join(
+    edu_code %>%
+      as_tibble() %>% # edu_code is a data.table
+      mutate(hfaudd = as.character(hfaudd)) %>%
+      select(hfaudd, level_code = number), # number = the two-digit level
+    by = "hfaudd"
+  )
+
+# 5. Group the level into the SEPLINE categories
 udda_data <- udda_data %>%
   mutate(
+    level_code = as.numeric(level_code),
     education_cat = case_when(
-      substr(as.character(hfaudd), 1, 2) %in% c("10", "15") ~ "Short",
-      substr(as.character(hfaudd), 1, 2) %in% c("20", "30", "35") ~ "Medium",
-      as.numeric(substr(as.character(hfaudd), 1, 2)) >= 40 ~ "Long",
-      is.na(hfaudd) | substr(as.character(hfaudd), 1, 2) == "90" ~ "Unknown",
-      TRUE ~ "Unknown"
+      level_code %in% c(5, 10, 15) ~ "Short", # pre-school, primary, preparatory
+      level_code %in% c(20, 25, 29, 30, 35, 39) ~ "Medium", # upper secondary and vocational
+      level_code >= 40 & level_code < 90 ~ "Long", # short cycle higher and above
+      TRUE ~ "Unknown" # 90 "not stated", or no match in edu_code
     )
   )
+
+# ALWAYS check how many did not match - a high number means a type mismatch
+# on hfaudd, or codes that are not in the lookup.
+udda_data %>%
+  summarise(unmatched = sum(is.na(level_code)), total = n())
 ```
 
-## Income - FAIK via BEF (`famaekvivadisp_13`)
+::: {.callout-note}
+**Getting `heaven` outside DST.** On DST it is already installed, which matters
+because the server has no internet - you could not install it there yourself.
+Elsewhere it is not on CRAN, so `install.packages("heaven")` will not find it,
+but it installs from GitHub in one line:
+
+```r
+# install.packages("pak")
+pak::pak("tagteam/heaven")
+```
+
+**If you would rather not add the dependency**, the lookup is not secret. It is
+DST's DISCED-15 classification, published as [Uddannelsesklassifikation
+(DISCED-15), afsluttede
+uddannelser](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd),
+and the same mapping sits in DST's SAS format files on the server (see [Format
+tables](formatting-tables.qmd)). Whichever source you use, the shape of the
+solution is the same: a table of education codes joined to your data on
+`hfaudd`. What you must not do is skip the lookup.
+:::
+
+::: {.callout-important}
+**The grouping in step 5 is our reading of SEPLINE, not a validated
+implementation.** `edu_code` gives you the level reliably; how those levels are
+collapsed into "short / medium / long" is a study-design choice. Check the
+[SEPLINE article](https://doi.org/10.2147/CLEP.S520772) for the categorisation
+your analysis should use, and note that `edu_code` also carries a ready-made
+5-level grouping (`code5txt`) and ISCED codes (`isced_code`) if either fits
+better.
+:::
+
+## Income - FAIK via BEF (`famaekvivadisp_13`) {#faik-income}
 
 Income is linked to the household, not the person. You need `familie_id` from
 BEF as a bridge. SEPLINE recommends a 3-year average divided into quintiles
@@ -188,7 +251,7 @@ stratified by sex × 5-year age group × reference year.
 bef <- read_register("bef") %>%
   rename_with(tolower)
 faik <- read_register("faik") %>%
-  rename_with(tolower)
+  rename_with(tolower) # check whether FAIK is one row per family in YOUR data - see the callout below
 # Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>% rename_with(tolower)  (same for faik)
 
 # 2. Fetch familie_id from BEF for baseline year
@@ -208,6 +271,62 @@ faik_data <- faik %>%
 income <- bef_family %>%
   left_join(faik_data, by = c("familie_id", "aar")) # two-key join: household and year
 ```
+
+::: {.callout-warning collapse="true"}
+## Check your FAIK before you trust this join
+
+The recipe above assumes FAIK holds **one row per family per year** - that is
+why the bridge goes through `familie_id`. On DARTER that stopped being true from
+**2022 onward**: FAIK now also carries `pnr`, and each family's row is repeated
+once per family member. **Whether this applies to your project depends on your
+data delivery, so check rather than assume either way.**
+
+```r
+names(faik) # is pnr among the columns?
+
+# More than one row per family and year means the duplication applies to you
+faik %>%
+  count(familie_id, aar) %>%
+  filter(n > 1) %>%
+  count() %>%
+  collect()
+```
+
+**What it does to the code above.** The join on `familie_id` + `aar` returns one
+row per family *member* instead of one per person, so your dataset grows without
+any error. And the 3-year average further down is then computed over a set
+weighted by household size: a five-person family counts five times as much as a
+single person in the same year. The numbers stay plausible throughout, which is
+what makes it dangerous.
+
+**If it applies to you, one line before the join fixes it.** Collapse the
+duplicates back to one row per family-year, and the rest of the recipe works
+unchanged for every year:
+
+```r
+faik <- faik %>%
+  distinct(familie_id, aar, famaekvivadisp_13) # one row per household per year
+```
+
+If your FAIK carries `pnr` for **all** years, you can join income to `pnr`
+directly and skip the BEF bridge entirely.
+:::
+
+::: {.callout-tip}
+**A ready-made alternative:
+[`heaven::averageIncome()`](packages-overview.qmd#heaven---danish-register-data-toolkit)**
+does the multi-year average in one call, uses only the years strictly before the
+index year, and keeps one row per person-year - so repeated rows for the same
+person and year collapse on their own. That happens to cover the FAIK
+duplication above, though the function was written for a different reason
+(quarterly duplicates), so do not treat it as a guarantee.
+
+It does **not** replace the BEF bridge: the income table you hand it must
+already be linked to `pnr`. `heaven` is pre-installed on DST and installs from
+GitHub elsewhere (`pak::pak("tagteam/heaven")`), so the choice is about whether
+you want the dependency - the code below is the version with no packages beyond
+the ones you already use.
+:::
 
 <details>
 <summary>3-year average and quintiles (SEPLINE recommendation)</summary>

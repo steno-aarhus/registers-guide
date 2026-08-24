@@ -121,7 +121,34 @@ lpr3_k <- read_register("lpr_a_kontakt") %>%
 you have copies of LPR3 code in your own scripts, you must add it manually.
 :::
 
-## 6. Laboratory results - use `laboratorieproevesvar_`
+## 6. FAIK changed structure from 2022 {#faik-2022}
+
+FAIK used to hold **one row per family per year**, which is why the standard
+recipe joins income to people via `familie_id` from BEF. From the **2022** data
+onward it also carries `pnr`, and the family's row is repeated once per family
+member (confirmed by the DARTER team, August 2026).
+
+If you join on `familie_id` alone across those years, you get one row per family
+member instead of one per person. Nothing errors, the dataset just grows, and
+any average computed afterwards is weighted by household size.
+
+```r
+# Check before you join - more than one row per family and year means it applies
+faik %>%
+  count(familie_id, aar) %>%
+  filter(n > 1) %>%
+  count() %>%
+  collect()
+
+# Fix: collapse back to one row per household-year before joining
+faik <- faik %>%
+  distinct(familie_id, aar, famaekvivadisp_13)
+```
+
+Full explanation and the alternative (joining on `pnr` directly) is in
+[Socioeconomic variables](../11b_socioeconomic-variables.qmd#faik-income).
+
+## 7. Laboratory results - use `laboratorieproevesvar_`
 
 The new laboratory data register is called `laboratorieproevesvar_` and contains
 >2.2 billion rows. The old `lab_forsker` / `lab_dm_forsker` still exists but
