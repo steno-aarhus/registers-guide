@@ -93,13 +93,13 @@ Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=45004151
 
 ## Overview - file type, package, function
 
-  | File type                   | Package              | Function                                                     | Loading                                     |
-  | --------------------------- | -------------------- | ------------------------------------------------------------ | ------------------------------------------- |
-  | `.parquet` / parquet folder | `arrow` or `fastreg` | `open_dataset("path/to/folder/")` or `read_register("name")` | **Lazy** - nothing in RAM until `collect()` |
-  | `.rds`                      | base R               | `readRDS("path/to/file.rds")`                                | **Full** - entire file into RAM             |
-  | `.sas7bdat`                 | `haven`              | `read_sas("path/to/file.sas7bdat")`                          | **Full** - entire file into RAM             |
-  | `.csv`                      | `readr`              | `read_csv("path/to/file.csv")`                               | **Full** - entire file into RAM             |
-  | `.xlsx`                     | `readxl`             | `read_xlsx("path/to/file.xlsx")`                             | **Full** - entire file into RAM             |
+  | File type                   | Package                          | Function                                                                           | Loading                                     |
+  | --------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------- |
+  | `.parquet` / parquet folder | `arrow`, `fastreg` or `duckplyr` | `open_dataset("path/")`, `read_register("name")` or `read_parquet_duckdb("path/")` | **Lazy** - nothing in RAM until `collect()` |
+  | `.rds`                      | base R                           | `readRDS("path/to/file.rds")`                                                      | **Full** - entire file into RAM             |
+  | `.sas7bdat`                 | `haven`                          | `read_sas("path/to/file.sas7bdat")`                                                | **Full** - entire file into RAM             |
+  | `.csv`                      | `readr`                          | `read_csv("path/to/file.csv")`                                                     | **Full** - entire file into RAM             |
+  | `.xlsx`                     | `readxl`                         | `read_xlsx("path/to/file.xlsx")`                                                   | **Full** - entire file into RAM             |
 
 The last column is the lazy/full distinction from above: parquet is the only
 lazy format, everything else loads fully into RAM.
@@ -113,9 +113,52 @@ lazy format, everything else loads fully into RAM.
   lives (you set that once during conversion). It also hands you a DuckDB
   connection, so more dplyr functions work without an extra `to_duckdb()` step.
   It requires that the registers were set up with fastreg.
+- With `read_parquet_duckdb()` (duckplyr) you write the **path**, like
+  `open_dataset()`, but you get a DuckDB-backed table straight away. It is
+  reported to be the fastest of the three and to keep memory use lowest, and to
+  avoid the `rapi` errors arrow sometimes throws on very large registers. It
+  needs an up-to-date **`duckplyr` and `duckdb`** - run `install.packages()` for
+  both, and repeat after a server reset.
+
+Whichever you pick, the rest of your code is the same: `filter()`, `select()`
+and `collect()` behave identically. You do **not** need to rewrite existing
+scripts to use a different one.
 
 The exact path depends on your project and server. Column names for each
 register are in [Overview of registers](register-reference.qmd).
+
+::: {.callout-note collapse="true"}
+## When the years do not have the same columns - `union_by_name`
+
+A register folder holds **one parquet file per year**, and they are read as one
+table. That works as long as every year has the same columns. It stops working
+when a register **changes structure partway through** - a column that appears in
+2022 but not in 2021, for instance.
+
+With `read_parquet_duckdb()` you handle that with an option:
+
+```r
+bef <- read_parquet_duckdb(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef",
+  options = list(union_by_name = TRUE)
+)
+```
+
+`union_by_name = TRUE` matches the files' columns **by name** instead of by
+position, and fills in `NA` for the years where a column does not exist. Without
+it, DuckDB expects every file to have the same columns and stops with an error
+when they do not.
+
+**Use it deliberately, not by default.** Without it you get an error, and that
+error is information: it tells you the register changed structure, which is
+something you want to know before you analyse it. With it you get a column that
+is silently `NA` for some years, and an `NA` you did not expect is much harder
+to spot than an error. Reach for it once you know what changed and have decided
+to read everything anyway.
+
+You only need it for a folder of several files with differing columns. A single
+file, or a register whose years all match, does not need it.
+:::
 
 ::: {.callout-note}
 **Didn't convert the data yourself?** If a colleague already converted the
