@@ -255,6 +255,22 @@ all_qmd <- setdiff(all_qmd, c("README.qmd", "404.qmd"))
 order_qmd <- if (is.null(prev)) all_qmd else c(prev$qmd, setdiff(all_qmd, prev$qmd))
 order_qmd <- order_qmd[order_qmd %in% all_qmd | order_qmd %in% FROZEN]
 
+#-----------------------------------------------------
+# Håndskrevet forrest: tjek-scriptet
+#-----------------------------------------------------
+# tools/dst-checks.R er ikke pillet ud af en .qmd - den skrives ind som den er,
+# som bundlens FØRSTE sektion, så splitteren giver den sin egen .R-fil.
+# Alt over "# CHECK YOUR PROJECT" er en note til os selv og tages ikke med.
+CHECKS_NAME <- "00_check_your_project.R"
+checks_file <- file.path(ROOT, "tools", "dst-checks.R")
+checks_lines <- if (file.exists(checks_file)) {
+  x <- readLines(checks_file, warn = FALSE)
+  start <- grep("^# CHECK YOUR PROJECT", x)
+  if (length(start)) x[start[1]:length(x)] else x
+} else {
+  NULL
+}
+
 pages <- list()
 for (qmd in order_qmd) {
   lines <- source_lines(qmd)
@@ -317,10 +333,28 @@ out <- c(
 )
 
 pad <- max(nchar(vapply(pages, function(p) p$name, character(1)))) + 2L
+if (!is.null(checks_lines)) {
+  out <- c(out, paste0("#    ", formatC(CHECKS_NAME, width = -pad),
+                       "Check the guide's claims against your own project"))
+}
 for (p in pages) {
   out <- c(out, paste0("#    ", formatC(p$name, width = -pad), p$title))
 }
 out <- c(out, RULE_EQ, "")
+
+# Tjek-scriptet forrest, så det er det første man møder.
+if (!is.null(checks_lines)) {
+  out <- c(
+    out,
+    "",
+    RULE_EQ,
+    paste0("# FILE: ", CHECKS_NAME),
+    "# Check the guide's claims against your own project   \u00b7   source: tools/dst-checks.R",
+    RULE_EQ,
+    "",
+    checks_lines
+  )
+}
 
 for (i in seq_along(pages)) {
   p <- pages[[i]]

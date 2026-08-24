@@ -15,6 +15,10 @@ check-weekly: check-guide check-urls check-spelling
 check-guide check="all":
   Rscript tools/check-guide.R {{check}}
 
+# Build dst_code_examples.R: all code from the guide in one file, to upload to DST
+build-code-examples:
+  Rscript tools/build-code-examples.R
+
 # Run all build-related recipes
 build-all: build-contributors build-website build-readme
 
