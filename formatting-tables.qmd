@@ -37,22 +37,46 @@ E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/
 ```
 
 The Star (`*`) on the Windows desktop inside the DST server opens an HTML guide
-for finding the right table. PDF guides to SAS formats are also here:
+for finding the right table. DST's written guides sit here:
 
 ```
 E:/Formater/SAS formater i Danmarks Statistik/Vejledning mv/
 ```
 
+The one worth reading is **`Brugen af SAS formater i Danmarks Statistik.pdf`**
+(\~2 MB, DST Consulting). It explains the naming systematics used below and has
+a section per topic - Uddannelserne, Brancherne, DISCO, Sundhed, Geokoder, DREAM.
+The same folder holds dated older editions (2012-2019) and a set of
+`Allokering af formatbibliotek (*).sas` scripts for pointing SAS at the format
+catalog - those are for SAS users and are not needed from R.
+
+Two more folders one level up are worth knowing:
+
+```
+E:/Formater/SAS formater i Danmarks Statistik/HTML_oversigter/   ← browsable code lists
+E:/Formater/SAS formater i Danmarks Statistik/PDF_lister/        ← the same as PDF
+```
+
+They let you look up what a code means without loading anything into R - useful
+when you just need to check a single value.
+
 Subfolders are organised by topic - including:
 ```
 Geokoder/                ← municipalities, regions
 Times_personstatistik/   ← employment (socio13)
-Disced/                  ← education (hfaudd)
+Uddannelser/             ← education (hfaudd)
 Brancher/                ← industries
 Sundhed/                 ← health
-Uddannelser/             ← education
+Disced/                  ← education, SAS format catalog (see note)
 ... and more
 ```
+
+::: {.callout-note}
+**Education sits in two places, and the naming is confusing.** The files you
+read from R are in **`SAS_datasaet/Uddannelser/`**. DST's own SAS *format
+catalog* for the same thing is called **DISCED**, which is why the word turns up
+in the documentation and in a separate folder. From R you want `Uddannelser/`.
+:::
 
 ::: {.callout-warning}
 **Find the specific filenames in the folder yourself.** The base path and
@@ -149,18 +173,116 @@ akm_categorised <- akm_data %>%
   )
 ```
 
-### Education (hfaudd)
+### Education level (hfaudd) {#education-level}
 
-The `Disced/` folder holds the format tables for education codes. What most
-analyses need from `hfaudd` is the **level** (short / medium / long), and that
-has its own recipe - see [Socioeconomic
-variables](11b_socioeconomic-variables.qmd#education).
+`hfaudd` is the four-digit code for the **specific education**. Its level - the
+thing almost every analysis actually needs - lives in a separate lookup, and the
+filename tells you exactly which lookup you are getting.
 
-Note that `hfaudd` identifies the *specific* education, not its level, so every
-route to the level goes through a lookup table. The digits of the code will not
-tell you - see [Overview of
-registers](register-reference.qmd#udda---education-register) for why that fails
-and what it costs.
+::: {.callout-note}
+**These files are dictionaries, not data.** A `.sas7bdat` in the format folders
+holds no people and no register records. It is a two-column translation table -
+one row per code, with the code and what it means - and they are tiny, a few
+hundred KB. You read one into R and `left_join()` it onto your own data, exactly
+like the municipality example above. Nothing about your cohort changes; you are
+only adding a column that says what a code stands for.
+:::
+
+**The filenames are systematic.** DST's own guide sets it out as
+`$AUDD2011_L1L2_KT`, read left to right:
+
+  | Part            | Means                                                        |
+  | --------------- | ------------------------------------------------------------- |
+  | `c_` / `n_`     | **c**haracter or **n**umeric - match your column's type        |
+  | `audd` / `udd`  | **a**fsluttet (completed) or igangværende (ongoing) education  |
+  | `2008` `2011` `2015` | which version of the classification                      |
+  | `l1`            | the level you are coming **from**                             |
+  | `l5`            | the level you are going **to**                                |
+  | `_k` `_t` `_kt` | output: code only, text only, or code + text                  |
+
+::: {.callout-warning}
+**`hfaudd` is a *completed* education, so you want an `audd` file, not a `udd`
+one.** The folder holds both: `audd` codes come from the completed-education
+register, `udd` codes from the pupil register (Elevregistret) and describe
+ongoing or interrupted study. They are different code systems, and a `udd`
+lookup joined to `hfaudd` will match some rows, miss others, and never tell you.
+:::
+
+And the levels themselves. The Danish names are what you will see on the server;
+the English is what they mean:
+
+  | Level | Danish (as DST names it) | In English                                    |
+  | ----- | ------------------------- | ---------------------------------------------- |
+  | **1** | Den 4-cifrede AUDD        | the four-digit code for the specific education - this is `hfaudd` |
+  | 2     | Elementærniveau           | elementary level - the finest grouping above the code itself |
+  | 3     | Undergruppe               | subgroup                                       |
+  | 4     | Mellemgruppe              | intermediate group                             |
+  | **5** | **Hovedgruppe**           | **main group - the short/medium/long level almost every analysis wants** |
+
+So the file that turns `hfaudd` into short/medium/long is an **L1 → L5** file.
+Level 5 is the grouping that comes out as `10 Grundskole`, `20 Gymnasiale
+uddannelser`, `30 Erhvervsfaglige uddannelser`, `35 Adgangsgivende
+uddannelsesforløb`, `40 KVU`, `50 MVU`, `60 Bachelor`, `70 LVU`, `80 Ph.d.`
+
+```r
+library(haven) # read_sas()
+library(dplyr)
+
+# Look first - the version in the filename varies, so do not copy this blindly
+list.files("E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Uddannelser/")
+
+# An L1 -> L5 file: from the 4-digit code to Hovedgruppe, code + text.
+# c_ = character, so use n_audd2015_l1l5_kt.sas7bdat if hfaudd is numeric.
+udda_level <- read_sas(
+  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Uddannelser/c_audd2015_l1l5_kt.sas7bdat"
+)
+names(udda_level) # find the START column and the label column
+head(udda_level)
+
+# Join it on, then check how many found no match
+udda_data <- udda_data %>%
+  mutate(hfaudd = as.character(hfaudd)) %>% # match the type in the format table
+  left_join(udda_level, by = c("hfaudd" = "START"))
+
+udda_data %>% summarise(unmatched = sum(is.na(.data[[names(udda_level)[2]]])), total = n())
+```
+
+::: {.callout-warning}
+**Three things to check before you trust the result.**
+
+- **Use the newest version, and only that one.** The folder holds several
+  versions side by side - `2008`, `2011`, `2015` and possibly newer - and it is
+  tempting to think you need one per study year. You do not. DST's own guide
+  says the education statistics are updated every year with the newest codes
+  **backwards in time as well**, so the latest version already covers the older
+  codes. One file, for the whole study period. (From 2015 the classification is
+  **DISCED-15**, which replaced the older `Forspalte`, `ISCED1997` and `DUN`.)
+- **Character or numeric.** `c_` (`$` in SAS) expects a **character** variable,
+  `n_` a **numeric** one. Both exist for the same mapping. Pick the one matching
+  your column, or convert - a type mismatch produces a join that matches nothing
+  and fills the column with `NA` without any error.
+- **`_k` vs `_t` vs `_kt`.** `_k` gives you only the code, `_t` only the text,
+  `_kt` both. For a categorical covariate you usually want `_kt` so you can see
+  what the codes mean while you work.
+:::
+
+::: {.callout-note}
+**Paths on DST.** The `E:/Formater/...` path above is the same for everyone
+working on a DST research machine, so it should work as written - but **check it
+yourself before you rely on it**, and expect it to differ if you are on a hosted
+machine. DST's own guide gives the network paths as
+`\\srvfsenas1\data\formater\SAS formater i Danmarks Statistik` (researcher
+machine) and `\\srvfsenas5\formater\SAS formater i Danmarks Statistik` (hosted).
+The full guide is the PDF *"Brugen af SAS formater i Danmarks Statistik"* under
+`E:/Formater/SAS formater i Danmarks Statistik/Vejledning mv/`.
+:::
+
+Why the level has to be looked up at all - and what it costs to guess it from
+the digits - is in [Overview of
+registers](register-reference.qmd#udda---education-register). The full
+extraction, from opening UDDA to a categorised variable, is in [Socioeconomic
+variables](11b_socioeconomic-variables.qmd#education), which also covers the
+`heaven` shortcut.
 
 ## Tips for finding the right table
 
