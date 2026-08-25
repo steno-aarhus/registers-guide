@@ -485,9 +485,67 @@ Concrete habits that keep RAM use down:
 - **Close unused sessions**, and start a fresh session when you begin a new task
   (`Session → Restart R`) - this also clears out old objects.
 
-- **Keep an eye on usage.** Open the **Task Manager** shortcut on the server's
-  desktop → the **Users** tab → find your project ident → see usage under
-  **Memory**.
+- **Keep an eye on usage.** Two views, and you want both. The **Task Manager**
+  shortcut on the server's desktop → the **Users** tab → your project ident →
+  **Memory** tells you what the *machine* is doing. To see what *your R session*
+  is holding, see below.
+
+### Seeing your memory use from inside R {#see-ram-in-r}
+
+The Task Manager tells you the machine is running out of memory. It does not
+tell you *which object* is the problem. R can, and you do not need any extra
+packages for it.
+
+**How much is this session using right now?**
+
+```r
+gc() # "garbage collection" - it also reports memory use
+```
+
+Read the **`(Mb)`** columns. `used` is what your session holds at this moment,
+`max used` the high-water mark since the session started. The `Vcells` row is
+the one that matters for data: it counts the memory holding your actual values.
+Calling `gc()` also asks R to hand back memory it no longer needs, so it is
+useful after an `rm()`.
+
+**Which object is eating it?**
+
+```r
+# Every object in your session, biggest first
+sizes <- sapply(ls(), function(x) object.size(get(x)))
+sort(sizes, decreasing = TRUE)
+
+# The same, in units you can read
+for (n in names(sort(sizes, decreasing = TRUE))) {
+  cat(sprintf("%-25s %s\n", n, format(object.size(get(n)), units = "auto")))
+}
+```
+
+That prints something like `lpr_raw  4.2 Gb` next to `cohort  1.3 Mb`, and the
+culprit is usually obvious immediately. Then `rm(lpr_raw); gc()`.
+
+**A single object, before you decide to keep it:**
+
+```r
+format(object.size(my_data), units = "auto") # e.g. "812.4 Mb"
+```
+
+::: {.callout-tip}
+**RStudio shows it too.** The **Environment** pane lists every object with its
+size, and the dropdown at the top of that pane has a **Memory Usage...** report
+with the session total. It is the same numbers as above, without typing
+anything - handy while you work, though the code is what you want when you need
+to compare two approaches.
+:::
+
+::: {.callout-note}
+**`object.size()` measures the object, not the query.** A lazy parquet
+connection from `open_dataset()` or `read_register()` is a few KB no matter how
+large the register behind it is - that is the whole point of lazy loading (see
+[Phase 4](04_file-formats.qmd)). The size only becomes real after `collect()`.
+So a small `object.size()` on a lazy object is good news, not a measurement
+error.
+:::
 
 If the shared environment cannot handle your analyses, you can look into a
 **hosted server** or an **HPC analysis platform** (both have guides on DST).
