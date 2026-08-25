@@ -585,7 +585,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </ul></li>
   <li><a href="#fail-early---check-your-data-before-the-analysis" id="toc-fail-early---check-your-data-before-the-analysis" class="nav-link" data-scroll-target="#fail-early---check-your-data-before-the-analysis">9. Fail early - check your data before the analysis</a></li>
   <li><a href="#one-object-one-purpose" id="toc-one-object-one-purpose" class="nav-link" data-scroll-target="#one-object-one-purpose">10. One object = one purpose</a></li>
-  <li><a href="#mind-your-ram" id="toc-mind-your-ram" class="nav-link" data-scroll-target="#mind-your-ram">11. Mind your RAM in the shared environment</a></li>
+  <li><a href="#mind-your-ram" id="toc-mind-your-ram" class="nav-link" data-scroll-target="#mind-your-ram">11. Mind your RAM in the shared environment</a>
+  <ul class="collapse">
+  <li><a href="#see-ram-in-r" id="toc-see-ram-in-r" class="nav-link" data-scroll-target="#see-ram-in-r">Seeing your memory use from inside R</a></li>
+  </ul></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/good-coding-practice.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/good-coding-practice.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -960,8 +963,46 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(raw_data) <span class="co"># remove a large object from RAM</span></span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">gc</span>() <span class="co"># ask R to release the memory</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div></li>
 <li><p><strong>Close unused sessions</strong>, and start a fresh session when you begin a new task (<code>Session → Restart R</code>) - this also clears out old objects.</p></li>
-<li><p><strong>Keep an eye on usage.</strong> Open the <strong>Task Manager</strong> shortcut on the server’s desktop → the <strong>Users</strong> tab → find your project ident → see usage under <strong>Memory</strong>.</p></li>
+<li><p><strong>Keep an eye on usage.</strong> Two views, and you want both. The <strong>Task Manager</strong> shortcut on the server’s desktop → the <strong>Users</strong> tab → your project ident → <strong>Memory</strong> tells you what the <em>machine</em> is doing. To see what <em>your R session</em> is holding, see below.</p></li>
 </ul>
+<section id="see-ram-in-r" class="level3">
+<h3 class="anchored" data-anchor-id="see-ram-in-r">Seeing your memory use from inside R</h3>
+<p>The Task Manager tells you the machine is running out of memory. It does not tell you <em>which object</em> is the problem. R can, and you do not need any extra packages for it.</p>
+<p><strong>How much is this session using right now?</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="fu">gc</span>() <span class="co"># "garbage collection" - it also reports memory use</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Read the <strong><code>(Mb)</code></strong> columns. <code>used</code> is what your session holds at this moment, <code>max used</code> the high-water mark since the session started. The <code>Vcells</code> row is the one that matters for data: it counts the memory holding your actual values. Calling <code>gc()</code> also asks R to hand back memory it no longer needs, so it is useful after an <code>rm()</code>.</p>
+<p><strong>Which object is eating it?</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Every object in your session, biggest first</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>sizes <span class="ot">&lt;-</span> <span class="fu">sapply</span>(<span class="fu">ls</span>(), <span class="cf">function</span>(x) <span class="fu">object.size</span>(<span class="fu">get</span>(x)))</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="fu">sort</span>(sizes, <span class="at">decreasing =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="co"># The same, in units you can read</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (n <span class="cf">in</span> <span class="fu">names</span>(<span class="fu">sort</span>(sizes, <span class="at">decreasing =</span> <span class="cn">TRUE</span>))) {</span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"%-25s %s</span><span class="sc">\n</span><span class="st">"</span>, n, <span class="fu">format</span>(<span class="fu">object.size</span>(<span class="fu">get</span>(n)), <span class="at">units =</span> <span class="st">"auto"</span>)))</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>That prints something like <code>lpr_raw  4.2 Gb</code> next to <code>cohort  1.3 Mb</code>, and the culprit is usually obvious immediately. Then <code>rm(lpr_raw); gc()</code>.</p>
+<p><strong>A single object, before you decide to keep it:</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="fu">format</span>(<span class="fu">object.size</span>(my_data), <span class="at">units =</span> <span class="st">"auto"</span>) <span class="co"># e.g. "812.4 Mb"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-simple callout-tip">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>RStudio shows it too.</strong> The <strong>Environment</strong> pane lists every object with its size, and the dropdown at the top of that pane has a <strong>Memory Usage…</strong> report with the session total. It is the same numbers as above, without typing anything - handy while you work, though the code is what you want when you need to compare two approaches.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong><code>object.size()</code> measures the object, not the query.</strong> A lazy parquet connection from <code>open_dataset()</code> or <code>read_register()</code> is a few KB no matter how large the register behind it is - that is the whole point of lazy loading (see <a href="./04_file-formats.html">Phase 4</a>). The size only becomes real after <code>collect()</code>. So a small <code>object.size()</code> on a lazy object is good news, not a measurement error.</p>
+</div>
+</div>
+</div>
 <p>If the shared environment cannot handle your analyses, you can look into a <strong>hosted server</strong> or an <strong>HPC analysis platform</strong> (both have guides on DST).</p>
 <div class="callout callout-style-simple callout-tip">
 <div class="callout-body d-flex">
@@ -973,6 +1014,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+</section>
 </section>
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
