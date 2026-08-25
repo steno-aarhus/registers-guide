@@ -15,9 +15,11 @@ check-weekly: check-guide check-urls check-spelling
 check-guide check="all":
   Rscript tools/check-guide.R {{check}}
 
-# Build dst_code_examples.R: all code from the guide in one file, to upload to DST
+# Build the personal one-file code bundle for uploading to DST.
+# LOCAL ONLY: both the script and its output live in _ignore/ (gitignored), so
+# this recipe does nothing in a fresh clone. It is kept here for convenience.
 build-code-examples:
-  Rscript tools/build-code-examples.R
+  Rscript _ignore/build-code-examples.R
 
 # Run all build-related recipes
 build-all: build-contributors build-website build-readme
