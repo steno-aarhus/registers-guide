@@ -91,6 +91,164 @@ person** is explained in [Long ↔ wide format](12a_long-wide.qmd) - here
 `slice(1)` for the first dispensing, but it could also be ever/never or a count
 in a window (see the role table above).
 
+## Which ATC column? {#atc-columns}
+
+LMDB does not hold the ATC code once. It holds it **five times**, at five levels,
+in five separate columns. DST's [variable list for
+LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html)
+labels them `ATC-kode detaljeret` and `ATC-niveau 1` to `ATC-niveau 4`. They are
+**cumulative**: each level repeats the levels above it and adds its own
+characters.
+
+  | Column | ATC level | Characters | Example   | What it is              |
+  | ------ | --------- | ---------- | --------- | ----------------------- |
+  | `atc1` | 1         | 1          | `C`       | anatomical main group   |
+  | `atc2` | 2         | 3          | `C09`     | therapeutic subgroup    |
+  | `atc3` | 3         | 4          | `C09A`    | pharmacological subgroup |
+  | `atc4` | 4         | 5          | `C09AA`   | chemical subgroup       |
+  | `atc`  | 5         | 7          | `C09AA05` | chemical substance      |
+
+The column names and their levels come from DST's variable list. The character
+counts are **not** stated there; they follow from the WHO standard, where level
+2 is by definition the three-character code ([WHO Collaborating Centre for Drug
+Statistics Methodology](https://atcddd.fhi.no/atc/structure_and_principles/)).
+
+::: {.callout-warning}
+**A pattern longer than the column can never match, and R will not tell you.**
+`atc2` holds three characters. `grepl("N02A", atc2)` compares a four-character
+pattern against three-character values, so it matches nothing: zero rows, no
+error, no warning. The same goes for `filter(atc2 %in% c("A10A", "A10B"))`. An
+empty result looks like a finding rather than a bug, and it is easy to write up
+as "no exposed patients" when the truth is that the filter could not fire.
+:::
+
+**So filter on `atc`, not on the level columns.** It is seven characters, it
+contains every level as a prefix, and `substr(atc, 1, 3)` gives you exactly what
+`atc2` holds. There is no case where a level column lets you filter something
+`atc` cannot:
+
+```r
+library(dplyr) # filter, select, collect
+
+# Ischaemic heart disease treatment, defined as organic nitrates (C01DA):
+ihd <- lmdb %>%
+  filter(grepl("^C01DA", atc)) %>% # the full definition, in one filter
+  select(pnr, atc, eksd) %>%
+  collect()
+```
+
+Use `^` to anchor the pattern at the start of the code. It costs nothing and it
+is the right habit from LPR, where a code genuinely can turn up mid-string.
+
+### Which way should you write the filter?
+
+There are two ways to keep the codes you want, and **the length of your codes
+decides which one to use**. ATC codes are not all the same length: `N02` is three
+characters, `A10BA` is five.
+
+  | Your code list                       | Use             | Why                                    |
+  | ------------------------------------ | --------------- | -------------------------------------- |
+  | All codes have the **same** length    | `substr()` + `%in%` | Faster, and easy to read               |
+  | Codes have **different** lengths      | `grepl()` with `^`  | Handles any length                     |
+
+**All codes the same length.** Cut `atc` down to that length, then check whether
+the result is on your list:
+
+```r
+library(dplyr) # filter, select, collect
+
+# Four drug groups, all three characters long
+my_codes <- c("A10", "C09", "N02", "M01")
+
+lmdb %>%
+  filter(substr(atc, 1, 3) %in% !!my_codes) %>% # keep the first 3 characters, look them up
+  select(pnr, atc, eksd) %>%
+  collect()
+```
+
+`substr(atc, 1, 3)` means "the first three characters of `atc`". Change the `3`
+to match your codes: use `1, 5` for five-character codes such as `A10BA`.
+
+**Codes of different lengths.** One `substr()` cannot serve `N02` and `A10BA` at
+the same time, because they need different cut lengths. Use `grepl()` instead,
+which matches whatever you give it:
+
+```r
+lmdb %>%
+  filter(grepl("^N02|^A10BA|^C09AA", atc)) %>% # ^ means "starts with", | means "or"
+  select(pnr, atc, eksd) %>%
+  collect()
+```
+
+::: {.callout-tip}
+**In doubt? Use `grepl()`.** It works for every code length, so it is never
+wrong. `substr()` + `%in%` was about twice as fast on a twenty-million-row test,
+which is worth having when you fetch many drug groups at once, but a correct
+slow filter beats a fast broken one.
+:::
+
+::: {.callout-note}
+**Does it save memory to filter on `atc2` first?** No. It is a reasonable thing
+to wonder, since `atc2` is the short column, but the filter runs **before**
+anything is loaded: nothing reaches your memory until `collect()`, and what
+lands there is the rows that survived, which are the same rows either way.
+`substr(atc, 1, 3)` gives you exactly what `atc2` contains, so the two are the
+same query.
+
+There is a practical catch as well. Comorbidity definitions often need more than
+three characters (`A10BA` rather than `A10`), and `atc2` cannot narrow that far.
+You would filter on `atc2`, then bring in `atc` afterwards to get down to the
+codes you actually wanted: two steps for a result one step gives you. And if a
+code longer than three characters is compared against `atc2` on its own, it
+matches nothing and returns no rows without an error, so it is worth doing in
+one step on `atc`.
+:::
+
+::: {.callout-note}
+**What the level columns are actually for: grouping, not filtering.** When you
+want a descriptive breakdown by therapeutic subgroup, `atc2` is a ready-made
+grouping column and saves you a `substr()`:
+
+```r
+medication %>%
+  count(atc2, sort = TRUE) # dispensings per therapeutic subgroup
+```
+
+That is the use case. Filtering is not.
+:::
+
+::: {.callout-tip}
+## Check this on your own extract before you trust it
+
+Two minutes, and it settles both whether the columns exist and how they are
+coded:
+
+```r
+library(dplyr) # select, collect
+
+colnames(lmdb) # do you even have atc1-atc4? Not every delivery does
+lmdb %>%
+  select(atc, atc1, atc2, atc3, atc4) %>%
+  head(20) %>%
+  collect()
+```
+
+Expect `C` / `C09` / `C09A` / `C09AA` / `C09AA05` across a row: each column
+repeating the one before it. If instead you see isolated fragments (`09` in
+`atc2`), every `^`-anchored pattern in this section is wrong for your delivery
+and you should filter on `atc` only.
+
+Note that `names(lmdb)` will **not** answer this. On a lazy connection it
+returns the connection object's own parts (`src`, `lazy_query`), not the table's
+columns, so it looks as though the columns are missing. Use `colnames()`.
+:::
+
+::: {.callout-note}
+**`atc3` and `atc4` are not filled in for every product.** Not all preparations
+are classified to that depth, so do not assume the columns are complete. Count
+the blanks in your own extract before you build anything on them.
+:::
+
 ## ATC is not enough: same substance, different product
 
 ATC classifies by **active substance**, not by product or indication. Two brands
@@ -187,6 +345,11 @@ or treat medication as a [time-varying](12d_time-varying.qmd) exposure.
 - [Outcomes](11a_outcomes.qmd#where-does-your-codelist-come-from): where a
   codelist comes from (applies to ATC too)
 - [Register reference](register-reference.qmd#lmdb): all confirmed LMDB columns
+- [DST's variable list for
+  LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html):
+  DST's own column labels and period coverage. The [darter
+  project](https://steno-aarhus.github.io/darter-project/) has the same lookup
+  for Danish registers in a searchable form
 - [Algorithms & special packages](packages-overview.qmd): `heaven` for exposure
   windows; OSDC and NMI already use ATC codes
 - [Time-varying variables](12d_time-varying.qmd): on/off treatment over time
