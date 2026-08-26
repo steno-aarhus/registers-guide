@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-08-25">
+<meta name="dcterms.date" content="2026-08-26">
 
 <title>DST pitfalls – Register-based research at Statistics Denmark</title>
 <style>
@@ -582,6 +582,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#nmi_count-nmi_score" id="toc-nmi_count-nmi_score" class="nav-link" data-scroll-target="#nmi_count-nmi_score">9. <code>nmi_count</code> ≠ <code>nmi_score</code></a></li>
   <li><a href="#immortal-time-bias" id="toc-immortal-time-bias" class="nav-link" data-scroll-target="#immortal-time-bias">10. Immortal time bias - exposure defined using the future</a></li>
   <li><a href="#the-most-common-error-messages-and-what-they-mean" id="toc-the-most-common-error-messages-and-what-they-mean" class="nav-link" data-scroll-target="#the-most-common-error-messages-and-what-they-mean">11. The most common error messages and what they mean</a></li>
+  <li><a href="#zero-rows" id="toc-zero-rows" class="nav-link" data-scroll-target="#zero-rows">12. Zero rows is not an error message</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/dst-pitfalls.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/dst-pitfalls.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -602,7 +603,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 25, 2026</p>
+      <p class="date">August 26, 2026</p>
     </div>
   </div>
   
@@ -955,6 +956,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
+</section>
+<section id="zero-rows" class="level2">
+<h2 class="anchored" data-anchor-id="zero-rows">12. Zero rows is not an error message</h2>
+<p>Every pitfall above announces itself in red. This one does not. A filter that cannot match returns an empty result, R reports success, and the empty table looks like a finding: “no patients were exposed”. Two ways to produce it:</p>
+<ul>
+<li><strong>A pattern longer than the column:</strong> <code>atc2</code> in LMDB holds three characters, so <code>grepl("N02A", atc2)</code> compares four characters against three and matches nothing. See <a href="./11d_medication.html#atc-columns">Medication (ATC)</a>.</li>
+<li><strong>A type mismatch in a join or filter:</strong> joining a character <code>pnr</code> to a numeric one matches no rows rather than failing, the same way a format table joined on the wrong type does (see <a href="./formatting-tables.html#education-level">Format tables</a>).</li>
+</ul>
+<p>So treat an empty result as a <strong>bug until proven otherwise</strong>. Count the rows before and after the filter, and check that the values you filter on actually occur:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># count, filter, collect</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span> <span class="fu">count</span>() <span class="sc">%&gt;%</span> <span class="fu">collect</span>() <span class="co"># rows before</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span> <span class="fu">count</span>(atc2) <span class="sc">%&gt;%</span> <span class="fu">head</span>(<span class="dv">20</span>) <span class="sc">%&gt;%</span> <span class="fu">collect</span>() <span class="co"># what the column really contains</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>If the second line shows three-character values and your pattern is longer, you have found it.</p>
 
 
 </section>
