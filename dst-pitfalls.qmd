@@ -282,3 +282,31 @@ encounter in a DST workflow, translated into what they actually mean:
 error message - is described in [Phase 7 - Seeing a red error
 message?](07_inspect-data.qmd#seeing-a-red-error-message).
 :::
+
+## 12. Zero rows is not an error message {#zero-rows}
+
+Every pitfall above announces itself in red. This one does not. A filter that
+cannot match returns an empty result, R reports success, and the empty table
+looks like a finding: "no patients were exposed". Two ways to produce it:
+
+- **A pattern longer than the column:** `atc2` in LMDB holds three characters,
+  so `grepl("N02A", atc2)` compares four characters against three and matches
+  nothing. See [Medication (ATC)](11d_medication.qmd#atc-columns).
+- **A type mismatch in a join or filter:** joining a character `pnr` to a
+  numeric one matches no rows rather than failing, the same way a format table
+  joined on the wrong type does (see [Format
+  tables](formatting-tables.qmd#education-level)).
+
+So treat an empty result as a **bug until proven otherwise**. Count the rows
+before and after the filter, and check that the values you filter on actually
+occur:
+
+```r
+library(dplyr) # count, filter, collect
+
+lmdb %>% count() %>% collect() # rows before
+lmdb %>% count(atc2) %>% head(20) %>% collect() # what the column really contains
+```
+
+If the second line shows three-character values and your pattern is longer, you
+have found it.
