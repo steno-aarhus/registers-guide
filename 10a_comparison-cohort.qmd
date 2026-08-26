@@ -167,12 +167,12 @@ them from SAS yourself.
 
 ```r
 #=====================================================
-# Step 3: prepare the exposed for matching
+# Step 3: prepare the exposed for matching        ----
 #=====================================================
 library(fastreg); library(arrow); library(dplyr); library(lubridate)  # read_register (arrow/open_dataset as fallback)
 
 #-----------------------------------------------------
-# 3.1 Constants (what we choose and can change)
+# 3.1 Constants (what we choose and can change)   ----
 #-----------------------------------------------------
 RATIO     <- 5L        # comparison persons per exposed
 YEAR_FROM <- 2005L     # study window: FIRST BEF year. Must reach at least 5 years before your earliest index (see fold-out)
@@ -183,7 +183,7 @@ bef <- read_register("bef") %>% # without fastreg: open_dataset("E:/workdata/[pr
   rename_with(tolower)                          # column names to lower case
 
 #-----------------------------------------------------
-# 3.2 Pull BEF person-years ONCE (reused for the pool in Step 4)
+# 3.2 Pull BEF person-years ONCE (reused for the pool in Step 4) ----
 #-----------------------------------------------------
 bef_py <- bef %>%
   filter(year >= YEAR_FROM, year <= YEAR_TO) %>%  # study window only
@@ -221,7 +221,7 @@ residence <- exposed %>%
   select(pnr, index_date, last_code = indud_kode, last_date = haend_dato)
 
 #-----------------------------------------------------
-# 3.3 Attach demographics to the exposed (from Phase 10: identified + prevalent cases excluded)
+# 3.3 Attach demographics to the exposed (from Phase 10: identified + prevalent cases excluded) ----
 #-----------------------------------------------------
 exposed <- exposed %>%
   left_join(demographics, by = "pnr") %>%       # add sex, birth date, birth year
@@ -236,7 +236,7 @@ exposed <- exposed %>%
   )
 
 #-----------------------------------------------------
-# 3.4 Inclusion criteria (the SAME are applied to the pool in Step 4)
+# 3.4 Inclusion criteria (the SAME are applied to the pool in Step 4) ----
 #-----------------------------------------------------
 n_before <- nrow(exposed)                       # nrow() = number of rows (here: persons) before exclusion
 exposed <- exposed %>%
@@ -343,12 +343,12 @@ Each date table ends up as **one row per person** (just the date eligibility dep
 
 ```r
 #=====================================================
-# Extract eligibility dates for the WHOLE population
+# Extract eligibility dates for the WHOLE population ----
 #=====================================================
 library(fastreg); library(arrow); library(dplyr)  # read_register (arrow/open_dataset as fallback)
 
 #-----------------------------------------------------
-# 4.1 First outcome date for EVERYONE
+# 4.1 First outcome date for EVERYONE             ----
 #-----------------------------------------------------
 # 'diagnoses' is the COMBINED LPR diagnosis table from Phase 9 (see the note above) - not a raw table.
 # Filter on the outcome codes -> all persons with the diagnosis, regardless of exposure.
@@ -362,7 +362,7 @@ outcome <- diagnoses %>%
   select(pnr, first_outcome_date = date_contact)     # same idiom as Phase 9 (arrange + slice)
 
 #-----------------------------------------------------
-# 4.2 First exposure date for EVERYONE
+# 4.2 First exposure date for EVERYONE            ----
 #-----------------------------------------------------
 # Same source you used to DEFINE exposure in Step 1, but without restricting to the exposed -
 # future-exposed people (crossover) also need a date.
@@ -374,7 +374,7 @@ exp_dt <- exposure_raw %>%                            # your exposure extract, o
   select(pnr, exposure_date)
 
 #-----------------------------------------------------
-# 4.3 Date of death (DODSAARS) for EVERYONE - migration events are pulled in Step 3
+# 4.3 Date of death (DODSAARS) for EVERYONE - migration events are pulled in Step 3 ----
 #-----------------------------------------------------
 # Same patterns as in Phase 12 - note: NO semi_join against the exposed (pnr).
 death <- read_register("dodsaars") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dodsaars/")
@@ -389,7 +389,7 @@ death <- read_register("dodsaars") %>% # without fastreg: open_dataset("E:/workd
 # can fall BEFORE index for someone who has moved back.
 
 #-----------------------------------------------------
-# 4.4 Save as .rds (can be reused in Step 2 and Step 4)
+# 4.4 Save as .rds (can be reused in Step 2 and Step 4) ----
 #-----------------------------------------------------
 saveRDS(outcome, "path/to/outcome_dates.rds")     # first outcome per person
 saveRDS(exp_dt,  "path/to/exposure_dates.rds")    # first exposure per person
@@ -406,7 +406,7 @@ saveRDS(vnds_ev, "path/to/migration_events.rds")  # ALL entries/exits (not one d
 
 ```r
 #=====================================================
-# Build the comparison pool (demographics + the dates)
+# Build the comparison pool (demographics + the dates) ----
 #=====================================================
 # death, emig, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
 # (or loaded with readRDS if you saved them). Each is one row per person.
@@ -474,7 +474,7 @@ uses `exposed` and `pool` directly and does not need this assembly.)
 
 ```r
 #=====================================================
-# Step 5 (Route A): match with exposureMatch()
+# Step 5 (Route A): match with exposureMatch()    ----
 #=====================================================
 library(heaven)   # exposureMatch
 STUDY_END <- as.Date("2022-12-31")   # we choose: last day of the study
@@ -504,7 +504,7 @@ all_persons <- bind_rows(
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' MUST be factor/character
 
 #-----------------------------------------------------
-# The matching itself: call exposureMatch()
+# The matching itself: call exposureMatch()       ----
 #-----------------------------------------------------
 # In the call below: the name LEFT of = is the function's ARGUMENT (fixed, defined by exposureMatch);
 # the value on the RIGHT is what WE set it to (usually the name of a column in 'all_persons', in quotes).
@@ -586,7 +586,7 @@ For standard register matching (sex, birth year, calendar time, alive/resident/o
 
 ```r
 #=====================================================
-# Step 5 (Route B): manual risk-set loop
+# Step 5 (Route B): manual risk-set loop          ----
 #=====================================================
 set.seed(20260620)                                       # fixed seed => reproducible sampling
 exp_sorted  <- exposed %>% arrange(index_date)           # earliest exposed first (chronological)
