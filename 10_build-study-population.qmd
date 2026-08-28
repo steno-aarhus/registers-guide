@@ -161,9 +161,7 @@ you.
 <summary>Show the code: the source population at study start</summary>
 
 ```r
-#=====================================================
-# Step 1: the source population at study start (BEF + VNDS) ----
-#=====================================================
+# Step 1: the source population at study start (BEF + VNDS) --------------------
 library(fastreg) # read_register()
 library(dplyr)   # the verbs are translated to SQL and run in DuckDB
 
@@ -173,18 +171,14 @@ library(dplyr)   # the verbs are translated to SQL and run in DuckDB
 # the code.
 STUDY_START <- as.Date("2010-01-01")   # we choose: first day of the study
 
-#-----------------------------------------------------
-# 1.1 The population and date of birth (BEF, all snapshots combined) ----
-#-----------------------------------------------------
+# 1.1 The population and date of birth (BEF, all snapshots combined) -----------
 # distinct() gives one row per person across ALL years in the window. Using a
 # single year's snapshot loses those who moved home later that year.
 bef <- read_register("bef") %>%
   rename_with(tolower) %>%
   distinct(pnr, foed_dag, koen)
 
-#-----------------------------------------------------
-# 1.2 Latest migration event BEFORE study start   ----
-#-----------------------------------------------------
+# 1.2 Latest migration event BEFORE study start --------------------------------
 # Everything is lazy: DuckDB does the lookup, and we only fetch the result at the
 # end. Pulling VNDS into R first fills memory for no reason.
 vnds <- read_register("vnds") %>%
@@ -198,9 +192,7 @@ latest_event <- vnds %>%
   ungroup() %>%
   select(pnr, last_code = indud_kode, last_date = haend_dato)
 
-#-----------------------------------------------------
-# 1.3 Decide residence and apply the criteria     ----
-#-----------------------------------------------------
+# 1.3 Decide residence and apply the criteria ----------------------------------
 # left_join: people WITHOUT events get NA - and NA here means "never left",
 # i.e. resident since birth. That is the default, not an exception.
 source_population <- bef %>%
@@ -262,9 +254,7 @@ you did not convert them from SAS yourself.
 `lpr_sksopr` holds the procedure code (`c_opr`) + `recnum`, but **not** `pnr` or date; those live in `lpr_adm`. So you join the two on `recnum` to get person + date + procedure together - exactly the same pattern as diagnoses (contact + diagnosis register), see [Understand LPR](09a_understand-lpr.qmd).
 
 ```r
-#=====================================================
-# Step 2A: identify the exposed via SKS codes     ----
-#=====================================================
+# Step 2A: identify the exposed via SKS codes ----------------------------------
 library(fastreg) # read_register - read a register by name
 library(dplyr)   # filter, select, group_by, slice, ungroup, bind_rows, mutate
 # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/<register>/") %>% rename_with(tolower) for each register
@@ -274,9 +264,7 @@ RYGB     <- c("KJDF10", "KJDF11")                     # Roux-en-Y gastric bypass
 SG       <- c("KJDF40", "KJDF41", "KJDF96", "KJDF97") # sleeve gastrectomy
 BS_CODES <- c(RYGB, SG)                               # combined vector
 
-#-----------------------------------------------------
-# 1A.1 LPR2: procedures up to 2018/2019           ----
-#-----------------------------------------------------
+# 1A.1 LPR2: procedures up to 2018/2019 ----------------------------------------
 lpr_sksopr <- read_register("lpr_sksopr") %>%
   rename_with(tolower)
 lpr_adm    <- read_register("lpr_adm") %>%
@@ -291,9 +279,7 @@ exp_lpr2 <- lpr_sksopr %>%
   ) %>%
   collect()
 
-#-----------------------------------------------------
-# 1A.2 LPR3: procedures from 2019 onwards         ----
-#-----------------------------------------------------
+# 1A.2 LPR3: procedures from 2019 onwards --------------------------------------
 proc_kir <- read_register("procedurer_kirurgi") %>%
   rename_with(tolower)
 lpr_a_k  <- read_register("lpr_a_kontakt") %>%
@@ -309,9 +295,7 @@ exp_lpr3 <- proc_kir %>%
   collect() %>%
   mutate(index_date = as.Date(index_date))                  # datetime → date
 
-#-----------------------------------------------------
-# 1A.3 Combine and take one procedure per person (the first) ----
-#-----------------------------------------------------
+# 1A.3 Combine and take one procedure per person (the first) -------------------
 # The result is called "exposed" - only the exposed group, NOT the full cohort yet
 exposed <- bind_rows(exp_lpr2, exp_lpr3) %>%
   group_by(pnr) %>%                                        # group per person
@@ -333,9 +317,7 @@ nrow(exposed)                                              # number of unique op
 <summary>Example B: ICD diagnosis as exposure criterion</summary>
 
 ```r
-#=====================================================
-# Step 2B: identify the exposed via ICD diagnosis ----
-#=====================================================
+# Step 2B: identify the exposed via ICD diagnosis ------------------------------
 # Same LPR pattern as Phase 9 - but without semi_join(tibble(pnr = cohort_pnrs), by = "pnr"),
 # as the cohort does not yet exist. You query the full population to identify the exposed.
 lpr_diag <- read_register("lpr_diag") %>%
@@ -390,9 +372,7 @@ practice](good-coding-practice.qmd).
 <summary>Show the code: exclude prevalent cases</summary>
 
 ```r
-#=====================================================
-# Step 3: exclude prevalent cases                 ----
-#=====================================================
+# Step 3: exclude prevalent cases ----------------------------------------------
 # diagnoses = your LPR extract from Phase 9 (columns: pnr, date_contact, icd3)
 OUTCOME_CODES <- c("G30", "F00", "F01", "F02", "F03")   # ICD-10 for your outcome - adapt
 
