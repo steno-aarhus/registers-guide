@@ -96,7 +96,7 @@ You need **both** registers, and it is worth understanding why:
   holds **only** migration events, so a person born in Denmark who never left
   has **no rows at all** in VNDS. Absence of events is the normal case, not an
   error.
-- **DODSAARS** gives the date of death, applied on top.
+- **DOD** gives the date of death, applied on top.
 
 The rule is therefore a default with exceptions: **resident since birth, unless
 VNDS says otherwise.** For each person, find the latest VNDS event **before**
@@ -235,14 +235,13 @@ criterion.
 
   | Type                             | Example                         | Register                                                   |
   | -------------------------------- | ------------------------------- | ---------------------------------------------------------- |
-  | Surgery / procedure (SKS code)   | Bariatric surgery KJDF10/KJDF11 | `lpr_sksopr`^a^ (LPR2), `procedurer_kirurgi`^a^ (LPR3)     |
+  | Surgery / procedure (SKS code)   | Bariatric surgery KJDF10/KJDF11 | `lpr_sksopr` (LPR2), `lpr_a_procregistrering` (LPR3)        |
   | Hospital diagnosis (ICD code)    | Type 2 diabetes E11             | `lpr_diag` + `lpr_adm`, `lpr_a_diagnose` + `lpr_a_kontakt` |
   | Medication exposure (ATC code)   | Metformin A10BA02               | LMDB                                                       |
   | Clinical measurement / biomarker | BMI > 35, HbA1c > 75 mmol/mol   | Project-specific data / OSDC / DBSO                        |
 
-^a^ `lpr_sksopr` and `procedurer_kirurgi` are the names on the DARTER project
-(708421) - see [Overview of registers](register-reference.qmd). Names may vary
-on other projects.
+Register names may vary on your project - see [Overview of
+registers](register-reference.qmd).
 
 The examples use `read_register()`; it requires fastreg set up with the path to
 your registers - see [Phase 4](04_file-formats.qmd#convert-sas-to-parquet) if
@@ -280,17 +279,17 @@ exp_lpr2 <- lpr_sksopr %>%
   collect()
 
 # 1A.2 LPR3: procedures from 2019 onwards --------------------------------------
-proc_kir <- read_register("procedurer_kirurgi") %>%
+proc <- read_register("lpr_a_procregistrering") %>%
   rename_with(tolower)
 lpr_a_k  <- read_register("lpr_a_kontakt") %>%
   rename_with(tolower)
 
-exp_lpr3 <- proc_kir %>%
-  filter(procedurekode %in% !!BS_CODES) %>%                 # only bariatric procedures
-  select(dw_ek_forloeb, sks_code = procedurekode) %>%
+exp_lpr3 <- proc %>%
+  filter(proc_kode %in% !!BS_CODES) %>%                     # only bariatric procedures
+  select(dw_ek_kontakt, sks_code = proc_kode) %>%           # dw_ek_kontakt joins to the contact
   inner_join(
-    lpr_a_k %>% select(pnr, dw_ek_forloeb, index_date = kont_starttidspunkt),
-    by = "dw_ek_forloeb"
+    lpr_a_k %>% select(pnr, dw_ek_kontakt, index_date = kont_starttidspunkt),
+    by = "dw_ek_kontakt"
   ) %>%
   collect() %>%
   mutate(index_date = as.Date(index_date))                  # datetime → date
@@ -431,7 +430,7 @@ simulated).
 
 ```{mermaid}
 flowchart TD
-    A[("Source registers - whole population<br>LPR2: lpr_sksopr + lpr_adm<br>LPR3: procedurer_kirurgi + lpr_a_kontakt")]:::store
+    A[("Source registers - whole population<br>LPR2: lpr_sksopr + lpr_adm<br>LPR3: lpr_a_procregistrering + lpr_a_kontakt")]:::store
     B["Step 2: filter on exposure codes<br>exposed with pnr + index_date<br>n = 12,300"]:::step
     E1["Excluded in Step 3:<br>prevalent outcome before index<br>(from LPR diagnoses)<br>n = 1,150"]:::excl
     C["Exposed cohort<br>n = 11,150"]:::step
@@ -507,4 +506,4 @@ repatriation](14_export.qmd).
 - [Extract from LPR](09b_extract-from-lpr.qmd): diagnosis pattern for
   exposure/case identification
 - [Overview of registers](register-reference.qmd): column names for lpr_sksopr,
-  procedurer_kirurgi etc.
+  lpr_a_procregistrering etc.
