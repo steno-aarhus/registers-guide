@@ -21,7 +21,6 @@ matches your study period.
 # All paths used as constants at the top of scripts
 path_parquet_reg <- "E:/workdata/708421/cleaned-data/parquet-registers/"
 path_parquet_ext <- "E:/workdata/708421/cleaned-data/parquet-external/"
-path_dm_pop <- "E:/workdata/708421/cleaned-data/diabetes-register-pop/dm_population_1977_2022.rds"
 path_output <- "E:/workdata/708421/workspaces/[yourName]/BS_demens/datasets/"
 ```
 
@@ -50,7 +49,7 @@ Column names shown after `rename_with(tolower)`.
   | **FAIK**                 | `read_register("faik")`                   | `familie_id`            | All years        | `famaekvivadisp_13`                                |
   | **AKM**                  | `read_register("akm")`                    | `pnr`                   | All years        | `socio13`, `aar`                                   |
   | **DBSO**                 | `read_register("dbso")`                   | `pnr`                   | 2010+            | `datoper_prim`, surgery flags                      |
-  | **OSDC**                 | `readRDS(path_dm_pop)`                    | `PNR` → rename to `pnr` | 1977–2022        | `diabetes_type`, `do_dm`                           |
+  | **OSDC**                 | `read_register("osdc")`                   | `pnr`                   | 1977–2024        | `has_t1d`/`has_t2d`, `stable_inclusion_date`       |
   | **Laboratory results**   | `read_register("laboratorieproevesvar_")` | `pnr`                   | Approx. 1994+    | `npu`, `samplingdato`, `samplevalue` (character)   |
 
 ## Critical notes
@@ -180,8 +179,18 @@ Confirm `lpr_a_procregistrering` is in your delivery before you rely on it.
 **DBSO:** The identifier column is `cpr` in raw parquet - renamed to `pnr` by
 `00_prepare_dbso.R`. All code uses `pnr` after that.
 
-**OSDC:** `PNR` is uppercase in the raw file - rename with `rename(pnr = PNR)`
-after loading.
+**OSDC:** a classified diabetes population is already computed and lies ready on
+the project, so you normally do not run the algorithm yourself - but you can, if
+you need to change the definitions. Both routes are described on [Diabetes
+population (OSDC)](../osdc.qmd); the package itself is documented at
+[steno-aarhus.github.io/osdc](https://steno-aarhus.github.io/osdc/).
+
+The one thing worth knowing here: the output has **two** inclusion dates, and
+picking between them is a study decision, not a formality. `raw_inclusion_date`
+is the person's second inclusion event; `stable_inclusion_date` is the same date
+but `NA` when it falls before 1998, where the underlying data is not considered
+reliable. Filter on the stable one and your early cases disappear without a
+word.
 
 ## Loading templates {#load-templates}
 
@@ -212,8 +221,8 @@ psyk_adm <- read_register("t_psyk_adm") %>%
 # DBSO - parquet-external (converted from SAS via 00_prepare_dbso.R):
 dbso <- read_register("dbso") %>% rename_with(tolower) # lazy connection
 
-# OSDC - RDS file with pre-computed diabetes classification:
-dm_pop <- readRDS(path_dm_pop) %>% rename(pnr = PNR) # PNR is uppercase in raw file - rename
+# OSDC - pre-computed diabetes classification (see ../osdc.qmd):
+dm_pop <- read_register("osdc") # pnr, has_t1d, has_t2d, raw_/stable_inclusion_date
 
 # LPR3 procedures - join via dw_ek_forloeb (NOT dw_ek_kontakt - is NA for all rows):
 proc <- read_register("procedurer_kirurgi") %>%
