@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-08-28">
+<meta name="dcterms.date" content="2026-08-29">
 
 <title>DST pitfalls – Register-based research at Statistics Denmark</title>
 <style>
@@ -571,7 +571,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#dodsaars-vs-dodsaasg---use-the-correct-death-register" id="toc-dodsaars-vs-dodsaasg---use-the-correct-death-register" class="nav-link active" data-scroll-target="#dodsaars-vs-dodsaasg---use-the-correct-death-register">1. <code>dodsaars</code> vs <code>dodsaasg</code> - use the correct death register</a></li>
+  <li><a href="#death-registers" id="toc-death-registers" class="nav-link active" data-scroll-target="#death-registers">1. Four death registers - <code>dodsaars</code> stops in 2001</a></li>
   <li><a href="#ram-is-shared---clean-up-after-large-extractions" id="toc-ram-is-shared---clean-up-after-large-extractions" class="nav-link" data-scroll-target="#ram-is-shared---clean-up-after-large-extractions">2. RAM is shared - clean up after large extractions</a></li>
   <li><a href="#tolower" id="toc-tolower" class="nav-link" data-scroll-target="#tolower">3. <code>rename_with(tolower)</code> must be called on each register</a></li>
   <li><a href="#4-date-columns-are-not-always-in-date-format" id="toc-4-date-columns-are-not-always-in-date-format" class="nav-link" data-scroll-target="#4-date-columns-are-not-always-in-date-format">4. Date columns are not always in Date format</a></li>
@@ -603,7 +603,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 28, 2026</p>
+      <p class="date">August 29, 2026</p>
     </div>
   </div>
   
@@ -616,56 +616,87 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>This page collects the errors that most frequently catch new users of DST registers. What they have in common: the error messages are either confusing, or there is no error message at all - the result is just silently wrong.</p>
-<section id="dodsaars-vs-dodsaasg---use-the-correct-death-register" class="level2">
-<h2 class="anchored" data-anchor-id="dodsaars-vs-dodsaasg---use-the-correct-death-register">1. <code>dodsaars</code> vs <code>dodsaasg</code> - use the correct death register</h2>
-<p>There are two registers with similar names:</p>
+<section id="death-registers" class="level2">
+<h2 class="anchored" data-anchor-id="death-registers">1. Four death registers - <code>dodsaars</code> stops in 2001</h2>
+<p>Four registers have confusingly similar names, and the one most people reach for first is the one that ends a quarter of a century ago:</p>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 8%">
-<col style="width: 61%">
+<col style="width: 17%">
+<col style="width: 24%">
+<col style="width: 27%">
 <col style="width: 30%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Register</th>
-<th>Contains</th>
-<th>Used for</th>
+<th>Full name</th>
+<th>Covers</th>
+<th>Use it for</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>dodsaars</code></td>
-<td>Individual death registrations with precise date of death (<code>d_dodsdto</code>)</td>
+<td><code>dod</code></td>
+<td>Døde i Danmark</td>
+<td><strong>1970-2025</strong>, ongoing</td>
 <td><strong>Censoring at death</strong></td>
 </tr>
 <tr class="even">
+<td><code>dodsaars</code></td>
+<td>Dødsårssagsregistret</td>
+<td>1970-<strong>2001</strong> only</td>
+<td>Cause of death, to 2001</td>
+</tr>
+<tr class="odd">
 <td><code>dodsaasg</code></td>
-<td>Cause-of-death classification</td>
-<td>Only for analysis of cause of death</td>
+<td>Dødsårsagsregister</td>
+<td><strong>2002</strong>-2022</td>
+<td>Cause of death, 2002-2022</td>
+</tr>
+<tr class="even">
+<td><code>dodsaarsager</code></td>
+<td>Dødsårsagsregister</td>
+<td><strong>2022</strong>-2024</td>
+<td>Cause of death, 2022 on</td>
 </tr>
 </tbody>
 </table>
-<p><code>dodsaasg</code> does not have the date of death in the correct format and is not the authoritative source for individual death dates.</p>
+<p>Coverage is from <a href="https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html">DST’s own register overview</a>.</p>
+<p>Two separate things are going on. <strong>The date of death</strong> lives in <code>dod</code>, which covers the whole period on its own. <strong>The cause of death</strong> is split across the three others, each picking up where the last stopped, so a study spanning 1995 to 2024 needs all three chained together and none of them alone will tell you it is incomplete.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Check dodsaars coverage in your project guide.</strong> <code>dodsaars</code> does not necessarily cover your entire study period - in project 708421 it covers only ~1970–2001 (as of June 2026), and post-2001 deaths require a separate extraction. Other projects may have different coverage.</p>
+<p><strong>If you censor on <code>dodsaars</code>, everyone who died after 2001 looks alive.</strong> There is no error and no warning. They stay in your risk set until the end of follow-up, so your survival curves are too good and your rates are too low. For a study running past 2001, which is nearly all of them, use <strong><code>dod</code></strong>.</p>
 </div>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - read the register by name (fastreg gets the path from your project config)</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>death <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dodsaars"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="co"># check coverage in your project guide</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Without fastreg: open_dataset("path/to/dodsaars/") %&gt;% rename_with(tolower)</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>death_person <span class="ot">&lt;-</span> death <span class="sc">%&gt;%</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort's pnr's</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> d_dodsdto) <span class="sc">%&gt;%</span> <span class="co"># d_dodsdto is the confirmed column</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG - do not use dodsaasg for censoring dates</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># semi_join, select, collect</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Date of death for censoring: dod, not dodsaars</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>death <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>death_person <span class="ot">&lt;-</span> death <span class="sc">%&gt;%</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort's pnr's</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span> <span class="co"># doddato, NOT d_dodsdto</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-simple callout-note">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>Two things to check on your own project before you rely on this.</strong></p>
+<p><strong>Is <code>dod</code> in your delivery, and does it reach far enough back?</strong> Your project received the years it ordered, not necessarily all of 1970-2025. Check with <code>read_register("dod") %&gt;% summarise(min(doddato), max(doddato)) %&gt;% collect()</code>.</p>
+<p><strong>Is it converted to parquet?</strong> On some projects <code>dod</code> sits only as a raw SAS file, so <code>read_register()</code> will not find it and you read it with <code>haven::read_sas()</code> instead. Ask your data manager for the path.</p>
+<p>Only if <code>dod</code> turns out <strong>not</strong> to cover your early years do you need <code>dodsaars</code> as well, and then you stack the two and rename so the date columns match. Do not do it by default: on a full delivery both registers hold every death from 1970 to 2001, so stacking them counts those deaths twice.</p>
+</div>
+</div>
+</div>
 </section>
 <section id="ram-is-shared---clean-up-after-large-extractions" class="level2">
 <h2 class="anchored" data-anchor-id="ram-is-shared---clean-up-after-large-extractions">2. RAM is shared - clean up after large extractions</h2>
@@ -754,7 +785,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="bef-is-a-status-snapshot---not-a-live-register" class="level2">
 <h2 class="anchored" data-anchor-id="bef-is-a-status-snapshot---not-a-live-register">5. BEF is a status snapshot - not a live register</h2>
-<p>BEF is a <strong>status register</strong>: it records the composition of the population at a given reference time - not continuously. DST’s reference time is <strong>ultimo</strong> (typically 31 December for an annual snapshot). Since 2008, BEF is also delivered <strong>quarterly</strong> (March, June, September, December).</p>
+<p>BEF is a <strong>status register</strong>: it records the composition of the population at a given reference time - not continuously. DST classifies every register as one of four <a href="https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/registre-og-referencetyper">reference types</a>: <strong>Status</strong> (a snapshot on one date, which is BEF), <strong>Statusperiode</strong> (population fixed on a date, values accumulated over a period), <strong>Forløb</strong> (rows with a start and an end date) and <strong>Hændelse</strong> (one row per event, with one date). Knowing which type you are holding tells you what a row actually means. DST’s reference time is <strong>ultimo</strong> (typically 31 December for an annual snapshot). Since 2008, BEF is also delivered <strong>quarterly</strong> (March, June, September, December).</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
