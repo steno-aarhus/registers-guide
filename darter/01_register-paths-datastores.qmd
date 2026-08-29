@@ -34,8 +34,8 @@ Column names shown after `rename_with(tolower)`.
   | Register                 | Access                                    | Join key                | Period           | Critical column                                    |
   | ------------------------ | ----------------------------------------- | ----------------------- | ---------------- | -------------------------------------------------- |
   | **BEF**                  | `read_register("bef")`                    | `pnr`                   | All years        | `koen`, `foed_dag`, `familie_id`                   |
-  | **DODSAARS**             | `read_register("dodsaars")`               | `pnr`                   | ~1970–2001       | `d_dodsdto` (death date)                           |
-  | **DOD**                  | `read_sas()` from rawdata - see below     | `pnr`                   | ~2001–2024       | `doddato` (death date)                             |
+  | **DOD**                  | `read_sas()` from rawdata - see below     | `pnr`                   | 1970–2024        | `doddato` (**use this for death**)                 |
+  | **DODSAARS**             | `read_register("dodsaars")`               | `pnr`                   | ~1970–**2001**   | `d_dodsdto` (stops in 2001 - see below)            |
   | **VNDS**                 | `read_register("vnds")`                   | `pnr`                   | All years        | `indud_kode`, `haend_dato`                         |
   | **LPR2 contacts**        | `read_register("lpr_adm")`                | `recnum`                | Up to March 2019 | `d_inddto`, `c_pattype`                            |
   | **LPR2 diagnoses**       | `read_register("lpr_diag")`               | `recnum`                | Up to March 2019 | `c_diag`, `c_diagtype`                             |
@@ -55,44 +55,60 @@ Column names shown after `rename_with(tolower)`.
 
 ## Critical notes
 
-**DODSAARS and DOD - deaths are split across two registers:** the date of death
-is not in one place. `dodsaars` is in cleaned-data but covers **only
-\~1970--2001** (date of death in `d_dodsdto`). Deaths **after 2001** are in
-**DOD** (date of death in `doddato`, covering \~2001--2024), which is **not in
-cleaned-data**. Both join on `pnr`, and you need **both** for full coverage over
-a modern study period.
+**Deaths - the convenient register is the wrong one.** `dodsaars` is in
+cleaned-data, so `read_register("dodsaars")` just works and it is the one you
+reach for first. It also **stops at the end of 2001**. `dod` (Døde i Danmark) is
+the register that covers deaths, 1970-2025 at DST, but on DARTER it is **not in
+cleaned-data**: it sits as a raw SAS file. Use `dod` and its `doddato` column for
+censoring at death, and see [pitfall 1 - three death
+registers](../dst-pitfalls.qmd#death-registers) for the general version.
 
-You do not need a separate extraction for DOD on DARTER: the raw SAS file can be
-read directly with `read_sas()`.
+You do not need a separate extraction on DARTER: the raw file reads directly.
 
 ```r
 library(haven) # read_sas() - reads .sas7bdat straight into R
-library(dplyr) # bind_rows, rename, select, mutate, distinct
+library(dplyr) # rename_with, select, mutate, semi_join, summarise
 
-# DARTER-SPECIFIC PATHS (project 708421). On another project the raw files sit
+# DARTER-SPECIFIC PATH (project 708421). On another project the raw files sit
 # somewhere else, may be named differently, and access to rawdata can depend on
 # your project role - ask your data manager for the path to the death register.
-dodsaars <- read_sas("E:/rawdata/708421/Grunddata/dodsaars2001.sas7bdat")
-dod <- read_sas("E:/rawdata/708421/Grunddata/dod2024.sas7bdat")
+dod <- read_sas("E:/rawdata/708421/Grunddata/dod2024.sas7bdat") %>%
+  rename_with(tolower)
 
-# Stack the two: the date column has a different name in each register.
-deaths <- bind_rows(
-  dodsaars %>% rename_with(tolower) %>% select(pnr, d_dodsdto),
-  dod %>%
-    rename_with(tolower) %>%
-    rename(d_dodsdto = doddato) %>%
-    select(pnr, d_dodsdto)
-) %>%
-  mutate(d_dodsdto = as.Date(d_dodsdto)) %>%
+# This is a whole-population file read straight into RAM, so cut it to your
+# cohort as soon as you have one.
+deaths <- dod %>%
+  semi_join(cohort, by = "pnr") %>%
+  select(pnr, death_date = doddato) %>%
+  mutate(death_date = as.Date(death_date))
+
+# Check how far back the file actually reaches before you trust it:
+deaths %>% summarise(min(death_date), max(death_date))
+```
+
+::: {.callout-warning}
+**Do the range check.** The file is named `dod2024`, and the row above says
+1970-2024, but nobody on the DARTER team has confirmed the start year of *this
+extract*. If it turns out to begin in 2001, and your study period reaches
+further back, you need `dodsaars` for the early years as well:
+
+```r
+dodsaars <- read_sas("E:/rawdata/708421/Grunddata/dodsaars2001.sas7bdat") %>%
+  rename_with(tolower) %>%
+  select(pnr, death_date = d_dodsdto) # note: different column name
+
+deaths <- bind_rows(deaths, mutate(dodsaars, death_date = as.Date(death_date))) %>%
   distinct(pnr, .keep_all = TRUE) # one death date per person
 ```
 
-These are whole-population files read into RAM, so filter to your cohort
-(`semi_join(cohort, by = "pnr")`) as soon as you have it.
+Only do this if the range check says you have to. If both files cover 1970-2001,
+stacking them puts every pre-2001 death in twice, and `distinct()` then keeps
+whichever came first rather than the one you meant.
+:::
 
-**Why it matters:** if you run on `dodsaars` only, everyone who dies after 2001
-is treated as alive. That skews censoring and matching in `01_build_cohorts.R`.
-See [pitfall
+**Why it matters:** run on `dodsaars` alone and everyone who died after 2001 is
+treated as alive for the past 25 years. That skews censoring and matching in
+`01_build_cohorts.R`, with no error message. See [pitfall
 1](02_darter-pitfalls.qmd#1-check-that-parquet-files-are-up-to-date).
 
 **LPR3 - duplicate risk:** `lpr_a_kontakt` and `lpr_a_diagnose` contain data
@@ -116,13 +132,50 @@ extracting:
 See [pitfall 7 - Laboratory results](02_darter-pitfalls.qmd) for a code example.
 <!-- TODO: dedicated extraction guide for laboratory results (NPU filtering, units, character samplevalue) missing - see TODO.md -->
 
-**procedurer_kirurgi:** `dw_ek_kontakt` is **NA for all rows** on DST. Join to
-`lpr_a_kontakt` via `dw_ek_forloeb` to fetch `pnr` - but that column also has
-many NA, so the join is not fully solved. `lpr_a_procregistrering` is the
-general LPR3 procedure table and is reported to have a usable `dw_ek_kontakt` on
-DARTER; prefer it if it covers your codes. Different column names (`proc_kode`,
-`proc_starttidspunkt`) - see [Overview of
-registers](../register-reference.qmd#lpr3-procedures).
+**procedurer_kirurgi - the pnr join is not solved.** This is a
+**project-specific** delivery of the LPR3 procedures; it is not a DST register,
+and it does not appear in DST's register list. Like every procedure table it
+carries **no `pnr`**: it identifies procedures, not people, so you have to join
+to a contact table to get one. On DARTER neither route works cleanly.
+
+  | Column                     | Type      | Contents                                                                      |
+  | -------------------------- | --------- | ----------------------------------------------------------------------------- |
+  | **`procedurekode`**        | character | SKS procedure code - match on this (e.g. `"KJDF10"`)                          |
+  | **`dato_start`**           | Date      | Procedure date                                                                |
+  | `dw_ek_kontakt`            | character | The intended join key - but **NA for every row** here (confirmed 2026-06-02)  |
+  | `dw_ek_forloeb`            | character | Course-level key - usable, but **many NA**                                    |
+  | `proceduretype`            | character | `"P"` = procedure, `"+"` = add-on code                                        |
+  | `procedurekode_parent`     | character | Parent procedure code                                                         |
+  | `dato_slut`                | Date      | Procedure end date                                                            |
+  | `lprindberetningssystem`   | character | LPR reporting system                                                          |
+  | `procedureregistrering_id` | character | Internal registration ID                                                      |
+
+::: {.callout-warning}
+**Both keys fail, in different ways.** `dw_ek_kontakt` is NA on every row, so the
+obvious join to `lpr_a_kontakt` - the same one the diagnosis table uses - matches
+**nothing at all**, with no error. `dw_ek_forloeb` is filled for some rows and so
+looks like a fix, but it also has many NA and nobody has counted how many, so
+that join drops an unknown share of procedures silently.
+
+The two keys are also not the same level: `dw_ek_kontakt` points at one contact,
+`dw_ek_forloeb` at a whole course of treatment, which can span several contacts.
+Swapping one for the other changes what a row means. That last point is read off
+the LPR3 data model rather than tested.
+
+**So there is currently no verified way to attach `pnr` to an LPR3 procedure
+through this file.** Use
+[`lpr_a_procregistrering`](../register-reference.qmd#lpr3-procedures) instead: it
+is the real DST register, it joins on `dw_ek_kontakt`, and DST even flags rows
+with no contact in `flag_proc_uden_kont`. Column names differ:
+
+  | `procedurer_kirurgi` | `lpr_a_procregistrering`             |
+  | -------------------- | ------------------------------------ |
+  | `procedurekode`      | `proc_kode`                          |
+  | `dato_start`         | `proc_starttidspunkt` (datetime)     |
+  | `dw_ek_forloeb`      | `dw_ek_kontakt` (a working join key) |
+
+Confirm `lpr_a_procregistrering` is in your delivery before you rely on it.
+:::
 
 **DBSO:** The identifier column is `cpr` in raw parquet - renamed to `pnr` by
 `00_prepare_dbso.R`. All code uses `pnr` after that.
