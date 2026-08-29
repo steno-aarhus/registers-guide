@@ -8,37 +8,64 @@ This page collects the errors that most frequently catch new users of DST
 registers. What they have in common: the error messages are either confusing, or
 there is no error message at all - the result is just silently wrong.
 
-## 1. `dodsaars` vs `dodsaasg` - use the correct death register
+## 1. Four death registers - `dodsaars` stops in 2001 {#death-registers}
 
-There are two registers with similar names:
+Four registers have confusingly similar names, and the one most people reach for
+first is the one that ends a quarter of a century ago:
 
-  | Register   | Contains                                                                | Used for                            |
-  | ---------- | ----------------------------------------------------------------------- | ----------------------------------- |
-  | `dodsaars` | Individual death registrations with precise date of death (`d_dodsdto`) | **Censoring at death**              |
-  | `dodsaasg` | Cause-of-death classification                                           | Only for analysis of cause of death |
+  | Register       | Full name            | Covers                 | Use it for                |
+  | -------------- | -------------------- | ---------------------- | ------------------------- |
+  | `dod`          | Døde i Danmark       | **1970-2025**, ongoing | **Censoring at death**    |
+  | `dodsaars`     | Dødsårssagsregistret | 1970-**2001** only     | Cause of death, to 2001   |
+  | `dodsaasg`     | Dødsårsagsregister   | **2002**-2022          | Cause of death, 2002-2022 |
+  | `dodsaarsager` | Dødsårsagsregister   | **2022**-2024          | Cause of death, 2022 on   |
 
-`dodsaasg` does not have the date of death in the correct format and is not the
-authoritative source for individual death dates.
+Coverage is from [DST's own register
+overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html).
+
+Two separate things are going on. **The date of death** lives in `dod`, which
+covers the whole period on its own. **The cause of death** is split across the
+three others, each picking up where the last stopped, so a study spanning 1995 to
+2024 needs all three chained together and none of them alone will tell you it is
+incomplete.
 
 ::: {.callout-warning}
-**Check dodsaars coverage in your project guide.** `dodsaars` does not
-necessarily cover your entire study period - in project 708421 it covers only
-\~1970--2001 (as of June 2026), and post-2001 deaths require a separate
-extraction. Other projects may have different coverage.
+**If you censor on `dodsaars`, everyone who died after 2001 looks alive.** There
+is no error and no warning. They stay in your risk set until the end of
+follow-up, so your survival curves are too good and your rates are too low. For a
+study running past 2001, which is nearly all of them, use **`dod`**.
 :::
 
 ```r
-# CORRECT - read the register by name (fastreg gets the path from your project config)
-death <- read_register("dodsaars") %>%
-  rename_with(tolower) # check coverage in your project guide
-# Without fastreg: open_dataset("path/to/dodsaars/") %>% rename_with(tolower)
+library(fastreg) # read_register()
+library(dplyr) # semi_join, select, collect
+
+# Date of death for censoring: dod, not dodsaars
+death <- read_register("dod") %>%
+  rename_with(tolower)
+
 death_person <- death %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>% # only the cohort's pnr's
-  select(pnr, death_date = d_dodsdto) %>% # d_dodsdto is the confirmed column
+  select(pnr, death_date = doddato) %>% # doddato, NOT d_dodsdto
   collect()
-
-# WRONG - do not use dodsaasg for censoring dates
 ```
+
+::: {.callout-note}
+**Two things to check on your own project before you rely on this.**
+
+**Is `dod` in your delivery, and does it reach far enough back?** Your project
+received the years it ordered, not necessarily all of 1970-2025. Check with
+`read_register("dod") %>% summarise(min(doddato), max(doddato)) %>% collect()`.
+
+**Is it converted to parquet?** On some projects `dod` sits only as a raw SAS
+file, so `read_register()` will not find it and you read it with
+`haven::read_sas()` instead. Ask your data manager for the path.
+
+Only if `dod` turns out **not** to cover your early years do you need `dodsaars`
+as well, and then you stack the two and rename so the date columns match. Do not
+do it by default: on a full delivery both registers hold every death from 1970 to
+2001, so stacking them counts those deaths twice.
+:::
 
 ## 2. RAM is shared - clean up after large extractions
 
@@ -111,7 +138,12 @@ class(bef$foed_dag) # "Date" - can be used directly
 ## 5. BEF is a status snapshot - not a live register
 
 BEF is a **status register**: it records the composition of the population at a
-given reference time - not continuously. DST's reference time is **ultimo**
+given reference time - not continuously. DST classifies every register as one of
+four [reference types](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/registre-og-referencetyper): **Status** (a snapshot on one date, which is BEF),
+**Statusperiode** (population fixed on a date, values accumulated over a period),
+**Forløb** (rows with a start and an end date) and **Hændelse** (one row per
+event, with one date). Knowing which type you are holding tells you what a row
+actually means. DST's reference time is **ultimo**
 (typically 31 December for an annual snapshot). Since 2008, BEF is also
 delivered **quarterly** (March, June, September, December).
 
