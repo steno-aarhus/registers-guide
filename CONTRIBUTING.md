@@ -85,11 +85,10 @@ This is a description of some of the files in this repository.
   project, such as:
   - `typos.toml`: [typos](https://github.com/crate-ci/typos) spell checker
     configuration file.
-  - `rumdl.toml` and `panache.toml`: [rumdl](https://rumdl.dev) and
-    [Panache](https://panache.bz) configuration file for formatting Markdown
-    files in the project.
-  - `cog.toml`: [Cocogitto](https://docs.cocogitto.io) configuration file for
-    managing versions.
+  - `panache.toml`: [Panache](https://panache.bz) configuration file for
+    formatting Markdown files in the project.
+  - `lychee.toml`: [lychee](https://lychee.cli.rs) configuration for checking
+    that external links still resolve.
   - `cliff.toml`: [git-cliff](https://git-cliff.org) configuration file for
     creating the changelog.
 - `.editorconfig`: Editor configuration file for
