@@ -97,6 +97,26 @@ inline. `kom` (98) is `enumerated: false` with a link to DST's classification an
 its CSV download: transcribing 98 codes by hand is 98 chances at an error nobody
 would notice. If they are ever needed inline, they come from the CSV, not prose.
 
+## Validation
+
+```r
+source("schema/R/load_schema.R")
+source("schema/R/validate_schema.R")
+validate_schema()
+```
+
+Returns a data frame of problems with a `severity`:
+
+- **error** - the schema is wrong. A type outside the allowed set, a duplicate
+  id, a `code_system` with no file, a join key that is not one of the register's
+  own columns.
+- **warning** - the schema is incomplete. A relationship pointing at a register
+  that has not been written yet is normal while the schema is being built out,
+  and it stays visible until that file exists.
+
+The validator lives here rather than in the consuming project, so it travels
+with the schema.
+
 ## Portability
 
 The loader depends on **base R and the `yaml` package only**. It never reads
