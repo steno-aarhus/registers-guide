@@ -1,22 +1,22 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 ci:
-  # autofix er SLÅET FRA med vilje. pre-commit.ci må gerne KØRE hookene og sige
-  # til, men den må ikke ændre filer og lægge dem i en commit.
+  # autofix is OFF deliberately. pre-commit.ci may RUN the hooks and report,
+  # but it must not modify files and put them in a commit.
   #
-  # Den 2026-08-11 bumpede autoupdate panache til 3.3.0, hvorefter autofix kørte
-  # den nye version og committede resultatet (b2cddb4). 24 sider fik escapede
-  # link-brackets og indrykkede callouts, og det gik live uden at bygningen
-  # fejlede. At pinne rev'en hjalp ikke - det er netop rev'en, autoupdate ændrer.
+  # On 2026-08-11 autoupdate bumped panache to 3.3.0, autofix then ran the new
+  # version and committed the result (b2cddb4). 24 pages got escaped link
+  # brackets and indented callouts, and it went live without the build failing.
+  # Pinning the rev did not help: the rev is exactly what autoupdate changes.
   #
-  # Med autofix_prs: false ville samme situation i stedet give en RØD PR, som
-  # man kan lade være med at merge. Lokalt ændrer hookene stadig filer som før.
+  # With autofix_prs: false the same situation gives a RED pull request that you
+  # can simply not merge. Locally the hooks still modify files as before.
   autofix_prs: false
   autoupdate_commit_msg: "ci: 👷 update pre-commit CI version"
-  # Ugentlige version-bump gav ét brud på seks uger. Kvartalsvis er rigeligt for
-  # et repo med denne kadence, og hvert bump bliver til noget, man kigger på.
+  # Weekly version bumps produced one breakage in six weeks. Quarterly is plenty
+  # for a repo at this pace, and it makes each bump something you actually read.
   autoupdate_schedule: quarterly
-  # check-guide kræver R, som ikke findes på pre-commit.ci. Den kører lokalt.
+  # check-guide needs R, which pre-commit.ci does not have. It runs locally.
   skip: [check-guide]
 
 repos:
@@ -34,21 +34,21 @@ repos:
       - id: typos
         args: [--config, .config/typos.toml, --force-exclude]
 
-  # panache-format er FJERNET HERFRA MED VILJE - tilføj den ikke igen.
+  # panache-format is REMOVED FROM HERE DELIBERATELY - do not add it back.
   #
-  # panache-cli 3.3.0 ødelægger indhold: formateringen er ikke idempotent, så
-  # anden kørsel trækker en :::-callout ind i den foregående liste, og tredje
-  # flader blokken ud til løbende tekst. Den escaper også link-brackets
-  # (\[tekst\](side.qmd)), så linket renderer som rå tekst. Begge dele er tavse
-  # i bygningen. Bisectet 2026-08-09: 2.61.0 til 3.2.0 er rene, 3.3.0 er ødelæggende.
+  # panache-cli 3.3.0 destroys content: the formatting is not idempotent, so a
+  # second run pulls a ::: callout into the preceding list, and a third flattens
+  # the block into running text. It also escapes link brackets
+  # (\[text\](page.qmd)), so the link renders as raw text. Both are silent in
+  # the build. Bisected 2026-08-09: 2.61.0 through 3.2.0 are clean, 3.3.0 is not.
   #
-  # At pinne reven er IKKE nok: pre-commit.ci's autoupdate bumpede den fra
-  # v3.0.2 til v3.3.0 den 2026-08-12 og kørte autofix direkte på main (commit
-  # 9f09969), som ødelagde 24 sider på det live site uden at bygningen fejlede.
-  # Så længe hooken står her, kan det gentage sig.
+  # Pinning the rev is NOT enough: pre-commit.ci autoupdate bumped it from
+  # v3.0.2 to v3.3.0 on 2026-08-12 and ran autofix straight on main (commit
+  # 9f09969), damaging 24 live pages without the build failing. As long as the
+  # hook is listed here, that can happen again.
   #
-  # Formatering køres i stedet manuelt og pinnet: `just format-md` (==3.0.2).
-  # Sæt den tilbage, når fejlen er rettet opstrøms - se _ignore/TODO.md.
+  # Formatting is run manually and pinned instead: `just format-md` (==3.0.2).
+  # Put it back when the bug is fixed upstream - see _ignore/TODO.md.
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -59,24 +59,24 @@ repos:
         args: [--fix=lf]
       - id: check-merge-conflict
         args: [--assume-in-merge]
-      # En ødelagt _quarto.yml vælter hele bygningen, og det opdages først i
-      # Actions efter et push. Her fanges det på to sekunder.
+      # A broken _quarto.yml takes down the whole build, and you only find out
+      # in Actions after a push. Here it is caught in two seconds.
       - id: check-yaml
       - id: check-toml
-      # Standardgrænsen er 500 KB. Største billede i dag er 426 KB, så et nyt
-      # skærmbillede over grænsen skal beskæres, ikke vinkes igennem. Gælder
-      # kun NYE filer - de eksisterende røres ikke.
+      # The default limit is 500 KB. The largest image today is 426 KB, so a new
+      # screenshot above the limit should be cropped, not waved through. Applies
+      # to NEW files only - existing ones are left alone.
       - id: check-added-large-files
 
-  # SIDST med vilje: kører EFTER panache, så den fanger det, hvis formatteren
-  # har ødelagt indhold (fladede lister, escapede link-brackets, indrykkede
-  # :::-callouts). Tjekker også R-blokke og at interne .qmd-links peger på
-  # filer, der findes - ingen af delene fanger Quarto-bygningen.
-  # Tager ~2 sekunder. Springes over på pre-commit.ci (ingen R der), se `ci:`.
+  # LAST deliberately: runs AFTER any formatter, so it catches the case where
+  # formatting has destroyed content (flattened lists, escaped link brackets,
+  # indented ::: callouts). It also checks R blocks and that internal .qmd links
+  # point at files that exist - the Quarto build catches neither.
+  # Takes ~2 seconds. Skipped on pre-commit.ci (no R there), see `ci:`.
   - repo: local
     hooks:
       - id: check-guide
-        name: check-guide (R-blokke, interne links, husregler)
+        name: check-guide (R blocks, internal links, house rules)
         entry: Rscript tools/check-guide.R
         language: system
         pass_filenames: false
