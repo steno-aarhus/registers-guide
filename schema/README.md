@@ -60,6 +60,18 @@ the output matches other projects or only one.
 **DST wins.** Where DST's documentation and the guide disagree, DST's version is
 used and the guide's is recorded in a note. See REVIEW.md.
 
+## Notes are for readers, not for maintainers
+
+There is one note field, `reader_note`, and it renders onto the guide page. It is
+for a caveat a researcher needs while reading the table: which period a code set
+is valid for, or that a column is not actually a DST variable.
+
+There is deliberately **no** field for maintenance commentary - where a value came
+from, what the guide used to say, why something was decided. That belongs in
+`provenance`, which is structured and queryable, or in git history. Free-text
+notes about provenance drift out of date and end up contradicting the structured
+fields beside them.
+
 ## Conventions learned the hard way
 
 **Record the value domain, not just what was observed.** The format tables hold

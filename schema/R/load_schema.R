@@ -98,7 +98,7 @@ get_columns <- function(id, schema = load_schema()) {
       code_system  = x$code_system %||% NA_character_,
       source_type  = x$provenance$source_type %||% NA_character_,
       verified_on  = as.character(x$provenance$verified_on %||% NA),
-      note         = x$note %||% NA_character_,
+      reader_note  = x$reader_note %||% NA_character_,
       stringsAsFactors = FALSE
     )
   }
