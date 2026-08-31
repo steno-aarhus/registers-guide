@@ -16,8 +16,10 @@
 source(file.path(dirname(sub("--file=", "",
   grep("--file=", commandArgs(FALSE), value = TRUE)[1])), "..", "schema", "R", "load_schema.R"))
 
-OUT <- file.path(schema_root(), "..", "_generated")
-dir.create(OUT, showWarnings = FALSE)
+# Overridable so the drift check can render to a temp dir and compare.
+OUT <- Sys.getenv("SCHEMA_TABLES_OUT",
+                  unset = file.path(schema_root(), "..", "_generated"))
+dir.create(OUT, showWarnings = FALSE, recursive = TRUE)
 
 # Helpers ----------------------------------------------------------------------
 
@@ -117,6 +119,11 @@ build_register <- function(id, schema = load_schema()) {
     }, character(1))
     out <- c(out, "**Worth knowing:**", "", lines, "")
   }
+
+  # Drop trailing blank lines. end-of-file-fixer strips them on commit, so
+  # emitting them here would put the generator and the hook in permanent
+  # disagreement and the drift check would never pass.
+  while (length(out) && !nzchar(out[length(out)])) out <- out[-length(out)]
 
   path <- file.path(OUT, paste0(id, "-columns.md"))
   writeLines(out, path)

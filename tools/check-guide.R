@@ -10,7 +10,7 @@
 #   style     Do we follow the house rules (no em dash, %>% not |>, colon
 #             after labels)?
 #
-# Usage:  Rscript tools/check-guide.R [all|code|functions|style|links]
+# Usage:  Rscript tools/check-guide.R [all|code|functions|style|links|schema]
 #         just check-guide
 #
 # Base R only, nothing to install.
@@ -579,6 +579,86 @@ check_links <- function() {
   cat("Checked ", n_checked, " internal links and ", n_anchors, " anchors, ", n_bad, " dead.\n", sep = "")
 }
 
+# 5. schema - is it valid, and are the generated tables up to date? ------------
+# Two separate questions.
+#
+# Validity: do the schema's own references resolve, are the types in the allowed
+# set, is anything duplicated. That check lives WITH the schema
+# (schema/R/validate_schema.R), because it travels to whatever repo consumes it.
+#
+# Drift: does _generated/ still match what the schema produces. Without this,
+# "single source of truth" is a hope, not a fact: someone edits the YAML and
+# forgets to run `just build-schema-tables`, or edits the generated markdown by
+# hand, and the page and the schema quietly disagree.
+
+check_schema <- function() {
+  header("5. Is the schema valid, and are the generated tables current?")
+
+  schema_dir <- file.path(ROOT, "schema")
+  if (!dir.exists(schema_dir)) {
+    cat("No schema/ directory - skipped.\n")
+    return(invisible())
+  }
+  if (!requireNamespace("yaml", quietly = TRUE)) {
+    cat("The 'yaml' package is not installed, so the schema cannot be checked.\n")
+    cat("install.packages('yaml')\n")
+    return(invisible())
+  }
+
+  source(file.path(schema_dir, "R", "load_schema.R"), local = TRUE)
+  source(file.path(schema_dir, "R", "validate_schema.R"), local = TRUE)
+
+  schema <- load_schema(schema_dir)
+  found <- validate_schema(schema)
+  for (i in seq_len(nrow(found))) {
+    if (found$severity[i] == "error") fail("schema - ", found$message[i])
+    else warn("schema - ", found$message[i])
+  }
+  cat("Checked ", length(schema$registers), " registers and ",
+      length(schema$code_systems), " code systems, ",
+      sum(found$severity == "error"), " errors.\n", sep = "")
+
+  # Regenerate into a temp dir and compare, file by file.
+  gen_dir <- file.path(ROOT, "_generated")
+  tmp <- file.path(tempdir(), "schema-tables-check")
+  unlink(tmp, recursive = TRUE)
+  old_out <- Sys.getenv("SCHEMA_TABLES_OUT", unset = NA)
+  Sys.setenv(SCHEMA_TABLES_OUT = tmp)
+  on.exit({
+    if (is.na(old_out)) Sys.unsetenv("SCHEMA_TABLES_OUT")
+    else Sys.setenv(SCHEMA_TABLES_OUT = old_out)
+  }, add = TRUE)
+
+  invisible(capture.output(
+    suppressWarnings(try(
+      source(file.path(ROOT, "tools", "build-schema-tables.R"), local = new.env()),
+      silent = TRUE
+    ))
+  ))
+
+  if (!dir.exists(tmp)) {
+    fail("schema - could not regenerate the tables to compare against _generated/")
+    return(invisible())
+  }
+  fresh <- list.files(tmp, pattern = "\\.md$")
+  n_drift <- 0
+  for (f in fresh) {
+    committed <- file.path(gen_dir, f)
+    if (!file.exists(committed)) {
+      fail("_generated/", f, " is missing. Run: just build-schema-tables")
+      n_drift <- n_drift + 1
+    } else if (!identical(readLines(committed, warn = FALSE),
+                          readLines(file.path(tmp, f), warn = FALSE))) {
+      fail("_generated/", f, " does not match the schema. Run: just build-schema-tables")
+      n_drift <- n_drift + 1
+    }
+  }
+  for (f in setdiff(list.files(gen_dir, pattern = "\\.md$"), fresh)) {
+    warn("_generated/", f, " has no register in the schema - left over from a rename?")
+  }
+  cat("Compared ", length(fresh), " generated table(s), ", n_drift, " out of date.\n", sep = "")
+}
+
 # Run --------------------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
 what <- if (length(args)) args[1] else "all"
@@ -587,6 +667,7 @@ if (what %in% c("all", "code")) check_code()
 if (what %in% c("all", "functions")) check_functions()
 if (what %in% c("all", "style")) check_style()
 if (what %in% c("all", "links")) check_links()
+if (what %in% c("all", "schema")) check_schema()
 
 header("Result")
 
