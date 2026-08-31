@@ -17,7 +17,30 @@ Last reviewed: 2026-08-31.
 
 ## Needs a decision or a lookup
 
-*(nothing open)*
+### `lmdb.year` - is it a DST variable or a partition column?
+
+The guide lists `year` as an LMDB column ("Dispensing year"). It is **not**
+confirmed against DST's variable list, and the LMDB parquet is partitioned by
+year, so it is very likely the partition column rather than a DST variable -
+exactly the situation `bef.aar` turned out to be.
+
+Until it is checked it carries `source_type: guide_prose` and no `origin`.
+
+```r
+colnames(read_register("lmdb"))                      # is `year` there?
+list.files("E:/workdata/708421/cleaned-data/parquet-registers/lmdb")[1:5]
+```
+
+Folders named `year=1995/`, `year=1996/` settle it: then `year` comes from the
+partitioning, and it should be marked `origin: tooling, added_by: fastreg` like
+`bef.aar`.
+
+### `lmdb.pnr` - DST's list says `PNR12`
+
+DST's variable list for LMDB has **`PNR12`**, not `PNR`. The column read through
+fastreg is `pnr`. Most likely two names for the same thing at different stages,
+but it is recorded as `server_verified` rather than as a DST fact until someone
+confirms what the raw delivery calls it.
 
 ---
 

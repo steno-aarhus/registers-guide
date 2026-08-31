@@ -60,6 +60,13 @@ the output matches other projects or only one.
 **DST wins.** Where DST's documentation and the guide disagree, DST's version is
 used and the guide's is recorded in a note. See REVIEW.md.
 
+## What `coverage` means
+
+`coverage` is **what DST documents that it holds**, dated by
+`provenance.verified_on`. It is not what your project was delivered: that is a
+subset chosen when the data was ordered, and no single answer is true for
+everyone. Check your own extract before relying on the range.
+
 ## Notes are for readers, not for maintainers
 
 There is one note field, `reader_note`, and it renders onto the guide page. It is
