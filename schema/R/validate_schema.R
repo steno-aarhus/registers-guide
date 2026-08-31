@@ -104,6 +104,13 @@ validate_schema <- function(schema = load_schema()) {
         add(cw, ": origin '", cl$origin, "' is not one of ",
             paste(ALLOWED_ORIGINS, collapse = "/"))
       }
+      if (!is.null(cl$superseded_by)) {
+        others <- vapply(r$columns, function(x) x$name %||% "", character(1))
+        if (!cl$superseded_by %in% others) {
+          add(cw, ": superseded_by '", cl$superseded_by,
+              "' is not another column of this register", severity = "warning")
+        }
+      }
       if (!is.null(cl$code_system) && !cl$code_system %in% cs_ids) {
         add(cw, ": code_system '", cl$code_system, "' has no file in code-systems/")
       }

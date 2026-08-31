@@ -112,6 +112,14 @@ build_register <- function(id, schema = load_schema()) {
   # edits the schema (where a value came from, what the guide used to say);
   # `reader_note` is the caveat a researcher needs while reading the table.
   # Rendering both put provenance chatter on the page.
+  derived <- Filter(function(x) !is.null(x$derivation), reg$columns)
+  if (length(derived)) {
+    lines <- vapply(derived, function(x) {
+      paste0("- **`", x$name, "`** = ", gsub("\\s+", " ", x$derivation))
+    }, character(1))
+    out <- c(out, "**How it is computed:**", "", lines, "")
+  }
+
   noted <- Filter(function(x) !is.null(x$reader_note), reg$columns)
   if (length(noted)) {
     lines <- vapply(noted, function(x) {
