@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-08-31">
+<meta name="dcterms.date" content="2026-09-01">
 
 <title>Understand LPR – Register-based research at Statistics Denmark</title>
 <style>
@@ -606,7 +606,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 31, 2026</p>
+      <p class="date">September 1, 2026</p>
     </div>
   </div>
   
@@ -686,7 +686,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td><strong>Join key</strong></td>
 <td><code>recnum</code></td>
-<td><code>k_recnum</code> / <code>v_recnum</code>¹</td>
+<td><code>recnum</code>¹</td>
 <td><code>dw_ek_kontakt</code></td>
 </tr>
 <tr class="even">
@@ -698,7 +698,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td><strong>pnr column</strong></td>
 <td><code>pnr</code></td>
-<td><code>v_cpr</code>³</td>
+<td><code>pnr</code>³</td>
 <td><code>pnr</code></td>
 </tr>
 <tr class="even">
@@ -721,7 +721,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>¹ <code>t_psyk_adm</code> has <code>k_recnum</code>; <code>t_psyk_diag</code> has <code>v_recnum</code> - rename both to <code>recnum</code> before joining. ² datetime format - convert with <code>as.Date()</code>. ³ Rename: <code>rename(pnr = v_cpr)</code>.</p>
+<p>¹ ³ These are DST’s names. Check whether your variables have been changed during delivery or data preprocessing: in DARTER the join key arrives as <code>k_recnum</code> in <code>t_psyk_adm</code> and <code>v_recnum</code> in <code>t_psyk_diag</code>, and the person column as <code>v_cpr</code>. Check <code>colnames()</code> and rename to <code>recnum</code> and <code>pnr</code> before joining. ² datetime format - convert with <code>as.Date()</code>.</p>
+<p>This table lists what the registers contain, not what your project was given. <code>c_pattype</code> in particular is often left out of somatic extracts, so check <code>colnames()</code> before you build anything on it.</p>
 <p><strong>Why two registers - contact and diagnosis?</strong> LPR splits each hospital contact into two tables: the <strong>contact register</strong> (e.g.&nbsp;<code>lpr_adm</code>) has one row per contact with <code>pnr</code>, dates and hospital, but <strong>not</strong> the diagnoses; the <strong>diagnosis register</strong> (e.g.&nbsp;<code>lpr_diag</code>) has one row per diagnosis with the ICD code, but <strong>not</strong> <code>pnr</code> or date. One contact can have several diagnoses. You <strong>join</strong> the two on the contact key (<code>recnum</code> in LPR2, <code>dw_ek_kontakt</code> in LPR3) to get <code>pnr</code> + date + diagnosis in one table. That is the join the extraction recipes in <a href="./09b_extract-from-lpr.html">Extract from LPR</a> are built on. The same principle applies to <strong>operations and procedures</strong>: <code>lpr_sksopr</code> (LPR2) has the SKS code + <code>recnum</code>, but not <code>pnr</code> or date, so it is joined to <code>lpr_adm</code> in exactly the same way when you want to find who had an operation and when.</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
@@ -863,10 +864,12 @@ Background: LPR_F vs LPR_A (safe to skip)
 <p><strong>We therefore encourage you to visualise, across calendar years, the counts of the diagnoses used in your study.</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lubridate)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>alle_dx <span class="sc">%&gt;%</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">year =</span> <span class="fu">year</span>(date_contact)) <span class="sc">%&gt;%</span> <span class="co"># date_contact from your LPR extract</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(year) <span class="sc">%&gt;%</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(year)</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># plot n against year and look for a jump around 2019-2020</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># not `year`: that name belongs to the parquet partition column, and</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># assigning to it would overwrite it</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">contact_year =</span> lubridate<span class="sc">::</span><span class="fu">year</span>(date_contact)) <span class="sc">%&gt;%</span> <span class="co"># date_contact from your extract</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(contact_year) <span class="sc">%&gt;%</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(contact_year)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co"># plot n against contact_year and look for a jump around 2019-2020</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Most diagnoses show the spike. A few are stable across the transition (type 1 diabetes, for example) and make a useful sanity check: if even a stable diagnosis jumps in your data, something else is wrong.</p>
 </div>
 </div>

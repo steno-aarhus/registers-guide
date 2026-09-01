@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-08-31">
+<meta name="dcterms.date" content="2026-09-01">
 
 <title>Register paths and datastores – Register-based research at Statistics Denmark</title>
 <style>
@@ -596,7 +596,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">August 31, 2026</p>
+      <p class="date">September 1, 2026</p>
     </div>
   </div>
   
@@ -733,48 +733,55 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>c_opr</code>, <code>d_odto</code></td>
 </tr>
 <tr class="odd">
+<td><strong>LPR2 examinations</strong></td>
+<td><code>read_register("lpr_sksube")</code></td>
+<td><code>recnum</code></td>
+<td>1999–2018</td>
+<td><strong>none delivered</strong> - see below</td>
+</tr>
+<tr class="even">
 <td><strong>LMDB</strong></td>
 <td><code>read_register("lmdb")</code></td>
 <td><code>pnr</code></td>
 <td>Approx. 1994+</td>
 <td><code>atc</code>, <code>eksd</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>UDDA</strong></td>
 <td><code>read_register("udda")</code></td>
 <td><code>pnr</code></td>
 <td>All years</td>
-<td><code>hfaudd</code>, <code>aar</code></td>
+<td><code>hfaudd</code>, <code>year</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><strong>FAIK</strong></td>
 <td><code>read_register("faik")</code></td>
 <td><code>familie_id</code></td>
 <td>All years</td>
 <td><code>famaekvivadisp_13</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>AKM</strong></td>
 <td><code>read_register("akm")</code></td>
 <td><code>pnr</code></td>
 <td>All years</td>
-<td><code>socio13</code>, <code>aar</code></td>
+<td><code>socio13</code>, <code>year</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><strong>DBSO</strong></td>
 <td><code>read_register("dbso")</code></td>
 <td><code>pnr</code></td>
 <td>2010+</td>
 <td><code>datoper_prim</code>, surgery flags</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><strong>OSDC</strong></td>
 <td><code>read_register("osdc")</code></td>
 <td><code>pnr</code></td>
 <td>1977–2024</td>
 <td><code>has_t1d</code>/<code>has_t2d</code>, <code>stable_inclusion_date</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><strong>Laboratory results</strong></td>
 <td><code>read_register("laboratorieproevesvar_")</code></td>
 <td><code>pnr</code></td>
@@ -786,26 +793,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="critical-notes" class="level2">
 <h2 class="anchored" data-anchor-id="critical-notes">Critical notes</h2>
+<p><strong><code>lpr_sksube</code> has no procedure code on DARTER.</strong> The parquet holds three columns and no more:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(<span class="fu">read_register</span>(<span class="st">"lpr_sksube"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower))</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># "recnum" "d_odto" "year"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>DST documents this register with <code>c_opr</code>, <code>c_oprart</code>, <code>c_osgh</code> and <code>c_tilopr</code> for every year 1999-2019, the same shape as <code>lpr_sksopr</code>. None of them are here, so the table can tell you that a procedure happened and on what date, but not which procedure. There is no filtering trick that recovers them.</p>
+<p>If you need examinations and non-surgical treatments, ask for the columns to be added to the delivery. Surgical procedures are unaffected: <code>lpr_sksopr</code> has <code>c_opr</code> and <code>d_odto</code> as documented.</p>
 <p><strong>Deaths - the convenient register is the wrong one.</strong> <code>dodsaars</code> is in cleaned-data, so <code>read_register("dodsaars")</code> just works and it is the one you reach for first. It also <strong>stops at the end of 2001</strong>. <code>dod</code> (Døde i Danmark) is the register that covers deaths, 1970-2025 at DST, but on DARTER it is <strong>not in cleaned-data</strong>: it sits as a raw SAS file. Use <code>dod</code> and its <code>doddato</code> column for censoring at death, and see <a href="../dst-pitfalls.html#death-registers">pitfall 1 - three death registers</a> for the general version.</p>
 <p>You do not need a separate extraction on DARTER: the raw file reads directly.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(haven) <span class="co"># read_sas() - reads .sas7bdat straight into R</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># rename_with, select, mutate, semi_join, summarise</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># DARTER-SPECIFIC PATH (project 708421). On another project the raw files sit</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># somewhere else, may be named differently, and access to rawdata can depend on</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># your project role - ask your data manager for the path to the death register.</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>dod <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="st">"E:/rawdata/708421/Grunddata/dod2024.sas7bdat"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># This is a whole-population file read straight into RAM, so cut it to your</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co"># cohort as soon as you have one.</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> dod <span class="sc">%&gt;%</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(cohort, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span></span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">death_date =</span> <span class="fu">as.Date</span>(death_date))</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Check how far back the file actually reaches before you trust it:</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>deaths <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="fu">min</span>(death_date), <span class="fu">max</span>(death_date))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(haven) <span class="co"># read_sas() - reads .sas7bdat straight into R</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># rename_with, select, mutate, semi_join, summarise</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># DARTER-SPECIFIC PATH (project 708421). On another project the raw files sit</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># somewhere else, may be named differently, and access to rawdata can depend on</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># your project role - ask your data manager for the path to the death register.</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>dod <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="st">"E:/rawdata/708421/Grunddata/dod2024.sas7bdat"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co"># This is a whole-population file read straight into RAM, so cut it to your</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co"># cohort as soon as you have one.</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> dod <span class="sc">%&gt;%</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(cohort, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">death_date =</span> <span class="fu">as.Date</span>(death_date))</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Check how far back the file actually reaches before you trust it:</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>deaths <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="fu">min</span>(death_date), <span class="fu">max</span>(death_date))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -813,12 +825,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container">
 <p><strong>Do the range check.</strong> The file is named <code>dod2024</code>, and the row above says 1970-2024, but nobody on the DARTER team has confirmed the start year of <em>this extract</em>. If it turns out to begin in 2001, and your study period reaches further back, you need <code>dodsaars</code> for the early years as well:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>dodsaars <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="st">"E:/rawdata/708421/Grunddata/dodsaars2001.sas7bdat"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> d_dodsdto) <span class="co"># note: different column name</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(deaths, <span class="fu">mutate</span>(dodsaars, <span class="at">death_date =</span> <span class="fu">as.Date</span>(death_date))) <span class="sc">%&gt;%</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(pnr, <span class="at">.keep_all =</span> <span class="cn">TRUE</span>) <span class="co"># one death date per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>dodsaars <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="st">"E:/rawdata/708421/Grunddata/dodsaars2001.sas7bdat"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> d_dodsdto) <span class="co"># note: different column name</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(deaths, <span class="fu">mutate</span>(dodsaars, <span class="at">death_date =</span> <span class="fu">as.Date</span>(death_date))) <span class="sc">%&gt;%</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(pnr, <span class="at">.keep_all =</span> <span class="cn">TRUE</span>) <span class="co"># one death date per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Only do this if the range check says you have to. If both files cover 1970-2001, stacking them puts every pre-2001 death in twice, and <code>distinct()</code> then keeps whichever came first rather than the one you meant.</p>
 </div>
 </div>
@@ -941,41 +953,41 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container">
 <p><strong><code>fastreg</code> replaces <code>dstDataPrep</code> on DARTER.</strong> Registers are now loaded with <code>fastreg::read_register("name")</code> - the same function as in the general guide. If you have been using <code>dstDataPrep::load_database()</code>, that code still runs, but write <strong>new</strong> code with <code>fastreg</code>. You point fastreg at DARTER’s folders once per script - <strong>both</strong> of them, per <a href="https://cran.r-project.org/package=fastreg">fastreg’s own documentation</a>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_workdata_dir =</span> <span class="st">"E:/workdata/708421/cleaned-data/"</span>,</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_rawdata_dir =</span> <span class="st">"E:/rawdata/708421/"</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_workdata_dir =</span> <span class="st">"E:/workdata/708421/cleaned-data/"</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_rawdata_dir =</span> <span class="st">"E:/rawdata/708421/"</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Then <code>read_register("bef")</code> works by name. See <a href="../04_file-formats.html#convert-sas-to-parquet">“Didn’t convert the data yourself?” in Phase 4</a> for the general version.</p>
 </div>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register() - access to DST registers</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># rename_with, rename, left_join, select</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Standard register - via read_register:</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"bef"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="co"># lazy connection; lowercase columns</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Psychiatric LPR2 - requires renaming v_cpr and k_recnum:</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>psyk_adm <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"t_psyk_adm"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span> <span class="co"># lowercase columns</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">pnr =</span> v_cpr, <span class="at">recnum =</span> k_recnum) <span class="co"># v_cpr → pnr; k_recnum → recnum</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="co"># DBSO - parquet-external (converted from SAS via 00_prepare_dbso.R):</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>dbso <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dbso"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="co"># lazy connection</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="co"># OSDC - pre-computed diabetes classification (see ../osdc.qmd):</span></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>dm_pop <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"osdc"</span>) <span class="co"># pnr, has_t1d, has_t2d, raw_/stable_inclusion_date</span></span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="co"># LPR3 procedures - join via dw_ek_forloeb (NOT dw_ek_kontakt - is NA for all rows):</span></span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>proc <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"procedurer_kirurgi"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span> <span class="co"># lowercase columns</span></span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(dw_ek_forloeb, pnr), <span class="co"># fetch pnr via the forloeb key</span></span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_forloeb"</span> <span class="co"># join key - dw_ek_kontakt does not work</span></span>
-<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a><span class="co"># proc is still lazy - add filter() and collect() before use</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register() - access to DST registers</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># rename_with, rename, left_join, select</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Standard register - via read_register:</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"bef"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="co"># lazy connection; lowercase columns</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Psychiatric LPR2 - requires renaming v_cpr and k_recnum:</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>psyk_adm <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"t_psyk_adm"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span> <span class="co"># lowercase columns</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="at">pnr =</span> v_cpr, <span class="at">recnum =</span> k_recnum) <span class="co"># v_cpr → pnr; k_recnum → recnum</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="co"># DBSO - parquet-external (converted from SAS via 00_prepare_dbso.R):</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>dbso <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dbso"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="co"># lazy connection</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="co"># OSDC - pre-computed diabetes classification (see ../osdc.qmd):</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>dm_pop <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"osdc"</span>) <span class="co"># pnr, has_t1d, has_t2d, raw_/stable_inclusion_date</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a><span class="co"># LPR3 procedures - join via dw_ek_forloeb (NOT dw_ek_kontakt - is NA for all rows):</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>proc <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"procedurer_kirurgi"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span> <span class="co"># lowercase columns</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(dw_ek_forloeb, pnr), <span class="co"># fetch pnr via the forloeb key</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_forloeb"</span> <span class="co"># join key - dw_ek_kontakt does not work</span></span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a><span class="co"># proc is still lazy - add filter() and collect() before use</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
