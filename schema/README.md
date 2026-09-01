@@ -79,6 +79,28 @@ from, what the guide used to say, why something was decided. That belongs in
 notes about provenance drift out of date and end up contradicting the structured
 fields beside them.
 
+## Everything is written in English
+
+The sources are Danish. The schema is not: labels, notes and derivations are
+written in English so the whole thing reads as one document.
+
+What makes that safe is `provenance.source_url` on every fact. A reader who
+wants DST's own wording follows the link and finds it, so nothing is lost by
+rendering it in English here.
+
+Danish is kept in exactly two places, where it is the fact rather than a
+description of one:
+
+- `label.da` - DST's own label, beside our `label.en`.
+- Code values and their Danish labels in `code-systems/`, because "Ugift" is
+  what the format table says and translating it would make the lookup wrong.
+
+## A column name can change on the way to you
+
+`name` is the column as DST documents it. What you read may differ: LMDB is
+documented as `PNR12` but arrives as `pnr`. Treat a name here as a starting
+point and confirm with `colnames()`.
+
 ## Conventions learned the hard way
 
 **Record the value domain, not just what was observed.** The format tables hold
@@ -93,6 +115,13 @@ counties (11-14, 21-24, 31-37, 88). The regions are 0 and 81-85, created by the
 2007 reform. Mapping one onto the other would have put a county name on every
 region code. The same applies to `kom`: v4 is valid from 2007, and before that
 the same number can mean a different municipality.
+
+**Check whether the source has already answered it before writing a query.** The
+VNDS successors overlap the old register by twenty years, and the obvious next
+step was a row count on the server to see whether they were a copy. DST's own
+two-paragraph notice about the split said outright that the old register
+contained duplicates and that the split was the fix. The query would also have
+been impossible: the project at hand has no VNDS_UD.
 
 **Never guess a label.** A guess that turns out right teaches the next person
 that guessing is fine here; a guess that turns out wrong is invisible until

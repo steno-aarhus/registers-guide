@@ -115,7 +115,10 @@ build_register <- function(id, schema = load_schema()) {
   derived <- Filter(function(x) !is.null(x$derivation), reg$columns)
   if (length(derived)) {
     lines <- vapply(derived, function(x) {
-      paste0("- **`", x$name, "`** = ", gsub("\\s+", " ", x$derivation))
+      d <- gsub("\\s+", " ", x$derivation)
+      # The source may state the formula with the variable name already in it.
+      if (grepl("=", d, fixed = TRUE)) paste0("- `", d, "`")
+      else paste0("- **`", x$name, "`** = ", d)
     }, character(1))
     out <- c(out, "**How it is computed:**", "", lines, "")
   }

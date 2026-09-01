@@ -14,6 +14,11 @@ ALLOWED_SOURCE_TYPES <- c("dst_variable_list", "dst_documentation", "nomenclatur
                           "server_verified", "guide_prose", "unknown")
 ALLOWED_ORIGINS <- c("dst", "tooling")
 ALLOWED_SCOPES <- c("dst", "project")
+# DST's own reference types, from its register overview: a snapshot on a date,
+# a population fixed on a date with values accumulated over a period, rows with
+# a start and an end, or one row per event.
+ALLOWED_TIMING <- c("ultimo", "status", "status_period", "course", "event")
+ALLOWED_CADENCE <- c("annual", "quarterly", "monthly", "continuous", "none")
 
 # Returns a data frame with `severity` ("error" or "warning") and `message`.
 # Errors mean the schema is wrong. Warnings mean it is incomplete: a reference
@@ -40,11 +45,24 @@ validate_schema <- function(schema = load_schema()) {
     add("Duplicate code system id: ", paste(unique(cs_ids[duplicated(cs_ids)]), collapse = ", "))
   }
 
-  for (r in schema$registers) {
+  # Validate the MERGED view, not the raw file. A fact inherited from a family
+  # is still a fact the register asserts, and checking only the raw YAML let a
+  # dangling family-level superseded_by through unnoticed.
+  for (rid in reg_ids) {
+    if (is.na(rid)) next
+    r <- tryCatch(get_register(rid, schema), error = function(e) schema$registers[[rid]])
     where <- paste0("register '", r$id %||% "?", "'")
 
     for (f in c("id", "name", "source_url", "columns")) {
       if (is.null(r[[f]])) add(where, ": missing required field `", f, "`")
+    }
+    if (!is.null(r$reference_timing) && !r$reference_timing %in% ALLOWED_TIMING) {
+      add(where, ": reference_timing '", r$reference_timing, "' is not one of ",
+          paste(ALLOWED_TIMING, collapse = "/"))
+    }
+    if (!is.null(r$update_cadence) && !r$update_cadence %in% ALLOWED_CADENCE) {
+      add(where, ": update_cadence '", r$update_cadence, "' is not one of ",
+          paste(ALLOWED_CADENCE, collapse = "/"))
     }
     if (!is.null(r$scope) && !r$scope %in% ALLOWED_SCOPES) {
       add(where, ": scope '", r$scope, "' is not one of ",
@@ -53,9 +71,12 @@ validate_schema <- function(schema = load_schema()) {
     if (!is.null(r$family) && !is.na(r$family) && !r$family %in% fam_ids) {
       add(where, ": family '", r$family, "' has no file in families/")
     }
-    if (!is.null(r$superseded_by) && !is.na(r$superseded_by) &&
-        !r$superseded_by %in% reg_ids) {
-      add(where, ": superseded_by '", r$superseded_by, "' is not a known register")
+    # A register can be replaced by several: DST split VNDS into three.
+    for (sb in unlist(r$superseded_by)) {
+      if (!is.na(sb) && !sb %in% reg_ids) {
+        add(where, ": superseded_by '", sb,
+            "', which has no file yet in registers/", severity = "warning")
+      }
     }
 
     col_ids <- vapply(r$columns, function(x) x$id %||% NA_character_, character(1))
@@ -126,6 +147,22 @@ validate_schema <- function(schema = load_schema()) {
         add(cw, ": has a `note` field. Use `reader_note` for reader-facing ",
             "caveats; maintenance commentary belongs in provenance or git history.")
       }
+    }
+  }
+
+  # Families carry facts too, so their own fields are checked.
+  for (f in schema$families) {
+    fw <- paste0("family '", f$id %||% "?", "'")
+    if (is.null(f$id)) add("A family file has no `id` field.")
+    if (!is.null(f$reference_timing) && !f$reference_timing %in% ALLOWED_TIMING) {
+      add(fw, ": reference_timing '", f$reference_timing, "' is not recognised")
+    }
+    if (!is.null(f$update_cadence) && !f$update_cadence %in% ALLOWED_CADENCE) {
+      add(fw, ": update_cadence '", f$update_cadence, "' is not recognised")
+    }
+    if (!any(vapply(schema$registers,
+                    function(r) identical(r$family, f$id), logical(1)))) {
+      add(fw, ": no register belongs to this family", severity = "warning")
     }
   }
 
