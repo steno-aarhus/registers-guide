@@ -82,7 +82,11 @@ build_register <- function(id, schema = load_schema()) {
     else if (!nzchar(from)) paste0("until ", to)
     else paste0(from, " to ", to)
   }, character(1))
-  if (any(nzchar(years))) cols$Years <- years
+  cols$Years <- years
+
+  # Drop the Years column from a table whose own rows are all blank. Otherwise a
+  # register with one odd column gives every table an empty Years column.
+  drop_empty_years <- function(d) if (all(!nzchar(d$Years))) d[setdiff(names(d), "Years")] else d
 
   # A full register is too long to read: LPR_A_KONTAKT alone has 53 columns. The
   # schema marks the handful a researcher actually reaches for with `key: true`,
@@ -90,10 +94,10 @@ build_register <- function(id, schema = load_schema()) {
   # than being guessed here.
   is_key <- vapply(reg$columns, function(x) isTRUE(x$key), logical(1))
   if (any(is_key) && !all(is_key)) {
-    out <- c(out, md_table(cols[is_key, , drop = FALSE]), "",
+    out <- c(out, md_table(drop_empty_years(cols[is_key, , drop = FALSE])), "",
              "<details>",
              paste0("<summary>All other columns (", sum(!is_key), ")</summary>"),
-             "", md_table(cols[!is_key, , drop = FALSE]), "")
+             "", md_table(drop_empty_years(cols[!is_key, , drop = FALSE])), "")
     # Caveats on the folded columns belong with them, not on the main page.
     rest_notes <- Filter(Negate(is.null), lapply(reg$columns[!is_key], function(x) {
       if (is.null(x$reader_note)) return(NULL)
@@ -102,7 +106,7 @@ build_register <- function(id, schema = load_schema()) {
     if (length(rest_notes)) out <- c(out, unlist(rest_notes), "")
     out <- c(out, "</details>", "")
   } else {
-    out <- c(out, md_table(cols), "")
+    out <- c(out, md_table(drop_empty_years(cols)), "")
   }
 
   # 2. joins - this is what "Household key - join to FAIK" used to say in a cell

@@ -1,18 +1,18 @@
 <!-- Generated from schema/registers/bef.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |  |
-| `koen` | integer | code | Sex |  |
-| `foed_dag` | date | date | Date of birth |  |
-| **`familie_id`** | character | join key | Household key |  |
-| `reg` | character | code | Region |  |
-| `civst` | character | code | Marital status |  |
-| `kom` | character | code | Municipality code |  |
-| `year` | integer | date | Register year |  |
-| `alder` | integer | value | Age at the reference time point |  |
-| `opr_land` | character | code | Country of origin |  |
-| `referencetid` | date | date | Reference time point |  |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |
+| `koen` | integer | code | Sex |
+| `foed_dag` | date | date | Date of birth |
+| **`familie_id`** | character | join key | Household key |
+| `reg` | character | code | Region |
+| `civst` | character | code | Marital status |
+| `kom` | character | code | Municipality code |
+| `year` | integer | date | Register year |
+| `alder` | integer | value | Age at the reference time point |
+| `opr_land` | character | code | Country of origin |
+| `referencetid` | date | date | Reference time point |
 
 <details>
 <summary>All other columns (29)</summary>
