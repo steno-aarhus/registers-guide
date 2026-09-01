@@ -97,9 +97,9 @@ your own files with `colnames()`.
   | [LPR_A_KONTAKT](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_KONTAKT%20-%20Landspatientregistret%20%28LPR3%29%20-Kontaktoplysninger%20omkring%20de%20enkelte%20kontakter.html) | `"lpr_a_kontakt"` | `dw_ek_kontakt` | March 2019+ | `kont_starttidspunkt` (datetime) |
   | [LPR_A_DIAGNOSE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_DIAGNOSE%20-%20Landspatientregistret%20%28LPR3%29%20-Diagnoseoplysning.html) | `"lpr_a_diagnose"` | `dw_ek_kontakt` | March 2019+ | `diag_kode`, `senere_afkraeftet` |
   | [LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20Lægemiddeldatabasen.html) | `"lmdb"` | `pnr` | Approx. 1994+ | `atc`, `eksd` |
-  | [UDDA](https://www.dst.dk/extranet/ForskningVariabellister/UDDA%20-%20Uddannelser%20%28BUE%29.html) | `"udda"` | `pnr` | All years | `hfaudd`, `aar` |
+  | [UDDA](https://www.dst.dk/extranet/ForskningVariabellister/UDDA%20-%20Uddannelser%20%28BUE%29.html) | `"udda"` | `pnr` | All years | `hfaudd`, `year` |
   | [FAIK](https://www.dst.dk/extranet/ForskningVariabellister/FAIK%20-%20Familieindkomster.html) | `"faik"` | `familie_id` | All years | `famaekvivadisp_13` |
-  | [AKM](https://www.dst.dk/extranet/ForskningVariabellister/AKM%20-%20Arbejdsklassifikationsmodulet.html) | `"akm"` | `pnr` | All years | `socio13`, `aar` |
+  | [AKM](https://www.dst.dk/extranet/ForskningVariabellister/AKM%20-%20Arbejdsklassifikationsmodulet.html) | `"akm"` | `pnr` | All years | `socio13`, `year` |
   | [SYSI / SSSY](https://www.dst.dk/extranet/ForskningVariabellister/SYSI%20-%20Sygesikring%20%286-cifret%29.html) | `"sysi"` / `"sssy"` | `pnr` | sysi older · sssy newer | GP/specialist contacts - section 6 |
   | [Cancerregisteret](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/cancerregisteret) | see project guide | `pnr` | ~1943+ | incident cancer diagnoses - section 6 |
   | Laboratory results | `"laboratorieproevesvar_"` | `pnr` | Varies | NPU codes, `samplevalue` (character) |
@@ -111,7 +111,7 @@ your own files with `colnames()`.
 
 Status register - one snapshot per person per reference time point. Delivered
 **quarterly since 2008** (March, June, September, December); before 2008
-December only. Whether `aar == 2020` corresponds to a particular reference time
+December only. Whether `year == 2020` corresponds to a particular reference time
 point depends on the project convention - confirm in your project guide. A
 person who dies during 2020 still appears in the 2020 snapshot - use DOD to
 determine whether a person was alive on a specific date.
@@ -168,6 +168,14 @@ registers](dst-pitfalls.qmd#death-registers).
 :::
 
 {{< include _generated/dodsaars-columns.md >}}
+
+#### DODSAASG - the 2002-2021 link in the chain
+
+{{< include _generated/dodsaasg-columns.md >}}
+
+#### DODSAARSAGER - the current register (2022 onwards)
+
+{{< include _generated/dodsaarsager-columns.md >}}
 
 ::: {.callout-warning}
 **Every register in the chain renames the same thing.** The cause columns are
@@ -238,6 +246,22 @@ the historical register. For emigration dates used in censoring, combine
 2026](https://www.dst.dk/da/TilSalg/data-til-forskning/nyt-og-meddelelser/2026/VNDS).
 :::
 
+#### VNDS_hist - historical migrations (1973-2004)
+
+{{< include _generated/vnds_hist-columns.md >}}
+
+#### VNDS_ind - immigrations (2005 onwards)
+
+The two new registers drop `indud_kode`: which direction the event went is now
+carried by which register you are reading, so a combined series has to add the
+direction back itself.
+
+{{< include _generated/vnds_ind-columns.md >}}
+
+#### VNDS_ud - emigrations (2005 onwards)
+
+{{< include _generated/vnds_ud-columns.md >}}
+
 ## 2. LPR2 - Somatic (up to March 2019)
 
 The register itself is owned by the Danish Health Data Authority, whose
@@ -248,26 +272,11 @@ Join: `lpr_adm` **LEFT JOIN** `lpr_diag` **ON** `recnum`.
 
 ### lpr_adm - Contacts
 
-  | Column          | Type      | Contents                                                                                                                                                                             |
-  | --------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | **`recnum`**    | character | Contact key - join to lpr_diag                                                                                                                                                       |
-  | **`pnr`**       | character | Personal identifier                                                                                                                                                                  |
-  | **`d_inddto`**  | Date      | Admission date - use as contact date                                                                                                                                                 |
-  | **`c_pattype`** | character | Contact type: `"0"` = inpatient, `"1"` = outpatient, `"2"` = emergency                                                                                                               |
-  | `d_uddto`       | Date      | Discharge date                                                                                                                                                                       |
-  | `c_adiag`       | character | Action diagnosis (copy - use lpr_diag via join instead)                                                                                                                              |
-  | `c_spec`        | character | Specialty code - see [specialty/department overview](https://www.dst.dk/da/Statistik/dokumentation/Times/moduldata-for-sociale-forhold--sundhedsvaesen--retsvaesen/spec) (in Danish) |
-  | `year`          | integer   | Year                                                                                                                                                                                 |
+{{< include _generated/lpr_adm-columns.md >}}
 
 ### lpr_diag - Diagnoses
 
-  | Column           | Type      | Contents                                                                            |
-  | ---------------- | --------- | ----------------------------------------------------------------------------------- |
-  | **`recnum`**     | character | Join key to lpr_adm                                                                 |
-  | **`c_diag`**     | character | ICD-10 code **with D-prefix** (e.g. `"DG30"`) - use `substr(c_diag, 2, 4)`          |
-  | **`c_diagtype`** | character | `"A"` = action diagnosis, `"B"` = secondary diagnosis, `"G"` = underlying condition |
-  | `c_diagmod`      | character | Diagnosis modifier                                                                  |
-  | `year`           | integer   | Year                                                                                |
+{{< include _generated/lpr_diag-columns.md >}}
 
 ## 3. LPR2 - Psychiatric (1995 -- March 2019)
 
@@ -309,12 +318,7 @@ psyk_adm <- read_register("t_psyk_adm") %>%
   rename(pnr = v_cpr, recnum = k_recnum)
 ```
 
-  | DST name        | Seen in DARTER as | Type      | Contents                          |
-  | --------------- | ----------------- | --------- | --------------------------------- |
-  | **`pnr`**       | `v_cpr`           | character | Personal identifier               |
-  | **`recnum`**    | `k_recnum`        | character | Contact key - join to t_psyk_diag |
-  | **`d_inddto`**  | (unchanged)       | Date      | Contact date - same as lpr_adm    |
-  | `c_pattype`     | (unchanged)       | character | Contact type                      |
+{{< include _generated/t_psyk_adm-columns.md >}}
 
 ### t_psyk_diag - Psychiatric diagnoses
 
@@ -324,11 +328,7 @@ psyk_diag <- read_register("t_psyk_diag") %>%
   rename(recnum = v_recnum)
 ```
 
-  | DST name         | Seen in DARTER as | Type      | Contents                                             |
-  | ---------------- | ----------------- | --------- | ---------------------------------------------------- |
-  | **`recnum`**     | `v_recnum`        | character | Join key to t_psyk_adm                               |
-  | **`c_diag`**     | (unchanged)    | character | ICD-10 **with D-prefix** - use `substr(c_diag, 2, 4)` |
-  | **`c_diagtype`** | (unchanged)    | character | `"A"` / `"B"` / `"G"` - same as lpr_diag              |
+{{< include _generated/t_psyk_diag-columns.md >}}
 
 ## 4. LPR3 (March 2019 and onwards)
 
@@ -344,18 +344,7 @@ table contains all types: A, B and G - you still need to filter on
 
 ### lpr_a_kontakt - Contacts
 
-  | Column                    | Type      | Contents                                          |
-  | ------------------------- | --------- | ------------------------------------------------- |
-  | **`pnr`**                 | character | Personal identifier                               |
-  | **`dw_ek_kontakt`**       | character | Contact key - join to lpr_a_diagnose              |
-  | **`kont_starttidspunkt`** | datetime  | Contact start time - **convert with `as.Date()`** |
-  | **`kont_type`**           | character | Contact type: `"ALCA00"` = inpatient              |
-  | `kont_sluttidspunkt`      | datetime  | Contact end time                                  |
-  | `kont_ans_hovedspec`      | character | Specialty code                                    |
-  | `borger_doedsdato`        | Date      | Date of death (copy from CPR)                     |
-  | `borger_foedselsdato`     | Date      | Date of birth (copy from CPR)                     |
-  | `borger_koen`             | character | Sex (copy from CPR)                               |
-  | `year`                    | integer   | Year                                              |
+{{< include _generated/lpr_a_kontakt-columns.md >}}
 
 <details>
 <summary>All confirmed columns in lpr_a_kontakt</summary>
@@ -373,15 +362,7 @@ specialty/department overview
 
 ### lpr_a_diagnose - Diagnoses
 
-  | Column                  | Type      | Contents                                                                            |
-  | ----------------------- | --------- | ----------------------------------------------------------------------------------- |
-  | **`dw_ek_kontakt`**     | character | Join key to lpr_a_kontakt                                                           |
-  | **`diag_kode`**         | character | ICD-10 **with D-prefix** (e.g. `"DG30"`) - use `substr(diag_kode, 2, 4)`            |
-  | **`diag_kode_type`**    | character | `"A"` = action diagnosis, `"B"` = secondary diagnosis, `"G"` = underlying condition |
-  | **`senere_afkraeftet`** | character | `"Ja"` = retracted (exclude), `"Nej"` = confirmed, `NA` = not recorded              |
-  | `diag_kode_tekst`       | character | ICD-10 code text                                                                    |
-  | `diag_parent_kode`      | character | Parent diagnosis code                                                               |
-  | `year`                  | integer   | Year                                                                                |
+{{< include _generated/lpr_a_diagnose-columns.md >}}
 
 Standard filter for `senere_afkraeftet`:
 
@@ -414,15 +395,7 @@ lpr_sksopr <- read_register("lpr_sksopr") %>%
   rename_with(tolower)
 ```
 
-  | Column       | Type      | Contents                                                     |
-  | ------------ | --------- | ------------------------------------------------------------ |
-  | **`recnum`** | character | Join key to `lpr_adm`                                        |
-  | **`c_opr`**  | character | SKS procedure code - use this for matching (e.g. `"KJDF10"`) |
-  | **`d_odto`** | Date      | Surgery date                                                 |
-  | `c_oprart`   | character | Procedure type code                                          |
-  | `c_osgh`     | character | Operating hospital                                           |
-  | `c_tilopr`   | character | Supplementary procedure code                                 |
-  | `year`       | integer   | Year (partition column)                                      |
+{{< include _generated/lpr_sksopr-columns.md >}}
 
 ### lpr_a_procregistrering - LPR3 SKS procedures (2019 and onwards) {#lpr3-procedures}
 
@@ -474,10 +447,17 @@ surgery <- read_register("lpr_a_kontakt") %>%
 ### lpr_sksube - SKS examinations and treatments (ZZ codes)
 
 Examination and treatment codes (ZZ codes) live in `lpr_sksube` (LPR2), separate
-from the operation codes in `lpr_sksopr` above. Join like the other SKS tables -
-via `recnum`. Column names are not verified here - see [DST's variable list for
-LPR_SKSUBE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSUBE%20-%20Landspatientregistret%20-%20unders%C3%B8gelser%20og%20behandlinger.html)
-and confirm with `colnames()`.
+from the operation codes in `lpr_sksopr` above. Join like the other SKS tables,
+via `recnum`. The register is shaped exactly like `lpr_sksopr`.
+
+{{< include _generated/lpr_sksube-columns.md >}}
+
+::: {.callout-warning}
+**Check that you actually have `c_opr` before planning around this register.**
+DST documents it for every year 1999-2019, but at least one delivery contains
+only `recnum`, `d_odto` and `year`, which cannot tell one procedure from
+another. Run `colnames()` first.
+:::
 
 ### Combination across the full period
 
@@ -543,8 +523,17 @@ Contacts and services in the **primary sector** (general practice, practising
 specialists, physiotherapy etc.). As with LPR, the register is split over time:
 `sysi` covers the older years, `sssy` the newer. Join via `pnr`. Use it for e.g.
 GP/specialist contacts, screening or vaccinations billed in primary care. Key
-fields (specialty, service code, date) are named differently in `sysi` and
-`sssy` - verify with `colnames()`.
+fields are named the same in both, but the two registers do not carry an
+identical column set, so verify with `colnames()`. They overlap in 2005: both
+report that year, so reading both without picking a source double-counts it.
+
+**`sysi` (1990-2005):**
+
+{{< include _generated/sysi-columns.md >}}
+
+**`sssy` (2005-2025):**
+
+{{< include _generated/sssy-columns.md >}}
 
 ### Laboratory results - laboratorieproevesvar_
 
@@ -686,7 +675,7 @@ tables](formatting-tables.qmd#education-level).
 ### FAIK - Family Income
 
 Household-equivalised disposable income per year. Link: join BEF (`pnr`,
-`familie_id`, `aar`) with FAIK (`familie_id`, `aar`).
+`familie_id`, `year`) with FAIK (`familie_id`, `year`).
 
 ::: {.callout-warning}
 **The structure can differ between years.** On DARTER, FAIK from **2022 onward**
