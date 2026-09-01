@@ -35,4 +35,5 @@
 
 **Worth knowing:**
 
+- **`pnr`:** A person appears once per snapshot, not once in total. Taking a single year loses people who were resident but not in that particular snapshot, so a population is built from the union of all snapshots in the window.
 - **`aar`:** Not a DST variable. It comes from fastreg's parquet conversion, which concatenates the yearly deliveries, so it exists in the data you read but not in DST's own documentation of BEF.

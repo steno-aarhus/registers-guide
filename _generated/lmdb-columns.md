@@ -33,8 +33,8 @@
 
 **Worth knowing:**
 
-- **`pnr`:** DST's variable list calls this `PNR12`. The column read through fastreg is `pnr`. Check `colnames()` on your own extract.
+- **`pnr`:** DST's variable list calls this column `PNR12`. Check whether your variable is named `pnr` or `pnr12`.
 - **`eksd`:** The date the prescription was collected at the pharmacy. Not the date it was prescribed, and not evidence that the medicine was taken.
 - **`vnr`:** The only reliable way to isolate one specific product. Two brands with the same active substance share an ATC code but have different item numbers.
 - **`indo`:** Recorded only when the prescriber picks an indication from the drop-down. Typed as free text it is not carried over, so the column is often empty.
-- **`year`:** Not confirmed against DST's variable list. The LMDB parquet is partitioned by year, so this is very likely the partition column rather than a DST variable - the same situation as `aar` in BEF, which was confirmed to come from fastreg. Treat it as such until checked.
+- **`year`:** Not a DST variable. It comes from fastreg's parquet conversion, which concatenates the yearly deliveries, so it exists in the data you read but not in DST's own documentation of this register.
