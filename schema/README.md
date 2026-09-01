@@ -158,3 +158,20 @@ with the schema.
 The loader depends on **base R and the `yaml` package only**. It never reads
 anything from the guide; the guide reads the schema, not the other way round.
 This directory can therefore be moved to its own repository unchanged.
+
+## One field that is editorial, not factual
+
+`key: true` on a column decides what the generated table shows. It is a
+judgement call, not a fact about the register, and it lives in the schema so the
+decision is reviewable in a diff rather than hidden in the generator.
+
+It marks the handful of columns a researcher actually reaches for; everything
+else folds into a `<details>` block, with its `reader_note` going along. Rule of
+thumb: every column used in a code example in the guide must be marked, and a
+register wants roughly four to ten.
+
+A deprecated register still gets a normal open table. Being superseded is not
+the same as being unusable: LPR2, `vnds_hist`, `sysi` and the older death
+registers are each the only source for their own years, and `vnds` is still the
+only migration register many projects have, because the three replacements are
+so new.

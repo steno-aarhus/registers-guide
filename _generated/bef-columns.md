@@ -10,10 +10,12 @@
 | `civst` | character | code | Marital status |  |
 | `kom` | character | code | Municipality code |  |
 | `year` | integer | date | Register year |  |
+| `alder` | integer | value | Age at the reference time point |  |
+| `opr_land` | character | code | Country of origin |  |
 | `referencetid` | date | date | Reference time point |  |
 
 <details>
-<summary>All other columns (31)</summary>
+<summary>All other columns (29)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
@@ -22,7 +24,6 @@
 | `aegte_id` | character | identifier | Spouse id |  |
 | `e_faelle_id` | character | identifier | Cohabiting partner id |  |
 | `fdato` | date | date | Date of birth, CPR form |  |
-| `alder` | integer | value | Age at the reference time point |  |
 | `antboernf` | integer | value | Number of children in the family |  |
 | `antboernh` | integer | value | Number of children in the household |  |
 | `antpersf` | integer | value | Number of people in the family |  |
@@ -36,7 +37,6 @@
 | `civ_vfra` | date | date | Date the marital status took effect |  |
 | `bop_vfra` | date | date | Date of moving in or immigrating |  |
 | `ie_type` | character | code | Immigrant, descendant or Danish origin |  |
-| `opr_land` | character | code | Country of origin |  |
 | `foedreg_kode` | character | code | Place of birth registration |  |
 | `statsb` | character | code | Citizenship |  |
 | `opholdmd_dk` | integer | value | Months of residence in Denmark |  |
@@ -51,7 +51,6 @@
 
 - **`mor_id`:** A pnr-like identifier for the mother, so BEF can be turned into a family structure without a separate register. It is only filled where the link is registered, which is not the case for everyone born before CPR.
 - **`fdato`:** Not on DST's variable list for BEF, which documents foed_dag instead. Present in this delivery. Prefer foed_dag unless you have checked what yours contains.
-- **`alder`:** Age at the snapshot, not at any date you choose. Recompute from foed_dag and your own index date rather than reusing it.
 - **`antefam`:** A household can hold several families. That is why the family counts and the household counts differ, and why FAIK's household income cannot be read as one family's income without checking this.
 - **`van_vtil`:** Ends December 2003 and is replaced by foerste_indvandring and seneste_indvandring. A study spanning 2003 has to read both, or it silently loses immigration dates on one side of the break.
 - **`foerste_indvandring`:** Begins December 2004. Before that the information is in van_vtil.
@@ -85,4 +84,5 @@
 
 - **`pnr`:** A person appears once per snapshot, not once in total. Taking a single year loses people who were resident but not in that particular snapshot, so a population is built from the union of all snapshots in the window.
 - **`year`:** Not a DST variable. It comes from the parquet conversion, which concatenates the yearly deliveries, so it exists in the data you read but not in DST's own documentation of BEF. Because it is made rather than delivered, the name is not guaranteed: check colnames() rather than assuming.
+- **`alder`:** Age at the snapshot, not at any date you choose. Recompute from foed_dag and your own index date rather than reusing it.
 - **`referencetid`:** The date the snapshot describes. Every other column in the row is a status as of this moment, which is what makes BEF a status register rather than an event register.

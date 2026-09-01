@@ -5,19 +5,19 @@
 | **`pnr`** | character | join key | Personal identifier | 1995-Q2 to 2025-Q2 |
 | `eksd` | date | date | Dispensing date | 1995-Q2 to 2025-Q2 |
 | `atc` | character | code | ATC code, full 7 characters | 1995-Q2 to 2025-Q2 |
+| `atc1` | character | code | ATC level 1 (1 character) | 1995-Q2 to 2025-Q2 |
 | `atc2` | character | code | ATC level 2 (3 characters) | 1995-Q2 to 2025-Q2 |
+| `atc3` | character | code | ATC level 3 (4 characters) | 1995-Q2 to 2025-Q2 |
+| `atc4` | character | code | ATC level 4 (5 characters) | 1995-Q2 to 2025-Q2 |
 | `vnr` | character | code | Item number (product key) | 1995-Q2 to 2025-Q2 |
 | `apk` | numeric | value | Number of packages | 1995-Q2 to 2025-Q2 |
 | `year` | integer | date | Dispensing year |  |
 
 <details>
-<summary>All other columns (8)</summary>
+<summary>All other columns (5)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `atc1` | character | code | ATC level 1 (1 character) | 1995-Q2 to 2025-Q2 |
-| `atc3` | character | code | ATC level 3 (4 characters) | 1995-Q2 to 2025-Q2 |
-| `atc4` | character | code | ATC level 4 (5 characters) | 1995-Q2 to 2025-Q2 |
 | `indo` | character | code | Indication code | 2004-Q2 to 2025-Q2 |
 | `packsize` | numeric | value | Package size | 1995-Q2 to 2025-Q2 |
 | `strnum` | numeric | value | Strength, numeric | 1995-Q2 to 2025-Q2 |
