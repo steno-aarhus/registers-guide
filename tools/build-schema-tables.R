@@ -67,6 +67,22 @@ build_register <- function(id, schema = load_schema()) {
     Label  = vapply(reg$columns, function(x) x$label$en %||% x$label$da %||% "", character(1)),
     stringsAsFactors = FALSE
   )
+  # A column can start or stop inside the register's own lifetime. Show the years
+  # only when they differ from the register's, so the column stays empty for the
+  # ordinary case and a value in it always means "read this".
+  reg_from <- as.character(reg$coverage$from %||% "")
+  reg_to   <- as.character(reg$coverage$to %||% "")
+  years <- vapply(reg$columns, function(x) {
+    from <- as.character(x$coverage$from %||% "")
+    to   <- as.character(x$coverage$to %||% "")
+    if (!nzchar(from) && !nzchar(to)) return("")
+    if (from == reg_from && to == reg_to) return("")
+    # " to ", not a dash: the values are themselves dashed (1985-12, 2004-Q2)
+    if (!nzchar(to)) paste0("from ", from)
+    else if (!nzchar(from)) paste0("until ", to)
+    else paste0(from, " to ", to)
+  }, character(1))
+  if (any(nzchar(years))) cols$Years <- years
   out <- c(out, md_table(cols), "")
 
   # 2. joins - this is what "Household key - join to FAIK" used to say in a cell

@@ -1,24 +1,24 @@
 <!-- Generated from schema/registers/udda.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |
-| `hfaudd` | character | code | Highest completed education |
-| `udd` | character | code | Education code |
-| `hf_kilde` | character | code | Source of the education record |
-| `hf_vfra` | date | date | Date the education was completed |
-| `hfinstnr` | character | code | Institution that awarded the education |
-| `almaudd` | character | code | Highest completed general education |
-| `erhaudd` | character | code | Highest completed vocational education |
-| `alm_vfra` | date | date | Date the general education was obtained |
-| `erh_vfra` | date | date | Date the vocational education was obtained |
-| `ig_vfra` | date | date | Start date of the ongoing education |
-| `alminstnr` | character | code | Institution, general education |
-| `erhinstnr` | character | code | Institution, vocational education |
-| `iginstnr` | character | code | Institution, ongoing education |
-| `cprtjek` | character | code | CPR check |
-| `cprtype` | character | code | CPR type |
-| `version` | character | code | Module data version |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier | 1980 to 2025 |
+| `hfaudd` | character | code | Highest completed education | 1980 to 2025 |
+| `udd` | character | code | Education code | 1980 to 2025 |
+| `hf_kilde` | character | code | Source of the education record | 1980 to 2025 |
+| `hf_vfra` | date | date | Date the education was completed | 1980 to 2025 |
+| `hfinstnr` | character | code | Institution that awarded the education | 1980 to 2025 |
+| `almaudd` | character | code | Highest completed general education | 1980 to 2025 |
+| `erhaudd` | character | code | Highest completed vocational education | 1980 to 2025 |
+| `alm_vfra` | date | date | Date the general education was obtained | 1980 to 2025 |
+| `erh_vfra` | date | date | Date the vocational education was obtained | 1980 to 2025 |
+| `ig_vfra` | date | date | Start date of the ongoing education | 1980 to 2025 |
+| `alminstnr` | character | code | Institution, general education | 1980 to 2025 |
+| `erhinstnr` | character | code | Institution, vocational education | 1980 to 2025 |
+| `iginstnr` | character | code | Institution, ongoing education | 1980 to 2025 |
+| `cprtjek` | character | code | CPR check | 2005 to 2025 |
+| `cprtype` | character | code | CPR type | 2005 to 2025 |
+| `version` | character | code | Module data version | 2005 to 2025 |
 
 **Join key:** `pnr`.
 

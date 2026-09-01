@@ -1,12 +1,12 @@
 <!-- Generated from schema/registers/lpr_diag.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`recnum`** | character | join key | Contact identifier |
-| `c_diag` | character | code | Diagnosis code |
-| `c_diagtype` | character | code | Diagnosis type |
-| `c_tildiag` | character | code | Supplementary diagnosis |
-| `c_diagmod` | character | code | Diagnosis modification |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`recnum`** | character | join key | Contact identifier |  |
+| `c_diag` | character | code | Diagnosis code |  |
+| `c_diagtype` | character | code | Diagnosis type |  |
+| `c_tildiag` | character | code | Supplementary diagnosis | 1995 to 2019 |
+| `c_diagmod` | character | code | Diagnosis modification | 1977 to 1994 |
 
 **Join key:** `recnum`.
 

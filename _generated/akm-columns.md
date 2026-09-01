@@ -1,14 +1,14 @@
 <!-- Generated from schema/registers/akm.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |
-| `socio13` | integer | code | Socioeconomic classification, 2013 version |
-| `socio02` | integer | code | Socioeconomic classification, 2002 version |
-| `socio` | integer | code | Socioeconomic classification, 1994-2001 version |
-| `socio_gl` | integer | code | Socioeconomic classification, 1976-1990 version |
-| `beskst13` | integer | code | Main source of income |
-| `year` | integer | date | Register year |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |  |
+| `socio13` | integer | code | Socioeconomic classification, 2013 version | 1991 to 2024 |
+| `socio02` | integer | code | Socioeconomic classification, 2002 version | 2002 to 2013 |
+| `socio` | integer | code | Socioeconomic classification, 1994-2001 version | 1994 to 2001 |
+| `socio_gl` | integer | code | Socioeconomic classification, 1976-1990 version | 1976 to 1990 |
+| `beskst13` | integer | code | Main source of income | 1991 to 2024 |
+| `year` | integer | date | Register year |  |
 
 **Join key:** `pnr`.
 

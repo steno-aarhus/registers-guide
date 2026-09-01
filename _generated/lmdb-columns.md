@@ -1,22 +1,22 @@
 <!-- Generated from schema/registers/lmdb.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |
-| `eksd` | date | date | Dispensing date |
-| `atc` | character | code | ATC code, full 7 characters |
-| `atc1` | character | code | ATC level 1 (1 character) |
-| `atc2` | character | code | ATC level 2 (3 characters) |
-| `atc3` | character | code | ATC level 3 (4 characters) |
-| `atc4` | character | code | ATC level 4 (5 characters) |
-| `vnr` | character | code | Item number (product key) |
-| `indo` | character | code | Indication code |
-| `apk` | numeric | value | Number of packages |
-| `packsize` | numeric | value | Package size |
-| `strnum` | numeric | value | Strength, numeric |
-| `strunit` | character | value | Unit for the numeric strength |
-| `aldr` | integer | value | Age at dispensing |
-| `year` | integer | date | Dispensing year |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier | 1995-Q2 to 2025-Q2 |
+| `eksd` | date | date | Dispensing date | 1995-Q2 to 2025-Q2 |
+| `atc` | character | code | ATC code, full 7 characters | 1995-Q2 to 2025-Q2 |
+| `atc1` | character | code | ATC level 1 (1 character) | 1995-Q2 to 2025-Q2 |
+| `atc2` | character | code | ATC level 2 (3 characters) | 1995-Q2 to 2025-Q2 |
+| `atc3` | character | code | ATC level 3 (4 characters) | 1995-Q2 to 2025-Q2 |
+| `atc4` | character | code | ATC level 4 (5 characters) | 1995-Q2 to 2025-Q2 |
+| `vnr` | character | code | Item number (product key) | 1995-Q2 to 2025-Q2 |
+| `indo` | character | code | Indication code | 2004-Q2 to 2025-Q2 |
+| `apk` | numeric | value | Number of packages | 1995-Q2 to 2025-Q2 |
+| `packsize` | numeric | value | Package size | 1995-Q2 to 2025-Q2 |
+| `strnum` | numeric | value | Strength, numeric | 1995-Q2 to 2025-Q2 |
+| `strunit` | character | value | Unit for the numeric strength | 1995-Q2 to 2025-Q2 |
+| `aldr` | integer | value | Age at dispensing |  |
+| `year` | integer | date | Dispensing year |  |
 
 **Join key:** `pnr`.
 
