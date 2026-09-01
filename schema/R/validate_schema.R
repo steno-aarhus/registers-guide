@@ -93,6 +93,15 @@ validate_schema <- function(schema = load_schema()) {
       }
     }
 
+    # The generated table shows key columns and folds the rest away. A register
+    # with none would render as an empty table above a fold-out holding
+    # everything, which looks broken rather than curated.
+    if (length(r$columns) > 8 && !any(vapply(r$columns, function(x) isTRUE(x$key), logical(1)))) {
+      add(where, ": has ", length(r$columns),
+          " columns and none marked `key: true`, so its table would render empty",
+          severity = "warning")
+    }
+
     for (rel in r$relationships) {
       if (is.null(rel$to)) {
         add(where, ": a relationship has no `to`")

@@ -83,7 +83,27 @@ build_register <- function(id, schema = load_schema()) {
     else paste0(from, " to ", to)
   }, character(1))
   if (any(nzchar(years))) cols$Years <- years
-  out <- c(out, md_table(cols), "")
+
+  # A full register is too long to read: LPR_A_KONTAKT alone has 53 columns. The
+  # schema marks the handful a researcher actually reaches for with `key: true`,
+  # and the rest fold away. Marking is editorial, so it lives in the YAML rather
+  # than being guessed here.
+  is_key <- vapply(reg$columns, function(x) isTRUE(x$key), logical(1))
+  if (any(is_key) && !all(is_key)) {
+    out <- c(out, md_table(cols[is_key, , drop = FALSE]), "",
+             "<details>",
+             paste0("<summary>All other columns (", sum(!is_key), ")</summary>"),
+             "", md_table(cols[!is_key, , drop = FALSE]), "")
+    # Caveats on the folded columns belong with them, not on the main page.
+    rest_notes <- Filter(Negate(is.null), lapply(reg$columns[!is_key], function(x) {
+      if (is.null(x$reader_note)) return(NULL)
+      paste0("- **`", x$name, "`:** ", gsub("\\s+", " ", x$reader_note))
+    }))
+    if (length(rest_notes)) out <- c(out, unlist(rest_notes), "")
+    out <- c(out, "</details>", "")
+  } else {
+    out <- c(out, md_table(cols), "")
+  }
 
   # 2. joins - this is what "Household key - join to FAIK" used to say in a cell
   if (length(reg$join_keys)) {
@@ -139,7 +159,10 @@ build_register <- function(id, schema = load_schema()) {
     out <- c(out, "**How it is computed:**", "", lines, "")
   }
 
-  noted <- Filter(function(x) !is.null(x$reader_note), reg$columns)
+  # Only the key columns: the folded ones already carry their notes inside the
+  # <details> block, and repeating them here would undo the folding.
+  shown <- if (any(is_key) && !all(is_key)) reg$columns[is_key] else reg$columns
+  noted <- Filter(function(x) !is.null(x$reader_note), shown)
   if (length(noted)) {
     lines <- vapply(noted, function(x) {
       paste0("- **`", x$name, "`:** ", gsub("\\s+", " ", x$reader_note))
