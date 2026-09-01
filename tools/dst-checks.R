@@ -52,12 +52,12 @@ faik <- read_register("faik") %>% rename_with(tolower)
 cat("  has a pnr column:", "pnr" %in% colnames(faik), "\n")
 
 faik_dupes <- faik %>%
-  count(familie_id, aar) %>%
+  count(familie_id, year) %>%
   filter(n > 1) %>%
   count() %>%
   collect()
 cat("  family-years with more than one row:", faik_dupes$n, "\n")
-cat("  -> if that number is above 0, add distinct(familie_id, aar, famaekvivadisp_13)\n")
+cat("  -> if that number is above 0, add distinct(familie_id, year, famaekvivadisp_13)\n")
 cat("     before the join, or join on pnr directly.\n")
 
 cat("\n=== 3. hfaudd - how wrong is the substr() rule on YOUR data? ===\n")
@@ -73,7 +73,7 @@ if (requireNamespace("heaven", quietly = TRUE)) {
 
   udda <- read_register("udda") %>%
     rename_with(tolower) %>%
-    select(pnr, aar, hfaudd) %>%
+    select(pnr, year, hfaudd) %>%
     collect() %>%
     mutate(hfaudd = as.character(hfaudd))
 
@@ -163,11 +163,11 @@ if (file.exists(dod_path)) {
 
 cat("\n=== 6. BEF - one row per person per year? ===\n")
 
-# The guide's panel joins assume (pnr, aar) is unique in BEF. Duplicates there
+# The guide's panel joins assume (pnr, year) is unique in BEF. Duplicates there
 # multiply rows in every join that uses the year as a key.
 bef <- read_register("bef") %>% rename_with(tolower)
 bef_dupes <- bef %>%
-  count(pnr, aar) %>%
+  count(pnr, year) %>%
   filter(n > 1) %>%
   count() %>%
   collect()
@@ -177,7 +177,7 @@ cat("  person-years with more than one row:", bef_dupes$n, "\n")
 # 2026-08-13. If you built anything in that window, check the year distribution
 # looks sane before reusing it.
 cat("  rows per year (eyeball for a year that is far too large):\n")
-bef %>% count(aar) %>% arrange(aar) %>% collect() %>% print(n = 100)
+bef %>% count(year) %>% arrange(year) %>% collect() %>% print(n = 100)
 
 cat("\n=== 7. osdc - the claims in the run-it-yourself script ===\n")
 

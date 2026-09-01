@@ -89,6 +89,43 @@ the follow-up they are measured.
 each value means, is in DST's classification documentation:
 [SOCIO →](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio).
 
+::: {.callout-warning}
+**`year` is not a DST variable.** It comes from the partitioning when the
+register was converted to parquet, so the name is set by whoever built your
+files rather than by DST. Every delivery checked for this guide calls it `year`,
+and that is what the code below uses, but a made column is not a guaranteed one:
+
+```r
+colnames(read_register("akm") %>% rename_with(tolower))
+```
+
+It affects every join in this chapter, since they all join on person plus year.
+:::
+
+::: {.callout-warning}
+**Do not create a column called `year` when one already exists.** `lubridate`
+has a function `year()` that pulls the year out of a date, and your register has
+a *column* called `year`. Sharing the name is fine on its own: R can tell a
+function from a column, so `year(index_date)` still calls the function even when
+the column is there.
+
+The problem is assigning to it. `mutate(year = ...)` does not create a second
+column, it **overwrites** the one from the parquet folders, with no warning:
+
+```r
+akm %>% mutate(year = lubridate::year(index_date) - 1) # the folder year is now gone
+```
+
+After that line, `filter(year == 2015)` no longer picks a folder, it filters on
+whatever you just computed, and the query reads every year on disk while
+returning the wrong rows. Give the new column its own name - the examples below
+use `year_baseline` - and leave `year` alone.
+
+The examples also write `lubridate::year()` in full rather than `year()`. That
+is for the reader, not for R: with a column of the same name a step away, the
+prefix says which of the two you meant.
+:::
+
 ```r
 library(fastreg) # read_register() - reads registers by name
 library(arrow) # open_dataset() - fallback without fastreg
@@ -106,14 +143,14 @@ index_year <- unique(lubridate::year(kohort$index_date) - 1) # baseline year = i
 
 akm_data <- akm %>%
   semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # only the cohort's pnr's
-  filter(aar %in% !!index_year) %>% # baseline year
-  select(pnr, aar, socio13) %>% # only the columns we use
+  filter(year %in% !!index_year) %>% # baseline year
+  select(pnr, year, socio13) %>% # only the columns we use
   collect() # fetch into R
 
 # 3. Attach to cohort with index year as join key
 cohort_akm <- kohort %>%
-  mutate(aar_baseline = lubridate::year(index_date) - 1) %>% # calculate baseline year
-  left_join(akm_data, by = c("pnr", "aar_baseline" = "aar")) # join on pnr and year
+  mutate(year_baseline = lubridate::year(index_date) - 1) %>% # calculate baseline year
+  left_join(akm_data, by = c("pnr", "year_baseline" = "year")) # join on pnr and year
 
 # 4. Categorise per SEPLINE
 cohort_akm <- cohort_akm %>%
@@ -177,14 +214,14 @@ udda <- read_register("udda") %>%
 # 2. Fetch education for the baseline year
 udda_data <- udda %>%
   semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # only the cohort's pnr's
-  filter(aar %in% !!index_year) %>% # baseline year
-  select(pnr, aar, hfaudd) %>% # only the columns we use
+  filter(year %in% !!index_year) %>% # baseline year
+  select(pnr, year, hfaudd) %>% # only the columns we use
   collect() # fetch into R
 
 # 3. Take the latest record if a person appears multiple times
 udda_data <- udda_data %>%
   group_by(pnr) %>% # group to find newest record per person
-  arrange(desc(aar)) %>% # newest year first
+  arrange(desc(year)) %>% # newest year first
   slice(1) %>% # keep only the newest record
   ungroup() # release grouping
 
@@ -274,6 +311,12 @@ Income is linked to the household, not the person. You need `familie_id` from
 BEF as a bridge. SEPLINE recommends a 3-year average divided into quintiles
 stratified by sex × 5-year age group × reference year.
 
+`famaekvivadisp_13` has a sister column, `famaekvivadisp`, with no suffix. The
+`_13` one is not simply the newer of the two: DST gives the old column the years
+1990-2012 and the `_13` column 1987-2024, so the newer definition was applied
+backwards as well as forwards. Use `_13` for the whole period. Splicing the two
+at 2013 mixes two definitions inside one series.
+
 ```r
 # 1. Open BEF + FAIK via fastreg (read_register gets the path from your project config)
 bef <- read_register("bef") %>%
@@ -285,19 +328,19 @@ faik <- read_register("faik") %>%
 # 2. Fetch familie_id from BEF for baseline year
 bef_family <- bef %>%
   semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>% # only the cohort's pnr's
-  filter(aar %in% !!index_year) %>% # baseline year
-  select(pnr, aar, familie_id) %>% # familie_id is the bridge to FAIK
+  filter(year %in% !!index_year) %>% # baseline year
+  select(pnr, year, familie_id) %>% # familie_id is the bridge to FAIK
   collect() # fetch into R
 
 # 3. Fetch income from FAIK for baseline year
 faik_data <- faik %>%
-  filter(aar %in% !!index_year) %>% # only baseline year
-  select(familie_id, aar, famaekvivadisp_13) %>% # only the columns we use
+  filter(year %in% !!index_year) %>% # only baseline year
+  select(familie_id, year, famaekvivadisp_13) %>% # only the columns we use
   collect() # fetch into R
 
 # 4. Join: pnr → familie_id → income
 income <- bef_family %>%
-  left_join(faik_data, by = c("familie_id", "aar")) # two-key join: household and year
+  left_join(faik_data, by = c("familie_id", "year")) # two-key join: household and year
 ```
 
 ::: {.callout-warning collapse="true"}
@@ -314,13 +357,13 @@ names(faik) # is pnr among the columns?
 
 # More than one row per family and year means the duplication applies to you
 faik %>%
-  count(familie_id, aar) %>%
+  count(familie_id, year) %>%
   filter(n > 1) %>%
   count() %>%
   collect()
 ```
 
-**What it does to the code above.** The join on `familie_id` + `aar` returns one
+**What it does to the code above.** The join on `familie_id` + `year` returns one
 row per family *member* instead of one per person, so your dataset grows without
 any error. And the 3-year average further down is then computed over a set
 weighted by household size: a five-person family counts five times as much as a
@@ -333,7 +376,7 @@ unchanged for every year:
 
 ```r
 faik <- faik %>%
-  distinct(familie_id, aar, famaekvivadisp_13) # one row per household per year
+  distinct(familie_id, year, famaekvivadisp_13) # one row per household per year
 ```
 
 If your FAIK carries `pnr` for **all** years, you can join income to `pnr`
@@ -370,22 +413,22 @@ Here is a simplified version with quintiles per year:
 library(dplyr)   # filter, select, left_join, group_by, summarise, mutate
 
 # Fetch 3 years: index year and the two preceding
-aar_3 <- c(index_year, index_year - 1, index_year - 2)   # 3-year window for average
+year_3 <- c(index_year, index_year - 1, index_year - 2)   # 3-year window for average
 
 bef_3yr <- bef %>%
   semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
-  filter(aar %in% !!aar_3) %>%                           # the 3 years
-  select(pnr, aar, familie_id) %>%                       # familie_id is the bridge to FAIK
+  filter(year %in% !!year_3) %>%                           # the 3 years
+  select(pnr, year, familie_id) %>%                       # familie_id is the bridge to FAIK
   collect()                                              # fetch into R
 
 faik_3yr <- faik %>%
-  filter(aar %in% !!aar_3) %>%                           # only the 3 baseline years
-  select(familie_id, aar, famaekvivadisp_13) %>%         # only the columns we use
+  filter(year %in% !!year_3) %>%                           # only the 3 baseline years
+  select(familie_id, year, famaekvivadisp_13) %>%         # only the columns we use
   collect()                                              # fetch into R
 
 # Calculate 3-year average per person
 income_mean <- bef_3yr %>%
-  left_join(faik_3yr, by = c("familie_id", "aar")) %>%   # link income via household and year
+  left_join(faik_3yr, by = c("familie_id", "year")) %>%   # link income via household and year
   group_by(pnr) %>%                                      # group to calculate average per person
   summarise(
     mean_income = mean(famaekvivadisp_13, na.rm = TRUE),   # mean disposable income
