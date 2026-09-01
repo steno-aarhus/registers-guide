@@ -4,10 +4,19 @@
 | --- | --- | --- | --- |
 | **`recnum`** | character | join key | Contact identifier |
 | `c_opr` | character | code | Procedure code |
+| `d_odto` | date | date | Procedure date |
+| `year` | integer | date | Register year |
+
+<details>
+<summary>All other columns (3)</summary>
+
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
 | `c_oprart` | character | code | Procedure type |
 | `c_osgh` | character | code | Hospital performing the procedure |
 | `c_tilopr` | character | code | Supplementary code |
-| `d_odto` | date | date | Procedure date |
+
+</details>
 
 **Join key:** `recnum`.
 
@@ -29,3 +38,4 @@
 **Worth knowing:**
 
 - **`c_opr`:** Check that you actually have this column. DST documents it for every year 1999-2019, but the DARTER delivery of this table contains only recnum, d_odto and year, which leaves no way to tell one procedure from another. Without it the table is unusable, and no filtering recovers it.
+- **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.

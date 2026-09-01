@@ -4,9 +4,17 @@
 | --- | --- | --- | --- |
 | **`pnr`** | character | join key | Personal identifier |
 | `doddato` | date | date | Date of death |
+
+<details>
+<summary>All other columns (3)</summary>
+
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
 | `alder_haend` | integer | value | Age at the time of death |
 | `cprtjek` | character | value | CPR check |
 | `cprtype` | character | value | CPR type |
+
+</details>
 
 **Join key:** `pnr`.
 

@@ -4,8 +4,9 @@
 # guide's prose. Where the guide and DST disagree, DST wins and the guide's
 # version is recorded in a note.
 #
-# Only the subset of columns the guide actually references is structured here.
-# The full list has 40+ variables; follow source_url for those.
+# All columns present in a verified delivery are structured here, matched
+# against DST's variable list. Two DST variables are not in that delivery and
+# are therefore absent: BETALINGSKOM and TIMES.
 
 id: bef
 name: "Befolkningen (population register)"
@@ -42,6 +43,7 @@ columns:
     label: {da: "Personnummer", en: "Personal identifier"}
     type: character
     role: join_key
+    key: true
     origin: dst
     reader_note: >-
       A person appears once per snapshot, not once in total. Taking a single
@@ -59,6 +61,7 @@ columns:
     label: {da: "Køn", en: "Sex"}
     type: integer
     role: code
+    key: true
     code_system: koen
     origin: dst
     provenance:
@@ -73,6 +76,7 @@ columns:
     label: {da: "Fødselsdato", en: "Date of birth"}
     type: date
     role: date
+    key: true
     origin: dst
     provenance:
       source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
@@ -86,6 +90,7 @@ columns:
     label: {da: "Familiens identificerende nummer", en: "Household key"}
     type: character
     role: join_key
+    key: true
     origin: dst
     provenance:
       source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
@@ -99,6 +104,7 @@ columns:
     label: {da: "Region", en: "Region"}
     type: character
     role: code
+    key: true
     code_system: reg
     origin: dst
     provenance:
@@ -113,6 +119,7 @@ columns:
     label: {da: "Civilstand", en: "Marital status"}
     type: character
     role: code
+    key: true
     code_system: civst
     origin: dst
     provenance:
@@ -127,6 +134,7 @@ columns:
     label: {da: "Kommunekode", en: "Municipality code"}
     type: character
     role: code
+    key: true
     origin: dst
     code_system: kom
     provenance:
@@ -136,20 +144,412 @@ columns:
       verified_by: "Sara Schwartz"
       verified_against: "colnames() on the BEF parquet, plus DST's variable list"
 
-  - id: aar
-    name: aar
+  - id: year
+    name: year
     label: {da: null, en: "Register year"}
     type: integer
     role: date
+    key: true
     origin: tooling
     added_by: fastreg
     provenance:
       source_type: server_verified
       verified_on: 2026-08-31
       verified_by: "Sara Schwartz"
-      verified_against: "fastreg's BEF parquet conversion"
+      verified_against: "colnames() on the BEF parquet, via both fastreg's read_register() and DARTER's load_database() - the two agree"
       guide_page: register-reference.qmd
     reader_note: >-
-      Not a DST variable. It comes from fastreg's parquet conversion, which
+      Not a DST variable. It comes from the parquet conversion, which
       concatenates the yearly deliveries, so it exists in the data you read but
-      not in DST's own documentation of BEF.
+      not in DST's own documentation of BEF. Because it is made rather than
+      delivered, the name is not guaranteed: check colnames() rather than
+      assuming.
+  - id: mor_id
+    name: mor_id
+    label: {da: "Moderens Person Id", en: "Mother's person id"}
+    type: character
+    role: identifier
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      A pnr-like identifier for the mother, so BEF can be turned into a family
+      structure without a separate register. It is only filled where the link
+      is registered, which is not the case for everyone born before CPR.
+  - id: far_id
+    name: far_id
+    label: {da: "Faderens Person Id", en: "Father's person id"}
+    type: character
+    role: identifier
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: aegte_id
+    name: aegte_id
+    label: {da: "AEgtefaelle ID", en: "Spouse id"}
+    type: character
+    role: identifier
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: e_faelle_id
+    name: e_faelle_id
+    label: {da: "E_faelle", en: "Cohabiting partner id"}
+    type: character
+    role: identifier
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: fdato
+    name: fdato
+    label: {da: "Foedselsdato (CPR)", en: "Date of birth, CPR form"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      Not on DST's variable list for BEF, which documents foed_dag instead.
+      Present in this delivery. Prefer foed_dag unless you have checked what
+      yours contains.
+  - id: alder
+    name: alder
+    label: {da: "Alder paa referencetidspunktet", en: "Age at the reference time point"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      Age at the snapshot, not at any date you choose. Recompute from foed_dag
+      and your own index date rather than reusing it.
+  - id: antboernf
+    name: antboernf
+    label: {da: "Antal boern i familien", en: "Number of children in the family"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: antboernh
+    name: antboernh
+    label: {da: "Antal boern i husstanden", en: "Number of children in the household"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: antpersf
+    name: antpersf
+    label: {da: "Antal personer i familien", en: "Number of people in the family"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: antpersh
+    name: antpersh
+    label: {da: "Antal personer i husstanden", en: "Number of people in the household"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: antefam
+    name: antefam
+    label: {da: "Antal E-familier i husstanden", en: "Number of E-families in the household"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      A household can hold several families. That is why the family counts and
+      the household counts differ, and why FAIK's household income cannot be
+      read as one family's income without checking this.
+  - id: familie_type
+    name: familie_type
+    label: {da: "Familietype", en: "Family type"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: fam_koen
+    name: fam_koen
+    label: {da: "Koen for hovedpersonen i familien", en: "Sex of the family's reference person"}
+    type: integer
+    role: code
+    origin: dst
+    code_system: koen
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: plads
+    name: plads
+    label: {da: "Familiestatus", en: "Position in the family"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: hustype
+    name: hustype
+    label: {da: "Husstandstype", en: "Household type"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: fm_mark
+    name: fm_mark
+    label: {da: "Foraeldremarkering", en: "Parent marker"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: civ_vfra
+    name: civ_vfra
+    label: {da: "Civilstandsdato", en: "Date the marital status took effect"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: bop_vfra
+    name: bop_vfra
+    label: {da: "Dato for tilflytning/indvandring", en: "Date of moving in or immigrating"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: ie_type
+    name: ie_type
+    label: {da: "Indvandrere, efterkommere, personer med dansk oprindelse", en: "Immigrant, descendant or Danish origin"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: opr_land
+    name: opr_land
+    label: {da: "Oprindelsesland", en: "Country of origin"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: foedreg_kode
+    name: foedreg_kode
+    label: {da: "Kode for personens foedselsregistreringssted", en: "Place of birth registration"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: statsb
+    name: statsb
+    label: {da: "Statsborgerskab", en: "Citizenship"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: opholdmd_dk
+    name: opholdmd_dk
+    label: {da: "Opholdstid i maaneder", en: "Months of residence in Denmark"}
+    type: integer
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: van_vtil
+    name: van_vtil
+    label: {da: "Indvandringsdato", en: "Immigration date"}
+    type: date
+    role: date
+    origin: dst
+    coverage: {from: 1985-12, to: 2003-12}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      Ends December 2003 and is replaced by foerste_indvandring and
+      seneste_indvandring. A study spanning 2003 has to read both, or it
+      silently loses immigration dates on one side of the break.
+  - id: foerste_indvandring
+    name: foerste_indvandring
+    label: {da: "Foerste indvandringsdato", en: "First immigration date"}
+    type: date
+    role: date
+    origin: dst
+    coverage: {from: 2004-12, to: 2026-06}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      Begins December 2004. Before that the information is in van_vtil.
+  - id: seneste_indvandring
+    name: seneste_indvandring
+    label: {da: "Seneste indvandringsdato", en: "Most recent immigration date"}
+    type: date
+    role: date
+    origin: dst
+    coverage: {from: 2004-12, to: 2026-06}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: adresse_id
+    name: adresse_id
+    label: {da: "Bopaelsadresse_id", en: "Address id"}
+    type: character
+    role: identifier
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      Identifies a dwelling, so two people with the same value live at the same
+      address. It is not a geographic coordinate and cannot be decoded into one.
+  - id: referencetid
+    name: referencetid
+    label: {da: "Referencetidspunkt eller -periode", en: "Reference time point"}
+    type: date
+    role: date
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+    reader_note: >-
+      The date the snapshot describes. Every other column in the row is a
+      status as of this moment, which is what makes BEF a status register
+      rather than an event register.
+  - id: fkirk
+    name: fkirk
+    label: {da: "Tilhoersforhold til folkekirken", en: "Membership of the Danish National Church"}
+    type: character
+    role: code
+    origin: dst
+    coverage: {from: 2004-12, to: 2026-06}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: cprtjek
+    name: cprtjek
+    label: {da: "CPR-tjek", en: "CPR check"}
+    type: character
+    role: code
+    origin: dst
+    coverage: {from: 2004-12, to: 2026-06}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: cprtype
+    name: cprtype
+    label: {da: "CPR-type", en: "CPR type"}
+    type: character
+    role: code
+    origin: dst
+    coverage: {from: 2004-12, to: 2026-06}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"
+  - id: version
+    name: version
+    label: {da: "Moduldata version", en: "Module data version"}
+    type: character
+    role: code
+    origin: dst
+    coverage: {from: 2004-12, to: 2026-06}
+    provenance:
+      source_url: https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html
+      source_type: dst_variable_list
+      verified_on: 2026-09-01
+      verified_against: "DST variable list, cross-checked against colnames() on the parquet"

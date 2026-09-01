@@ -8,6 +8,7 @@
 | `c_osgh` | character | code | Hospital performing the procedure |
 | `c_tilopr` | character | code | Supplementary code |
 | `d_odto` | date | date | Procedure date |
+| `year` | integer | date | Register year |
 
 **Join key:** `recnum`.
 
@@ -29,3 +30,4 @@
 **Worth knowing:**
 
 - **`c_opr`:** The SKS procedure code. Surgical codes start with K.
+- **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.

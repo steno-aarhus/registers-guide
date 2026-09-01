@@ -6,16 +6,24 @@
 | **`recnum`** | character | join key | Contact identifier |
 | `c_pattype` | character | code | Contact type |
 | `c_adiag` | character | code | Primary diagnosis |
+| `d_inddto` | date | date | Admission date |
+| `d_uddto` | date | date | Discharge date |
+
+<details>
+<summary>All other columns (8)</summary>
+
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
 | `c_indm` | character | code | Admission mode |
 | `c_udm` | character | code | Discharge mode |
 | `c_sgh` | character | code | Hospital |
 | `c_afd` | character | code | Department |
 | `c_spec` | character | code | Specialty |
-| `d_inddto` | date | date | Admission date |
-| `d_uddto` | date | date | Discharge date |
 | `v_indtime` | integer | value | Admission hour |
 | `v_indminut` | integer | value | Admission minute |
 | `v_udtime` | integer | value | Discharge hour |
+
+</details>
 
 **Join key:** `recnum`.
 
@@ -24,12 +32,14 @@
 - `recnum` joins to **T_PSYK_DIAG** (one-to-many).
 
 <details>
-<summary>Value sets for the coded columns (1)</summary>
+<summary>Value sets for the coded columns (2)</summary>
 
 | Code system | Values |
 | --- | --- |
+| `pattype` | `0` Heldoegns indlaeggelse, `1` Deldoegns indlaeggelse, `2` Ambulant, `3` Skadestue, `4` Dagpatient, `5` Natpatient |
 | `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 
+- **`pattype`:** Do not read this as a simple three-way split. The emergency-room coding changed around 2014: before then an ER visit is mostly `"3"`, afterwards it usually arrives as `"2"` with an acute admission mode in `c_indm`. Classifying on `c_pattype` alone therefore counts ER visits as outpatient for the later years. The extraction chapter has the full rule.
 - **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
 
 </details>

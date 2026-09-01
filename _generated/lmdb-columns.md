@@ -5,18 +5,28 @@
 | **`pnr`** | character | join key | Personal identifier | 1995-Q2 to 2025-Q2 |
 | `eksd` | date | date | Dispensing date | 1995-Q2 to 2025-Q2 |
 | `atc` | character | code | ATC code, full 7 characters | 1995-Q2 to 2025-Q2 |
-| `atc1` | character | code | ATC level 1 (1 character) | 1995-Q2 to 2025-Q2 |
 | `atc2` | character | code | ATC level 2 (3 characters) | 1995-Q2 to 2025-Q2 |
+| `vnr` | character | code | Item number (product key) | 1995-Q2 to 2025-Q2 |
+| `apk` | numeric | value | Number of packages | 1995-Q2 to 2025-Q2 |
+| `year` | integer | date | Dispensing year |  |
+
+<details>
+<summary>All other columns (8)</summary>
+
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| `atc1` | character | code | ATC level 1 (1 character) | 1995-Q2 to 2025-Q2 |
 | `atc3` | character | code | ATC level 3 (4 characters) | 1995-Q2 to 2025-Q2 |
 | `atc4` | character | code | ATC level 4 (5 characters) | 1995-Q2 to 2025-Q2 |
-| `vnr` | character | code | Item number (product key) | 1995-Q2 to 2025-Q2 |
 | `indo` | character | code | Indication code | 2004-Q2 to 2025-Q2 |
-| `apk` | numeric | value | Number of packages | 1995-Q2 to 2025-Q2 |
 | `packsize` | numeric | value | Package size | 1995-Q2 to 2025-Q2 |
 | `strnum` | numeric | value | Strength, numeric | 1995-Q2 to 2025-Q2 |
 | `strunit` | character | value | Unit for the numeric strength | 1995-Q2 to 2025-Q2 |
 | `aldr` | integer | value | Age at dispensing |  |
-| `year` | integer | date | Dispensing year |  |
+
+- **`indo`:** Recorded only when the prescriber picks an indication from the drop-down. Typed as free text it is not carried over, so the column is often empty.
+
+</details>
 
 **Join key:** `pnr`.
 
@@ -36,5 +46,4 @@
 - **`pnr`:** DST's variable list calls this column `PNR12`. Check whether your variable is named `pnr` or `pnr12`.
 - **`eksd`:** The date the prescription was collected at the pharmacy. Not the date it was prescribed, and not evidence that the medicine was taken.
 - **`vnr`:** The only reliable way to isolate one specific product. Two brands with the same active substance share an ATC code but have different item numbers.
-- **`indo`:** Recorded only when the prescriber picks an indication from the drop-down. Typed as free text it is not carried over, so the column is often empty.
 - **`year`:** Not a DST variable. It comes from fastreg's parquet conversion, which concatenates the yearly deliveries, so it exists in the data you read but not in DST's own documentation of this register.

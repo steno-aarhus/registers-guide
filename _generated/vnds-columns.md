@@ -6,8 +6,16 @@
 | `indud_kode` | character | code | Immigration or emigration |
 | `haend_dato` | date | date | Date of the migration event |
 | `indud_land` | character | code | Country migrated from or to |
+
+<details>
+<summary>All other columns (2)</summary>
+
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
 | `cprtjek` | character | value | CPR check |
 | `cprtype` | character | value | CPR type |
+
+</details>
 
 **Join key:** `pnr`.
 

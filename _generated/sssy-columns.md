@@ -5,18 +5,30 @@
 | **`pnr`** | character | join key | Personal identifier |
 | `ydernr` | character | identifier | Provider number |
 | `speciale` | character | code | Specialty, 6-digit |
-| `ydtyp` | character | code | Provider type |
 | `ydlant` | integer | value | Number of services under the specialty |
+| `afrper` | character | date | Settlement period |
+| `sikgrup` | character | code | Insurance group |
+| `year` | integer | date | Register year |
+
+<details>
+<summary>All other columns (9)</summary>
+
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `ydtyp` | character | code | Provider type |
 | `ydltid` | character | code | Service timing code |
 | `ydersamt` | character | code | Provider's county |
-| `afrper` | character | date | Settlement period |
 | `bruhon` | numeric | value | Gross fee to the provider |
 | `honuge` | character | date | Fee week |
 | `barnmak` | character | code | Child marker |
-| `sikgrup` | character | code | Insurance group |
 | `kontakt` | character | value | Contact |
 | `patgrp` | character | code | Patient group |
 | `koenimp` | integer | code | Sex, imputed values included |
+
+- **`kontakt`:** Not in SYSI. Do not assume a comparable count of contacts before 2005.
+- **`koenimp`:** Imputed where the source was missing, so it is not identical to koen in BEF. Prefer BEF when you need sex as a study variable.
+
+</details>
 
 **Join key:** `pnr`.
 
@@ -36,5 +48,4 @@
 - **`ydlant`:** One row can cover several services, so counting rows undercounts activity. Sum this column instead.
 - **`afrper`:** A settlement period, not a treatment date. It says when the fee was settled, which can fall in a later week or month than the contact.
 - **`sikgrup`:** Group 1 patients are listed with a GP and need a referral to see most specialists; group 2 patients may go directly but pay part of the fee. The two groups therefore generate different rows for the same need.
-- **`kontakt`:** Not in SYSI. Do not assume a comparable count of contacts before 2005.
-- **`koenimp`:** Imputed where the source was missing, so it is not identical to koen in BEF. Prefer BEF when you need sex as a study variable.
+- **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.

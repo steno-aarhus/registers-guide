@@ -6,6 +6,12 @@
 | `haend_dato` | date | date | Date of immigration |
 | `indv_land` | character | code | Country immigration from |
 | `indvmd` | character | date | Month of immigration |
+
+<details>
+<summary>All other columns (18)</summary>
+
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
 | `adresse_id` | character | code |  |
 | `alder_haend` | integer | value |  |
 | `alder_ult` | integer | value |  |
@@ -25,6 +31,23 @@
 | `statsb` | character | code |  |
 | `version` | character | value |  |
 
+- **`adresse_id`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`alder_haend`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`alder_ult`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`bank_statsb`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`cprtjek`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`cprtype`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`foedreg_kode`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`foed_dag`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`foed_land`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`ie_type`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`opr_land`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`referencetid`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`statsb`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+- **`version`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
+
+</details>
+
 **Join key:** `pnr`.
 
 <details>
@@ -42,20 +65,3 @@
 - **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 
 </details>
-
-**Worth knowing:**
-
-- **`adresse_id`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`alder_haend`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`alder_ult`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`bank_statsb`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`cprtjek`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`cprtype`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`foedreg_kode`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`foed_dag`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`foed_land`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`ie_type`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`opr_land`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`referencetid`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`statsb`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
-- **`version`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
