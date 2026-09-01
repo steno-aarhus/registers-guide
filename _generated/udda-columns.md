@@ -8,6 +8,17 @@
 | `hf_kilde` | character | code | Source of the education record |
 | `hf_vfra` | date | date | Date the education was completed |
 | `hfinstnr` | character | code | Institution that awarded the education |
+| `almaudd` | character | code | Highest completed general education |
+| `erhaudd` | character | code | Highest completed vocational education |
+| `alm_vfra` | date | date | Date the general education was obtained |
+| `erh_vfra` | date | date | Date the vocational education was obtained |
+| `ig_vfra` | date | date | Start date of the ongoing education |
+| `alminstnr` | character | code | Institution, general education |
+| `erhinstnr` | character | code | Institution, vocational education |
+| `iginstnr` | character | code | Institution, ongoing education |
+| `cprtjek` | character | code | CPR check |
+| `cprtype` | character | code | CPR type |
+| `version` | character | code | Module data version |
 
 **Join key:** `pnr`.
 
@@ -27,3 +38,5 @@
 - **`hfaudd`:** A code for which education, not for its level. UDDA carries no level column at all, so the level has to come from a lookup table.
 - **`udd`:** Not the same code system as hfaudd. Under DISCED-15, AUDD codes describe a completed education and UDD codes one that is ongoing or was interrupted, so a lookup table built for one will not fit the other.
 - **`hfinstnr`:** The guide previously referred to this column as `INSTNR`. DST's list has no INSTNR; the institution columns are HFINSTNR, ALMINSTNR, ERHINSTNR and IGINSTNR, one per kind of education.
+- **`almaudd`:** The general-education track only. hfaudd is the highest completed education of any kind, so the two answer different questions and are not interchangeable.
+- **`ig_vfra`:** Pairs with udd: this is when the ongoing education began. An education with a start and no completion is either still running or was interrupted, and the register does not distinguish the two.

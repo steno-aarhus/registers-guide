@@ -8,6 +8,11 @@
 | `diag_parent_kode` | character | code | Parent diagnosis code |
 | `senere_afkraeftet` | character | code | Later retracted |
 | `lprindberetningssystem` | character | code | Reporting system |
+| `diag_kode_tekst` | character | value | Diagnosis code, text |
+| `diag_kode_type_tekst` | character | value | Diagnosis type, text |
+| `diag_parent_kode_tekst` | character | value | Parent diagnosis code, text |
+| `diag_parent_kode_type` | character | code | Parent diagnosis type |
+| `diag_parent_kode_type_tekst` | character | value | Parent diagnosis type, text |
 
 **Join key:** `dw_ek_kontakt`.
 
@@ -30,3 +35,4 @@
 
 - **`senere_afkraeftet`:** A diagnosis that was subsequently withdrawn. Keeping these counts conditions the patient turned out not to have.
 - **`lprindberetningssystem`:** Filter to "LPR3": the table holds rows from two reporting formats, and not doing so duplicates rows.
+- **`diag_kode_tekst`:** The code spelled out. Convenient for reading, but do not group on it: the text can change between years while the code stays the same.
