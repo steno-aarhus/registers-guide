@@ -1,35 +1,35 @@
 <!-- Generated from schema/registers/vnds_ud.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |
-| `haend_dato` | date | date | Date of emigration |
-| `udv_land` | character | code | Country emigration to |
-| `udvmd` | character | date | Month of emigration |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier | 2025 to 1900 |
+| `haend_dato` | date | date | Date of emigration | 2025 to 1900 |
+| `udv_land` | character | code | Country emigration to | 2025 to 1900 |
+| `udvmd` | character | date | Month of emigration | 2025 to 1900 |
 
 <details>
 <summary>All other columns (18)</summary>
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| `adresse_id` | character | code |  |
-| `alder_haend` | integer | value |  |
-| `alder_ult` | integer | value |  |
-| `bank_statsb` | character | code |  |
-| `civst` | character | code |  |
-| `cprtjek` | character | value |  |
-| `cprtype` | character | value |  |
-| `foedreg_kode` | character | code |  |
-| `foed_dag` | date | date |  |
-| `foed_land` | character | code |  |
-| `ie_type` | character | code |  |
-| `koen` | integer | code |  |
-| `kom` | character | code |  |
-| `opr_land` | character | code |  |
-| `referencetid` | date | date |  |
-| `reg` | character | code |  |
-| `statsb` | character | code |  |
-| `version` | character | value |  |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| `adresse_id` | character | code |  | 2025 to 1900 |
+| `alder_haend` | integer | value |  | 2025 to 1900 |
+| `alder_ult` | integer | value |  | 2025 to 1900 |
+| `bank_statsb` | character | code |  | 2025 to 1900 |
+| `civst` | character | code |  | 2025 to 1900 |
+| `cprtjek` | character | value |  | 2025 to 1900 |
+| `cprtype` | character | value |  | 2025 to 1900 |
+| `foedreg_kode` | character | code |  | 2025 to 1900 |
+| `foed_dag` | date | date |  | 2025 to 1900 |
+| `foed_land` | character | code |  | 2025 to 1900 |
+| `ie_type` | character | code |  | 2025 to 1900 |
+| `koen` | integer | code |  | 2025 to 1900 |
+| `kom` | character | code |  | 2025 to 1900 |
+| `opr_land` | character | code |  | 2025 to 1900 |
+| `referencetid` | date | date |  | 2025 to 1900 |
+| `reg` | character | code |  | 2025 to 1900 |
+| `statsb` | character | code |  | 2025 to 1900 |
+| `version` | character | value |  | 2025 to 1900 |
 
 - **`adresse_id`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
 - **`alder_haend`:** DST's variable list gives this column no label, so the schema records the name only. Its meaning has not been sourced.
@@ -48,6 +48,8 @@
 
 </details>
 
+*The Type column is read off the column name for 22 of these 22 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
+
 **Join key:** `pnr`.
 
 <details>
@@ -63,5 +65,12 @@
 - **`civst`:** Codes P, O and L came in with the registered-partnership act of 1 October 1989; before that the set was smaller. Registered partnerships could no longer be entered into from 15 June 2012.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality.
 - **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
+
+Where these values come from:
+
+- **`civst`:** [DST's variable list for BEF](https://www.dst.dk/da/Statistik/dokumentation/Times/cpr-oplysninger/civst).
+- **`koen`:** [DST's variable list for BEF](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
+- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts).
+- **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
 
 </details>

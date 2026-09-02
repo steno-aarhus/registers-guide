@@ -1,53 +1,54 @@
 <!-- Generated from schema/registers/bef.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |
-| `koen` | integer | code | Sex |
-| `foed_dag` | date | date | Date of birth |
-| **`familie_id`** | character | join key | Household key |
-| `reg` | character | code | Region |
-| `civst` | character | code | Marital status |
-| `kom` | character | code | Municipality code |
-| `year` | integer | date | Register year |
-| `alder` | integer | value | Age at the reference time point |
-| `opr_land` | character | code | Country of origin |
-| `referencetid` | date | date | Reference time point |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier | 1985 to 2026 |
+| `koen` | numeric | code | Sex | 1985 to 2026 |
+| `foed_dag` | date | date | Date of birth | 1985 to 2026 |
+| **`familie_id`** | character | join key | Household key | 1985 to 2026 |
+| `reg` | character | code | Region | 1985 to 2026 |
+| `civst` | character | code | Marital status | 1985 to 2026 |
+| `kom` | character | code | Municipality code | 1985 to 2026 |
+| `year` | integer | date | Register year |  |
+| `alder` | numeric | value | Age at the reference time point | 1985 to 2026 |
+| `opr_land` | numeric | code | Country of origin | 1985 to 2026 |
+| `referencetid` | date | date | Reference time point | 1985 to 2026 |
 
 <details>
-<summary>All other columns (29)</summary>
+<summary>All other columns (30)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `mor_id` | character | identifier | Mother's person id |  |
-| `far_id` | character | identifier | Father's person id |  |
-| `aegte_id` | character | identifier | Spouse id |  |
-| `e_faelle_id` | character | identifier | Cohabiting partner id |  |
+| `mor_id` | character | identifier | Mother's person id | 1985 to 2026 |
+| `far_id` | character | identifier | Father's person id | 1985 to 2026 |
+| `aegte_id` | character | identifier | Spouse id | 1985 to 2026 |
+| `e_faelle_id` | character | identifier | Cohabiting partner id | 1985 to 2026 |
 | `fdato` | date | date | Date of birth, CPR form |  |
-| `antboernf` | integer | value | Number of children in the family |  |
-| `antboernh` | integer | value | Number of children in the household |  |
-| `antpersf` | integer | value | Number of people in the family |  |
-| `antpersh` | integer | value | Number of people in the household |  |
-| `antefam` | integer | value | Number of E-families in the household |  |
-| `familie_type` | character | code | Family type |  |
-| `fam_koen` | integer | code | Sex of the family's reference person |  |
-| `plads` | character | code | Position in the family |  |
-| `hustype` | character | code | Household type |  |
-| `fm_mark` | character | code | Parent marker |  |
-| `civ_vfra` | date | date | Date the marital status took effect |  |
-| `bop_vfra` | date | date | Date of moving in or immigrating |  |
-| `ie_type` | character | code | Immigrant, descendant or Danish origin |  |
-| `foedreg_kode` | character | code | Place of birth registration |  |
-| `statsb` | character | code | Citizenship |  |
-| `opholdmd_dk` | integer | value | Months of residence in Denmark |  |
+| `antboernf` | numeric | value | Number of children in the family | 1985 to 2026 |
+| `antboernh` | numeric | value | Number of children in the household | 1985 to 2026 |
+| `antpersf` | numeric | value | Number of people in the family | 1985 to 2026 |
+| `antpersh` | numeric | value | Number of people in the household | 1985 to 2026 |
+| `antefam` | numeric | value | Number of E-families in the household | 1985 to 2026 |
+| `familie_type` | numeric | code | Family type | 1985 to 2026 |
+| `fam_koen` | numeric | code | Sex of the family's reference person | 1985 to 2026 |
+| `plads` | numeric | code | Position in the family | 1985 to 2026 |
+| `hustype` | numeric | code | Household type | 1985 to 2026 |
+| `fm_mark` | numeric | code | Parent marker | 1985 to 2026 |
+| `civ_vfra` | date | date | Date the marital status took effect | 1985 to 2026 |
+| `bop_vfra` | date | date | Date of moving in or immigrating | 1985 to 2026 |
+| `ie_type` | numeric | code | Immigrant, descendant or Danish origin | 1985 to 2026 |
+| `foedreg_kode` | numeric | code | Place of birth registration | 1985 to 2026 |
+| `statsb` | numeric | code | Citizenship | 1985 to 2026 |
+| `opholdmd_dk` | numeric | value | Months of residence in Denmark | 1985 to 2026 |
 | `van_vtil` | date | date | Immigration date | 1985-12 to 2003-12 |
 | `foerste_indvandring` | date | date | First immigration date | 2004-12 to 2026-06 |
 | `seneste_indvandring` | date | date | Most recent immigration date | 2004-12 to 2026-06 |
-| `adresse_id` | character | identifier | Address id |  |
+| `adresse_id` | character | identifier | Address id | 1985 to 2026 |
 | `fkirk` | character | code | Membership of the Danish National Church | 2004-12 to 2026-06 |
 | `cprtjek` | character | code | CPR check | 2004-12 to 2026-06 |
 | `cprtype` | character | code | CPR type | 2004-12 to 2026-06 |
-| `version` | character | code | Module data version | 2004-12 to 2026-06 |
+| `version` | numeric | code | Module data version | 2004-12 to 2026-06 |
+| `betalingskom` | character | code | Betalingskommune | 1985 to 2026 |
 
 - **`mor_id`:** A pnr-like identifier for the mother, so BEF can be turned into a family structure without a separate register. It is only filled where the link is registered, which is not the case for everyone born before CPR.
 - **`fdato`:** Not on DST's variable list for BEF, which documents foed_dag instead. Present in this delivery. Prefer foed_dag unless you have checked what yours contains.
@@ -57,6 +58,8 @@
 - **`adresse_id`:** Identifies a dwelling, so two people with the same value live at the same address. It is not a geographic coordinate and cannot be decoded into one.
 
 </details>
+
+*The Type column is read off the column name for 1 of these 41 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `pnr`.
 
@@ -77,6 +80,13 @@
 - **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 - **`civst`:** Codes P, O and L came in with the registered-partnership act of 1 October 1989; before that the set was smaller. Registered partnerships could no longer be entered into from 15 June 2012.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality.
+
+Where these values come from:
+
+- **`koen`:** [DST's variable list for BEF](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
+- **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
+- **`civst`:** [DST's variable list for BEF](https://www.dst.dk/da/Statistik/dokumentation/Times/cpr-oplysninger/civst).
+- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts).
 
 </details>
 

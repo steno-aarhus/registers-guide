@@ -2,24 +2,24 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| **`recnum`** | character | join key | Contact identifier |  |
-| `pnr` | character | identifier | Personal identifier |  |
-| `d_inddto` | date | date | Date of admission |  |
-| `d_uddto` | date | date | Date of discharge |  |
-| `c_pattype` | character | code | Patient type |  |
-| `c_spec` | character | code | Specialty |  |
-| `c_adiag` | character | code | Action diagnosis |  |
+| **`recnum`** | character | join key | Contact identifier | 1977 to 2019 |
+| `pnr` | character | identifier | Personal identifier | 1977 to 2019 |
+| `d_inddto` | date | date | Date of admission | 1977 to 2019 |
+| `d_uddto` | date | date | Date of discharge | 1977 to 2019 |
+| `c_pattype` | character | code | Patient type | 1977 to 2019 |
+| `c_spec` | character | code | Specialty | 1977 to 2019 |
+| `c_adiag` | character | code | Action diagnosis | 1977 to 2019 |
 | `c_indm` | character | code | Admission mode | 1977 to 2019 |
 | `year` | integer | date | Register year |  |
 
 <details>
-<summary>All other columns (10)</summary>
+<summary>All other columns (43)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `c_sgh` | character | code | Hospital |  |
-| `c_afd` | character | code | Department |  |
-| `v_alder` | integer | value | Age at the start of the contact |  |
+| `c_sgh` | character | code | Hospital | 1977 to 2019 |
+| `c_afd` | character | code | Department | 1977 to 2019 |
+| `v_alder` | numeric | value | Age at the start of the contact | 1977 to 2019 |
 | `c_udm` | character | code | Discharge mode | 1987 to 2019 |
 | `c_henm` | character | code | Referral mode | 1987 to 2019 |
 | `c_kontaars` | character | code | Reason for the contact | 1987 to 2019 |
@@ -27,13 +27,49 @@
 | `c_amt` | character | code | County | 2005 to 2019 |
 | `v_sengdage` | numeric | value | Bed days | 1994 to 2019 |
 | `v_behdage` | numeric | value | Treatment days | 1977 to 2001 |
+| `c_sex` | character | code | Sex | 1977 to 2019 |
+| `cprtjek` | character | code | CPR-tjek | 1977 to 2019 |
+| `cprtype` | character | code | CPR-type | 1977 to 2019 |
+| `c_andenbeh` | character | code | 28490 | 1986 to 1900 |
+| `c_blok` | character | code | Inddeling af speciale i blokke | 1994 to 2019 |
+| `c_eakt` | character | code | Ulykkeskode, aktivitet | 1987 to 2003 |
+| `c_emek` | character | code | 32142 | 2003 to 1900 |
+| `c_emodpart` | character | code | Ulykkeskode, modpart | 1994 to 2003 |
+| `c_epart` | character | code | Ulykkeskode, egenpart | 1994 to 2003 |
+| `c_ested` | character | code | Ulykkeskode, sted | 1987 to 2003 |
+| `c_etraf` | character | code | Ulykkeskode, trafikal | 1987 to 2003 |
+| `c_hafd` | character | code | Henvisende afdeling | 2004 to 2019 |
+| `c_hsgh` | character | code | Henvisende sygehus | 2004 to 2019 |
+| `c_indform` | character | code | 28490 | 1986 to 1900 |
+| `c_indfra` | character | code | 28490 | 1986 to 1900 |
+| `c_kom` | character | code | Kommune | 1977 to 2019 |
+| `c_nyafd` | character | code | 38717 | 2019 to 1900 |
+| `c_senstat` | character | code | 28490 | 1986 to 1900 |
+| `c_sghamt` | character | code | Sygehusamt | 1977 to 2019 |
+| `c_udtil` | character | code | 28490 | 1986 to 1900 |
+| `c_ulykke` | character | code | 28490 | 1986 to 1900 |
+| `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) | 1996 to 2019 |
+| `d_fusdto` | date | date | Dato for forundersøgelse (Variabel udgået efter 31.12.2003) | 1996 to 2019 |
+| `d_hendto` | date | date | Henvisningsdato | 1977 to 2019 |
+| `d_opdatdto` | date | date | Intern dato for opdatering af kontakten | 2005 to 2019 |
+| `k_afd` | character | code | Afdelingskode | 2005 to 2019 |
+| `leverancedato` | date | date | 28490 | 2019 to 1900 |
+| `version` | character | code | Version | 1977 to 2019 |
+| `v_alddg` | numeric | value | Alder i dage ved kontaktens start | 2001 to 2019 |
+| `v_aldmdr` | numeric | value | Alder i måneder ved kontaktens start | 2001 to 2019 |
+| `v_indminut` | numeric | value | Indlæggelsminut | 1994 to 2019 |
+| `v_indtime` | numeric | date | Indlæggelsestidspunkt | 1977 to 2019 |
+| `v_udtime` | numeric | value | Udskrivningstime | 1994 to 2019 |
 
 - **`c_udm`:** Starts in 1987, ten years after the register itself.
 - **`c_bopamt`:** Ends with the counties themselves: the 2007 local government reform is already visible here in 2004/2005, where c_bopamt stops and c_amt starts. Neither covers the whole register, so a geographic analysis spanning that point needs both.
 - **`v_sengdage`:** Starts in 1994. Before that, compute the stay from d_inddto and d_uddto instead.
 - **`v_behdage`:** Ends in 2001.
+- **`c_sex`:** The coding changes in 2005, from 1/2 to M/K. Prefer koen from BEF for a study variable.
 
 </details>
+
+*The Type column is read off the column name for 20 of these 52 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `recnum`.
 
@@ -42,15 +78,26 @@
 - `recnum` joins to **LPR_DIAG** (one-to-many).
 
 <details>
-<summary>Value sets for the coded columns (2)</summary>
+<summary>Value sets for the coded columns (4)</summary>
 
 | Code system | Values |
 | --- | --- |
-| `pattype` | `0` Heldoegns indlaeggelse, `1` Deldoegns indlaeggelse, `2` Ambulant, `3` Skadestue, `4` Dagpatient, `5` Natpatient |
+| `pattype` | `0` Heldoegnspatient (to 2001), Indlagt patient (2002-), `1` Dagpatient (to 1986), Deldoegnspatient (1987-2001), `2` Natpatient (to 1986), Ambulant patient (1987-), `3` Skadestuepatient |
 | `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
+| `indm` | `1` Akut, `2` Ikke akut, `9` Uoplyst |
+| `sex_lpr` | `1` Mand (to 2004), `2` Kvinde (to 2004), `M` Mand (2005-), `K` Kvinde (2005-) |
 
-- **`pattype`:** Do not read this as a simple three-way split. The emergency-room coding changed around 2014: before then an ER visit is mostly `"3"`, afterwards it usually arrives as `"2"` with an acute admission mode in `c_indm`. Classifying on `c_pattype` alone therefore counts ER visits as outpatient for the later years. The extraction chapter has the full rule.
+- **`pattype`:** There are four codes, not six, and they changed meaning. Code `1` was Dagpatient until 1986 and Deldoegnspatient from 1987; code `2` was Natpatient until 1986 and Ambulant from 1987. The register only started using `1`, `2` and `3` in 1994, so before that essentially every contact is `0`. Code `3` was discontinued at the end of 2013, and from 2014 an emergency-room visit arrives as `2` with an acute admission mode in `c_indm`. Reading `2` as outpatient across the whole register therefore mislabels night patients before 1987 and emergency visits after 2013.
 - **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
+- **`indm`:** From 2014 this is what separates an emergency-room visit from an ordinary outpatient one, because `c_pattype` code `3` was discontinued and both arrive as `2`. Code `9` (Uoplyst) stops at the end of 2003, so a missing value after that is genuinely missing rather than coded as unknown.
+- **`sex_lpr`:** The coding changed at the start of 2005: `1`/`2` until the end of 2004, `M`/`K` from 2005. A study spanning that year that filters on `c_sex == "2"` keeps only the women seen before 2005 and silently drops the rest, with no error and no empty result to warn you. Take sex from BEF instead, where it is `koen` coded `1`/`2` throughout, unless you specifically need what the hospital recorded.
+
+Where these values come from:
+
+- **`pattype`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
+- **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`indm`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
+- **`sex_lpr`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
 
 </details>
 

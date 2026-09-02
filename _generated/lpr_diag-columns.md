@@ -2,20 +2,24 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| **`recnum`** | character | join key | Contact identifier |  |
-| `c_diag` | character | code | Diagnosis code |  |
-| `c_diagtype` | character | code | Diagnosis type |  |
+| **`recnum`** | character | join key | Contact identifier | 1977 to 2019 |
+| `c_diag` | character | code | Diagnosis code | 1977 to 2019 |
+| `c_diagtype` | character | code | Diagnosis type | 1977 to 2019 |
 | `c_tildiag` | character | code | Supplementary diagnosis | 1995 to 2019 |
 | `year` | integer | date | Register year |  |
 
 <details>
-<summary>All other columns (1)</summary>
+<summary>All other columns (3)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
 | `c_diagmod` | character | code | Diagnosis modification | 1977 to 1994 |
+| `leverancedato` | date | date | 28490 | 2019 to 1900 |
+| `version` | character | code | Version | 1977 to 2019 |
 
 </details>
+
+*The Type column is read off the column name for 5 of these 8 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `recnum`.
 
@@ -29,10 +33,15 @@
 | Code system | Values |
 | --- | --- |
 | `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
-| `diagtype` | `A`, `B`, `G` |
+| `diagtype` | `A` Aktionsdiagnose, `B` Bidiagnose, `G` Grundmorbus, naar forskellig fra aktionsdiagnose, `H` Henvisningsdiagnose, `M` Midlertidig diagnose, kun for aabne somatisk ambulante besoeg, `C` Komplikation |
 
 - **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
-- **`diagtype`:** Which types to keep is a case definition, not a technicality. Outcomes and exclusion diagnoses normally use A and B; baseline comorbidity also uses G. Keeping only A drops secondary diagnoses and will undercount conditions. Carry the type column into the extract so the definition can be varied later. The set is taken from the guide and may not be complete.
+- **`diagtype`:** The guide long described this as an A/B/G column. There are six codes, and three of them stop: **G runs 1995-2003 only**, M 1998-2013 and C 2002-2013. A and B run the whole period, H from 1995. So a comorbidity definition built on G silently covers nine years and nothing else, and filtering to A/B/G drops referral diagnoses entirely. Which types to keep is a case definition, not a technicality: outcomes usually use A and B. Carry the type column into the extract so the definition can be varied later.
+
+Where these values come from:
+
+- **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`diagtype`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
 
 </details>
 

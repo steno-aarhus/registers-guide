@@ -1,0 +1,235 @@
+# Laboratoriedatabasens Forskertabel (acronym LAB_F, main table Lab_dm_forsker).
+# Held by Sundhedsdatastyrelsen, not DST: it does not appear in DST's register
+# list at all, and a project reaches it through Forskerservice.
+#
+# Column names come from Sundhedsdatastyrelsen's own documentation and were
+# cross-checked against a delivery. The delivery also carries two narrower
+# tables, lab_forsker (no samplingtime, no resultvalidation) and
+# laboratorieproevesvar (four columns, with cprnummer and samplevalue instead of
+# patient_cpr and value). Using more than one of them double-counts.
+
+id: lab_dm_forsker
+name: "Laboratoriedatabasens Forskertabel"
+scope: sds
+reference_timing: event
+description: >-
+  One row per laboratory result attached to a request: a blood or other sample,
+  its analyte code, the result and its unit. Very large - well over a billion
+  rows - so filter before collecting.
+source_url: https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen
+coverage: {from: 2008, to: 2025}
+
+join_keys: [patient_cpr]
+
+columns:
+  - id: patient_cpr
+    name: patient_cpr
+    label: {da: "PATIENT_CPR", en: "Personal identifier"}
+    type: character
+    role: join_key
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_source: "Dokumentation af Laboratoriedatabasens Forskertabel v4: Format CHAR, Laengde 10"
+    reader_note: >-
+      Results carrying only a replacement CPR number are filtered out before the
+      research table is built, so every row here has a real personal identifier.
+      The narrower `laboratorieproevesvar` table calls this column `cprnummer`.
+  - id: samplingdate
+    name: samplingdate
+    label: {da: "SAMPLINGDATE", en: "Sampling date"}
+    type: date
+    role: date
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      When the sample was taken, not when the result was reported. This guide
+      previously called the column `samplingdato`, which does not exist.
+  - id: samplingtime
+    name: samplingtime
+    label: {da: "SAMPLINGTIME", en: "Sampling time"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      Not in the narrower `lab_forsker` table.
+  - id: analysiscode
+    name: analysiscode
+    label: {da: "ANALYSISCODE", en: "Analyte code"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      Which analysis was done, coded in NPU or the Danish DNK terminology. This
+      is the column the guide used to call `npu`, which does not exist. Only
+      NPU- and DNK-coded results reach the research table, about 95 per cent of
+      all results: anything coded with a laboratory's own local code is absent.
+  - id: value
+    name: value
+    label: {da: "VALUE", en: "Result"}
+    type: character
+    role: value
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      Text, not a number. Alongside numeric results the table holds a fixed set
+      of words: POSITIV, NEGATIV, NORMAL, IKKE PAAVIST, PAAVIST, INGEN VAEKST,
+      FORHOEJET and the blood-type codes. as.numeric() turns every one of those
+      into NA without warning, which drops exactly the samples where something
+      was found. The narrower `laboratorieproevesvar` table calls this column
+      `samplevalue`.
+  - id: unit
+    name: unit
+    label: {da: "UNIT", en: "Unit"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      Never compare values across laboratories without checking this. Different
+      equipment and sample material mean the same analyte code can need
+      different interpretation, within one laboratory over time as well.
+  - id: resulttype
+    name: resulttype
+    label: {da: "RESULTTYPE", en: "Result type"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      Whether the result is numeric or alphanumeric. Use it to split the two
+      before converting anything.
+  - id: laboratorium_idcode
+    name: laboratorium_idcode
+    label: {da: "LABORATORIUM_IDCODE", en: "Laboratory identifier"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      A MedCom laboratory code. Coverage starts at different dates per
+      laboratory, so this column is what tells you whether a gap in a series is
+      clinical or administrative.
+  - id: referenceinterval_lowerlimit
+    name: referenceinterval_lowerlimit
+    label: {da: "REFERENCEINTERVAL_LOWERLIMIT", en: "Reference interval, lower limit"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+  - id: referenceinterval_upperlimit
+    name: referenceinterval_upperlimit
+    label: {da: "REFERENCEINTERVAL_UPPERLIMIT", en: "Reference interval, upper limit"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+  - id: resultvalidation
+    name: resultvalidation
+    label: {da: "RESULTVALIDATION", en: "Result validation"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4, and a delivered column list"
+      type_inferred: true
+    reader_note: >-
+      Not in the narrower `lab_forsker` table.
+  - id: rekvirent_id
+    name: rekvirent_id
+    label: {da: "REKVIRENT_ID", en: "Requester identifier"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4 - absent from a delivery that was checked"
+      type_inferred: true
+  - id: rekvirent_idtype
+    name: rekvirent_idtype
+    label: {da: "REKVIRENT_IDTYPE", en: "Requester identifier type"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4 - absent from a delivery that was checked"
+      type_inferred: true
+  - id: operator
+    name: operator
+    label: {da: "OPERATOR", en: "Operator"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-02
+      verified_against: "Dokumentation af Laboratoriedatabasens Forskertabel v4 - absent from a delivery that was checked"
+      type_inferred: true
+    reader_note: >-
+      Carries the "less than" or "greater than" sign when a result is reported
+      as below or above a detection limit. Ignoring it turns a censored value
+      into an exact one.

@@ -11,21 +11,29 @@
 | `year` | integer | date | Register year |
 
 <details>
-<summary>All other columns (9)</summary>
+<summary>All other columns (15)</summary>
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| `ydtyp` | character | code | Provider type |
-| `ydltid` | character | code | Service timing code |
-| `ydersamt` | character | code | Provider's county |
-| `bruhon` | numeric | value | Gross fee to the provider |
-| `honuge` | character | date | Fee week |
-| `barnmak` | character | code | Child marker |
-| `pattyp` | character | code | Patient type |
-| `praktyp` | character | code | Practice type |
-| `sikrekom` | character | code | Municipality of the insured |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| `ydtyp` | character | code | Provider type |  |
+| `ydltid` | character | code | Service timing code |  |
+| `ydersamt` | character | code | Provider's county |  |
+| `bruhon` | numeric | value | Gross fee to the provider |  |
+| `honuge` | character | date | Fee week |  |
+| `barnmak` | character | code | Child marker |  |
+| `pattyp` | character | code | Patient type |  |
+| `praktyp` | character | code | Practice type |  |
+| `sikrekom` | character | code | Municipality of the insured |  |
+| `grdhon` | character | code | GRUNDHONORAR | 1997 to 2005 |
+| `henvisni` | character | code | Henvisningsydernummer |  |
+| `paragraf` | character | code | PARAGRAFRELATION | 1997 to 2005 |
+| `praksiso` | character | code | PRAKSISOMRÅDE | 1997 to 2005 |
+| `sikreamt` | character | code | Sikredes amt |  |
+| `vagtomr` | character | code | VAGTOMRÅDE | 1997 to 2005 |
 
 </details>
+
+*The Type column is read off the column name for 21 of these 22 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `pnr`.
 
@@ -38,13 +46,17 @@
 
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality.
 
+Where these values come from:
+
+- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts).
+
 </details>
 
 **Worth knowing:**
 
-- **`ydernr`:** Identifies the practice, not the person treating you. It changes when a practice changes hands, so it does not track a doctor over time.
+- **`ydernr`:** A provider number, not a person. DST's variable list does not say what unit it identifies or whether it is stable when a practice changes hands, so do not use it to follow an individual clinician over time without checking that first.
 - **`speciale`:** The 6-digit specialty code is what distinguishes a GP contact from a specialist one. There is no separate contact-type column: the specialty is the classification.
 - **`ydlant`:** One row can cover several services, so counting rows undercounts activity. Sum this column instead.
-- **`afrper`:** A settlement period, not a treatment date. It says when the fee was settled, which can fall in a later week or month than the contact.
-- **`sikgrup`:** Group 1 patients are listed with a GP and need a referral to see most specialists; group 2 patients may go directly but pay part of the fee. The two groups therefore generate different rows for the same need.
+- **`afrper`:** DST labels this "Afregningsperiode", a settlement period rather than a treatment date. Nothing in the variable list says how far settlement can lag the contact, so check the distribution against honuge before using it as a date.
+- **`sikgrup`:** Group 1 patients need a referral from their GP to see a specialist, physiotherapist, chiropodist or psychologist, and pay nothing. Group 2 patients may go directly to any GP or specialist, but pay the difference between the fee and the regional subsidy themselves. The two groups therefore leave different traces for the same clinical need, so group membership is a confounder in any analysis of specialist use. Source: borger.dk, "Sygesikring og sikringsgrupper".
 - **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.

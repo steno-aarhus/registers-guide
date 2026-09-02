@@ -6,97 +6,99 @@
 | **`familie_id`** | character | join key | Household key |  |
 | `famaekvivadisp_13` | numeric | value | Household-equivalised disposable income |  |
 | `year` | integer | date | Register year |  |
-| `famdisponibel_13` | numeric | value | Disponibel indkomst |  |
-| `famindkomstialt_13` | numeric | value | Indkomst i alt, før skatter mv. |  |
-| `famsociogrup_13` | character | code | Familiens socioøkonomiske gruppe Def13 | 1993 to 2024 |
-| `famtype` | character | code | Familietype |  |
+| `famdisponibel_13` | numeric | value | Disposable income |  |
+| `famindkomstialt_13` | numeric | value | Total income before taxes |  |
+| `famsociogrup_13` | numeric | code | Socioeconomic group, 2013 definition | 1993 to 2024 |
+| `famtype` | numeric | code | Family type |  |
 
 <details>
 <summary>All other columns (79)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `famaekvivadisp` | numeric | value | Ækvivaleret disponibel indkomst for familien | 1990 to 2012 |
-| `famaekvivaindknetto` | numeric | value | Ækvivaleret samlet indkomst med nettorenter | 1990 to 2012 |
-| `famaktieindk` | numeric | value | Aktieindkomster | 1990 to 2009 |
-| `famandenpension` | numeric | value | Andre pensionsudbetalinger til familien |  |
-| `famandoverforsel` | numeric | value | Andre overførsler til familien | 1990 to 2012 |
-| `famantalfskattepligtige` | numeric | value | Antal fuldt skattepligtige voksne i familien |  |
-| `famarbejdsloesp` | numeric | value | Arbejdsløshedsdagpenge og uddannelsesgodtgørelse |  |
-| `famarbmabidrag` | numeric | value | Arbejdsmarkedsbidrag mv |  |
-| `famboernetilskud` | numeric | value | Børnetilskud og familieydelser til familien |  |
-| `famboligform` | character | code | Familiens boligform | 2000 to 2024 |
-| `famboligstoette` | numeric | value | Boligstøtte udbetalt til familien |  |
-| `famboligtype` | character | code | Familiens boligtype | 2000 to 2024 |
-| `fambruttoindk` | numeric | value | Bruttoindkomst for familien | 1990 to 2009 |
-| `famdagpenge_kontant_13` | numeric | value | Familiens samlede dagpenge og kontanthjælp |  |
-| `famdisponibel` | numeric | value | Disponibel indkomst for familien | 1990 to 2012 |
-| `famefterloen` | numeric | value | Efterløn |  |
-| `famejdskat_ejerbolig` | numeric | value | Ejendomsskat for boligejere | 2010 to 2024 |
-| `famejdskat_lejerbolig` | numeric | value | Ejendomsskat for lejere | 2010 to 2024 |
-| `famejendomsvurdering` | numeric | value | Kontant ejendomsværdi |  |
-| `famerhvervsindk` | numeric | value | Erhvervsindkomst for familien | 1990 to 2012 |
-| `famerhvervsindk_13` | numeric | value | Erhvervsindkomst, løn og nettooverskud |  |
-| `famfolkefortid_13` | numeric | value | Folke- og førtidspension i familien |  |
-| `famformrest_ny05` | numeric | value | Familiens nettorestformue ultimo året |  |
-| `famformueaktiver` | numeric | value | Familiens samlede aktiver |  |
-| `famformueindk` | numeric | value | Formueindkomst i alt for familien | 1990 to 2012 |
-| `famformueindk_brutto` | numeric | value | Formueindkomst, brutto i familien |  |
-| `famfradragialt` | numeric | value | Samlet beregnet fradrag for familien | 1990 to 2012 |
-| `famfrynsegoder` | numeric | value | Skattemæssig værdi af frynsegoderne | 1993 to 2009 |
-| `famgaeldialt` | numeric | value | Familiens passiver |  |
-| `famgron_check` | numeric | value | Grøn check | 2010 to 2024 |
-| `famhoejstudda` | character | code | Højeste uddannelse for de voksne | 2000 to 2024 |
-| `famhonny` | numeric | value | AMB. pligtige honorarer |  |
-| `famindkomstialt` | numeric | value | Familieindkomst i alt før skat | 1990 to 2012 |
-| `famkontanthjaelp` | numeric | value | Kontanthjælp for familien | 1990 to 2009 |
-| `famkontanthjaelp_13` | numeric | value | Kontanthjælp i familien |  |
-| `famlejevaerdi` | numeric | value | Beregnet lejeværdi af egen bolig | 1990 to 2012 |
-| `famlejev_egen_bolig` | numeric | value | Beregnet lejeværdi af egen bolig |  |
-| `famloenmv` | numeric | value | Lønindkomst i alt i familien | 1990 to 2012 |
-| `famloenmv_13` | numeric | value | Lønindkomst i alt i familien |  |
-| `fammidlertidyd` | numeric | value | Midlertidige overførselsindkomster | 1990 to 2012 |
-| `famoevrigformue` | numeric | value | Anden formueindkomst for familien | 1990 to 2009 |
-| `famoevrigformue_13` | numeric | value | Øvrige formueindkomster i familien |  |
-| `famoffpens_eftlon_13` | numeric | value | Offentlige pensioner i familien |  |
-| `famoff_overforsel_13` | numeric | value | Familiens offentlige overførsler |  |
-| `famorlovsydelse` | numeric | value | Orlovsydelser udbetalt til familien | 1994 to 2009 |
-| `famoverfoerindk` | numeric | value | Familiens samlede overførselsindkomster | 1990 to 2012 |
-| `famovergangyd` | numeric | value | Familiens samlede overgangsydelse | 1994 to 2006 |
-| `famovrig_dagpenge_akas_13` | numeric | value | Øvrige dagpenge fra A-kasser |  |
-| `famovrig_kontanthjalp_13` | numeric | value | Aktiverings-, ledigheds- og revalideringsydelse |  |
-| `famovrig_overforsel_13` | numeric | value | Øvrige overførselsindkomster i familien |  |
-| `fampensionatp` | numeric | value | Pensionsudbetaling fra ATP for familien |  |
-| `fampensionialt` | numeric | value | Pensioner i alt for familien | 1990 to 2012 |
-| `fampensoffentlig` | numeric | value | Folke- og førtidspension for familien | 1990 to 2009 |
-| `fampenstjeneste` | numeric | value | Tjenestemandspension for familien |  |
-| `famprivat_pension_13` | numeric | value | Private pensioner i familien |  |
-| `famrenteindk` | numeric | value | Samlede renteindtægter fra Danmark | 1990 to 2009 |
-| `famrenteindk_13` | numeric | value | Familiens samlede skattepligtige renteindtægter |  |
-| `famrenteudgifter` | numeric | value | Samlede fradragsberettigede renteudgifter | 1990 to 2012 |
-| `famrenteudgifter_13` | numeric | value | Renteudgifter |  |
-| `famrestbistandsyd` | numeric | value | Andre ydelser fra kommuner og A-kasser | 1990 to 2009 |
-| `famrestindk` | numeric | value | Diverse indkomster ikke klassificeret | 1990 to 2012 |
-| `famrestindk_13` | numeric | value | Anden personlig indkomst i familien |  |
-| `famsamletindk` | numeric | value | Samlet indkomst for familien | 1990 to 2009 |
-| `famskatfriyd` | numeric | value | Skattefrie indkomster i familien | 1990 to 2012 |
-| `famskatmvialt` | numeric | value | Skat og arbejdsmarkedsbidrag betalt | 1990 to 2012 |
-| `famskatmvialt_13` | numeric | value | Skat, arbejdsmarkedsbidrag og særlig pension |  |
-| `famskatpligtindk` | numeric | value | Skattepligtig indkomst for familien |  |
-| `famskattot` | numeric | value | Samlet indkomstskat betalt af familien | 1990 to 2009 |
-| `famskattot_13` | numeric | value | Samlet personlig slutskat for en skatteyder |  |
-| `famsociogrup` | character | code | Familiens socioøkonomiske gruppe | 1994 to 2009 |
-| `famsu` | numeric | value | Stipendier fra Statens Uddannelsesstøtte - SU |  |
-| `famsumindknettorent` | numeric | value | Samlet indkomst med nettorenter | 1990 to 2012 |
-| `famsyg_barsel_13` | numeric | value | Familiens syge- og barselsdagpenge |  |
-| `famtransportfradrag` | numeric | value | Samlet befordringsfradrag i familien | 1990 to 2009 |
-| `famunderhbidrag` | numeric | value | Underholdsbidrag betalt af familien |  |
-| `famvirkordind` | numeric | value | Beløb indsat i virksomhedsordningerne |  |
-| `famvirkoverskud` | numeric | value | Nettooverskud af selvstændig virksomhed | 1990 to 2009 |
-| `famvirkoverskud_13` | numeric | value | Familiens samlede overskud af selvstændig virksomhed |  |
-| `version` | character | code | Moduldata version |  |
+| `famaekvivadisp` | numeric | value | Equivalised disposable family income | 1990 to 2012 |
+| `famaekvivaindknetto` | numeric | value | Equivalised total income including net interest | 1990 to 2012 |
+| `famaktieindk` | numeric | value | Share income | 1990 to 2009 |
+| `famandenpension` | numeric | value | Other pension payments to the family |  |
+| `famandoverforsel` | numeric | value | Other transfers to the family | 1990 to 2012 |
+| `famantalfskattepligtige` | numeric | value | Number of fully taxable adults in the family |  |
+| `famarbejdsloesp` | numeric | value | Unemployment benefit and training allowance |  |
+| `famarbmabidrag` | numeric | value | Labour market contributions |  |
+| `famboernetilskud` | numeric | value | Child benefit and family allowances |  |
+| `famboligform` | numeric | code | Housing tenure | 2000 to 2024 |
+| `famboligstoette` | numeric | value | Housing benefit paid to the family |  |
+| `famboligtype` | numeric | code | Dwelling type | 2000 to 2024 |
+| `fambruttoindk` | numeric | value | Gross family income | 1990 to 2009 |
+| `famdagpenge_kontant_13` | numeric | value | Total benefits and social assistance |  |
+| `famdisponibel` | numeric | value | Disposable family income | 1990 to 2012 |
+| `famefterloen` | numeric | value | Early retirement pay |  |
+| `famejdskat_ejerbolig` | numeric | value | Property tax, homeowners | 2010 to 2024 |
+| `famejdskat_lejerbolig` | numeric | value | Property tax, tenants | 2010 to 2024 |
+| `famejendomsvurdering` | numeric | value | Cash property value |  |
+| `famerhvervsindk` | numeric | value | Business income for the family | 1990 to 2012 |
+| `famerhvervsindk_13` | numeric | value | Business income: wages and net profit |  |
+| `famfolkefortid_13` | numeric | value | State and early retirement pension in the family |  |
+| `famformrest_ny05` | numeric | value | Net residual wealth at year end |  |
+| `famformueaktiver` | numeric | value | Total assets |  |
+| `famformueindk` | numeric | value | Total capital income for the family | 1990 to 2012 |
+| `famformueindk_brutto` | numeric | value | Capital income, gross |  |
+| `famfradragialt` | numeric | value | Total calculated deductions | 1990 to 2012 |
+| `famfrynsegoder` | numeric | value | Taxable value of fringe benefits | 1993 to 2009 |
+| `famgaeldialt` | numeric | value | Liabilities |  |
+| `famgron_check` | numeric | value | Green check | 2010 to 2024 |
+| `famhoejstudda` | character | code | Highest education among the adults | 2000 to 2024 |
+| `famhonny` | numeric | value | Fees liable to labour market contributions |  |
+| `famindkomstialt` | numeric | value | Total family income before tax | 1990 to 2012 |
+| `famkontanthjaelp` | numeric | value | Social assistance for the family | 1990 to 2009 |
+| `famkontanthjaelp_13` | numeric | value | Social assistance in the family |  |
+| `famlejevaerdi` | numeric | value | Imputed rental value of owner-occupied dwelling | 1990 to 2012 |
+| `famlejev_egen_bolig` | numeric | value | Imputed rental value of owner-occupied dwelling |  |
+| `famloenmv` | numeric | value | Total wage income in the family | 1990 to 2012 |
+| `famloenmv_13` | numeric | value | Total wage income in the family |  |
+| `fammidlertidyd` | numeric | value | Temporary transfer incomes | 1990 to 2012 |
+| `famoevrigformue` | numeric | value | Other capital income for the family | 1990 to 2009 |
+| `famoevrigformue_13` | numeric | value | Other capital incomes in the family |  |
+| `famoffpens_eftlon_13` | numeric | value | Public pensions in the family |  |
+| `famoff_overforsel_13` | numeric | value | Public transfers to the family |  |
+| `famorlovsydelse` | numeric | value | Leave benefits paid to the family | 1994 to 2009 |
+| `famoverfoerindk` | numeric | value | Total transfer incomes | 1990 to 2012 |
+| `famovergangyd` | numeric | value | Total transitional allowance | 1994 to 2006 |
+| `famovrig_dagpenge_akas_13` | numeric | value | Other benefits from unemployment funds |  |
+| `famovrig_kontanthjalp_13` | numeric | value | Activation, unemployment and rehabilitation allowance |  |
+| `famovrig_overforsel_13` | numeric | value | Other transfer incomes in the family |  |
+| `fampensionatp` | numeric | value | ATP pension payments |  |
+| `fampensionialt` | numeric | value | Total pensions for the family | 1990 to 2012 |
+| `fampensoffentlig` | numeric | value | State and early retirement pension | 1990 to 2009 |
+| `fampenstjeneste` | numeric | value | Civil servant pension |  |
+| `famprivat_pension_13` | numeric | value | Private pensions in the family |  |
+| `famrenteindk` | numeric | value | Total interest income from Denmark | 1990 to 2009 |
+| `famrenteindk_13` | numeric | value | Total taxable interest income |  |
+| `famrenteudgifter` | numeric | value | Total deductible interest expenses | 1990 to 2012 |
+| `famrenteudgifter_13` | numeric | value | Interest expenses |  |
+| `famrestbistandsyd` | numeric | value | Other benefits from municipalities and unemployment funds | 1990 to 2009 |
+| `famrestindk` | numeric | value | Miscellaneous unclassified income | 1990 to 2012 |
+| `famrestindk_13` | numeric | value | Other personal income in the family |  |
+| `famsamletindk` | numeric | value | Total income for the family | 1990 to 2009 |
+| `famskatfriyd` | numeric | value | Tax-free incomes in the family | 1990 to 2012 |
+| `famskatmvialt` | numeric | value | Tax and labour market contributions paid | 1990 to 2012 |
+| `famskatmvialt_13` | numeric | value | Tax, labour market contributions and special pension |  |
+| `famskatpligtindk` | numeric | value | Taxable income for the family |  |
+| `famskattot` | numeric | value | Total income tax paid | 1990 to 2009 |
+| `famskattot_13` | numeric | value | Total personal final tax |  |
+| `famsociogrup` | numeric | code | Socioeconomic group | 1994 to 2009 |
+| `famsu` | numeric | value | State education grants (SU) |  |
+| `famsumindknettorent` | numeric | value | Total income including net interest | 1990 to 2012 |
+| `famsyg_barsel_13` | numeric | value | Sickness and maternity benefits |  |
+| `famtransportfradrag` | numeric | value | Total commuting deduction | 1990 to 2009 |
+| `famunderhbidrag` | numeric | value | Maintenance payments made by the family |  |
+| `famvirkordind` | numeric | value | Amounts placed in the business tax schemes |  |
+| `famvirkoverskud` | numeric | value | Net profit from self-employment | 1990 to 2009 |
+| `famvirkoverskud_13` | numeric | value | Total profit from self-employment |  |
+| `version` | numeric | code | Module data version |  |
 
 </details>
+
+*The Type column is read off the column name for 67 of these 87 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `familie_id`.
 
@@ -106,7 +108,11 @@
 
 **How it is computed:**
 
-- `FAMAEKVIVADISP_13 = FAMDISPONIBEL_13 / (1 + (0.5 * (number of people over 14 in the family - 1)) + (0.3 * number of people under 15 in the family))`
+**`famaekvivadisp_13`**
+
+```
+FAMAEKVIVADISP_13 = FAMDISPONIBEL_13 / (1 + (0.5 * (number of people over 14 in the family - 1)) + (0.3 * number of people under 15 in the family))
+```
 
 **Worth knowing:**
 

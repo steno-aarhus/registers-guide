@@ -33,6 +33,8 @@
 
 </details>
 
+*The Type column is read off the column name for 17 of these 18 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
+
 **Join key:** `pnr`.
 
 <details>
@@ -43,6 +45,10 @@
 | `hfaudd` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd) |
 
 - **`hfaudd`:** This is an identifier, not a scale. The level (short, medium, long) has to be looked up in a separate table, and cannot be read off the digits: 4112 is an electrician, and taking the first two digits as a level code makes it a long higher education. DST documents the ongoing-education codes separately as DISCED-15 UDD.
+
+Where these values come from:
+
+- **`hfaudd`:** [DST's DISCED-15 classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd).
 
 </details>
 
