@@ -13,7 +13,10 @@ ALLOWED_ROLES <- c("join_key", "identifier", "date", "value", "code", "derived")
 ALLOWED_SOURCE_TYPES <- c("dst_variable_list", "dst_documentation", "nomenclature",
                           "server_verified", "guide_prose", "unknown")
 ALLOWED_ORIGINS <- c("dst", "tooling")
-ALLOWED_SCOPES <- c("dst", "project")
+# "sds" is a register held by Sundhedsdatastyrelsen rather than DST. It reaches
+# a project through Forskerservice, so the documentation, the naming and the
+# ordering process are all different from a DST register's.
+ALLOWED_SCOPES <- c("dst", "sds", "project")
 # DST's own reference types, from its register overview: a snapshot on a date,
 # a population fixed on a date with values accumulated over a period, rows with
 # a start and an end, or one row per event.
