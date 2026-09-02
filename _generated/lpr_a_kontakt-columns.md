@@ -67,7 +67,7 @@
 - **`dw_ek_borger`:** An internal person key. Use pnr for joins to other registers; this one does not travel outside LPR3.
 - **`kont_indb_tidspunkt`:** When the contact was reported, not when it happened. Recent months look incomplete because reporting lags.
 - **`flag_kont_afsluttet`:** An open contact has no end time yet, so durations computed near the end of the data are wrong rather than missing.
-- **`borger_koen`:** Sex as recorded on the contact. It arrives as text, not a number, unlike BEF's koen, and which values it uses in LPR3 has not been checked - LPR2's c_sex switched from 1/2 to M/K in 2005, so do not assume either. BEF is the source to prefer for a study variable.
+- **`borger_koen`:** Sex as recorded on the contact, as text rather than a number. **The value set is unknown and this schema does not record one.** Sundhedsdatastyrelsen publishes no variable documentation for LPR3, and the neighbouring register is no guide: LPR2's c_sex switched from 1/2 to M/K in 2005, so both codings exist in the family. Do not assume either. If you need sex as a study variable, take koen from BEF, which is documented and stable; if you need what the hospital recorded, check what your own column contains before filtering on it.
 - **`borger_foedselsdato`:** A copy from CPR carried on the contact, so it only exists for people who had a hospital contact. BEF is the source to use for a study variable.
 - **`borger_doedsdato`:** A death date carried on the contact. It is not a death register: use DOD for mortality, or you only see people who had a hospital contact.
 
