@@ -656,6 +656,20 @@ check_schema <- function() {
   for (f in setdiff(list.files(gen_dir, pattern = "\\.md$"), fresh)) {
     warn("_generated/", f, " has no register in the schema - left over from a rename?")
   }
+
+  # The variable index lives in assets/ rather than _generated/, because Quarto
+  # does not copy anything under a directory starting with an underscore and the
+  # browser fetches this one at runtime. It drifts the same way, so check it too.
+  vj <- file.path(ROOT, "assets", "variables.json")
+  vj_fresh <- file.path(dirname(tmp), "assets", "variables.json")
+  if (!file.exists(vj)) {
+    fail("assets/variables.json is missing. Run: just build-schema-tables")
+    n_drift <- n_drift + 1
+  } else if (file.exists(vj_fresh) &&
+             !identical(readLines(vj, warn = FALSE), readLines(vj_fresh, warn = FALSE))) {
+    fail("assets/variables.json does not match the schema. Run: just build-schema-tables")
+    n_drift <- n_drift + 1
+  }
   cat("Compared ", length(fresh), " generated table(s), ", n_drift, " out of date.\n", sep = "")
 }
 

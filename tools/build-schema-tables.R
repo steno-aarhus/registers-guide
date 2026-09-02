@@ -258,6 +258,59 @@ build_overview <- function(schema = load_schema()) {
   cat("wrote", normalizePath(path, mustWork = FALSE), "\n")
 }
 
+# The variable index ------------------------------------------------------------
+#
+# Every column in every register as one JSON array, for the "Find a variable"
+# page. Written from the same schema as the tables, so it cannot drift from them.
+# No dependency beyond base R: the strings are escaped by hand rather than
+# pulling in a JSON package the loader does not otherwise need.
+
+json_string <- function(x) {
+  if (is.null(x) || length(x) == 0 || is.na(x[1])) return("null")
+  x <- gsub("\\\\", "\\\\\\\\", as.character(x[1]))
+  x <- gsub('"', '\\\\"', x)
+  x <- gsub("[\r\n\t]+", " ", x)
+  paste0('"', x, '"')
+}
+
+build_variable_index <- function(schema = load_schema()) {
+  rows <- character()
+  for (id in sort(names(schema$registers))) {
+    r <- get_register(id, schema)
+    for (cl in r$columns) {
+      cov <- {
+        f <- as.character(cl$coverage$from %||% ""); t <- as.character(cl$coverage$to %||% "")
+        if (!nzchar(f) && !nzchar(t)) "null" else json_string(paste0(f, " to ", t))
+      }
+      rows <- c(rows, paste0(
+        "{", paste(c(
+          paste0('"name":', json_string(cl$name)),
+          paste0('"register":', json_string(id)),
+          paste0('"register_name":', json_string(r$name)),
+          paste0('"label":', json_string(cl$label$en %||% cl$label$da)),
+          paste0('"type":', json_string(cl$type)),
+          paste0('"role":', json_string(cl$role)),
+          paste0('"key":', if (isTRUE(cl$key)) "true" else "false"),
+          paste0('"type_inferred":', if (isTRUE(cl$provenance$type_inferred)) "true" else "false"),
+          paste0('"coverage":', cov),
+          paste0('"code_system":', json_string(cl$code_system)),
+          paste0('"note":', json_string(if (is.null(cl$reader_note)) NULL
+                                        else gsub("\\s+", " ", cl$reader_note))),
+          paste0('"source_url":', json_string(r$source_url))
+        ), collapse = ","), "}"))
+    }
+  }
+  # assets/, not _generated/: Quarto does not copy anything under a directory
+  # starting with an underscore, and this file is fetched by the browser at
+  # runtime rather than included at render time.
+  dir <- file.path(dirname(OUT), "assets")
+  dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+  path <- file.path(dir, "variables.json")
+  writeLines(c("[", paste0(rows, collapse = ",\n"), "]"), path)
+  cat("wrote", normalizePath(path, mustWork = FALSE), "(", length(rows), "columns )\n")
+}
+
 schema <- load_schema()
 for (id in names(schema$registers)) build_register(id, schema)
 build_overview(schema)
+build_variable_index(schema)
