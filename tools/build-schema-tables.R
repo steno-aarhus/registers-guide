@@ -224,5 +224,40 @@ build_register <- function(id, schema = load_schema()) {
   cat("wrote", normalizePath(path, mustWork = FALSE), "\n")
 }
 
+# The overview table -----------------------------------------------------------
+#
+# It used to be maintained by hand, and drifted: it still said LPR3 started in
+# March 2019 after the schema had been corrected to 2017, and gave LMDB as
+# "approx. 1994+" against DST's 1995Q2. Same facts, one source.
+
+build_overview <- function(schema = load_schema()) {
+  ids <- sort(names(schema$registers))
+  rows <- lapply(ids, function(id) {
+    r <- get_register(id, schema)
+    per <- {
+      f <- as.character(r$coverage$from %||% ""); t <- as.character(r$coverage$to %||% "")
+      if (!nzchar(f) && !nzchar(t)) "*not recorded*" else paste0(f, " to ", t)
+    }
+    keys <- vapply(Filter(function(x) isTRUE(x$key), r$columns), function(x) x$name, character(1))
+    keys <- setdiff(keys, unlist(r$join_keys))
+    nm <- if (!is.null(r$source_url)) paste0("[", toupper(id), "](", r$source_url, ")") else toupper(id)
+    data.frame(
+      Register = nm,
+      `Read as` = paste0("`\"", id, "\"`"),
+      `Join key` = paste0("`", paste(unlist(r$join_keys), collapse = "`, `"), "`"),
+      Period = per,
+      `Often used` = if (length(keys)) paste0("`", paste(head(keys, 3), collapse = "`, `"), "`") else "",
+      check.names = FALSE, stringsAsFactors = FALSE
+    )
+  })
+  out <- c(
+    "<!-- Generated from schema/registers/ by tools/build-schema-tables.R. Do not edit by hand. -->",
+    "", md_table(do.call(rbind, rows)))
+  path <- file.path(OUT, "register-overview.md")
+  writeLines(out, path)
+  cat("wrote", normalizePath(path, mustWork = FALSE), "\n")
+}
+
 schema <- load_schema()
 for (id in names(schema$registers)) build_register(id, schema)
+build_overview(schema)
