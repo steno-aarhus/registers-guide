@@ -109,6 +109,28 @@ build_register <- function(id, schema = load_schema()) {
     out <- c(out, md_table(drop_empty_years(cols)), "")
   }
 
+  # Where DST publishes no labels, the English ones here are readings of the
+  # column names. A reader cannot tell that from the table, so say it.
+  unlabelled <- sum(vapply(reg$columns, function(x)
+    grepl("gives no label", x$provenance$verified_against %||% "", fixed = TRUE), logical(1)))
+  if (unlabelled > 0) {
+    out <- c(out, paste0(
+      "*DST publishes no labels for ", unlabelled, " of these columns. ",
+      "Where the Label column is filled in anyway, it is this guide's reading of ",
+      "the column name, not an official description.*"), "")
+  }
+
+  inferred <- sum(vapply(reg$columns,
+    function(x) isTRUE(x$provenance$type_inferred), logical(1)))
+  if (inferred > 0) {
+    out <- c(out, paste0(
+      "*The Type column is read off the column name for ", inferred, " of these ",
+      nrow(cols), " columns: no published source gives a data type for them. ",
+      "Check with `sapply(class)` on a row of your own data before relying on it, ",
+      "especially for code columns, which lose their leading zeros if they arrive ",
+      "as numbers.*"), "")
+  }
+
   # 2. joins - this is what "Household key - join to FAIK" used to say in a cell
   if (length(reg$join_keys)) {
     out <- c(out, paste0("**Join key:** ",
@@ -145,6 +167,21 @@ build_register <- function(id, schema = load_schema()) {
                          paste0("- **`", cid, "`:** ", gsub("\\s+", " ", cs$reader_note))
                        }))
     if (length(cs_notes)) out <- c(out, unlist(cs_notes), "")
+
+    # Where the values came from. An enumerated set lists its codes rather than
+    # linking out, so without this the reader has no way back to the source.
+    # Both links: the document itself, and the page it is published on.
+    cs_src <- Filter(Negate(is.null), lapply(unlist(used), function(cid) {
+      cs <- schema$code_systems[[cid]]
+      if (is.null(cs$source_url)) return(NULL)
+      nm <- cs$source_name %||% "source"
+      line <- paste0("- **`", cid, "`:** [", nm, "](", cs$source_url, ")")
+      if (!is.null(cs$source_page))
+        line <- paste0(line, ", published on [", sub("^https?://([^/]+).*$", "\\1", cs$source_page),
+                       "](", cs$source_page, ")")
+      paste0(line, ".")
+    }))
+    if (length(cs_src)) out <- c(out, "Where these values come from:", "", unlist(cs_src), "")
     out <- c(out, "</details>", "")
   }
 
@@ -154,12 +191,15 @@ build_register <- function(id, schema = load_schema()) {
   # Rendering both put provenance chatter on the page.
   derived <- Filter(function(x) !is.null(x$derivation), reg$columns)
   if (length(derived)) {
-    lines <- vapply(derived, function(x) {
+    lines <- unlist(lapply(derived, function(x) {
       d <- gsub("\\s+", " ", x$derivation)
+      # A long formula in inline code cannot wrap, so it runs off the page and
+      # under the sidebar. Give it a fenced block, which scrolls on its own.
+      if (nchar(d) > 70) c(paste0("**`", x$name, "`**"), "", "```", d, "```")
       # The source may state the formula with the variable name already in it.
-      if (grepl("=", d, fixed = TRUE)) paste0("- `", d, "`")
+      else if (grepl("=", d, fixed = TRUE)) paste0("- `", d, "`")
       else paste0("- **`", x$name, "`** = ", d)
-    }, character(1))
+    }))
     out <- c(out, "**How it is computed:**", "", lines, "")
   }
 
