@@ -96,6 +96,22 @@ validate_schema <- function(schema = load_schema()) {
       }
     }
 
+    # A label that is nothing but digits is an import error, not a label. DST's
+    # order list is a spreadsheet: a variable with no description leaves an empty
+    # cell, and a reader that counts cells by position instead of by reference
+    # shifts the whole row, landing a date serial in the label. That happened on
+    # 2026-09-02 and put "45657" on 54 columns.
+    for (cl in r$columns) {
+      for (lang in c("da", "en")) {
+        lab <- cl$label[[lang]]
+        if (!is.null(lab) && grepl("^[0-9.]+$", lab)) {
+          add(where, ", column '", cl$id, "': label.", lang, " is '", lab,
+              "', which is a number rather than a label - almost certainly a",
+              " column shift when importing from a spreadsheet")
+        }
+      }
+    }
+
     # The generated table shows key columns and folds the rest away. A register
     # with none would render as an empty table above a fold-out holding
     # everything, which looks broken rather than curated.
