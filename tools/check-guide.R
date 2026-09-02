@@ -660,6 +660,27 @@ check_schema <- function() {
   # The variable index lives in assets/ rather than _generated/, because Quarto
   # does not copy anything under a directory starting with an underscore and the
   # browser fetches this one at runtime. It drifts the same way, so check it too.
+  # The search index is harvested from the .qmd sources, so it goes stale the
+  # moment a page is added, renamed or rewritten. Same drift check as the tables.
+  si <- file.path(ROOT, "assets", "search-index.json")
+  si_tmp <- file.path(tempdir(), "search-index-check")
+  unlink(si_tmp, recursive = TRUE)
+  old_si <- Sys.getenv("SEARCH_INDEX_OUT", unset = NA)
+  Sys.setenv(SEARCH_INDEX_OUT = si_tmp)
+  invisible(capture.output(suppressWarnings(try(
+    source(file.path(ROOT, "tools", "build-search-index.R"), local = new.env()),
+    silent = TRUE))))
+  if (is.na(old_si)) Sys.unsetenv("SEARCH_INDEX_OUT") else Sys.setenv(SEARCH_INDEX_OUT = old_si)
+  si_fresh <- file.path(si_tmp, "search-index.json")
+  if (!file.exists(si)) {
+    fail("assets/search-index.json is missing. Run: just build-search-index")
+    n_drift <- n_drift + 1
+  } else if (file.exists(si_fresh) &&
+             !identical(readLines(si, warn = FALSE), readLines(si_fresh, warn = FALSE))) {
+    fail("assets/search-index.json does not match the guide. Run: just build-search-index")
+    n_drift <- n_drift + 1
+  }
+
   vj <- file.path(ROOT, "assets", "variables.json")
   vj_fresh <- file.path(dirname(tmp), "assets", "variables.json")
   if (!file.exists(vj)) {

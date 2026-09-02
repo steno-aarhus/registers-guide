@@ -11,6 +11,11 @@ check-all: check-spelling check-urls check-guide
 build-schema-tables:
   Rscript tools/build-schema-tables.R
 
+# Rebuild the search index from the guide. Run after adding or renaming a page,
+# or after editing .config/search-synonyms.yaml.
+build-search-index:
+  Rscript tools/build-search-index.R
+
 # The weekly once-over: everything that can rot without the build noticing
 check-weekly: check-guide check-urls check-spelling
 

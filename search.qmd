@@ -1,0 +1,195 @@
+---
+title: "Search the guide"
+subtitle: "Search by what you are trying to do, not by the word the register uses"
+date: last-modified
+---
+
+The search box in the top right matches text exactly. This one also knows that
+**emigration** is what you want when you type *moves abroad*, and that
+**hfaudd** is what you want when you type *uddannelse*.
+
+Danish works. The guide is in English, but the words you reach for are probably
+not.
+
+::: {.callout-tip}
+Looking for a **column** rather than an explanation?
+[Find a variable](find-a-variable.qmd) searches all 835 columns across every
+register instead.
+:::
+
+```{=html}
+<div id="gsearch">
+  <input id="gs-q" type="search" autocomplete="off" aria-label="Search the guide"
+         placeholder="What are you trying to do? Try: folk der flytter til udlandet, competing risk, matching">
+  <p id="gs-count" class="gs-count"></p>
+  <div id="gs-results"></div>
+</div>
+
+<style>
+#gsearch { margin: 1.5rem 0; }
+#gs-q { width: 100%; padding: .7rem .9rem; font-size: 1.05rem; border-radius: 6px;
+        border: 1px solid var(--bs-border-color, #ccc); background: var(--bs-body-bg, #fff);
+        color: var(--bs-body-color, #111); }
+.gs-count { font-size: .85rem; opacity: .75; margin: .7rem 0 0; }
+.gs-hit { border-top: 1px solid var(--bs-border-color, #ddd); padding: .9rem 0; }
+.gs-where { font-size: .8rem; opacity: .7; }
+.gs-head { font-size: 1.05rem; font-weight: 600; margin: .15rem 0; }
+.gs-head a { text-decoration: none; }
+.gs-snip { font-size: .9rem; margin: .25rem 0 0; }
+.gs-snip mark { background: rgba(255, 214, 0, .35); color: inherit; padding: 0 .1em; }
+.gs-via { font-size: .8rem; opacity: .75; margin: .3rem 0 0; }
+.gs-empty { padding: 1.5rem 0; opacity: .8; }
+</style>
+
+<script>
+(function () {
+  var SECTIONS = [], SYN = [], EXPAND = {};
+
+  // Without this, "folk der flytter til udlandet" matches almost every section,
+  // because "der" and "til" are everywhere and drown the one word that matters.
+  var STOP = ("a an and are as at be but by can do does for from has have how i " +
+    "if in is it its me my of on or that the their then there they this to was " +
+    "what when where which who why will with you your " +
+    "af alle at bruge da de den der det dette du eller en er et for fra gør har " +
+    "hvad hvor hvordan hvorfor hvilke hvilken i ikke jeg kan man med mig min mine " +
+    "og om på selv skal som til ved vi").split(" ");
+  var q = document.getElementById("gs-q"),
+      out = document.getElementById("gs-results"),
+      count = document.getElementById("gs-count");
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  // Every term in a synonym group expands to the whole group. Longer terms are
+  // matched first so "flytter til udlandet" wins over "udlandet" alone.
+  function buildExpand() {
+    SYN.forEach(function (group) {
+      group.forEach(function (term) {
+        EXPAND[term.toLowerCase()] = group.map(function (t) { return t.toLowerCase(); });
+      });
+    });
+  }
+
+  function expand(query) {
+    var lower = " " + query.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, " ") + " ";
+    var words = lower.trim().split(/\s+/).filter(Boolean);
+    var terms = words.filter(function (w) { return STOP.indexOf(w) === -1 && w.length > 1; });
+    if (!terms.length) terms = words;  // a query of nothing but stop words
+
+    var extra = [], via = [];
+    Object.keys(EXPAND).forEach(function (term) {
+      var hit;
+      if (term.indexOf(" ") !== -1) {
+        hit = lower.indexOf(" " + term + " ") !== -1;
+      } else {
+        // Danish inflects: "censurerer" should reach "censurer", "matcher"
+        // should reach "match". A prefix match in either direction does that,
+        // with a floor of four characters so short words stay literal.
+        hit = terms.some(function (w) {
+          if (w === term) return true;
+          if (term.length < 4 || w.length < 4) return false;
+          return w.indexOf(term) === 0 || term.indexOf(w) === 0;
+        });
+      }
+      if (hit) {
+        EXPAND[term].forEach(function (t) { if (extra.indexOf(t) === -1) extra.push(t); });
+        if (via.indexOf(term) === -1) via.push(term);
+      }
+    });
+    return { terms: terms, all: terms.concat(extra), via: via, extra: extra };
+  }
+
+  function score(sec, all, terms) {
+    var head = (sec.heading + " " + sec.title).toLowerCase(),
+        body = sec.text.toLowerCase(), s = 0;
+    all.forEach(function (t) {
+      var typed = terms.indexOf(t) !== -1;
+      if (head.indexOf(t) !== -1) s += typed ? 12 : 6;
+      var n = body.split(t).length - 1;
+      if (n) s += (typed ? 3 : 1.5) * Math.min(n, 4);
+    });
+    return s;
+  }
+
+  function snippet(text, all) {
+    var lower = text.toLowerCase(), at = -1, hit = "";
+    all.some(function (t) { var i = lower.indexOf(t); if (i !== -1) { at = i; hit = t; return true; } });
+    if (at === -1) return esc(text.slice(0, 200)) + "...";
+    var from = Math.max(0, at - 90), to = Math.min(text.length, at + 150);
+    var s = esc((from ? "..." : "") + text.slice(from, to) + (to < text.length ? "..." : ""));
+    all.forEach(function (t) {
+      if (!t) return;
+      // escape every non-word character so a term like "c_opr (main)" is literal
+      var safe = t.replace(/[^\w\s]/g, "\\$&");
+      s = s.replace(new RegExp("(" + safe + ")", "gi"), "<mark>$1</mark>");
+    });
+    return s;
+  }
+
+  function render() {
+    if (!q.value.trim()) { out.innerHTML = ""; count.textContent = ""; return; }
+    var e = expand(q.value);
+    var hits = SECTIONS.map(function (sec) { return { sec: sec, s: score(sec, e.all, e.terms) }; })
+                       .filter(function (h) { return h.s > 0; })
+                       .sort(function (a, b) { return b.s - a.s; });
+
+    count.textContent = hits.length + " section" + (hits.length === 1 ? "" : "s") +
+      (e.extra.length ? ", including matches on " + e.extra.slice(0, 6).join(", ") : "");
+
+    if (!hits.length) {
+      out.innerHTML = '<p class="gs-empty">Nothing found. Try a single word, or a column name on ' +
+        '<a href="find-a-variable.html">Find a variable</a>. If a search you expected to work ' +
+        'came up empty, the feedback box below is how that gets fixed.</p>';
+      return;
+    }
+
+    out.innerHTML = hits.slice(0, 25).map(function (h) {
+      var sec = h.sec;
+      var href = sec.page.replace(/\.qmd$/, ".html") + (sec.anchor ? "#" + sec.anchor : "");
+      return '<div class="gs-hit">' +
+        '<div class="gs-where">' + esc(sec.title) + "</div>" +
+        '<div class="gs-head"><a href="' + esc(href) + '">' +
+          esc(sec.heading || sec.title) + "</a></div>" +
+        '<p class="gs-snip">' + snippet(sec.text, e.all) + "</p>" +
+        "</div>";
+    }).join("") + (hits.length > 25
+      ? '<p class="gs-empty">Showing the 25 best matches.</p>' : "");
+  }
+
+  fetch("assets/search-index.json")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      SECTIONS = d.sections; SYN = d.synonyms || [];
+      buildExpand();
+      q.addEventListener("input", render);
+      var pre = new URLSearchParams(location.search).get("q");
+      if (pre) { q.value = pre; render(); }
+      q.focus();
+    })
+    .catch(function () {
+      out.innerHTML = '<p class="gs-empty">The search index could not be loaded. ' +
+        "It is generated from the guide by <code>just build-search-index</code>.</p>";
+    });
+})();
+</script>
+```
+
+::: {.callout-note collapse="true"}
+## How this works, and how to improve it
+
+It searches the text of every section in the guide, then adds the words that
+mean the same thing. The list of those lives in `.config/search-synonyms.yaml`
+in the repository, one line per group, with a comment saying why each was added.
+
+That list is the whole intelligence here. It knows nothing it has not been
+taught, so **a search that should have worked and did not is a bug worth
+reporting**. The feedback box below, or an
+[issue](https://github.com/steno-aarhus/registers-guide/issues), and the next
+reader gets it for free.
+
+The index is built from the `.qmd` source rather than the rendered pages, so
+headings, anchors and text cannot drift from what is published.
+:::
