@@ -606,7 +606,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#mfr---medical-birth-register" id="toc-mfr---medical-birth-register" class="nav-link" data-scroll-target="#mfr---medical-birth-register">MFR - Medical Birth Register</a></li>
   <li><a href="#the-cancer-register" id="toc-the-cancer-register" class="nav-link" data-scroll-target="#the-cancer-register">The Cancer Register</a></li>
   <li><a href="#primary-sector---sysi-and-sssy-health-insurance-register" id="toc-primary-sector---sysi-and-sssy-health-insurance-register" class="nav-link" data-scroll-target="#primary-sector---sysi-and-sssy-health-insurance-register">Primary sector - sysi and sssy (Health Insurance Register)</a></li>
-  <li><a href="#laboratory-results---laboratorieproevesvar_" id="toc-laboratory-results---laboratorieproevesvar_" class="nav-link" data-scroll-target="#laboratory-results---laboratorieproevesvar_">Laboratory results - laboratorieproevesvar_</a></li>
+  <li><a href="#laboratory-results---laboratoriedatabasens-forskertabel" id="toc-laboratory-results---laboratoriedatabasens-forskertabel" class="nav-link" data-scroll-target="#laboratory-results---laboratoriedatabasens-forskertabel">Laboratory results - Laboratoriedatabasens Forskertabel</a></li>
   <li><a href="#healthcare-costs-under-development" id="toc-healthcare-costs-under-development" class="nav-link" data-scroll-target="#healthcare-costs-under-development">Healthcare costs (under development)</a></li>
   </ul></li>
   <li><a href="#lmdb" id="toc-lmdb" class="nav-link" data-scroll-target="#lmdb">7. LMDB - Prescription Register</a></li>
@@ -4918,7 +4918,7 @@ All other columns (43)
 <li><strong><code>dw_ek_borger</code>:</strong> An internal person key. Use pnr for joins to other registers; this one does not travel outside LPR3.</li>
 <li><strong><code>kont_indb_tidspunkt</code>:</strong> When the contact was reported, not when it happened. Recent months look incomplete because reporting lags.</li>
 <li><strong><code>flag_kont_afsluttet</code>:</strong> An open contact has no end time yet, so durations computed near the end of the data are wrong rather than missing.</li>
-<li><strong><code>borger_koen</code>:</strong> Sex as recorded on the contact. It arrives as text, not a number, unlike BEF’s koen, and which values it uses in LPR3 has not been checked - LPR2’s c_sex switched from 1/2 to M/K in 2005, so do not assume either. BEF is the source to prefer for a study variable.</li>
+<li><strong><code>borger_koen</code>:</strong> Sex as recorded on the contact, as text rather than a number. <strong>The value set is unknown and this schema does not record one.</strong> Sundhedsdatastyrelsen publishes no variable documentation for LPR3, and the neighbouring register is no guide: LPR2’s c_sex switched from 1/2 to M/K in 2005, so both codings exist in the family. Do not assume either. If you need sex as a study variable, take koen from BEF, which is documented and stable; if you need what the hospital recorded, check what your own column contains before filtering on it.</li>
 <li><strong><code>borger_foedselsdato</code>:</strong> A copy from CPR carried on the contact, so it only exists for people who had a hospital contact. BEF is the source to use for a study variable.</li>
 <li><strong><code>borger_doedsdato</code>:</strong> A death date carried on the contact. It is not a death register: use DOD for mortality, or you only see people who had a hospital contact.</li>
 </ul>
@@ -7349,9 +7349,21 @@ Value sets for the coded columns (1)
 <li><strong><code>year</code>:</strong> Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register’s own date column.</li>
 </ul>
 </section>
-<section id="laboratory-results---laboratorieproevesvar_" class="level3">
-<h3 class="anchored" data-anchor-id="laboratory-results---laboratorieproevesvar_">Laboratory results - laboratorieproevesvar_</h3>
-<p>Laboratory/blood test results (e.g.&nbsp;HbA1c, lipids). A <strong>very large register - over 2.2 billion rows</strong>, so filter with arrow/duckplyr <strong>before</strong> you <code>collect()</code> into R. Central fields: <code>pnr</code>, NPU code (analyte type) and sample date. <strong><code>samplevalue</code> is character</strong> (not numeric), because some results are coded in natural language (e.g.&nbsp;<code>"ikke påvist"</code>, <code>"negativ"</code>) - handle that before computing on the values. Name and availability are project-/DARTER-specific.</p>
+<section id="laboratory-results---laboratoriedatabasens-forskertabel" class="level3">
+<h3 class="anchored" data-anchor-id="laboratory-results---laboratoriedatabasens-forskertabel">Laboratory results - Laboratoriedatabasens Forskertabel</h3>
+<p>Laboratory and blood test results: HbA1c, lipids, creatinine. A <strong>very large register</strong>, well over a billion rows, so filter with arrow or duckplyr <strong>before</strong> you <code>collect()</code> into R.</p>
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>It is not a DST register.</strong> This is Laboratoriedatabasens Forskertabel (LAB_F), held by Sundhedsdatastyrelsen and reached through Forskerservice. It is not in DST’s register list, the table names are project-specific, and the columns are named in English: <code>patient_cpr</code>, <code>analysiscode</code>, <code>samplingdate</code>, <code>value</code>, <code>unit</code>. NPU is the <em>coding system</em> used in <code>analysiscode</code>, not a column name.</p>
+<p><strong><code>value</code> is text, not a number.</strong> Alongside numeric results it holds a fixed set of words - <code>POSITIV</code>, <code>NEGATIV</code>, <code>IKKE PÅVIST</code>, <code>INGEN VÆKST</code> and the blood type codes. <code>as.numeric()</code> turns every one of them into <code>NA</code> without warning, which drops exactly the samples where something was found.</p>
+<p><strong>Coverage starts in 2008, not the 1990s</strong>, and complete coverage arrives per laboratory between 2010 and 2016. Only NPU- and DNK-coded results reach the table, about 95 per cent; results with a laboratory’s own local code are absent, as are patients who declined consent. See <a href="https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen">Laboratoriedatabasen →</a>.</p>
+</div>
+</div>
+</div>
 <div class="callout callout-style-simple callout-tip">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
