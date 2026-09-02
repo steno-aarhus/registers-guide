@@ -2,16 +2,16 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| **`dw_ek_kontakt`** | character | join key | Contact identifier | 2025 to 1899 |
-| `dw_ek_forloeb` | character | code | Course identifier | 2025 to 1899 |
-| `pnr` | character | identifier | Personal identifier | 2025 to 1899 |
-| `kont_starttidspunkt` | datetime | date | Contact start | 2025 to 1899 |
-| `kont_sluttidspunkt` | datetime | date | Contact end | 2025 to 1899 |
-| `kont_type` | character | code | Contact type | 2025 to 1899 |
-| `lprindberetningssystem` | character | code | Reporting system | 2025 to 1899 |
-| `adiag` | character | code | Primary diagnosis | 2025 to 1899 |
-| `prioritet` | character | code | Priority | 2025 to 1899 |
-| `kont_ans_hovedspec` | character | code | Responsible main specialty | 2025 to 1899 |
+| **`dw_ek_kontakt`** | character | join key | Contact identifier | 2025 to 2025 |
+| `dw_ek_forloeb` | character | code | Course identifier | 2025 to 2025 |
+| `pnr` | character | identifier | Personal identifier | 2025 to 2025 |
+| `kont_starttidspunkt` | datetime | date | Contact start | 2025 to 2025 |
+| `kont_sluttidspunkt` | datetime | date | Contact end | 2025 to 2025 |
+| `kont_type` | character | code | Contact type | 2025 to 2025 |
+| `lprindberetningssystem` | character | code | Reporting system | 2025 to 2025 |
+| `adiag` | character | code | Primary diagnosis | 2025 to 2025 |
+| `prioritet` | character | code | Priority | 2025 to 2025 |
+| `kont_ans_hovedspec` | character | code | Responsible main specialty | 2025 to 2025 |
 | `year` | integer | date | Register year |  |
 
 <details>
@@ -19,49 +19,49 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `dw_sk_sygehusophold` | character | code | Hospital stay identifier | 2025 to 1899 |
-| `dw_ek_helbredsforloeb` | character | code | Health course identifier | 2025 to 1899 |
-| `dw_ek_borger` | character | code | Citizen identifier | 2025 to 1899 |
-| `adiag_tekst` | character | value | Primary diagnosis, text | 2025 to 1899 |
-| `kont_type_tekst` | character | value | Contact type, text | 2025 to 1899 |
-| `kont_patient_type` | character | code | Patient type | 2025 to 1899 |
-| `kont_patient_type_tekst` | character | value | Patient type, text | 2025 to 1899 |
-| `prioritet_tekst` | character | value | Priority, text | 2025 to 1899 |
-| `kont_aarsag` | character | code | Reason for the contact | 2025 to 1899 |
-| `kont_aarsag_tekst` | character | value | Reason for the contact, text | 2025 to 1899 |
-| `kont_henv_aarsag` | character | code | Referral reason | 2025 to 1899 |
-| `kont_henv_aarsag_tekst` | character | value | Referral reason, text | 2025 to 1899 |
-| `kont_henv_maade` | character | code | Referral mode | 2025 to 1899 |
-| `kont_henv_maade_tekst` | character | value | Referral mode, text | 2025 to 1899 |
-| `kont_henv_instans` | character | code | Referring body | 2025 to 1899 |
-| `kont_henv_tidspunkt` | datetime | date | Referral time | 2025 to 1899 |
-| `kont_indb_tidspunkt` | datetime | date | Reporting time | 2025 to 1899 |
-| `beh_starttidspunkt` | datetime | date | Treatment start | 2025 to 1899 |
-| `flag_kont_afsluttet` | numeric | code | Contact closed flag | 2025 to 1899 |
-| `kont_ans` | character | code | Responsible unit | 2025 to 1899 |
-| `kont_ans_inst` | character | code | Responsible institution | 2025 to 1899 |
-| `kont_ans_hovedspec_shak` | character | code | Responsible main specialty, SHAK | 2025 to 1899 |
-| `kont_ans_geo_reg` | character | code | Region of the treating unit, geographic | 2025 to 1899 |
-| `kont_ans_geo_reg_tekst` | character | value | Region of the treating unit, text | 2025 to 1899 |
-| `kont_ans_org_reg` | character | code | Region of the treating unit, organisational | 2025 to 1899 |
-| `kont_ans_org_reg_tekst` | character | value | Organisational region, text | 2025 to 1899 |
-| `kont_inst_ejertype` | character | code | Institution ownership type | 2025 to 1899 |
-| `kont_fir_kode` | character | code | Company code | 2025 to 1899 |
-| `kont_fir_tekst` | character | value | Company, text | 2025 to 1899 |
-| `kont_fritvalg` | character | code | Free choice of hospital | 2025 to 1899 |
-| `kont_fritvalg_tekst` | character | value | Free choice, text | 2025 to 1899 |
-| `kont_lpr_entity_id` | character | code | LPR entity identifier | 2025 to 1899 |
-| `borger_koen` | character | code | Sex | 2025 to 1899 |
-| `borger_foedselsdato` | date | date | Date of birth | 2025 to 1899 |
-| `borger_doedsdato` | date | date | Date of death | 2025 to 1899 |
-| `borger_alder_aar_ind` | numeric | value | Age in years at contact start | 2025 to 1899 |
-| `borger_alder_aar_ud` | numeric | value | Age in years at contact end | 2025 to 1899 |
-| `borger_bo_kom` | character | code | Municipality of residence | 2025 to 1899 |
-| `borger_bo_kom_tekst` | character | value | Municipality of residence, text | 2025 to 1899 |
-| `borger_bo_reg` | character | code | Region of residence | 2025 to 1899 |
-| `borger_bo_reg_tekst` | character | value | Region of residence, text | 2025 to 1899 |
-| `cprtjek` | character | code | CPR check | 2025 to 1899 |
-| `cprtype` | character | code | CPR type | 2025 to 1899 |
+| `dw_sk_sygehusophold` | character | code | Hospital stay identifier | 2025 to 2025 |
+| `dw_ek_helbredsforloeb` | character | code | Health course identifier | 2025 to 2025 |
+| `dw_ek_borger` | character | code | Citizen identifier | 2025 to 2025 |
+| `adiag_tekst` | character | value | Primary diagnosis, text | 2025 to 2025 |
+| `kont_type_tekst` | character | value | Contact type, text | 2025 to 2025 |
+| `kont_patient_type` | character | code | Patient type | 2025 to 2025 |
+| `kont_patient_type_tekst` | character | value | Patient type, text | 2025 to 2025 |
+| `prioritet_tekst` | character | value | Priority, text | 2025 to 2025 |
+| `kont_aarsag` | character | code | Reason for the contact | 2025 to 2025 |
+| `kont_aarsag_tekst` | character | value | Reason for the contact, text | 2025 to 2025 |
+| `kont_henv_aarsag` | character | code | Referral reason | 2025 to 2025 |
+| `kont_henv_aarsag_tekst` | character | value | Referral reason, text | 2025 to 2025 |
+| `kont_henv_maade` | character | code | Referral mode | 2025 to 2025 |
+| `kont_henv_maade_tekst` | character | value | Referral mode, text | 2025 to 2025 |
+| `kont_henv_instans` | character | code | Referring body | 2025 to 2025 |
+| `kont_henv_tidspunkt` | datetime | date | Referral time | 2025 to 2025 |
+| `kont_indb_tidspunkt` | datetime | date | Reporting time | 2025 to 2025 |
+| `beh_starttidspunkt` | datetime | date | Treatment start | 2025 to 2025 |
+| `flag_kont_afsluttet` | numeric | code | Contact closed flag | 2025 to 2025 |
+| `kont_ans` | character | code | Responsible unit | 2025 to 2025 |
+| `kont_ans_inst` | character | code | Responsible institution | 2025 to 2025 |
+| `kont_ans_hovedspec_shak` | character | code | Responsible main specialty, SHAK | 2025 to 2025 |
+| `kont_ans_geo_reg` | character | code | Region of the treating unit, geographic | 2025 to 2025 |
+| `kont_ans_geo_reg_tekst` | character | value | Region of the treating unit, text | 2025 to 2025 |
+| `kont_ans_org_reg` | character | code | Region of the treating unit, organisational | 2025 to 2025 |
+| `kont_ans_org_reg_tekst` | character | value | Organisational region, text | 2025 to 2025 |
+| `kont_inst_ejertype` | character | code | Institution ownership type | 2025 to 2025 |
+| `kont_fir_kode` | character | code | Company code | 2025 to 2025 |
+| `kont_fir_tekst` | character | value | Company, text | 2025 to 2025 |
+| `kont_fritvalg` | character | code | Free choice of hospital | 2025 to 2025 |
+| `kont_fritvalg_tekst` | character | value | Free choice, text | 2025 to 2025 |
+| `kont_lpr_entity_id` | character | code | LPR entity identifier | 2025 to 2025 |
+| `borger_koen` | character | code | Sex | 2025 to 2025 |
+| `borger_foedselsdato` | date | date | Date of birth | 2025 to 2025 |
+| `borger_doedsdato` | date | date | Date of death | 2025 to 2025 |
+| `borger_alder_aar_ind` | numeric | value | Age in years at contact start | 2025 to 2025 |
+| `borger_alder_aar_ud` | numeric | value | Age in years at contact end | 2025 to 2025 |
+| `borger_bo_kom` | character | code | Municipality of residence | 2025 to 2025 |
+| `borger_bo_kom_tekst` | character | value | Municipality of residence, text | 2025 to 2025 |
+| `borger_bo_reg` | character | code | Region of residence | 2025 to 2025 |
+| `borger_bo_reg_tekst` | character | value | Region of residence, text | 2025 to 2025 |
+| `cprtjek` | character | code | CPR check | 2025 to 2025 |
+| `cprtype` | character | code | CPR type | 2025 to 2025 |
 
 - **`dw_sk_sygehusophold`:** A stay can gather several contacts. Counting rows here is not the same as counting admissions.
 - **`dw_ek_borger`:** An internal person key. Use pnr for joins to other registers; this one does not travel outside LPR3.

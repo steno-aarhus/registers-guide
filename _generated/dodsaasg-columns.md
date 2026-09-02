@@ -7,7 +7,7 @@
 | `c_dodtilgrundl_acme` | character | code | Underlying cause of death (ACME) | 2022 to 2022 |
 | `c_dod_1a` | character | code | Cause of death, certificate line 1a | 2022 to 2022 |
 | `c_dodsmaade` | character | code | Manner of death | 2022 to 2022 |
-| `aar` | integer | date | Year | 2022 to 1899 |
+| `aar` | integer | date | Year | 2022 to 2022 |
 
 <details>
 <summary>All other columns (35)</summary>

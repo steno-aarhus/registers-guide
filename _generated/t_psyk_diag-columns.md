@@ -12,7 +12,7 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `leverancedato` | date | date | 43830 | 2019 to 1899 |
+| `leverancedato` | date | date |  | 2019 to 2019 |
 | `version` | character | code | Version | 2019 to 2019 |
 
 </details>

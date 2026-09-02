@@ -13,13 +13,13 @@
 <details>
 <summary>All other columns (5)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `c_oafd` | character | code | Procedurende afdeling (operation) |  |
-| `leverancedato` | date | date | 35430 | 2019 to 1900 |
-| `version` | character | code | Version |  |
-| `v_ominut` | numeric | value | Procedureminut (operation) |  |
-| `v_otime` | numeric | value | Proceduretime (operation) |  |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `c_oafd` | character | code | Procedurende afdeling (operation) |
+| `leverancedato` | date | date |  |
+| `version` | character | code | Version |
+| `v_ominut` | numeric | value | Procedureminut (operation) |
+| `v_otime` | numeric | value | Proceduretime (operation) |
 
 </details>
 

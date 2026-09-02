@@ -27,14 +27,14 @@
 | `aip` | numeric | value | Registerpris ('Apotekets indkøbspris') (s) | 1995 to 2025 |
 | `aref` | character | code | Andre refusionsordninger | 1995 to 2025 |
 | `aup` | numeric | value | Registerpris ('Apotekets udsalgspris') (s) | 1995 to 2025 |
-| `bald` | character | code | 35064 | 2011 to 1900 |
+| `bald` | character | code |  | 1995 to 2011 |
 | `cprtjek` | character | code | CPR-tjek | 1995 to 2025 |
 | `cprtype` | character | code | CPR-type | 1995 to 2025 |
 | `cpr_kom` | date | date | CPR-bopælskommune på ekspeditionsdatoen | 2005 to 2025 |
 | `cpr_reg` | date | date | CPR-bopælsregion på ekspeditionsdatoen | 2005 to 2025 |
 | `dosform` | character | code | Lægemiddelform (s) | 1995 to 2025 |
 | `doso` | character | code | Doseringskode | 2004 to 2025 |
-| `edbl` | character | code | 44196 | 2025 to 1900 |
+| `edbl` | character | code |  | 2020 to 2025 |
 | `ejs` | character | code | Fravalg af substitution | 1997 to 2025 |
 | `eksp` | numeric | value | Ekspeditionspris | 1995 to 2025 |
 | `ekst` | character | code | Ekspeditionstype | 1995 to 2025 |
@@ -70,8 +70,8 @@
 | `tsk3` | character | code | Andre tilskud | 1995 to 2025 |
 | `tska` | character | code | Amtskommunalt tilskud | 1995 to 2025 |
 | `udlv` | character | code | Udleveringssted | 1995 to 2025 |
-| `voltypecode` | character | code | 35064 | 2025 to 1900 |
-| `voltypetxt` | character | code | 35064 | 2025 to 1900 |
+| `voltypecode` | character | code |  | 1995 to 2025 |
+| `voltypetxt` | character | code |  | 1995 to 2025 |
 | `volume` | character | code | Volume | 1995 to 2025 |
 
 - **`indo`:** Recorded only when the prescriber picks an indication from the drop-down. Typed as free text it is not carried over, so the column is often empty.

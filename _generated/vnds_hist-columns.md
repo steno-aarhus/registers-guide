@@ -2,18 +2,18 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier | 2004 to 1899 |
-| `indud_kode` | character | code | Immigration or emigration | 2004 to 1899 |
-| `haend_dato` | date | date | Date of the migration event | 2004 to 1899 |
-| `indud_land` | character | code | Country migrated from or to | 2004 to 1899 |
+| **`pnr`** | character | join key | Personal identifier | 2004 to 2004 |
+| `indud_kode` | character | code | Immigration or emigration | 2004 to 2004 |
+| `haend_dato` | date | date | Date of the migration event | 2004 to 2004 |
+| `indud_land` | character | code | Country migrated from or to | 2004 to 2004 |
 
 <details>
 <summary>All other columns (2)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `cprtjek` | character | value |  | 2004 to 1899 |
-| `cprtype` | character | value |  | 2004 to 1899 |
+| `cprtjek` | character | value |  | 2004 to 2004 |
+| `cprtype` | character | value |  | 2004 to 2004 |
 
 </details>
 

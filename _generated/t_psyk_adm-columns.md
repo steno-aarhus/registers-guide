@@ -31,7 +31,7 @@
 | `c_hsgh` | character | code | Henvisende sygehus | 2019 to 2019 |
 | `c_kom` | character | code | Kommune | 2019 to 2019 |
 | `c_kontaars` | character | code | Kontaktårsag | 2019 to 2019 |
-| `c_nyafd` | character | code | 43830 | 2019 to 1899 |
+| `c_nyafd` | character | code |  | 2019 to 2019 |
 | `c_sex` | character | code | Køn | 2019 to 2019 |
 | `c_sghamt` | character | code | Sygehusamt | 2019 to 2019 |
 | `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) | 2019 to 2019 |
@@ -39,7 +39,7 @@
 | `d_hendto` | date | date | Henvisningsdato | 2019 to 2019 |
 | `d_opdatdto` | date | date | Intern dato for opdatering af kontakten | 2019 to 2019 |
 | `k_afd` | character | code | Afdelingskode | 2019 to 2019 |
-| `leverancedato` | date | date | 43830 | 2019 to 1899 |
+| `leverancedato` | date | date |  | 2019 to 2019 |
 | `version` | character | code | Version | 2019 to 2019 |
 | `v_alddg` | numeric | value | Alder i dage ved kontaktens start | 2019 to 2019 |
 | `v_alder` | numeric | value | Alder i år ved kontaktens start | 2019 to 2019 |

@@ -2,32 +2,32 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| **`dw_ek_kontakt`** | character | join key | Contact identifier | 2025 to 1899 |
-| `proc_kode` | character | code | Procedure code | 2025 to 1899 |
-| `proc_starttidspunkt` | datetime | date | Procedure start | 2025 to 1899 |
-| `proc_kode_type` | character | code | Procedure code type | 2025 to 1899 |
-| `proc_sluttidspunkt` | datetime | date | Procedure end | 2025 to 1899 |
-| `proc_parent_kode` | character | code | Parent procedure code | 2025 to 1899 |
-| `dw_ek_forloeb` | character | code | Course identifier | 2025 to 1899 |
-| `flag_proc_uden_kont` | character | code | Procedure without a contact | 2025 to 1899 |
-| `lprindberetningssystem` | character | code | Reporting system | 2025 to 1899 |
+| **`dw_ek_kontakt`** | character | join key | Contact identifier | 2025 to 2025 |
+| `proc_kode` | character | code | Procedure code | 2025 to 2025 |
+| `proc_starttidspunkt` | datetime | date | Procedure start | 2025 to 2025 |
+| `proc_kode_type` | character | code | Procedure code type | 2025 to 2025 |
+| `proc_sluttidspunkt` | datetime | date | Procedure end | 2025 to 2025 |
+| `proc_parent_kode` | character | code | Parent procedure code | 2025 to 2025 |
+| `dw_ek_forloeb` | character | code | Course identifier | 2025 to 2025 |
+| `flag_proc_uden_kont` | character | code | Procedure without a contact | 2025 to 2025 |
+| `lprindberetningssystem` | character | code | Reporting system | 2025 to 2025 |
 
 <details>
 <summary>All other columns (11)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `dw_ek_procedureregistrering` | character | identifier | Procedure registration identifier | 2025 to 1899 |
-| `dw_sk_sygehusophold` | character | code | Hospital stay identifier | 2025 to 1899 |
-| `proc_indb_tidspunkt` | datetime | date | Reporting time | 2025 to 1899 |
-| `proc_kode_tekst` | character | value | Procedure code, text | 2025 to 1899 |
-| `proc_kode_type_tekst` | character | value | Procedure code type, text | 2025 to 1899 |
-| `proc_parent_kode_tekst` | character | value | Parent procedure code, text | 2025 to 1899 |
-| `proc_parent_kode_type` | character | code | Parent procedure code type | 2025 to 1899 |
-| `proc_parent_kode_type_tekst` | character | value | Parent procedure code type, text | 2025 to 1899 |
-| `proc_lpr_entity_id` | character | code | LPR entity identifier | 2025 to 1899 |
-| `prod_enh` | character | code | Performing unit | 2025 to 1899 |
-| `prod_inst` | character | code | Performing institution | 2025 to 1899 |
+| `dw_ek_procedureregistrering` | character | identifier | Procedure registration identifier | 2025 to 2025 |
+| `dw_sk_sygehusophold` | character | code | Hospital stay identifier | 2025 to 2025 |
+| `proc_indb_tidspunkt` | datetime | date | Reporting time | 2025 to 2025 |
+| `proc_kode_tekst` | character | value | Procedure code, text | 2025 to 2025 |
+| `proc_kode_type_tekst` | character | value | Procedure code type, text | 2025 to 2025 |
+| `proc_parent_kode_tekst` | character | value | Parent procedure code, text | 2025 to 2025 |
+| `proc_parent_kode_type` | character | code | Parent procedure code type | 2025 to 2025 |
+| `proc_parent_kode_type_tekst` | character | value | Parent procedure code type, text | 2025 to 2025 |
+| `proc_lpr_entity_id` | character | code | LPR entity identifier | 2025 to 2025 |
+| `prod_enh` | character | code | Performing unit | 2025 to 2025 |
+| `prod_inst` | character | code | Performing institution | 2025 to 2025 |
 
 - **`proc_indb_tidspunkt`:** When the procedure was reported, not when it happened. Recent months look incomplete because reporting lags.
 

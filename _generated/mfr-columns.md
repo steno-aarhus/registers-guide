@@ -48,7 +48,7 @@
 | `foedselsaar` | character | code | FOEDSELSAAR |  |
 | `foedselsdato` | date | date | FOEDSELSDATO |  |
 | `foedselsdiagnose_moder` | character | code | FOEDSELSDIAGNOSE_MODER |  |
-| `foedselsloebenummer` | numeric | value | 35795 | 2018 to 1900 |
+| `foedselsloebenummer` | numeric | value |  |  |
 | `foedselstime` | character | code | FOEDSELSTIME |  |
 | `fosterpraesentation` | character | code | FOSTERPRAESENTATION |  |
 | `hjemmebesoeg` | character | code | HJEMMEBESOEG | 2003 to 2018 |
@@ -60,7 +60,7 @@
 | `levende_eller_doedfoedt` | character | code | LEVENDE_ELLER_DOEDFOEDT |  |
 | `markoer_accreta` | character | code | MARKOER_ACCRETA |  |
 | `markoer_anaestesi_til_operation` | character | code | MARKOER_ANAESTESI_TIL_OPERATION | 2000 to 2018 |
-| `markoer_andre_foedselskomplikati` | character | code | 35795 | 2018 to 1900 |
+| `markoer_andre_foedselskomplikati` | character | code |  |  |
 | `markoer_b_misdannelse` | character | code | MARKOER_B_MISDANNELSE |  |
 | `markoer_cardiomyopati` | character | code | MARKOER_CARDIOMYOPATI |  |
 | `markoer_graviditetskomplikatio` | character | code | MARKOER_GRAVIDITETSKOMPLIKATIO |  |

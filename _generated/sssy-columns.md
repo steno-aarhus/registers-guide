@@ -25,13 +25,13 @@
 | `patgrp` | character | code | Patient group |  |
 | `koenimp` | character | code | Sex, imputed values included |  |
 | `alderimp` | numeric | value | Alder ultimo inkl. imputerede |  |
-| `behandlingsdato` | date | date | 44561 | 2025 to 1900 |
+| `behandlingsdato` | date | date |  | 2021 to 2025 |
 | `cprtjek` | character | code | CPR-tjek |  |
 | `cprtype` | character | code | CPR-type |  |
-| `registreringstid` | character | code | 44561 | 2025 to 1900 |
+| `registreringstid` | character | code |  | 2021 to 2025 |
 | `spec2` | character | code | 2-cifret speciale |  |
-| `spec80` | character | code | 44561 | 2025 to 1900 |
-| `statpop` | character | code | 44561 | 2025 to 1900 |
+| `spec80` | character | code |  | 2021 to 2025 |
+| `statpop` | character | code |  | 2021 to 2025 |
 | `version` | numeric | date | Version pr. referencetidspunkt for Moduldata |  |
 
 - **`kontakt`:** Not in SYSI. Do not assume a comparable count of contacts before 2005.

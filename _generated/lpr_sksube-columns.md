@@ -10,16 +10,16 @@
 <details>
 <summary>All other columns (8)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `c_oprart` | character | code | Procedure type |  |
-| `c_osgh` | character | code | Hospital performing the procedure |  |
-| `c_tilopr` | character | code | Supplementary code |  |
-| `c_oafd` | character | code | Procedurende afdeling (undersøgelse &amp; behandling) |  |
-| `leverancedato` | date | date | 36525 | 2019 to 1900 |
-| `version` | character | code | Version |  |
-| `v_ominut` | numeric | value | Procedureminut (undersøgelse &amp; behandling) |  |
-| `v_otime` | numeric | value | Proceduretime (undersøgelse &amp; behandling) |  |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `c_oprart` | character | code | Procedure type |
+| `c_osgh` | character | code | Hospital performing the procedure |
+| `c_tilopr` | character | code | Supplementary code |
+| `c_oafd` | character | code | Procedurende afdeling (undersøgelse &amp; behandling) |
+| `leverancedato` | date | date |  |
+| `version` | character | code | Version |
+| `v_ominut` | numeric | value | Procedureminut (undersøgelse &amp; behandling) |
+| `v_otime` | numeric | value | Proceduretime (undersøgelse &amp; behandling) |
 
 </details>
 

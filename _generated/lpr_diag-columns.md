@@ -14,7 +14,7 @@
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
 | `c_diagmod` | character | code | Diagnosis modification | 1977 to 1994 |
-| `leverancedato` | date | date | 28490 | 2019 to 1900 |
+| `leverancedato` | date | date |  | 1977 to 2019 |
 | `version` | character | code | Version | 1977 to 2019 |
 
 </details>

@@ -26,34 +26,34 @@
 | `c_bopamt` | character | code | County of residence | 1977 to 2004 |
 | `c_amt` | character | code | County | 2005 to 2019 |
 | `v_sengdage` | numeric | value | Bed days | 1994 to 2019 |
-| `v_behdage` | numeric | value | Treatment days | 1977 to 2001 |
+| `v_behdage` | numeric | value | Treatment days | 1977 to 2019 |
 | `c_sex` | character | code | Sex | 1977 to 2019 |
 | `cprtjek` | character | code | CPR-tjek | 1977 to 2019 |
 | `cprtype` | character | code | CPR-type | 1977 to 2019 |
-| `c_andenbeh` | character | code | 28490 | 1986 to 1900 |
+| `c_andenbeh` | character | code |  | 1977 to 1986 |
 | `c_blok` | character | code | Inddeling af speciale i blokke | 1994 to 2019 |
 | `c_eakt` | character | code | Ulykkeskode, aktivitet | 1987 to 2003 |
-| `c_emek` | character | code | 32142 | 2003 to 1900 |
+| `c_emek` | character | code |  | 1987 to 2003 |
 | `c_emodpart` | character | code | Ulykkeskode, modpart | 1994 to 2003 |
 | `c_epart` | character | code | Ulykkeskode, egenpart | 1994 to 2003 |
 | `c_ested` | character | code | Ulykkeskode, sted | 1987 to 2003 |
 | `c_etraf` | character | code | Ulykkeskode, trafikal | 1987 to 2003 |
 | `c_hafd` | character | code | Henvisende afdeling | 2004 to 2019 |
 | `c_hsgh` | character | code | Henvisende sygehus | 2004 to 2019 |
-| `c_indform` | character | code | 28490 | 1986 to 1900 |
-| `c_indfra` | character | code | 28490 | 1986 to 1900 |
+| `c_indform` | character | code |  | 1977 to 1986 |
+| `c_indfra` | character | code |  | 1977 to 1986 |
 | `c_kom` | character | code | Kommune | 1977 to 2019 |
-| `c_nyafd` | character | code | 38717 | 2019 to 1900 |
-| `c_senstat` | character | code | 28490 | 1986 to 1900 |
+| `c_nyafd` | character | code |  | 2005 to 2019 |
+| `c_senstat` | character | code |  | 1977 to 1986 |
 | `c_sghamt` | character | code | Sygehusamt | 1977 to 2019 |
-| `c_udtil` | character | code | 28490 | 1986 to 1900 |
-| `c_ulykke` | character | code | 28490 | 1986 to 1900 |
+| `c_udtil` | character | code |  | 1977 to 1986 |
+| `c_ulykke` | character | code |  | 1977 to 1986 |
 | `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) | 1996 to 2019 |
 | `d_fusdto` | date | date | Dato for forundersøgelse (Variabel udgået efter 31.12.2003) | 1996 to 2019 |
 | `d_hendto` | date | date | Henvisningsdato | 1977 to 2019 |
 | `d_opdatdto` | date | date | Intern dato for opdatering af kontakten | 2005 to 2019 |
 | `k_afd` | character | code | Afdelingskode | 2005 to 2019 |
-| `leverancedato` | date | date | 28490 | 2019 to 1900 |
+| `leverancedato` | date | date |  | 1977 to 2019 |
 | `version` | character | code | Version | 1977 to 2019 |
 | `v_alddg` | numeric | value | Alder i dage ved kontaktens start | 2001 to 2019 |
 | `v_aldmdr` | numeric | value | Alder i måneder ved kontaktens start | 2001 to 2019 |
