@@ -24,7 +24,7 @@ registers/<id>.yaml      # id matches fastreg's read_register() name
 families/<id>.yaml       # facts shared by several datasets, e.g. the LPR2/LPR3 boundary
 code-systems/<id>.yaml   # koen, civst, reg, and later icd10, atc ...
 R/load_schema.R          # loader and query helpers
-REVIEW.md                # everything uncertain, for review
+REVIEW.md                # local only, gitignored: see below
 ```
 
 ## Using it
@@ -58,7 +58,27 @@ For anyone generating synthetic data from this, that difference decides whether
 the output matches other projects or only one.
 
 **DST wins.** Where DST's documentation and the guide disagree, DST's version is
-used and the guide's is recorded in a note. See REVIEW.md.
+used and the guide's is recorded in a note.
+
+### How a fact checked against real data is recorded
+
+Some facts here were established by looking at a delivered dataset rather than at
+published documentation: which columns a register actually contains, and what
+type each one has. Two rules apply.
+
+**Only the structure is ever used.** `head(0)` returns the columns with zero
+rows, so nothing about any person is read, held or written down. Never
+`glimpse()` or `head(1)` for this: they print real values from real records.
+Everything that leaves a secure server goes through the official results-export
+procedure, a list of column types included.
+
+**The provenance says what was checked, not whose data it was.** A delivery
+belongs to the project that ordered it, and naming it here would publish what
+that project holds. So the wording is `a delivered column list` or `column
+structure of a delivered dataset`, with a month rather than a date. Where a
+specific project's naming genuinely helps a reader, the note says "some
+deliveries" and the project-specific version lives in that project's own chapter.
+
 
 ## What `coverage` means
 
@@ -66,6 +86,16 @@ used and the guide's is recorded in a note. See REVIEW.md.
 `provenance.verified_on`. It is not what your project was delivered: that is a
 subset chosen when the data was ordered, and no single answer is true for
 everyone. Check your own extract before relying on the range.
+
+Two DST sources give it, and they agree: the per-register variable list linked
+from each register's `source_url`, and [DST's order
+list](https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx),
+a spreadsheet of every variable in every DST register with its period. The order
+list is the faster one to work from - 30,921 rows covering 532 registers - and
+it is what the column-level `coverage` values were filled from. Health registers
+are documented separately by Sundhedsdatastyrelsen on
+[esundhed.dk](https://www.esundhed.dk/Dokumentation), which is the only source
+found so far that publishes **data types**.
 
 ## Notes are for readers, not for maintainers
 
@@ -122,6 +152,61 @@ step was a row count on the server to see whether they were a copy. DST's own
 two-paragraph notice about the split said outright that the old register
 contained duplicates and that the split was the fix. The query would also have
 been impossible: the project at hand has no VNDS_UD.
+
+**A delivery is narrower than the register.** DST's variable list describes the
+register; a project receives only the variables it ordered. Document what DST
+publishes and warn that it has to be ordered - never delete a column because one
+delivery lacks it. The clean proof: `lpr_adm` in one delivery has no
+`c_pattype`, `c_indm`, `c_sgh`, `c_afd` or `v_alder`, while `t_psyk_adm` in the
+*same* delivery has all of them.
+
+**Column names can come from the data processing.** DST gives both psychiatric
+tables `RECNUM` and `PNR`; one delivery hands them over as `k_recnum`,
+`v_recnum` and `v_cpr`, so one key ends up with three names. DST's names are
+canonical here and in the general chapters, with the delivery-specific name in a
+`reader_note`. The `darter/` pages use the DARTER names, which is correct there.
+
+**The guide is not an independent source.** Every word of it was written from
+one delivery, so when the guide and the data agree that is one source, not two.
+Corroboration means DST's own documentation, or a second delivery. This produced
+a real error: `c_dod1` to `c_dod4` were deleted from the site because DST's page
+supposedly lacked them. It did not.
+
+**DST publishes no data types. Do not look again.** Checked 2026-09-02 against
+the BEF and AKM variable lists, the order list, DST's own documentation overview
+(*"no reference to formats whatsoever"*) and the per-variable Times pages, which
+give a definition and nothing technical. So a `type` on a DST register is a
+reading of the column name unless `provenance.type_source` says otherwise. When
+FAIK was finally checked against data, six of nine `character` guesses were
+wrong.
+
+Two things do exist. Sundhedsdatastyrelsen publishes `Format` and `Laengde` per
+variable on [esundhed.dk](https://www.esundhed.dk/Dokumentation), which covers
+LPR2, LMDB, the death registers and the cancer register. And on the server, a
+SAS format whose name starts with `$` is a character format, so the format
+catalogue implies the type - but `sapply(class)` on one row answers it directly
+and is the method the review list uses.
+
+It matters most for code columns stored as numbers, which lose their leading
+zeros.
+
+**Establishing a type must not require taking data out.** Use `head(0)`, which
+returns the column structure with zero rows: the classes are still correct
+because a data frame carries its types independently of its contents, and the
+output is a list of names and the words character, numeric, Date. `glimpse()`
+and `head(1)` print real values from real records, so they are the right tools
+for looking at data inside DST and the wrong ones for producing anything that
+leaves. Everything that leaves goes through the official results-export
+procedure, a list of column types included.
+
+**A type checked against data is evidence about one delivery, not the register.**
+`class()` can only be run on the columns a project actually ordered, so a
+register documented at 40 columns may only ever get types for the 12 it
+received. The rest stay inferred until somebody with a wider delivery checks
+them, and that is a permanent limitation rather than a task on a list. The type
+also comes from whoever converted the SAS files to parquet, so a second project
+could in principle get a different one for the same column. `type_source` names
+the delivery and the date for exactly this reason.
 
 **Never guess a label.** A guess that turns out right teaches the next person
 that guessing is fine here; a guess that turns out wrong is invisible until

@@ -117,7 +117,7 @@ get_code_system <- function(id, schema = load_schema()) {
 
 #' Every fact whose value set or provenance is unresolved
 #'
-#' This is what REVIEW.md is generated from, so the review list cannot drift
+#' This is what the local review list is checked against, so it cannot drift
 #' away from the schema.
 unresolved <- function(schema = load_schema()) {
   rows <- list()
@@ -128,6 +128,16 @@ unresolved <- function(schema = load_schema()) {
         rows[[length(rows) + 1]] <- data.frame(
           kind = "column", register = r$id, item = cl$id,
           issue = paste0("provenance: ", st), stringsAsFactors = FALSE
+        )
+      }
+      # A type read off the column name rather than from a source. Harmless on
+      # the page, but the synthetic-data work generates values from it, so it
+      # must not pass as verified.
+      if (isTRUE(cl$provenance$type_inferred)) {
+        rows[[length(rows) + 1]] <- data.frame(
+          kind = "column", register = r$id, item = cl$id,
+          issue = "type inferred from the column name, not sourced",
+          stringsAsFactors = FALSE
         )
       }
     }
