@@ -911,9 +911,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Both keys fail, in different ways.</strong> <code>dw_ek_kontakt</code> is NA on every row, so the obvious join to <code>lpr_a_kontakt</code> - the same one the diagnosis table uses - matches <strong>nothing at all</strong>, with no error. <code>dw_ek_forloeb</code> is filled for some rows and so looks like a fix, but it also has many NA and nobody has counted how many, so that join drops an unknown share of procedures silently.</p>
-<p>The two keys are also not the same level: <code>dw_ek_kontakt</code> points at one contact, <code>dw_ek_forloeb</code> at a whole course of treatment, which can span several contacts. Swapping one for the other changes what a row means. That last point is read off the LPR3 data model rather than tested.</p>
-<p><strong>So there is currently no verified way to attach <code>pnr</code> to an LPR3 procedure through this file.</strong> Use <a href="../register-reference.html#lpr3-procedures"><code>lpr_a_procregistrering</code></a> instead: it is the real DST register, it joins on <code>dw_ek_kontakt</code>, and DST even flags rows with no contact in <code>flag_proc_uden_kont</code>. Column names differ:</p>
+<p><strong>The empty keys are by design, but the pattern here is still wrong.</strong> Sundhedsdatastyrelsen’s <a href="https://cdn.sundhedsdatastyrelsen.dk/sundhedsdatastyrelsen/media/16364/Vejledning%20til%20LPR3_F.pdf">guide to LPR3 for researchers</a> states that LPR3 has four real join keys - <code>dw_ek_helbredsforloeb</code>, <code>dw_ek_forloeb</code>, <code>dw_ek_kontakt</code> and <code>dw_ek_procedureregistrering</code> - and that in a table where more than one of them could apply, <em>“only the key that is relevant to join on is filled in”</em>. A procedure attaches either to a single contact or to a whole course, and the other key is deliberately left empty.</p>
+<p>So NA on one key is not a defect. What does not fit is the proportion: the same guide says there will be <em>“relatively few rows with course procedures”</em> in <code>procedurer_kirurgi</code>, yet here <code>dw_ek_kontakt</code> is NA on <strong>every</strong> row (confirmed 2026-06-02), which is the opposite of what the register should look like. That points at the extract rather than at LPR3.</p>
+<p>The two keys are not the same level either: <code>dw_ek_kontakt</code> points at one contact, <code>dw_ek_forloeb</code> at a whole course, which can span several contacts. Swapping one for the other changes what a row means.</p>
+<p>The documented route for course-level procedures, if you do not have the <code>forloeb</code> table, is to join on <code>dw_ek_forloeb</code> <strong>in the contacts table</strong>. That gets you to a person, but at course level, not contact level.</p>
+<p><strong>So there is still no verified way to attach <code>pnr</code> to a single LPR3 procedure through this file.</strong> Use <a href="../register-reference.html#lpr3-procedures"><code>lpr_a_procregistrering</code></a> instead: it is the real DST register, it joins on <code>dw_ek_kontakt</code>, and DST even flags rows with no contact in <code>flag_proc_uden_kont</code>. Column names differ:</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -937,6 +939,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tbody>
 </table>
 <p>Confirm <code>lpr_a_procregistrering</code> is in your delivery before you rely on it.</p>
+<p>Two more things from the same source, worth knowing before you plan around this table. <code>procedurer_kirurgi</code> is not a DARTER invention: it is Forskerservice’s own table name, and it holds <strong>surgical</strong> procedures only. Non-surgical ones, including indication codes, are in a separate table called <code>procedurer_andre</code>. And add-on codes get their own rows, with <code>procedurekode_parent</code> and <code>proceduretype_parent</code> saying which procedure they belong to, so counting rows counts add-ons as procedures.</p>
 </div>
 </div>
 </div>
