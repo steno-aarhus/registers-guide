@@ -1,27 +1,27 @@
 <!-- Generated from schema/registers/t_psyk_adm.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |
-| **`recnum`** | character | join key | Contact identifier |
-| `c_pattype` | character | code | Contact type |
-| `c_adiag` | character | code | Primary diagnosis |
-| `d_inddto` | date | date | Admission date |
-| `d_uddto` | date | date | Discharge date |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier | 2019 to 2019 |
+| **`recnum`** | character | join key | Contact identifier | 2019 to 2019 |
+| `c_pattype` | character | code | Contact type | 2019 to 2019 |
+| `c_adiag` | character | code | Primary diagnosis | 2019 to 2019 |
+| `d_inddto` | date | date | Admission date | 2019 to 2019 |
+| `d_uddto` | date | date | Discharge date | 2019 to 2019 |
 
 <details>
 <summary>All other columns (32)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| `c_indm` | character | code | Admission mode |  |
-| `c_udm` | character | code | Discharge mode |  |
-| `c_sgh` | character | code | Hospital |  |
-| `c_afd` | character | code | Department |  |
-| `c_spec` | character | code | Specialty |  |
-| `v_indtime` | integer | value | Admission hour |  |
-| `v_indminut` | integer | value | Admission minute |  |
-| `v_udtime` | integer | value | Discharge hour |  |
+| `c_indm` | character | code | Admission mode | 2019 to 2019 |
+| `c_udm` | character | code | Discharge mode | 2019 to 2019 |
+| `c_sgh` | character | code | Hospital | 2019 to 2019 |
+| `c_afd` | character | code | Department | 2019 to 2019 |
+| `c_spec` | character | code | Specialty | 2019 to 2019 |
+| `v_indtime` | integer | value | Admission hour | 2019 to 2019 |
+| `v_indminut` | integer | value | Admission minute | 2019 to 2019 |
+| `v_udtime` | integer | value | Discharge hour | 2019 to 2019 |
 | `cprtjek` | character | code | CPR-tjek | 2019 to 2019 |
 | `cprtype` | character | code | CPR-type | 2019 to 2019 |
 | `c_amt` | character | code | AMT | 2019 to 2019 |

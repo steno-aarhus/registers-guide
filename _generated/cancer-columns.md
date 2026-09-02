@@ -13,36 +13,40 @@
 <details>
 <summary>All other columns (28)</summary>
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| `c_amtf07` | character | code | Amtskode |
-| `c_behandling` | character | code | Behandlingskode |
-| `c_diaggr` | character | code | Diagnosegruppering ICD7 |
-| `c_diaggr_kp` | character | code | Diagnosegruppering KP |
-| `c_diaggr_nordcan` | character | code | Diagnosegruppering NordCan |
-| `c_grad` | character | code | Gradering |
-| `c_idc7` | character | code | ICD7 diagnose |
-| `c_komf07` | character | code | Patientens bopælskommune |
-| `c_kommune` | character | code | Bopælskommune |
-| `c_lateral` | character | code | Lateralitet |
-| `c_makrogrundlag` | character | code | Makroskopisk grundlag |
-| `c_mikrogrundlag` | character | code | Mikroskopisk grundlag |
-| `c_orggr` | character | code | ICD7 diagnosegruppering |
-| `c_orggr_idc10` | character | code | ICD10 diagnosegruppering |
-| `c_region` | character | code | Patientens bopælsregion |
-| `c_sarc` | character | code | Sarcom. eller ej |
-| `c_sex` | character | code | Patientens køn |
-| `c_status` | character | code | Patientens status |
-| `c_tnm_m` | character | code | Angiver fjernmetastaser |
-| `c_tnm_n` | character | code | Angiver lymfeknudemetastaser |
-| `c_tmn_t` | character | code | Størrelse af tumor |
-| `c_udbred` | character | code | Tumorens udbredelse |
-| `c_udbred_klassifikation` | character | code | Anvendt udbredelsesklassifikation |
-| `c_aa` | character | code | Ann Arbour klassifikation |
-| `d_fdsdato` | date | date | Fødselsdato |
-| `d_statdato` | date | date | Status dato |
-| `v_diagmd` | numeric | value | Diagnosemåned |
-| `v_diagaar` | numeric | value | Diagnoseår |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| `c_amtf07` | character | code | Amtskode | 1968 to 2006 |
+| `c_behandling` | character | code | Behandlingskode | 1943 to 2003 |
+| `c_diaggr` | character | code | Diagnosegruppering ICD7 |  |
+| `c_diaggr_kp` | character | code | Diagnosegruppering KP |  |
+| `c_diaggr_nordcan` | character | code | Diagnosegruppering NordCan |  |
+| `c_grad` | character | code | Gradering | 1943 to 2008 |
+| `c_idc7` | character | code | ICD7 diagnose | 1943 to 1977 |
+| `c_komf07` | character | code | Patientens bopælskommune | 1968 to 2006 |
+| `c_kommune` | character | code | Bopælskommune |  |
+| `c_lateral` | character | code | Lateralitet |  |
+| `c_makrogrundlag` | character | code | Makroskopisk grundlag |  |
+| `c_mikrogrundlag` | character | code | Mikroskopisk grundlag |  |
+| `c_orggr` | character | code | ICD7 diagnosegruppering |  |
+| `c_orggr_idc10` | character | code | ICD10 diagnosegruppering |  |
+| `c_region` | character | code | Patientens bopælsregion |  |
+| `c_sarc` | character | code | Sarcom. eller ej |  |
+| `c_sex` | character | code | Patientens køn |  |
+| `c_status` | character | code | Patientens status |  |
+| `c_tnm_m` | character | code | Angiver fjernmetastaser | 2004 to 2024 |
+| `c_tnm_n` | character | code | Angiver lymfeknudemetastaser | 2004 to 2024 |
+| `c_tmn_t` | character | code | Størrelse af tumor | 2004 to 2024 |
+| `c_udbred` | character | code | Tumorens udbredelse | 1943 to 2003 |
+| `c_udbred_klassifikation` | character | code | Anvendt udbredelsesklassifikation |  |
+| `c_aa` | character | code | Ann Arbour klassifikation | 2004 to 2024 |
+| `d_fdsdato` | date | date | Fødselsdato |  |
+| `d_statdato` | date | date | Status dato |  |
+| `v_diagmd` | numeric | value | Diagnosemåned |  |
+| `v_diagaar` | numeric | value | Diagnoseår |  |
+
+- **`c_grad`:** Only filled in for urinary tract tumours.
+- **`c_idc7`:** ICD-7, the coding used before ICD-10. A series running back before 1978 needs both this and c_icd10.
+- **`c_udbred`:** Replaced by the TNM columns and Ann Arbor from 2004, when the register moved from paper coding to electronic reporting through LPR. Nothing maps one to the other, so a stage variable across 2004 is two different things.
 
 </details>
 

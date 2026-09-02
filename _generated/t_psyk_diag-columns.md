@@ -1,11 +1,11 @@
 <!-- Generated from schema/registers/t_psyk_diag.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| **`recnum`** | character | join key | Contact identifier |
-| `c_diag` | character | code | Diagnosis code |
-| `c_diagtype` | character | code | Diagnosis type |
-| `c_tildiag` | character | code | Supplementary diagnosis |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| **`recnum`** | character | join key | Contact identifier | 2019 to 2019 |
+| `c_diag` | character | code | Diagnosis code | 2019 to 2019 |
+| `c_diagtype` | character | code | Diagnosis type | 2019 to 2019 |
+| `c_tildiag` | character | code | Supplementary diagnosis | 2019 to 2019 |
 
 <details>
 <summary>All other columns (2)</summary>
