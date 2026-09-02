@@ -168,18 +168,30 @@ to a contact table to get one. On DARTER neither route works cleanly.
   | `procedureregistrering_id` | character | Internal registration ID                                                      |
 
 ::: {.callout-warning}
-**Both keys fail, in different ways.** `dw_ek_kontakt` is NA on every row, so the
-obvious join to `lpr_a_kontakt` - the same one the diagnosis table uses - matches
-**nothing at all**, with no error. `dw_ek_forloeb` is filled for some rows and so
-looks like a fix, but it also has many NA and nobody has counted how many, so
-that join drops an unknown share of procedures silently.
+**The empty keys are by design, but the pattern here is still wrong.**
+Sundhedsdatastyrelsen's [guide to LPR3 for
+researchers](https://cdn.sundhedsdatastyrelsen.dk/sundhedsdatastyrelsen/media/16364/Vejledning%20til%20LPR3_F.pdf)
+states that LPR3 has four real join keys - `dw_ek_helbredsforloeb`,
+`dw_ek_forloeb`, `dw_ek_kontakt` and `dw_ek_procedureregistrering` - and that in
+a table where more than one of them could apply, *"only the key that is relevant
+to join on is filled in"*. A procedure attaches either to a single contact or to
+a whole course, and the other key is deliberately left empty.
 
-The two keys are also not the same level: `dw_ek_kontakt` points at one contact,
-`dw_ek_forloeb` at a whole course of treatment, which can span several contacts.
-Swapping one for the other changes what a row means. That last point is read off
-the LPR3 data model rather than tested.
+So NA on one key is not a defect. What does not fit is the proportion: the same
+guide says there will be *"relatively few rows with course procedures"* in
+`procedurer_kirurgi`, yet here `dw_ek_kontakt` is NA on **every** row
+(confirmed 2026-06-02), which is the opposite of what the register should look
+like. That points at the extract rather than at LPR3.
 
-**So there is currently no verified way to attach `pnr` to an LPR3 procedure
+The two keys are not the same level either: `dw_ek_kontakt` points at one
+contact, `dw_ek_forloeb` at a whole course, which can span several contacts.
+Swapping one for the other changes what a row means.
+
+The documented route for course-level procedures, if you do not have the
+`forloeb` table, is to join on `dw_ek_forloeb` **in the contacts table**. That
+gets you to a person, but at course level, not contact level.
+
+**So there is still no verified way to attach `pnr` to a single LPR3 procedure
 through this file.** Use
 [`lpr_a_procregistrering`](../register-reference.qmd#lpr3-procedures) instead: it
 is the real DST register, it joins on `dw_ek_kontakt`, and DST even flags rows
@@ -192,6 +204,14 @@ with no contact in `flag_proc_uden_kont`. Column names differ:
   | `dw_ek_forloeb`      | `dw_ek_kontakt` (a working join key) |
 
 Confirm `lpr_a_procregistrering` is in your delivery before you rely on it.
+
+Two more things from the same source, worth knowing before you plan around this
+table. `procedurer_kirurgi` is not a DARTER invention: it is Forskerservice's
+own table name, and it holds **surgical** procedures only. Non-surgical ones,
+including indication codes, are in a separate table called `procedurer_andre`.
+And add-on codes get their own rows, with `procedurekode_parent` and
+`proceduretype_parent` saying which procedure they belong to, so counting rows
+counts add-ons as procedures.
 :::
 
 **DBSO:** The identifier column is `cpr` in raw parquet - renamed to `pnr` by
