@@ -416,7 +416,7 @@ check_style <- function() {
     }
 
     # %>% not |>, but ONLY in actual R code. The guide deliberately explains the
-    # difference between %>% and |> in prose (02_r-intro, function-guide), and
+    # difference between %>% and |> in prose (r-intro, function-guide), and
     # that kind of mention is not a style violation.
     for (b in extract_blocks(lines)) {
       if (!is_r_block(b$info)) next

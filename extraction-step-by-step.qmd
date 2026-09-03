@@ -1,0 +1,256 @@
+---
+title: "Extracting data step by step"
+subtitle: "Open, filter, select, collect"
+date: last-modified
+---
+
+In Phase 4 you saw that registers are loaded *lazily*: you open a connection,
+not data. This page shows **the working method** that follows from that - the
+same pattern you will use in every single extraction for the rest of the guide.
+
+::: {.callout-important}
+**This is the most important pattern in the entire guide.** Every extraction
+from DST registers follows this structure. Learn it here once - you will
+recognise it everywhere from Phase 6 onwards.
+:::
+
+::: {.callout-note}
+**Why can't we just load a register like a CSV file?** Because the registers are
+too large. A CSV (or `readRDS`) reads the entire file into memory at once - that
+works fine with your own small datasets, but BEF and LMDB have millions to
+well over a billion rows and would crash your session. The lazy connection
+lets you filter *before* you fetch, so only the rows you actually need ever
+reach memory.
+:::
+
+## The pattern: open connection → filter → select → fetch
+
+Think of a supermarket. You can either buy the whole shop and sort at home - or
+send a shopping list and only have what is on the list delivered. Lazy loading
+is the latter: you describe what you want, and only fetch the items at the end
+with `collect()`.
+
+**Step 1 - open the register** as a lazy connection. Pick the way that matches
+your project (the rest of the pattern is identical whichever you choose):
+
+::: {.panel-tabset}
+## fastreg (recommended)
+
+```r
+library(fastreg)
+
+# Once per script, next to the library() calls. This is what lets
+# read_register() find a register by name. Ask whoever set the project up for
+# the paths - see Phase 4, "Point fastreg at your registers".
+options(
+  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/",
+  fastreg.project_rawdata_dir = "E:/rawdata/[projectnumber]/"
+)
+
+bef <- read_register("bef") %>% rename_with(tolower)
+```
+
+The `options()` call is not repeated in the rest of the guide's examples: it
+belongs at the top of the script, once, not before each read.
+
+## arrow (any parquet)
+
+```r
+library(arrow)
+bef <- open_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/"
+) %>%
+  rename_with(tolower)
+```
+:::
+
+**Steps 2-3 - filter, select, then fetch.** `bef` is now a lazy connection (no
+data has moved). The rest is the same regardless of how you opened it:
+
+```r
+library(dplyr) # filter, select, collect
+
+# 2. Filter rows and select columns - still no data in R
+bef_filtered <- bef %>%
+  filter(year == 2020) %>%
+  select(pnr, koen, foed_dag, familie_id)
+
+# 3. collect() - HERE the selected data is moved into R's memory
+bef_data <- bef_filtered %>% collect()
+```
+
+Steps 1--2 are pure *instructions* - they cost almost no memory. `collect()` in
+step 3 is the only line that actually moves data.
+
+::: {.callout-note}
+**Why `rename_with(tolower)` as the first step?** Raw column names in DST
+registers have inconsistent capitalisation - `PNR`, `pnr`, `Pnr`. By
+standardising to lower case immediately, the rest of your code can use `pnr`
+everywhere without thinking about it. Add it immediately after `open_dataset()`
+as the first step in your pipe - before filtering or selecting columns.
+:::
+
+## The most important rule: filter and select columns BEFORE fetching {#filtrer-foer-hent}
+
+```r
+# CORRECT - filter rows and select columns BEFORE collect
+result <- large_register %>%
+  filter(year == 2020) %>% # keep only the rows you need
+  select(pnr, koen, foed_dag) %>% # keep only the columns you use
+  collect() # only now is data moved into R
+
+# WRONG - fetches all rows and all columns into RAM first, then filters
+result <- large_register %>%
+  collect() %>% # everything into RAM - can crash the session
+  filter(year == 2020)
+```
+
+BEF has millions of rows; LMDB has more than a billion. Calling `collect()`
+before you have narrowed the rows can crash your session - and because everyone
+shares the server's RAM, it makes the server slow for **everyone else** at the
+same time. The more you have filtered and selected columns in advance, the
+faster and more stably it runs.
+
+::: {.callout-tip}
+**Rule of thumb:** `filter()` limits rows. `select()` limits columns. Use both
+*before* `collect()`, never after.
+:::
+
+::: {.callout-note}
+**Later: keeping just your cohort.** Once you have built a study population, you
+will usually want to keep only *your cohort's* people in a register. That is
+done with `semi_join` against your cohort's `pnr` - introduced when you extract
+from LPR ([Phase 9b](extract-from-lpr.qmd)), once the cohort itself is built
+([Phase 10](build-study-population.qmd)). You don't need it yet.
+:::
+
+::: {.callout-warning}
+**Never write actual CPR numbers (pnr) in your code** - only variable names and
+vectors. Hardcoding real CPR numbers in a script violates DST's rules for
+handling microdata.
+:::
+
+<details>
+<summary>In depth: what `!!` means, and when you need it (skip for now if this is new)</summary>
+
+Sometimes you filter on a **list you defined in R yourself** - typically a set of ICD or year codes:
+
+```r
+my_codes <- c("DE10", "DE11", "DE14")   # local R vector you created
+register %>% filter(c_diag %in% !!my_codes)
+```
+
+The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs *separately* from R and does not know your local variables. Without `!!`, the engine would look for a *column* called `my_codes` inside the register. It does not exist - `my_codes` is an R vector you created locally. `!!` means: *"this is an R object, not a column name - look up its values in R and use them in the query."*
+
+::: {.callout-tip}
+Rule of thumb: if you refer to a **column** in the register, write the name directly. If you refer to an **R variable** you created yourself, put `!!` in front of it.
+:::
+
+The other place this comes up is subsetting a register to your cohort's `pnr` - but there you will use `semi_join`, which takes an ordinary local table and avoids `!!` entirely. See [Phase 9b](extract-from-lpr.qmd).
+
+</details>
+
+## Check: do you have data or just a connection?
+
+Many errors arise because you think you have fetched data - but actually still
+have an unexecuted query. Ask the object what it is:
+
+```r
+class(my_object)
+```
+
+  | What `class()` returns    | What it means       | What to do              |
+  | ------------------------- | ------------------- | ----------------------- |
+  | `"tbl_df" "data.frame"`   | Data is in R        | Nothing - you are ready |
+  | `"tbl_duckdb_connection"` | Unsent DuckDB query | Add `%>% collect()`     |
+  | `"Table" "ArrowObject"`   | Unsent Arrow query  | Add `%>% collect()`     |
+
+<details>
+<summary>In depth: RAM is shared - clean up after large extractions</summary>
+
+On DST all users share the server's memory. When the memory bar in RStudio turns red, it slows everyone's sessions.
+
+```r
+rm(large_register)   # removes the object from your R session (disappears from the list in the top right of RStudio)
+gc()                 # asks the operating system to reclaim memory R no longer uses
+```
+
+`rm()` removes the object from your active session - it can no longer be used in code and disappears from the Environment panel (top right in RStudio).
+
+`gc()` (*garbage collection*) does not affect your session - all your other objects are still there. R normally holds on to freed memory a little longer, because it is faster to reuse than to request new memory from the operating system. `gc()` forces R to return that memory to the operating system *immediately*, so it becomes available to other users on the shared DST server. You lose nothing - it helps your colleagues.
+
+Always clean up after large extractions before continuing.
+
+</details>
+
+## What happens visually
+
+```{mermaid}
+flowchart TD
+    P[("Parquet register<br>on the DST server")]:::store
+    L["open_dataset()"]:::lazy
+    F["filter() - choose rows"]:::lazy
+    S["select() - choose columns"]:::lazy
+    J["inner_join() - link (optional)"]:::lazy
+    C(["collect()"]):::collect
+    R[("data.frame in R")]:::store
+    V["saveRDS() → datasets/"]:::save
+
+    P -->|"lazy - nothing moves yet"| L
+    L --> F --> S --> J
+    J -->|"send the query"| C
+    C -->|"only chosen rows + columns"| R
+    R --> V
+
+    classDef store fill:#eef0f2,stroke:#8a94a6,color:#1f2733;
+    classDef lazy fill:#eaf2fb,stroke:#4a78b5,color:#173a5e;
+    classDef collect fill:#fff3e0,stroke:#e69500,color:#7a4f00;
+    classDef save fill:#e9f7ef,stroke:#3fae6b,color:#14532d;
+```
+
+The blue steps are **lazy** - they only build up a query. Data moves into R only
+at `collect()` (orange). That is why `filter()` and `select()` must come
+*before* `collect()`.
+
+<details>
+<summary>Want to know more? What are Parquet, Arrow and DuckDB really?</summary>
+
+You do not need to know these names to use the pattern above - but here is what happens under the hood.
+
+**Parquet** is a file format that stores data *column by column* rather than row by row. If you only want `pnr` and `year`, the computer reads only those two columns - not the rest. That is why it is fast.
+
+On the DARTER project (708421) most SAS datasets are already converted to parquet and can be opened directly with `read_register()` - see [DARTER - Register paths and datastores](darter/01_register-paths-datastores.qmd). On other projects you can convert SAS files to parquet yourself - see [Phase 4 - Convert SAS to parquet](file-formats.qmd#convert-sas-to-parquet).
+
+**Arrow** is the R package that reads parquet files and translates your dplyr commands into efficient parquet queries. `open_dataset()` uses Arrow.
+
+**DuckDB** is a database that runs directly inside your R session. It is very fast and supports almost all dplyr syntax. If you use `read_register()` (fastreg), Arrow and DuckDB are used under the hood. You just write normal dplyr code - both ways.
+
+</details>
+
+[]{#arrow-vs-duckdb}
+
+<details>
+<summary>More technical: Arrow vs. DuckDB - when is which used?</summary>
+
+Both engines use lazy evaluation and `collect()`.
+
+**Arrow** is fast at reading parquet, but does not support all dplyr functions. `open_dataset()` gives you an Arrow connection.
+
+**DuckDB** supports almost all dplyr functions and is also very fast. To move an Arrow connection over to DuckDB, pipe through `to_duckdb()` (from the `arrow` package):
+
+```r
+bef <- open_dataset("path/to/bef/") %>% to_duckdb()   # now queried by DuckDB
+```
+
+`read_register()` (fastreg) return a DuckDB connection already, so this step is built in - you do not call `to_duckdb()` yourself.
+
+If you encounter an error about *"unsupported function"* in Arrow, switch to DuckDB with `to_duckdb()`, or `collect()` the data into R first and perform the operation after that.
+
+</details>
+
+## Next steps
+
+You now know the pattern. In the next phase you use it on real (synthetic)
+register data from start to finish.
+
+→ [Phase 6 - First extraction](first-extraction.qmd)
