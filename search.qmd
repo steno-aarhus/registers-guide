@@ -20,7 +20,7 @@ register instead.
 ```{=html}
 <div id="gsearch">
   <input id="gs-q" type="search" autocomplete="off" aria-label="Search the guide"
-         placeholder="What are you trying to do? Try: folk der flytter til udlandet, competing risk, matching">
+         placeholder="What are you trying to do? Try: people who move abroad, competing risk, matched controls">
   <p id="gs-count" class="gs-count"></p>
   <div id="gs-results"></div>
 </div>
@@ -85,13 +85,17 @@ register instead.
       if (term.indexOf(" ") !== -1) {
         hit = lower.indexOf(" " + term + " ") !== -1;
       } else {
-        // Danish inflects: "censurerer" should reach "censurer", "matcher"
-        // should reach "match". A prefix match in either direction does that,
-        // with a floor of four characters so short words stay literal.
+        // Danish inflects: "stien" should reach "sti", "censurerer" should
+        // reach "censurer". A prefix match in either direction does that. The
+        // floor is three characters, and the ending it adds is capped at four,
+        // which covers -en, -et, -er, -ne and -erne without letting "kom"
+        // swallow "kommentar".
         hit = terms.some(function (w) {
           if (w === term) return true;
-          if (term.length < 4 || w.length < 4) return false;
-          return w.indexOf(term) === 0 || term.indexOf(w) === 0;
+          if (term.length < 3 || w.length < 3) return false;
+          if (w.indexOf(term) === 0) return w.length - term.length <= 4;
+          if (term.indexOf(w) === 0) return term.length - w.length <= 4;
+          return false;
         });
       }
       if (hit) {
@@ -103,11 +107,19 @@ register instead.
   }
 
   function score(sec, all, terms) {
-    var head = (sec.heading + " " + sec.title).toLowerCase(),
-        body = sec.text.toLowerCase(), s = 0;
+    // The anchor counts as a heading. An explicit {#fastreg-paths} is the
+    // author labelling the section, and it often carries the word the reader
+    // types when the prose does not.
+    var head = (sec.heading + " " + sec.title + " " +
+                (sec.anchor || "").replace(/-/g, " ")).toLowerCase(),
+        body = sec.text.toLowerCase(),
+        code = (sec.code || "").toLowerCase(), s = 0;
     all.forEach(function (t) {
       var typed = terms.indexOf(t) !== -1;
       if (head.indexOf(t) !== -1) s += typed ? 12 : 6;
+      // Identifiers from the code blocks. "How do I set the fastreg path" is
+      // answered by a line of code, and the prose around it never says "path".
+      if (code.indexOf(t) !== -1) s += typed ? 4 : 2;
       var n = body.split(t).length - 1;
       if (n) s += (typed ? 3 : 1.5) * Math.min(n, 4);
     });
@@ -176,20 +188,3 @@ register instead.
 })();
 </script>
 ```
-
-::: {.callout-note collapse="true"}
-## How this works, and how to improve it
-
-It searches the text of every section in the guide, then adds the words that
-mean the same thing. The list of those lives in `.config/search-synonyms.yaml`
-in the repository, one line per group, with a comment saying why each was added.
-
-That list is the whole intelligence here. It knows nothing it has not been
-taught, so **a search that should have worked and did not is a bug worth
-reporting**. The feedback box below, or an
-[issue](https://github.com/steno-aarhus/registers-guide/issues), and the next
-reader gets it for free.
-
-The index is built from the `.qmd` source rather than the rendered pages, so
-headings, anchors and text cannot drift from what is published.
-:::
