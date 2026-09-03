@@ -53,6 +53,24 @@ heading_text <- function(heading) {
   trimws(gsub("`|\\*+", "", h))
 }
 
+# The identifiers inside code blocks are exactly what people search for:
+# "how do I set the fastreg path" is answered by a line of code, not by prose.
+# Keeping the whole block would flood the snippets, so keep only the names.
+CODE_STOP <- c("library", "function", "return", "true", "false", "null", "for",
+  "if", "else", "the", "and", "not", "your", "this", "that", "with", "from",
+  "value", "values", "data", "name", "names", "list", "vector", "character",
+  "numeric", "integer", "date", "paste", "print", "cat", "head", "nrow", "ncol")
+
+code_terms <- function(lines) {
+  fence <- grepl("^\\s*```", lines)
+  code <- lines[cumsum(fence) %% 2 == 1 & !fence]
+  if (!length(code)) return("")
+  tok <- unlist(regmatches(code, gregexpr("[A-Za-z][A-Za-z0-9_.]{2,}", code)))
+  tok <- tolower(unique(tok))
+  tok <- tok[!tok %in% CODE_STOP & nchar(tok) < 40]
+  paste(utils::head(tok, 80), collapse = " ")
+}
+
 # Strip what a reader is not searching for: front matter, code, raw html blocks,
 # and the div fences Quarto uses for callouts.
 clean_prose <- function(lines) {
@@ -99,7 +117,8 @@ for (path in sort(qmd)) {
     head_line <- if (i == 1 && !is_head[from]) "" else block[1]
     body <- clean_prose(if (nzchar(head_line)) block[-1] else block)
     body <- paste(body[nzchar(body)], collapse = " ")
-    if (nchar(body) < 40) next
+    ct <- code_terms(if (nzchar(head_line)) block[-1] else block)
+    if (nchar(body) < 40 && nchar(ct) < 20) next
 
     entries[[length(entries) + 1]] <- list(
       page = rel,
@@ -109,7 +128,8 @@ for (path in sort(qmd)) {
       # Cut at a word boundary: a snippet ending in "sampl" reads as a typo,
       # and the spell checker flags it as one.
       text = if (nchar(body) <= 1200) body
-             else sub("\\s+\\S*$", "", substr(body, 1, 1200))
+             else sub("\\s+\\S*$", "", substr(body, 1, 1200)),
+      code = code_terms(if (nzchar(head_line)) block[-1] else block)
     )
   }
 }
@@ -129,7 +149,8 @@ sections <- vapply(entries, function(e) paste0(
     paste0('"title":', json_string(e$title)),
     paste0('"heading":', json_string(e$heading)),
     paste0('"anchor":', json_string(e$anchor)),
-    paste0('"text":', json_string(e$text))
+    paste0('"text":', json_string(e$text)),
+    paste0('"code":', json_string(e$code))
   ), collapse = ","), "}"), character(1))
 
 groups <- vapply(syn, function(g) paste0("[",
