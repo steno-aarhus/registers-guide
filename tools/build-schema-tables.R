@@ -296,6 +296,17 @@ build_variable_index <- function(schema = load_schema()) {
           paste0('"code_system":', json_string(cl$code_system)),
           paste0('"note":', json_string(if (is.null(cl$reader_note)) NULL
                                         else gsub("\\s+", " ", cl$reader_note))),
+          paste0('"derivation":', json_string(if (is.null(cl$derivation)) NULL
+                                              else gsub("\\s+", " ", cl$derivation))),
+          paste0('"derivation_source":', json_string(cl$derivation_source)),
+          paste0('"superseded_by":',
+                 if (is.null(cl$superseded_by)) "null"
+                 else json_string(paste(unlist(cl$superseded_by), collapse = ", "))),
+          paste0('"origin":', json_string(
+            if (identical(cl$origin, "tooling"))
+              paste0("not a DST variable - added by ", cl$added_by %||% "the conversion")
+            else NULL)),
+          paste0('"guide_page":', json_string(cl$provenance$guide_page)),
           paste0('"source_url":', json_string(r$source_url))
         ), collapse = ","), "}"))
     }
@@ -305,8 +316,66 @@ build_variable_index <- function(schema = load_schema()) {
   # runtime rather than included at render time.
   dir <- file.path(dirname(OUT), "assets")
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+  # The value sets travel with the index. Finding out what code 5100 means is
+  # the slow part of register work, and the schema already knows: without this
+  # the search shows the name of the code system and leaves the reader to go
+  # looking. Shipped once as a lookup rather than repeated on every column.
+  cs_rows <- character()
+  for (cid in sort(names(schema$code_systems))) {
+    cs <- schema$code_systems[[cid]]
+    vals <- "null"
+    if (!is.null(cs$lookup) && !identical(cs$lookup, "unknown") && length(cs$lookup)) {
+      vv <- vapply(names(cs$lookup), function(k) {
+        lab <- cs$lookup[[k]]
+        en <- lab$en %||% lab$da %||% ""
+        da <- lab$da %||% ""
+        paste0("{", paste(c(paste0('"code":', json_string(k)),
+                            paste0('"en":', json_string(en)),
+                            paste0('"da":', json_string(da))), collapse = ","), "}")
+      }, character(1))
+      vals <- paste0("[", paste(vv, collapse = ","), "]")
+    }
+    cs_rows <- c(cs_rows, paste0(json_string(cid), ":{", paste(c(
+      paste0('"name":', json_string(cs$name)),
+      paste0('"description":', json_string(gsub("\\s+", " ", cs$description %||% ""))),
+      paste0('"note":', json_string(gsub("\\s+", " ", cs$reader_note %||% ""))),
+      paste0('"source_url":', json_string(cs$source_url)),
+      paste0('"source_page":', json_string(cs$source_page)),
+      paste0('"source_name":', json_string(cs$source_name %||% "source")),
+      paste0('"values":', vals)
+    ), collapse = ","), "}"))
+  }
+
+  # Register-level facts a searcher needs the moment they find a column: how to
+  # join it, whether the register is closed, and what it is. Shipped once.
+  reg_rows <- character()
+  for (rid in sort(names(schema$registers))) {
+    r <- get_register(rid, schema)
+    reg_rows <- c(reg_rows, paste0(json_string(rid), ":{", paste(c(
+      paste0('"name":', json_string(r$name)),
+      paste0('"description":', json_string(gsub("\\s+", " ", r$description %||% ""))),
+      paste0('"join_keys":', json_string(paste(unlist(r$join_keys), collapse = ", "))),
+      paste0('"coverage":', json_string(paste0(r$coverage$from %||% "?", " to ", r$coverage$to %||% "?"))),
+      paste0('"timing":', json_string(gsub("_", " ", r$reference_timing %||% ""))),
+      paste0('"scope":', json_string(r$scope)),
+      paste0('"deprecated":', if (isTRUE(r$deprecated)) "true" else "false"),
+      paste0('"superseded_by":', json_string(paste(unlist(r$superseded_by), collapse = ", "))),
+      paste0('"overlap_note":', json_string(if (is.null(r$overlap_note)) NULL
+                                            else gsub("\\s+", " ", r$overlap_note))),
+      paste0('"cadence":', json_string(r$update_cadence)),
+      paste0('"joins":', if (!length(r$relationships)) "null" else json_string(
+        paste(vapply(r$relationships, function(x)
+          paste0(x$key, " to ", toupper(x$to),
+                 if (!is.null(x$cardinality)) paste0(" (", gsub("_", "-", x$cardinality), ")") else ""),
+          character(1)), collapse = "; "))),
+      paste0('"source_url":', json_string(r$source_url))
+    ), collapse = ","), "}"))
+  }
+
   path <- file.path(dir, "variables.json")
-  writeLines(c("[", paste0(rows, collapse = ",\n"), "]"), path)
+  writeLines(c('{"columns": [', paste0(rows, collapse = ",\n"), "],",
+               '"code_systems": {', paste0(cs_rows, collapse = ",\n"), "},",
+               '"registers": {', paste0(reg_rows, collapse = ",\n"), "}}"), path)
   cat("wrote", normalizePath(path, mustWork = FALSE), "(", length(rows), "columns )\n")
 }
 

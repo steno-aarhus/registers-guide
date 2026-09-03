@@ -12,7 +12,7 @@ Search by column name, by what it means, or by register. Everything comes from
 the same schema as the register tables, so the two pages cannot disagree.
 
 ::: {.callout-note collapse="true"}
-## What the columns in the results mean
+## What a result shows you
 
 **Type** is the R type you get after loading. Where it says *unverified*, no
 published source gives a type for that column and it was read off the name: DST
@@ -30,6 +30,18 @@ that stops in 2003 is a silent hole in a series that runs to 2024.
 is a number, `c_sex` in LPR2 changed coding in 2005, `borger_koen` in LPR3 is
 text with an unknown value set. Three answers to one question, and the register
 pages show them one at a time.
+
+**The value set** is folded under each coded column: what `U` means in `civst`,
+what `3` meant in `c_pattype` before 2014. Working that out is normally the slow
+part, and where the codes are too many to list, the fold-out links to the
+classification instead.
+
+**Under the register name** you get how to join it, what period it covers, and a
+warning if it is closed. A column in `dodsaars` is fine for causes of death and
+wrong for censoring, and the search says so before you use it.
+
+**Replaced by** marks a column with a successor, like `van_vtil`. Using it alone
+leaves a silent hole in the middle of a series.
 :::
 
 ```{=html}
@@ -73,12 +85,20 @@ pages show them one at a time.
 .vf-warn { border-color: #b8860b; }
 .vf-note { margin: .3rem 0 0; font-size: .85rem; opacity: .9; }
 .vf-empty { padding: 1.5rem 0; opacity: .8; }
+.vf-cs { margin: .45rem 0 0; font-size: .85rem; }
+.vf-cs > summary { cursor: pointer; opacity: .85; }
+.vf-codes { margin: .4rem 0 .2rem; font-size: .85rem; border-collapse: collapse; }
+.vf-codes td { padding: .12rem .8rem .12rem 0; vertical-align: top; }
+.vf-codes td:first-child { white-space: nowrap; }
+.vf-da { opacity: .6; }
+.vf-danger { border-left: 2px solid #b8860b; padding-left: .5rem; }
+.vf-reg .vf-meta { margin-top: .15rem; }
 @media (max-width: 620px) { .vf-hit { grid-template-columns: 1fr; } }
 </style>
 
 <script>
 (function () {
-  var DATA = [], byName = {};
+  var DATA = [], CS = {}, REG = {}, byName = {};
   var q = document.getElementById("vf-q"), reg = document.getElementById("vf-reg"),
       role = document.getElementById("vf-role"), onlyKey = document.getElementById("vf-key"),
       onlyInf = document.getElementById("vf-inf"), onlyPart = document.getElementById("vf-part"),
@@ -99,6 +119,63 @@ pages show them one at a time.
                (v.register_name || "") + " " + (v.code_system || "") + " " +
                (v.note || "")).toLowerCase();
     return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+  }
+
+  // The register a column sits in decides how you join it and whether it is
+  // still maintained. A searcher who lands on dodsaars.d_dodsdto needs to know
+  // the register stops in 2001 before they use it for censoring.
+  function regLine(id) {
+    var r = REG[id];
+    if (!r) return "";
+    var bits = [];
+    if (r.join_keys) bits.push("join on <code>" + esc(r.join_keys) + "</code>");
+    if (r.coverage) bits.push(esc(r.coverage));
+    if (r.timing) bits.push(esc(r.timing));
+    if (r.cadence) bits.push(esc(r.cadence));
+    // Not from DST: the cancer register and the laboratory table come through
+    // Sundhedsdatastyrelsen's Forskerservice, on a separate application.
+    if (r.scope === "sds") bits.push("<strong>Sundhedsdatastyrelsen, not DST</strong>");
+    var warn = r.deprecated
+      ? '<div class="vf-note vf-danger">Closed register' +
+        (r.superseded_by ? ", replaced by <code>" + esc(r.superseded_by) + "</code>" : "") +
+        ". Check it still covers your period.</div>"
+      : "";
+    var overlap = r.overlap_note
+      ? '<div class="vf-note vf-danger">' + esc(r.overlap_note) + "</div>" : "";
+    var joins = r.joins
+      ? '<div class="vf-note">Joins to other registers: ' + esc(r.joins) + ".</div>" : "";
+    var desc = r.description
+      ? '<div class="vf-note">' + esc(r.description) + "</div>" : "";
+    return '<div class="vf-meta">' + bits.join(" &middot; ") + "</div>" +
+           desc + joins + warn + overlap;
+  }
+
+  // What a code means is the slow part of register work. The schema knows it,
+  // so show it here rather than sending the reader to a classification page.
+  function codeBlock(id) {
+    var cs = id && CS[id];
+    if (!cs) return "";
+    var src = cs.source_url
+      ? ' <a href="' + esc(cs.source_url) + '">' + esc(cs.source_name || "source") + "</a>" +
+        (cs.source_page ? ' on <a href="' + esc(cs.source_page) + '">' +
+          esc(cs.source_page.replace(/^https?:\/\/([^/]+).*$/, "$1")) + "</a>" : "")
+      : "";
+    var body;
+    if (cs.values && cs.values.length) {
+      body = '<table class="vf-codes"><tbody>' + cs.values.map(function (v) {
+        return "<tr><td><code>" + esc(v.code) + "</code></td><td>" + esc(v.en) +
+          (v.da && v.da !== v.en ? ' <span class="vf-da">' + esc(v.da) + "</span>" : "") +
+          "</td></tr>";
+      }).join("") + "</tbody></table>";
+    } else {
+      body = '<p class="vf-note">Too many codes to list here.' + (src ? " See" + src + "." : "") + "</p>";
+    }
+    return '<details class="vf-cs"><summary>' +
+      (cs.values && cs.values.length ? cs.values.length + " values" : "Code system") +
+      ": " + esc(cs.name || id) + "</summary>" + body +
+      (cs.note ? '<p class="vf-note">' + esc(cs.note) + "</p>" : "") +
+      (cs.values && cs.values.length && src ? '<p class="vf-note">Source:' + src + ".</p>" : "") +
+      "</details>";
   }
 
   function render() {
@@ -146,10 +223,22 @@ pages show them one at a time.
         if (v.coverage) tags.push('<span class="vf-tag vf-warn">' + esc(v.coverage) + "</span>");
         if (v.code_system) tags.push('<span class="vf-tag">codes: ' + esc(v.code_system) + "</span>");
         return '<div class="vf-hit">' +
-          '<div class="vf-reg"><a href="' + esc(v.source_url) + '">' + esc(v.register) + "</a></div>" +
+          '<div class="vf-reg"><a href="' + esc(v.source_url) + '">' + esc(v.register) + "</a>" +
+            regLine(v.register) + "</div>" +
           "<div>" + (v.label ? esc(v.label) : "<em>no label published</em>") +
           '<div class="vf-meta">' + tags.join("") + "</div>" +
+          (v.origin ? '<p class="vf-note"><strong>' + esc(v.origin) + "</strong></p>" : "") +
+          (v.superseded_by ? '<p class="vf-note vf-danger">Replaced by <code>' +
+             esc(v.superseded_by) + "</code>. Using this one alone leaves a gap.</p>" : "") +
           (v.note ? '<p class="vf-note">' + esc(v.note) + "</p>" : "") +
+          (v.derivation ? '<p class="vf-note">How it is computed: <code>' +
+             esc(v.derivation) + "</code>" +
+             (v.derivation_source ? ' <a href="' + esc(v.derivation_source) + '">source</a>' : "") +
+             "</p>" : "") +
+          (v.guide_page ? '<p class="vf-note">Explained in <a href="' +
+             esc(v.guide_page.replace(/\.qmd$/, ".html")) + '">' +
+             esc(v.guide_page.replace(/\.qmd$/, "")) + "</a>.</p>" : "") +
+          codeBlock(v.code_system) +
           "</div></div>";
       }).join("");
       return '<div class="vf-group"><span class="vf-name">' + esc(name) + "</span>" + multi + rows + "</div>";
@@ -160,7 +249,7 @@ pages show them one at a time.
   fetch("assets/variables.json")
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      DATA = d;
+      DATA = d.columns; CS = d.code_systems || {}; REG = d.registers || {};
       d.forEach(function (v) { byName[v.register] = v.register_name || v.register; });
       Object.keys(byName).sort().forEach(function (k) {
         reg.insertAdjacentHTML("beforeend",
