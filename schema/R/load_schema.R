@@ -130,7 +130,7 @@ unresolved <- function(schema = load_schema()) {
           issue = paste0("provenance: ", st), stringsAsFactors = FALSE
         )
       }
-      # A type read off the column name rather than from a source. Harmless on
+      # A type assumed rather than taken from a source. Harmless on
       # the page, but the synthetic-data work generates values from it, so it
       # must not pass as verified.
       if (isTRUE(cl$provenance$type_inferred)) {

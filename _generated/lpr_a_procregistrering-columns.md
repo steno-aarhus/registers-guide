@@ -35,7 +35,7 @@
 
 *DST publishes no labels for 20 of these columns. Where the Label column is filled in anyway, it is this guide's reading of the column name, not an official description.*
 
-*The Type column is read off the column name for 20 of these 20 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
+*No published source gives a data type for 20 of these 20 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `dw_ek_kontakt`.
 

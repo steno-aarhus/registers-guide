@@ -124,8 +124,8 @@ build_register <- function(id, schema = load_schema()) {
     function(x) isTRUE(x$provenance$type_inferred), logical(1)))
   if (inferred > 0) {
     out <- c(out, paste0(
-      "*The Type column is read off the column name for ", inferred, " of these ",
-      nrow(cols), " columns: no published source gives a data type for them. ",
+      "*No published source gives a data type for ", inferred, " of these ",
+      nrow(cols), " columns, so the Type column is our own assumption. ",
       "Check with `sapply(class)` on a row of your own data before relying on it, ",
       "especially for code columns, which lose their leading zeros if they arrive ",
       "as numbers.*"), "")

@@ -34,9 +34,9 @@ feedback box below. A mistake spotted once is a morning nobody else loses.
 ## What a result shows you
 
 **Type** is the R type you get after loading. Where it says *unverified*, no
-published source gives a type for that column and it was read off the name: DST
-publishes data types for none of its registers, and only Sundhedsdatastyrelsen
-does, for the health registers. Confirm with `sapply(class)` before relying on
+published source gives a type for that column, so the one shown is our own
+assumption: DST publishes data types for none of its registers, and only
+Sundhedsdatastyrelsen does, for the health registers. Confirm with `sapply(class)` before relying on
 it, especially for code columns, which lose their leading zeros if they arrive
 as numbers.
 
@@ -95,10 +95,13 @@ leaves a silent hole in the middle of a series.
 .vf-group { border-top: 1px solid var(--bs-border-color, #ddd); padding: .9rem 0; }
 .vf-name { font-family: var(--bs-font-monospace, monospace); font-size: 1.05rem; font-weight: 600; }
 .vf-multi { font-size: .8rem; font-weight: 400; opacity: .8; margin-left: .5rem; }
-.vf-hit { display: grid; grid-template-columns: 8.5rem 1fr; gap: .25rem .9rem;
-          margin: .5rem 0 0 .25rem; font-size: .9rem; }
-.vf-reg { font-family: var(--bs-font-monospace, monospace); }
-.vf-meta { opacity: .8; font-size: .85rem; }
+.vf-hit { display: grid; grid-template-columns: minmax(11rem, 15rem) 1fr;
+          gap: .25rem 1.25rem; margin: .5rem 0 0 .25rem; font-size: .9rem; }
+/* Only the register name is monospace. The description under it is prose and
+   was unreadable set in a narrow monospace column. */
+.vf-reg > a, .vf-reg > span.vf-regname { font-family: var(--bs-font-monospace, monospace); }
+.vf-meta { opacity: .8; font-size: .85rem; line-height: 1.45; }
+.vf-meta .vf-bit { white-space: nowrap; }
 .vf-tag { display: inline-block; padding: .05rem .4rem; border-radius: 4px; font-size: .75rem;
           border: 1px solid var(--bs-border-color, #ccc); margin-right: .3rem; }
 .vf-warn { border-color: #b8860b; }
@@ -182,8 +185,7 @@ leaves a silent hole in the middle of a series.
   }
 
   // Every claim on this page comes from somewhere. Saying where lets a reader
-  // decide whether to trust it, which matters most for the columns whose type
-  // was read off the name rather than published anywhere.
+  // decide whether to trust it.
   var SRC_LABEL = {
     dst_variable_list: "DST's variable list",
     dst_documentation: "Sundhedsdatastyrelsen's register documentation",
@@ -201,7 +203,7 @@ leaves a silent hole in the middle of a series.
         : "Name and label from " + esc(lab));
     }
     if (v.type_inferred) {
-      bits.push("<strong>type not published anywhere</strong>, read off the column name");
+      bits.push("<strong>type not published anywhere</strong> - check it in your own data");
     } else if (v.type_source) {
       var m = v.type_source.match(/^(https?:\/\/\S+?)(?:,\s*(.*))?$/);
       bits.push(m
@@ -238,7 +240,9 @@ leaves a silent hole in the middle of a series.
       ? '<div class="vf-note">Joins to other registers: ' + esc(r.joins) + ".</div>" : "";
     var desc = r.description
       ? '<div class="vf-note">' + esc(r.description) + "</div>" : "";
-    return '<div class="vf-meta">' + bits.join(" &middot; ") + "</div>" +
+    return '<div class="vf-meta">' +
+           bits.map(function (b) { return '<span class="vf-bit">' + b + "</span>"; })
+               .join(" &middot; ") + "</div>" +
            desc + joins + warn + overlap;
   }
 
@@ -320,7 +324,8 @@ leaves a silent hole in the middle of a series.
         tags.push('<span class="vf-tag">' + esc(v.type) +
                   (v.type_inferred ? ", unverified" : "") + "</span>");
         tags.push('<span class="vf-tag">' + esc((v.role || "").replace(/_/g, " ")) + "</span>");
-        if (v.coverage) tags.push('<span class="vf-tag vf-warn">' + esc(v.coverage) + "</span>");
+        if (v.coverage) tags.push('<span class="vf-tag vf-warn" title="This column covers a ' +
+            'different period from the rest of the register">' + esc(v.coverage) + "</span>");
         if (v.code_system) tags.push('<span class="vf-tag">codes: ' + esc(v.code_system) + "</span>");
         return '<div class="vf-hit">' +
           '<div class="vf-reg"><a href="' + esc(v.source_url) + '">' + esc(v.register) + "</a>" +

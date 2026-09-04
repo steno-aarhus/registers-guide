@@ -78,7 +78,7 @@
 
 </details>
 
-*The Type column is read off the column name for 48 of these 65 columns: no published source gives a data type for them. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
+*No published source gives a data type for 48 of these 65 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `pnr`.
 
