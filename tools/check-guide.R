@@ -35,12 +35,9 @@ warn <- function(...) FINDINGS$warnings <- c(FINDINGS$warnings, paste0(...))
 header <- function(txt) cat("\n", txt, "\n", strrep("-", nchar(txt)), "\n", sep = "")
 
 qmd_files <- function() {
-  # The guide's pages sit in the root; darter/ is a subfolder. README and 404
+  # Every page sits in the root, including the darter-* ones. README and 404
   # are not guide content and are not checked.
-  files <- c(
-    list.files(ROOT, pattern = "\\.qmd$", full.names = TRUE),
-    list.files(file.path(ROOT, "darter"), pattern = "\\.qmd$", full.names = TRUE)
-  )
+  files <- list.files(ROOT, pattern = "\\.qmd$", full.names = TRUE)
   files[!basename(files) %in% c("README.qmd", "404.qmd")]
 }
 
