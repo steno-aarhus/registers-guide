@@ -11,7 +11,7 @@
 ALLOWED_TYPES <- c("character", "factor", "date", "datetime", "integer", "numeric")
 ALLOWED_ROLES <- c("join_key", "identifier", "date", "value", "code", "derived")
 ALLOWED_SOURCE_TYPES <- c("dst_variable_list", "dst_documentation", "nomenclature",
-                          "server_verified", "guide_prose", "unknown")
+                          "unverified", "unknown")
 ALLOWED_ORIGINS <- c("dst", "tooling")
 # "sds" is a register held by Sundhedsdatastyrelsen rather than DST. It reaches
 # a project through Forskerservice, so the documentation, the naming and the

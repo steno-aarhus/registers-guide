@@ -86,7 +86,7 @@
 
 | Code system | Values |
 | --- | --- |
-| `kont_type` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
+| `kont_type` | Not listed here - see [DST's classification](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf) |
 | `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
 | `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
@@ -98,7 +98,7 @@
 
 Where these values come from:
 
-- **`kont_type`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`kont_type`:** [Vejledning til indberetning til LPR3](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf), published on [medinfo.dk](https://medinfo.dk/sks/brows.php).
 - **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).

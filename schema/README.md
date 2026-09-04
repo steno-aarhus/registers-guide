@@ -45,39 +45,32 @@ Every fact records where it came from:
 ```yaml
 provenance:
   source_url: ...
-  source_type: dst_variable_list | dst_documentation | nomenclature | guide_prose | unknown
+  source_type: dst_variable_list | dst_documentation | nomenclature | unverified | unknown
   verified_on: 2026-08-31
   verified_against: "DST variable list BEF"
   guide_page: register-reference.qmd
   credit: null
 ```
 
-A boolean `confirmed` would blur three very different things: documented by DST,
-observed in one project's delivery, and asserted in a guide page with no source.
-For anyone generating synthetic data from this, that difference decides whether
-the output matches other projects or only one.
+A boolean `confirmed` would blur two very different things: documented by DST,
+and asserted with no published source behind it. For anyone generating synthetic
+data from this, that difference decides how much weight the value carries.
 
 **DST wins.** Where DST's documentation and the guide disagree, DST's version is
 used and the guide's is recorded in a note.
 
-### How a fact checked against real data is recorded
+### What `unverified` means
 
-Some facts here were established by looking at a delivered dataset rather than at
-published documentation: which columns a register actually contains, and what
-type each one has. Two rules apply.
+`unverified` means exactly that: no published source states this, so it is a
+working assumption and should be read as one. Types are the usual case, because
+DST publishes none (see below), and so is any name or label that DST's own pages
+do not spell out.
 
-**Only the structure is ever used.** `head(0)` returns the columns with zero
-rows, so nothing about any person is read, held or written down. Never
-`glimpse()` or `head(1)` for this: they print real values from real records.
-Everything that leaves a secure server goes through the official results-export
-procedure, a list of column types included.
-
-**The provenance says what was checked, not whose data it was.** A delivery
-belongs to the project that ordered it, and naming it here would publish what
-that project holds. So the wording is `a delivered column list` or `column
-structure of a delivered dataset`, with a month rather than a date. Where a
-specific project's naming genuinely helps a reader, the note says "some
-deliveries" and the project-specific version lives in that project's own chapter.
+Nothing in this schema is derived from data held on the DST server. Facts come
+from DST's and Sundhedsdatastyrelsen's published documentation, and where those
+are silent the field says `unverified` rather than being filled in from
+somewhere else. Anything about your own delivery is yours to check inside your
+project, with the results-export procedure for anything that leaves.
 
 
 ## What `coverage` means
@@ -133,11 +126,11 @@ point and confirm with `colnames()`.
 
 ## Conventions learned the hard way
 
-**Record the value domain, not just what was observed.** The format tables hold
-codes a given delivery does not: `civst` has `9` (Uoplyst) and `reg` has `0`,
-neither of which occurs in the DARTER data. A generator that only emits observed
-values produces data that is too clean, and code never meets an "Uoplyst" until
-it meets real data.
+**Record the value domain the format table publishes, not a shorter list.** The
+format tables hold codes a given delivery may never contain: `civst` has `9`
+(Uoplyst) and `reg` has `0`. A generator built from a shortened list produces
+data that is too clean, and code never meets an "Uoplyst" until it meets real
+data.
 
 **Codes are version-dependent, and versions of the same thing look alike.** The
 first geography format table opened here was `AMT_V1_KT`: the 16 pre-2007
@@ -164,7 +157,7 @@ delivery lacks it. The clean proof: `lpr_adm` in one delivery has no
 tables `RECNUM` and `PNR`; one delivery hands them over as `k_recnum`,
 `v_recnum` and `v_cpr`, so one key ends up with three names. DST's names are
 canonical here and in the general chapters, with the delivery-specific name in a
-`reader_note`. The `darter/` pages use the DARTER names, which is correct there.
+`reader_note`. The `darter-*` pages use the DARTER names, which is correct there.
 
 **The guide is not an independent source.** Every word of it was written from
 one delivery, so when the guide and the data agree that is one source, not two.

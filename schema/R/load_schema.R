@@ -124,7 +124,7 @@ unresolved <- function(schema = load_schema()) {
   for (r in schema$registers) {
     for (cl in r$columns) {
       st <- cl$provenance$source_type %||% "unknown"
-      if (st %in% c("unknown", "guide_prose")) {
+      if (st %in% c("unknown", "unverified")) {
         rows[[length(rows) + 1]] <- data.frame(
           kind = "column", register = r$id, item = cl$id,
           issue = paste0("provenance: ", st), stringsAsFactors = FALSE
