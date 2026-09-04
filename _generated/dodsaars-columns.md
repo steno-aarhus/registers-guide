@@ -57,7 +57,7 @@
 
 | Code system | Values |
 | --- | --- |
-| `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts) |
+| `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
 | `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `atc` | Not listed here - see [DST's classification](https://atcddd.fhi.no/atc/structure_and_principles/) |
 
@@ -67,7 +67,7 @@
 
 Where these values come from:
 
-- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts).
+- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
 - **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`atc`:** [WHO ATC/DDD Index](https://atcddd.fhi.no/atc/structure_and_principles/).
 

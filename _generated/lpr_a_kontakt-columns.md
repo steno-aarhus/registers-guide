@@ -89,7 +89,7 @@
 | `kont_type` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
-| `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts) |
+| `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
 
 - **`kont_type`:** `ALCA00` means physical attendance, which is the closest LPR3 gets to LPR2's inpatient flag. It marks attendance, not admission, so a study that treats it as "was admitted" will include outpatient visits.
 - **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
@@ -101,7 +101,7 @@ Where these values come from:
 - **`kont_type`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
-- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts).
+- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
 
 </details>
 

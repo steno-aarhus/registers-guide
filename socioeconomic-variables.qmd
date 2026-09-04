@@ -90,6 +90,13 @@ each value means, is in DST's classification documentation:
 [SOCIO →](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio).
 
 ::: {.callout-warning}
+**Two codes are easy to get wrong.** `410` is **Andre**, a category of its own,
+not unemployed: the unemployed are `210`. And `420` is **children under 15**, a
+real category rather than a missing value, so seeing it in an adult cohort means
+the index date is wrong, not that the data is incomplete.
+:::
+
+::: {.callout-warning}
 **`year` is not a DST variable.** It comes from the partitioning when the
 register was converted to parquet, so the name is set by whoever built your
 files rather than by DST. Every delivery checked for this guide calls it `year`,
@@ -171,11 +178,14 @@ cohort_akm <- cohort_akm %>%
           135,
           139
         ) ~ "Employed",
-      socio13 == 310 ~ "Student",
-      socio13 %in% c(210, 410) ~ "Unemployed",
-      socio13 %in% c(220, 321, 330) ~ "Outside labour market", # sick pay, disability pension, flex job
-      socio13 %in% c(322, 323) ~ "Retired",
-      TRUE ~ "Unknown" # 0, 420 or missing
+      socio13 == 310 ~ "Student", # under uddannelse
+      socio13 == 210 ~ "Unemployed", # arbejdsløse mindst halvdelen af året
+      # 220 sygedagpenge/orlov, 321 førtidspension, 330 kontanthjælp
+      socio13 %in% c(220, 321, 330) ~ "Outside labour market",
+      socio13 %in% c(322, 323) ~ "Retired", # folkepension, efterløn
+      socio13 == 410 ~ "Other", # "Andre" - a category of its own, not unemployed
+      socio13 == 420 ~ "Child under 15", # should not occur in an adult cohort
+      TRUE ~ "Unknown" # missing
     )
   )
 ```

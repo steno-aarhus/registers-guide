@@ -179,6 +179,9 @@ build_register <- function(id, schema = load_schema()) {
       if (!is.null(cs$source_page))
         line <- paste0(line, ", published on [", sub("^https?://([^/]+).*$", "\\1", cs$source_page),
                        "](", cs$source_page, ")")
+      # The CSV is the exact list, machine-readable, no scraping needed.
+      if (!is.null(cs$source_csv))
+        line <- paste0(line, " ([the code list as CSV](", cs$source_csv, "))")
       paste0(line, ".")
     }))
     if (length(cs_src)) out <- c(out, "Where these values come from:", "", unlist(cs_src), "")
@@ -307,6 +310,13 @@ build_variable_index <- function(schema = load_schema()) {
               paste0("not a DST variable - added by ", cl$added_by %||% "the conversion")
             else NULL)),
           paste0('"guide_page":', json_string(cl$provenance$guide_page)),
+          # Where this column's facts come from, so a reader can judge them
+          # rather than take them on faith.
+          paste0('"src_type":', json_string(cl$provenance$source_type)),
+          paste0('"src_url":', json_string(cl$provenance$source_url)),
+          paste0('"type_source":', json_string(
+            if (is.null(cl$provenance$type_source)) NULL
+            else gsub("\\s+", " ", cl$provenance$type_source))),
           paste0('"source_url":', json_string(r$source_url))
         ), collapse = ","), "}"))
     }
@@ -341,6 +351,7 @@ build_variable_index <- function(schema = load_schema()) {
       paste0('"note":', json_string(gsub("\\s+", " ", cs$reader_note %||% ""))),
       paste0('"source_url":', json_string(cs$source_url)),
       paste0('"source_page":', json_string(cs$source_page)),
+      paste0('"source_csv":', json_string(cs$source_csv)),
       paste0('"source_name":', json_string(cs$source_name %||% "source")),
       paste0('"values":', vals)
     ), collapse = ","), "}"))
@@ -372,10 +383,19 @@ build_variable_index <- function(schema = load_schema()) {
     ), collapse = ","), "}"))
   }
 
+  # Same synonym map as the guide search. Without it the two pages behave
+  # differently: "indkomst" finds nothing here while "income" does, purely
+  # because of which labels happened to get translated.
+  syn_path <- file.path(schema_root(), "..", ".config", "search-synonyms.yaml")
+  syn <- if (file.exists(syn_path)) (yaml::yaml.load_file(syn_path)$groups %||% list()) else list()
+  syn_json <- vapply(syn, function(g) paste0("[",
+    paste(vapply(g, json_string, character(1)), collapse = ","), "]"), character(1))
+
   path <- file.path(dir, "variables.json")
   writeLines(c('{"columns": [', paste0(rows, collapse = ",\n"), "],",
                '"code_systems": {', paste0(cs_rows, collapse = ",\n"), "},",
-               '"registers": {', paste0(reg_rows, collapse = ",\n"), "}}"), path)
+               '"registers": {', paste0(reg_rows, collapse = ",\n"), "},",
+               '"synonyms": [', paste0(syn_json, collapse = ",\n"), "]}"), path)
   cat("wrote", normalizePath(path, mustWork = FALSE), "(", length(rows), "columns )\n")
 }
 

@@ -48,11 +48,13 @@
 
 | Code system | Values |
 | --- | --- |
-| `koen` | `1` Mand, `2` Kvinde |
+| `koen` | `1` Mand, `2` Kvinde, `9` Uoplyst |
+
+- **`koen`:** DST's classification KOEN_V1_1980 also defines `9` for not stated, which a delivery may not contain but a value set should. Sex is taken from the tenth digit of the CPR number: even is female, odd is male.
 
 Where these values come from:
 
-- **`koen`:** [DST's variable list for BEF](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
+- **`koen`:** [DST's classification KOEN_V1_1980](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/koen) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e267e7c0-d998-4922-b2c4-6b44b15dd149csv_da)).
 
 </details>
 

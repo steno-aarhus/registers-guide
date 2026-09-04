@@ -72,13 +72,13 @@
 
 | Code system | Values |
 | --- | --- |
-| `socio13` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio) |
+| `socio13` | `11` Selvstændige, `110` Selvstændige, `111` Selvstændige erhvervsdrivende med 10 eller flere ansatte, `112` Selvstændige erhvervsdrivende med 5-9 ansatte, `113` Selvstændige erhvervsdrivende med 1-4 ansatte, `114` Selvstændige erhvervsdrivende uden ansatte, `12` Medarbejdende ægtefælle, `120` Medarbejdende ægtefælle, `13` Lønmodtagere, `131` Lønmodtagere med ledelsesarbejde, `132` Lønmodtager i arbejde der forudsætter færdigheder på højeste niveau, `133` Lønmodtager i arbejde der forudsætter færdigheder på mellemniveau, `134` Lønmodtager i arbejde der forudsætter færdigheder på grundniveau, `135` Andre lønmodtagere, `139` Lønmodtager uden nærmere angivelse, `21` Arbejdsløs mindst halvdelen af året, `210` Arbejdsløse mindst halvdelen af året, `22` Sygedagpenge, orlov mv., `220` Modtager af sygedagpenge, uddannelsesgodtgørelse, orlovsydelser mv., `31` Uddannelsessøgende, `310` Under uddannelse, inkl. skoleelever på min. 15 år, `32` Pensionist/efterløn, `321` Førtidspensionister, `322` Folkepensionister, `323` Efterlønsmodtagere mv., `33` Kontanthjælp, `330` Kontanthjælpsmodtagere, `41` Andre, `410` Andre, `42` Børn, `420` Børn under 15 år, ultimo året |
 
-- **`socio13`:** DST publishes four versions for different eras (SOCIO_GL, SOCIO, SOCIO02, SOCIO13). They are not interchangeable, so a study spanning the boundaries has to decide which one it uses and check that it covers the whole period.
+- **`socio13`:** Two codes are easy to misread. `410` is **Andre** (other), not unemployed: the unemployed are `210`. And `420` is **children under 15**, a known category rather than a missing value, so it appearing in an adult cohort means the index date is wrong rather than the data being incomplete.
 
 Where these values come from:
 
-- **`socio13`:** [DST's SOCIO classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio).
+- **`socio13`:** [DST's SOCIO classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/007fb11c-4b35-4c7a-ad2d-f0a2cb0155c0csv_da)).
 
 </details>
 
