@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-03">
+<meta name="dcterms.date" content="2026-09-04">
 
 <title>Find a variable – Register-based research at Statistics Denmark</title>
 <style>
@@ -48,7 +48,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-bb62276ab45c84d9efd712f51ff97b5a.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-70e22857e649eb8dbb242daf460359f9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-9f77b1a19d6d014bf0e3aafff3f6275c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -568,7 +568,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 3, 2026</p>
+      <p class="date">September 4, 2026</p>
     </div>
   </div>
   
@@ -582,6 +582,18 @@ ul.task-list li input[type="checkbox"] {
 
 <p><a href="./register-reference.html">Overview of registers</a> answers <em>“what is in this register?”</em>. This page answers the opposite: <em>“which register has this variable, and what does it look like there?”</em></p>
 <p>Search by column name, by what it means, or by register. Everything comes from the same schema as the register tables, so the two pages cannot disagree.</p>
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>This is a starting point, not an authority.</strong> The names, types and value sets here are collected from DST’s and Sundhedsdatastyrelsen’s published documentation, and they can be out of date or simply wrong. Codes change meaning, columns are retired, and what is documented is the register, not what your project ordered.</p>
+<p><strong>Check two things before you rely on anything you find here.</strong> The current format tables on the DST server, which are the authoritative code lists and are updated without this page knowing, and <strong>your own delivered dataset</strong> with <code>colnames()</code> and a look at the actual values. A column can be missing from your extract, spelled differently, or arrive as a type that changes what your code does.</p>
+<p>Found something wrong? <a href="https://github.com/steno-aarhus/registers-guide/issues">Open an issue</a> or use the feedback box below. A mistake spotted once is a morning nobody else loses.</p>
+</div>
+</div>
+</div>
 <div class="callout callout-style-simple callout-note callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
@@ -648,6 +660,7 @@ ul.task-list li input[type="checkbox"] {
 .vf-codes td { padding: .12rem .8rem .12rem 0; vertical-align: top; }
 .vf-codes td:first-child { white-space: nowrap; }
 .vf-da { opacity: .6; }
+.vf-src { font-size: .8rem; opacity: .65; margin: .4rem 0 0; }
 .vf-danger { border-left: 2px solid #b8860b; padding-left: .5rem; }
 .vf-reg .vf-meta { margin-top: .15rem; }
 @media (max-width: 620px) { .vf-hit { grid-template-columns: 1fr; } }
@@ -655,7 +668,18 @@ ul.task-list li input[type="checkbox"] {
 
 <script>
 (function () {
-  var DATA = [], CS = {}, REG = {}, byName = {};
+  var DATA = [], CS = {}, REG = {}, EXPAND = {}, byName = {};
+
+  // Same stop words and synonym expansion as Search the guide, so the two
+  // pages answer the same query the same way. Without it "indkomst" finds
+  // nothing here while "income" does, purely because of which labels happened
+  // to be in English.
+  var STOP = ("a an and are as at be but by can do does for from has have how i " +
+    "if in is it its me my of on or that the their then there they this to was " +
+    "what when where which who why will with you your " +
+    "af alle at bruge da de den der det dette du eller en er et for fra gør har " +
+    "hvad hvor hvordan hvorfor hvilke hvilken i ikke jeg kan man med mig min mine " +
+    "og om på selv skal som til ved vi").split(" ");
   var q = document.getElementById("vf-q"), reg = document.getElementById("vf-reg"),
       role = document.getElementById("vf-role"), onlyKey = document.getElementById("vf-key"),
       onlyInf = document.getElementById("vf-inf"), onlyPart = document.getElementById("vf-part"),
@@ -667,15 +691,77 @@ ul.task-list li input[type="checkbox"] {
     });
   }
 
-  function matches(v, terms) {
+  // Everything a reader might type: the column, its label, the register, the
+  // code system AND its value labels, the note, and the register description.
+  function haystack(v) {
+    if (v._hay) return v._hay;
+    var r = REG[v.register] || {}, cs = CS[v.code_system];
+    v._hay = (v.name + " " + (v.label || "") + " " + v.register + " " +
+      (v.register_name || "") + " " + (v.code_system || "") + " " +
+      (v.note || "") + " " + (v.derivation || "") + " " +
+      (r.description || "") + " " + (cs ? cs._text : "")).toLowerCase();
+    return v._hay;
+  }
+
+  // A query term matches if it is in the haystack, or if a synonym of it is.
+  // Prefix matching with a three-character floor handles Danish inflection.
+  function expand(terms) {
+    var all = terms.slice();
+    Object.keys(EXPAND).forEach(function (term) {
+      var hit = terms.some(function (w) {
+        if (w === term) return true;
+        if (term.length < 3 || w.length < 3) return false;
+        if (w.indexOf(term) === 0) return w.length - term.length <= 6;
+        if (term.indexOf(w) === 0) return term.length - w.length <= 6;
+        return false;
+      });
+      if (hit) EXPAND[term].forEach(function (t) { if (all.indexOf(t) === -1) all.push(t); });
+    });
+    return all;
+  }
+
+  function matches(v, terms, expanded) {
     if (!terms.length) return true;
-    // code_system belongs in here: searching "icd" should find every diagnosis
-    // column, and the code system is the only place that word appears for most
-    // of them. Same for "atc" and "sks".
-    var hay = (v.name + " " + (v.label || "") + " " + v.register + " " +
-               (v.register_name || "") + " " + (v.code_system || "") + " " +
-               (v.note || "")).toLowerCase();
-    return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+    var hay = haystack(v);
+    // every typed word must be found, by itself or through a synonym
+    return terms.every(function (t) {
+      if (hay.indexOf(t) !== -1) return true;
+      var grp = expanded[t];
+      return grp && grp.some(function (x) { return hay.indexOf(x) !== -1; });
+    });
+  }
+
+  // Every claim on this page comes from somewhere. Saying where lets a reader
+  // decide whether to trust it, which matters most for the columns whose type
+  // was read off the name rather than published anywhere.
+  var SRC_LABEL = {
+    dst_variable_list: "DST's variable list",
+    dst_documentation: "Sundhedsdatastyrelsen's register documentation",
+    nomenclature: "the classification itself",
+    server_verified: "a delivered dataset, not published documentation",
+    guide_prose: "this guide, not an external source",
+    unknown: "no source recorded"
+  };
+
+  function sourceLine(v) {
+    var bits = [];
+    var lab = SRC_LABEL[v.src_type] || v.src_type;
+    if (lab) {
+      bits.push(v.src_url
+        ? 'Name and label from <a href="' + esc(v.src_url) + '">' + esc(lab) + "</a>"
+        : "Name and label from " + esc(lab));
+    }
+    if (v.type_inferred) {
+      bits.push("<strong>type not published anywhere</strong>, read off the column name");
+    } else if (v.type_source) {
+      var m = v.type_source.match(/^(https?:\/\/\S+?)(?:,\s*(.*))?$/);
+      bits.push(m
+        ? 'type from <a href="' + esc(m[1]) + '">' +
+            esc(m[2] || m[1].replace(/^https?:\/\/([^/]+).*$/, "$1")) + "</a>"
+        : "type from " + esc(v.type_source));
+    }
+    if (!bits.length) return "";
+    return '<p class="vf-src">' + bits.join(". ") + ".</p>";
   }
 
   // The register a column sits in decides how you join it and whether it is
@@ -715,7 +801,10 @@ ul.task-list li input[type="checkbox"] {
     var src = cs.source_url
       ? ' <a href="' + esc(cs.source_url) + '">' + esc(cs.source_name || "source") + "</a>" +
         (cs.source_page ? ' on <a href="' + esc(cs.source_page) + '">' +
-          esc(cs.source_page.replace(/^https?:\/\/([^/]+).*$/, "$1")) + "</a>" : "")
+          esc(cs.source_page.replace(/^https?:\/\/([^/]+).*$/, "$1")) + "</a>" : "") +
+        // The CSV is the exact list. Worth linking: it is what you load when
+        // you need the full set rather than the handful shown here.
+        (cs.source_csv ? ' (<a href="' + esc(cs.source_csv) + '">CSV</a>)' : "")
       : "";
     var body;
     if (cs.values && cs.values.length) {
@@ -736,9 +825,14 @@ ul.task-list li input[type="checkbox"] {
   }
 
   function render() {
-    var terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+    var words = q.value.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, " ")
+                  .split(/\s+/).filter(Boolean);
+    var terms = words.filter(function (w) { return STOP.indexOf(w) === -1 && w.length > 1; });
+    if (!terms.length) terms = words;
+    var expanded = {};
+    terms.forEach(function (t) { expanded[t] = expand([t]); });
     var hits = DATA.filter(function (v) {
-      if (!matches(v, terms)) return false;
+      if (!matches(v, terms, expanded)) return false;
       if (reg.value && v.register !== reg.value) return false;
       if (role.value && v.role !== role.value) return false;
       if (onlyKey.checked && !v.key) return false;
@@ -796,6 +890,7 @@ ul.task-list li input[type="checkbox"] {
              esc(v.guide_page.replace(/\.qmd$/, ".html")) + '">' +
              esc(v.guide_page.replace(/\.qmd$/, "")) + "</a>.</p>" : "") +
           codeBlock(v.code_system) +
+          sourceLine(v) +
           "</div></div>";
       }).join("");
       return '<div class="vf-group"><span class="vf-name">' + esc(name) + "</span>" + multi + rows + "</div>";
@@ -807,6 +902,18 @@ ul.task-list li input[type="checkbox"] {
     .then(function (r) { return r.json(); })
     .then(function (d) {
       DATA = d.columns; CS = d.code_systems || {}; REG = d.registers || {};
+      (d.synonyms || []).forEach(function (g) {
+        g.forEach(function (t) {
+          EXPAND[t.toLowerCase()] = g.map(function (x) { return x.toLowerCase(); });
+        });
+      });
+      // The value labels are searchable too: "ugift" should find civst.
+      Object.keys(CS).forEach(function (id) {
+        var v = CS[id].values || [];
+        CS[id]._text = v.map(function (x) {
+          return x.code + " " + (x.en || "") + " " + (x.da || "");
+        }).join(" ").toLowerCase() + " " + (CS[id].name || "").toLowerCase();
+      });
       d.forEach(function (v) { byName[v.register] = v.register_name || v.register; });
       Object.keys(byName).sort().forEach(function (k) {
         reg.insertAdjacentHTML("beforeend",
@@ -829,17 +936,6 @@ ul.task-list li input[type="checkbox"] {
     });
 })();
 </script>
-<div class="callout callout-style-simple callout-important">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Same sources, same caveats as <a href="./register-reference.html">Overview of registers</a>.</strong> Built from DST’s variable lists and order list, and from Sundhedsdatastyrelsen’s documentation for the health registers. Those change, and this page can be out of date or wrong. What is documented is the register, not what your project ordered: verify against your own files with <code>colnames()</code>.</p>
-<p><strong>If you find something wrong, please tell us.</strong> A mistake you spot once becomes a mistake nobody else has to spend a morning on. <a href="https://github.com/steno-aarhus/registers-guide/issues">Open an issue</a>, or use the feedback box below.</p>
-</div>
-</div>
-</div>
 
 
 
