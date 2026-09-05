@@ -11,9 +11,7 @@ directly on the page.*
 Statistical models - `glm`, `coxph`, `lm` ... - are explained in [Phase
 13](analysis.qmd) where they're used.
 
-::: {.callout-note}
-## Jump directly to
-
+::: {.callout-note title="Jump directly to"}
   | Topic                             | Section                                                                       |
   | --------------------------------- | ----------------------------------------------------------------------------- |
   | The pipe `%>%`                    | [The pipe](#the-pipe)                                                         |
@@ -29,9 +27,7 @@ Statistical models - `glm`, `coxph`, `lm` ... - are explained in [Phase
   | Debugging                         | [Diagnostics and debugging](#diagnostics-and-debugging)                       |
 :::
 
-::: {.callout-tip}
-## The most important functions - start here
-
+::: {.callout-tip title="The most important functions - start here"}
 If you understand the 6 functions below, you can read most lines of register
 data code.
 
@@ -163,7 +159,7 @@ memory yet. The rest of your commands (`filter`, `select`) add further
 instructions, before you finally say "send them now" - that is `collect()`.
 
 ::: {.panel-tabset}
-## fastreg (recommended)
+#### fastreg (recommended)
 
 ```r
 library(fastreg)
@@ -171,7 +167,7 @@ bef <- read_register("bef") %>% rename_with(tolower) # by name - fastreg knows t
 ```
 
 `read_register()` finds the path from your project config (set once) - see
-[Phase 4](file-formats.qmd#convert-sas-to-parquet). It returns a DuckDB
+[Prepare your registers](parquet-and-fastreg.qmd#convert-sas-to-parquet). It returns a DuckDB
 connection.
 
 It can only find registers in fastreg's own format
@@ -179,9 +175,9 @@ It can only find registers in fastreg's own format
 the available ones with `list_parquet_datasets()`, or point straight at the
 folder with `read_parquet_dataset("full/path/to/folder")` - see [When
 `read_register()` cannot find the
-register](file-formats.qmd#when-read-register-fails).
+register](parquet-and-fastreg.qmd#when-read-register-fails).
 
-## DST server (arrow)
+#### DST server (arrow)
 
 ```r
 bef <- open_dataset(
@@ -193,7 +189,7 @@ bef <- open_dataset(
 The confirmed paths for your project are in [Overview of
 registers](register-reference.qmd).
 
-## Local (fakeregs)
+#### Local (fakeregs)
 
 ```r
 bef <- open_dataset("synth_data/bef/") %>% rename_with(tolower) # path to locally saved synthetic register
@@ -347,6 +343,36 @@ Useful when you are not sure what a table contains.
 ```r
 names(full_cohort) # prints all column names
 ```
+
+On a **lazy** connection `names()` is not always reliable - see
+`arrow::schema()` below.
+
+### `arrow::schema(lazy_table)` <small>- `arrow`</small> {#arrow-schema}
+
+**What it does:** lists the column names **and their types** of a lazy Arrow
+connection, without reading any data into RAM.
+
+Use it when you want to check what a register really contains before you write
+code against it - which you should, because a delivery only holds the columns
+your project ordered, and LPR_A renamed a number of them.
+
+```r
+library(arrow) # open_dataset, schema
+
+lpr <- open_dataset("path/to/lpr_adm/")
+arrow::schema(lpr) # column names + types, nothing read into memory
+```
+
+For the DuckDB-backed objects that `read_register()` (fastreg) returns, use
+`colnames()` instead.
+
+::: {.callout-warning}
+**Do not trust `colnames()` on a lazy Arrow query after `rename_with()`.** It
+can return an empty vector silently, so a column that exists is reported as
+missing. The operations themselves are fine - it is only the name check that
+fails. (Seen on arrow 23.0.1 outside DST; not yet confirmed on the server.) Use `names(collect(head(tbl, 0)))`, which fetches the structure with zero
+rows.
+:::
 
 ## Columns: select, add, transform {#columns-select-add-transform}
 
@@ -676,7 +702,7 @@ only hospital contacts for persons who are actually in the study.
 inner_join(bs_cohort %>% select(pnr, surgery_date), by = "pnr") # only contacts from BS cohort members
 ```
 
-### `semi_join(y, by = "key")`
+### `semi_join(y, by = "key")` {#semi-join}
 
 **What it does:** keeps the rows from the left table that have a match in `y` -
 but adds **no** columns from `y`. So it is a *filter* where the list of allowed
@@ -914,9 +940,7 @@ smallest/largest for each element.
 pmin(death_date, as.Date("2024-12-31")) # censoring date: either death date or study end date
 ```
 
-::: {.callout-tip}
-## Dates across the guide
-
+::: {.callout-tip title="Dates across the guide"}
 The functions above are the building blocks. The concrete date tasks are shown
 where they belong in the workflow:
 
@@ -1077,9 +1101,7 @@ on all registers these packages work against.
   | `arrow`     | `read_parquet()`, `write_parquet()` - parquet file handling                                                                                                                                         |
   | `haven`     | `read_sas()` - reading SAS data files                                                                                                                                                               |
 
-::: {.callout-tip}
-## Further information
-
+::: {.callout-tip title="Further information"}
 Further depth in *The Epidemiologist R Handbook*:
 
 - [Writing

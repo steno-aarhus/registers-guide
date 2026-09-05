@@ -1,0 +1,211 @@
+---
+title: "Troubleshooting"
+subtitle: "Your code stopped, or gave you nothing back - what to do"
+date: last-modified
+---
+
+This page is for when something has already gone wrong: a red error message, or
+a result that came back empty.
+
+If your code runs fine but you suspect the *answer* is wrong, that is the other
+page: [DST pitfalls](dst-pitfalls.qmd) collects the traps that produce a
+plausible-looking result and never say a word.
+
+## Start here: six steps {#six-steps}
+
+Before you go looking in the code, do this in order:
+
+1. **Read the error message:** which line is mentioned? Which object name
+   appears?
+2. **Run `class(object)`:** is it data (`"data.frame"`) or still a connection
+   (`"tbl_duckdb_connection"`)? See [Phase 5 - do you have data or just a
+   connection?](extraction-step-by-step.qmd)
+3. **Run `names(object)`:** is the column named exactly what you think? A single
+   letter or difference in capitalisation is enough to fail.
+4. **Isolate the failing line:** run it alone and see what happens.
+5. **Restart the R session** (Ctrl/Cmd+Shift+F10) and run from the top. This
+   clears stale objects left behind by earlier runs, which is a surprisingly
+   common cause.
+6. **Use `?functionname`:** type e.g. `?colSums` in the console to open the help
+   in the **Help** panel (bottom right) - what the function does, its arguments,
+   and examples.
+
+Still stuck after that? [Where to ask](#where-to-ask) is at the bottom of this
+page.
+
+## Common R error messages {#r-errors}
+
+Most R errors are small typos.
+
+| Error message | Usually means |
+|---|---|
+| `could not find function "..."` | Function name misspelled, or the package is not loaded (`library()`) |
+| `object '...' not found` | The object/column does not exist (yet) or is misspelled (R is case-sensitive) |
+| `unexpected symbol in "..."` | A typo just before: a missing comma, pipe (`%>%`) or quote |
+| `unexpected '}'` / `unexpected ')'` | An unclosed or extra parenthesis/bracket |
+
+**Quick self-check of the code:**
+
+- A missing comma or pipe (`%>%`)?
+- Unclosed `(`, `[` or `{`?
+- Capitalisation (`PNR` vs. `pnr`)?
+- Are the data and packages loaded in this session?
+
+For a fuller walkthrough of debugging (`traceback()`, `browser()`,
+print-debugging and reading error messages), see
+[Debugging](https://r-coding-cafe.zheer.dk/notes/lesson-notes/02-Debugging.html)
+from Zheer's R Coding Café, and the DDEA course's [troubleshooting
+guide](https://r-cubed-intro.rostools.org/appendix/troubleshooting).
+
+## Error messages specific to register work {#dst-errors}
+
+These are the ones you meet in a DST workflow rather than in R generally:
+
+  | Error message                                    | Typical cause                                                  | Solution                                                                                        |
+  | ------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+  | `Error: Column 'pnr' not found`                  | `rename_with(tolower)` is missing                              | Add `%>% rename_with(tolower)` immediately after `read_register()` - see [pitfall 3](dst-pitfalls.qmd#tolower)  |
+  | `Error: object 'my_list' not found`              | `!!` missing in `filter()` on a lazy connection                | Write `filter(year %in% !!my_list)` - see [pitfall 8](dst-pitfalls.qmd#bang-bang)                                |
+  | `Error: could not find function "read_register"` | `library(fastreg)` missing                                     | Add `library(fastreg)` at the top of the script                                                 |
+  | `non-numeric argument to binary operator`        | Date column is `character`, not `Date`                         | `mutate(date = as.Date(date))` - see [pitfall 4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) |
+  | `Error in filter.default(...)`                   | Filtering on a lazy object without `%>%`                       | Switch to `%>%` - see [the pipe](function-guide.qmd#the-pipe)                                   |
+  | `Error: Can't convert ... to ...`                | Join on columns of different type (e.g. numeric vs. character) | Use `mutate(pnr = as.character(pnr))` to match types                                            |
+  | `object of type 'closure' is not subsettable`    | A variable name overwrites a function (e.g. `data <- ...`)     | Use a unique variable name - avoid `data`, `df`, `c` as object names                            |
+
+::: {.callout-note}
+**`unsupported function` in Arrow** is not a mistake in your code - it is a gap
+in what the Arrow engine covers. Switch the connection to DuckDB with
+`to_duckdb()`, or `collect()` into R first and do the operation there. See
+[Arrow vs. DuckDB](extraction-step-by-step.qmd#arrow-vs-duckdb).
+:::
+
+## No error, but zero rows {#zero-rows}
+
+This is the failure mode that does not announce itself. A filter that cannot
+match returns an empty result, R reports success, and the empty table looks like
+a finding: "no patients were exposed". Two ways to produce it:
+
+- **A pattern longer than the column:** `atc2` in LMDB holds three characters,
+  so `grepl("N02A", atc2)` compares four characters against three and matches
+  nothing. See [Medication (ATC)](medication.qmd#atc-columns).
+- **A type mismatch in a join or filter:** joining a character `pnr` to a
+  numeric one matches no rows rather than failing, the same way a format table
+  joined on the wrong type does (see [Format
+  tables](formatting-tables.qmd#education-level)).
+
+So treat an empty result as a **bug until proven otherwise**. Count the rows
+before and after the filter, and check that the values you filter on actually
+occur:
+
+```r
+library(dplyr) # count, filter, collect
+
+lmdb %>% count() %>% collect() # rows before
+lmdb %>% count(atc2) %>% head(20) %>% collect() # what the column really contains
+```
+
+If the second line shows three-character values and your pattern is longer, you
+have found it.
+
+## Where to ask {#where-to-ask}
+
+Follow this order. AI is at the bottom for a good reason.
+
+  | #   | Where                              | When                                                                                                |
+  | --- | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+  | 1   | **Colleague or supervisor**        | Ask first - they know your data and workflow                                                        |
+  | 2   | **Google**                         | Search for the error message including `Error:`                                                     |
+  | 3   | **Stack Overflow**                 | The world's largest collection of coding questions and answers                                      |
+  | 4   | **Zheers R Coding Café**           | [r-coding-cafe.zheer.dk](https://r-coding-cafe.zheer.dk/) - register-data specific                  |
+  | 5   | **Official package documentation** | Search the package name + "documentation"                                                           |
+  | 6   | **AI (Claude, ChatGPT)**           | Good for code problems, but easy to believe wrong answers - use only when you understand the answer |
+
+Two ready-made references worth bookmarking: [Common
+errors](https://www.epirhandbook.com/en/new_pages/errors.html) and [Getting
+help](https://www.epirhandbook.com/en/new_pages/help.html), both in The
+Epidemiologist R Handbook.
+
+::: {.callout-important}
+**On DST there is an extra rule: no data in the question.** Not a value, not a
+row, not a pasted error message that happens to contain one. This applies to
+colleagues, to DST support and to any AI tool. When you need to show the
+problem, build a small fake dataset that reproduces it.
+:::
+
+::: {.callout-warning}
+**Avoid AI as your first stop if you are new.** AI can generate
+plausible-sounding code that does not work - or works but gives wrong results.
+Use it as a supplement to your own understanding, not as a substitute.
+:::
+
+<details>
+<summary>How to ask a good help question (minimal reproducible example)</summary>
+
+A good help question is **minimal** (the smallest code that still shows the
+error), **complete** and **reproducible**.
+
+**Bad:** "My code fails, what is wrong?" *(no code, no error message)*
+
+**Good:**
+> "I get the error `Error: object 'pnr' not found` - what is missing?"
+>
+> ```r
+> library(dplyr)
+> df <- data.frame(PNR = 1:5, age = 20:24)
+> df %>% filter(pnr > 3)   # error here
+> ```
+>
+> Expected: rows where PNR > 3. Actual: error that 'pnr' is not found.
+
+The error: the column is called `PNR`, the code asks for `pnr`. R is
+case-sensitive.
+
+[Minimal Reproducible
+Example](https://r-coding-cafe.zheer.dk/notes/lesson-notes/01-Minimal-Reproducible-Example.html)
+(Zheer's R Coding Café) works through how to build the fake dataset.
+
+</details>
+
+<details>
+<summary>How to use AI most effectively for R code</summary>
+
+AI is good at explaining error messages and suggesting solutions - but you need to give it enough context, and you must verify the answer yourself.
+
+**Give AI this:**
+
+1. **The exact error message** (including `Error:` and line number if there is one)
+2. **The failing code:** as little as possible, but enough to reproduce the error
+3. **What you expected vs. what happened**
+4. **Which packages you are using** (e.g. "dplyr and arrow on DST")
+
+**Example of a good AI question:**
+> "I get `Error: Column 'pnr' not found` when I run this code with dplyr and arrow on DST. I am using `read_register()` (fastreg). What is wrong?"
+> ```r
+> bef <- read_register("bef")
+> bef %>% filter(pnr == "001")   # error here
+> ```
+
+**Ask for explanation, not just a fix:**
+Write "explain what is wrong and why" rather than just "fix it". If you only get the code corrected without understanding why, the same error will appear again next time.
+
+**Ask AI to ask questions before answering:**
+Write "ask me questions before you answer if you need information". AI often guesses at context it does not have - this produces better answers if it asks about e.g. your package version, register type or what you actually want to achieve.
+
+**Always verify the answer:**
+Code examples from AI are starting points - not guarantees. Check that column names, function names and logic match your data with `names()`, `class()` and `head()`.
+
+</details>
+
+**DST has its own AI code tool.** Forskermaskinen offers [an AI tool for code
+help →](https://www.dst.dk/da/TilSalg/data-til-forskning/analyseplatform/forskermaskinen)
+covering R, SAS, SPSS, Stata and Python. It is for code only, the no-data rule
+above applies in full, and your conversations are not saved when you close it -
+so treat it as help with syntax, not as a notebook.
+
+## See also
+
+- [DST pitfalls](dst-pitfalls.qmd): the traps where the code runs and the answer
+  is quietly wrong
+- [Phase 7 - Inspect your data](inspect-data.qmd): checking structure, types and
+  distributions before you analyse
+- [Learning resources](learning-resources.qmd): courses and books, if the
+  problem is that you want to understand R better

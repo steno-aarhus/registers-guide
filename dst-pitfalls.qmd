@@ -294,51 +294,20 @@ a variable is built from the future, ask whether you are conditioning on the
 person having survived to see it. Background: [Hernán & Robins, *What If*,
 §3.6](https://miguelhernan.org/whatifbook) (target trial, time zero).
 
-## 11. The most common error messages and what they mean {#the-most-common-error-messages-and-what-they-mean}
+## 11. `year` is a folder name, not a date {#year-is-not-a-date}
 
-R's error messages are short and technical - here are the ones you most often
-encounter in a DST workflow, translated into what they actually mean:
+In a converted register, `year` says which yearly file a row came from. Filtering
+on it is what makes a query against a billion rows finish in seconds - but it
+does **not** tell you when anything happened. `year == 2020` in BEF does not say
+which quarterly snapshot you have. When the timing matters, use the register's
+own date column (`hf_vfra` in UDDA, `d_inddto` in `lpr_adm`, `referencetid` in
+BEF). The two uses look identical in the code.
 
-  | Error message                                    | Typical cause                                                  | Solution                                                                                        |
-  | ------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-  | `Error: Column 'pnr' not found`                  | `rename_with(tolower)` is missing                              | Add `%>% rename_with(tolower)` immediately after `read_register()` - see [pitfall 3](#tolower)  |
-  | `Error: object 'my_list' not found`              | `!!` missing in `filter()` on a lazy connection                | Write `filter(year %in% !!my_list)` - see [pitfall 8](#bang-bang)                                |
-  | `Error: could not find function "read_register"` | `library(fastreg)` missing                                     | Add `library(fastreg)` at the top of the script                                                 |
-  | `non-numeric argument to binary operator`        | Date column is `character`, not `Date`                         | `mutate(date = as.Date(date))` - see [pitfall 4](#4-date-columns-are-not-always-in-date-format) |
-  | `Error in filter.default(...)`                   | Filtering on a lazy object without `%>%`                       | Switch to `%>%` - see [the pipe](function-guide.qmd#the-pipe)                                   |
-  | `Error: Can't convert ... to ...`                | Join on columns of different type (e.g. numeric vs. character) | Use `mutate(pnr = as.character(pnr))` to match types                                            |
-  | `object of type 'closure' is not subsettable`    | A variable name overwrites a function (e.g. `data <- ...`)     | Use a unique variable name - avoid `data`, `df`, `c` as object names                            |
+Full explanation: [Phase 4 - Reading a register that is split by
+year](file-formats.qmd#year-column).
 
-::: {.callout-tip}
-**The fastest debugging flow** - what to do step by step when you see a red
-error message - is described in [Phase 7 - Seeing a red error
-message?](inspect-data.qmd#seeing-a-red-error-message).
-:::
+## Something actually broke?
 
-## 12. Zero rows is not an error message {#zero-rows}
-
-Every pitfall above announces itself in red. This one does not. A filter that
-cannot match returns an empty result, R reports success, and the empty table
-looks like a finding: "no patients were exposed". Two ways to produce it:
-
-- **A pattern longer than the column:** `atc2` in LMDB holds three characters,
-  so `grepl("N02A", atc2)` compares four characters against three and matches
-  nothing. See [Medication (ATC)](medication.qmd#atc-columns).
-- **A type mismatch in a join or filter:** joining a character `pnr` to a
-  numeric one matches no rows rather than failing, the same way a format table
-  joined on the wrong type does (see [Format
-  tables](formatting-tables.qmd#education-level)).
-
-So treat an empty result as a **bug until proven otherwise**. Count the rows
-before and after the filter, and check that the values you filter on actually
-occur:
-
-```r
-library(dplyr) # count, filter, collect
-
-lmdb %>% count() %>% collect() # rows before
-lmdb %>% count(atc2) %>% head(20) %>% collect() # what the column really contains
-```
-
-If the second line shows three-character values and your pattern is longer, you
-have found it.
+Every pitfall above is a case where the code runs and the answer is quietly
+wrong. If instead you have a red error message, or a result that came back
+empty, that is [Troubleshooting](troubleshooting.qmd).

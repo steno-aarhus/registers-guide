@@ -16,141 +16,127 @@ You use the same extraction pattern as in [Phase
 applied to LPR's two generations. It is the most important and probably the most
 complex part of the guide.
 
-::: {.callout-note}
-**Circular dependency with Phase 10 - deliberate.** To extract diagnoses (this
-page) we assume you already have a cohort; but you *build* the cohort in [Phase
-10](build-study-population.qmd) using exactly the extraction pattern you
-learn here. Read the phases in order, and come back to the code when your cohort
-is ready. The code uses `inner_join()` and `bind_rows()`; if these are new, they
-are explained in detail in [Phase 12](data-manipulation.qmd).
+The examples assume you already have a cohort: `kohort`, a data.frame with `pnr`
+and `index_date` per person, built in [Phase
+10](build-study-population.qmd). That phase comes later and uses the pattern you
+learn here, so read them in order and come back to this code once your cohort
+exists. They also use `inner_join()` and `bind_rows()`, explained in [Phase
+12](data-manipulation.qmd).
+
+::: {.callout-warning}
+**Check the column names in your own delivery before you load.** The examples
+use the names the registers typically have, but LPR_A renamed a number of them,
+and [what you were given is not what the register
+contains](understand-lpr.qmd#lpr-is-split-into-two-periods). List them with
+[`arrow::schema()`](function-guide.qmd#arrow-schema), and look the confirmed
+ones up in [Overview of registers](register-reference.qmd).
 :::
 
-::: {.callout-warning #lpr-a-format}
-**LPR3 files and column names - check before you load.**
+Two facts from [Understand LPR](understand-lpr.qmd) that the code below depends
+on: use the **LPR_A** files and filter them with `lprindberetningssystem ==
+"LPR3"` ([why](understand-lpr.qmd#lpr-a-format)), and expect a **spike in
+diagnosis counts around 2019-2020** if your analysis counts diagnoses or looks
+at trends ([why](understand-lpr.qmd#lpr3-spike)).
 
-- **Use the LPR_A files consistently.** DST has switched LPR3 from the old
-  **LPR_F** format (`kontakter`, `diagnoser`, `forloeb`) to the new **LPR_A**
-  format (`lpr_a_kontakt`, `lpr_a_diagnose`). Both versions may sit in your
-  folder and cover the same years - loading both (or mixing old and new) gives
-  you **duplicated rows**. Use `lpr_a_*` as in the examples here, and leave the
-  LPR_F files alone. `lpr_a_kontakt` also contains older data that is already in
-  LPR2; filter it out with `lprindberetningssystem == "LPR3"`. This is a general
-  property of LPR_A - on **DARTER** it is spelled out in [pitfall
-  5](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
-- **Verify column names.** The switch to LPR_A changed a number of variable
-  names (often opaque Danish abbreviations). The examples use the names the
-  registers typically have, but always check before relying on a column name. On
-  a lazy `open_dataset()` object use `arrow::schema(your_data)` - it lists the
-  column names **and their types** without reading data into RAM;
-  `colnames(your_data)` also works (and is what you use for the DuckDB-backed
-  objects from `read_register()` (fastreg)). Look names up in [Overview of
-  registers](register-reference.qmd).
-- **Mind the 2019-2020 diagnosis spike.** The LPR3 contact model registers far
-  more outpatient diagnoses than LPR2 did, producing a spike in diagnosis counts
-  around 2019-2020 that matters for any count- or trend-based analysis. See [the
-  diagnosis spike](understand-lpr.qmd#lpr3-spike).
-:::
+## Fetch diagnoses from LPR
 
-## Fetch diagnoses from LPR - choose your approach
+There is one decision to make, and it is about your study, not about LPR:
+**do you need one outcome, or several?**
 
-Choose **one** of two approaches depending on your study:
+- **One outcome** (or a couple): filter on your ICD codes inside the query, so
+  only the matching rows are ever read. That is the worked example below.
+- **Several outcomes**: pull all A and B diagnoses once into a table called
+  `alle_dx`, then filter that table per outcome. Same code, three small changes -
+  see [Several outcomes at once](#several-outcomes). Querying LPR once and
+  reusing the result is much faster than re-scanning the registers per outcome,
+  and the reusable [`get_lpr_diagnoses()`](#reusable-function) function is built
+  for exactly this.
 
-  |               | Approach 1 - direct extraction                | Approach 2 - `alle_dx`                         |
-  | ------------- | --------------------------------------------- | ---------------------------------------------- |
-  | **Best when** | You have **fewer outcomes**                   | You have **multiple outcomes** from LPR        |
-  | **Workflow**  | Fetch specific codes → Exclude → done         | Fetch all → Exclude → filter per outcome       |
-  | **Advantage** | Simpler and faster for single-outcome studies | LPR queried only once; reused for all outcomes |
-
-**Approach 1** is best for a smaller number of outcomes. Filter on specific ICD
-codes directly in the `filter()` step *before* `collect()`. DuckDB/Arrow pushes
-the filter down to the storage layer - only matching rows are loaded into RAM.
-
-**Approach 2** is best when your study has multiple outcomes. You query LPR once
-and build `alle_dx`: a shared table with all A and B diagnoses. For each new
-outcome, filter `alle_dx` on the relevant codes - the only line you change is
-the code list.
-
-::: {.callout-note}
-The examples require parquet files and a completed study population. `kohort` is
-the data.frame with `pnr` and `index_date` per person - see [Phase
-10](build-study-population.qmd).
+Either way the shape is identical, and it comes straight from [Understand
+LPR](understand-lpr.qmd): a hospital contact's `pnr` and date live in one table
+and the ICD code in another, so **every extract is a join between a contact
+register and a diagnosis register**, done once per LPR generation and then
+stacked.
 
 The examples use `read_register("name")` (fastreg); without fastreg use
-`open_dataset("E:/workdata/[projectnumber]/.../<register>/")` with your own
-path. **Note:** LPR is one of the largest registers, so the data **must** be in
-parquet. That lets Arrow/DuckDB filter before loading and fetch only the rows
-you ask for; reading LPR directly from e.g. SAS pulls the whole register into
-RAM. Convert SAS to parquet first: [Phase 4 - SAS to
-Parquet](file-formats.qmd#convert-sas-to-parquet).
-:::
+`open_dataset("path/to/<register>/")`. LPR is one of the largest registers, so
+it **must** be in parquet - reading it from SAS pulls the whole thing into RAM.
+Convert first if nobody has: [Parquet and
+fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet).
 
-::: {.callout-tip}
-**Why `semi_join(tibble(pnr = ...))` and not `filter(pnr %in% ...)`?** Both keep
-only the cohort's rows, but a `semi_join` against a small `tibble` of pnr's
-pushes down into Arrow/DuckDB more efficiently and reliably. A large `%in%`
-filter with an R vector can get slow or be rejected outright (especially with an
-older `duckplyr`). It also frees you from `!!`: `semi_join` takes an ordinary
-local table as its argument. You still need `!!` when you pass a local R vector
-into a `filter()`, e.g. a code list (`substr(c_diag, 2, 4) %in% !!CODES`).
-:::
+The code filters to your cohort with `semi_join(tibble(pnr = ...))` rather than
+`filter(pnr %in% ...)`, because it pushes down into Arrow/DuckDB better and needs
+no `!!` - see [`semi_join()`](function-guide.qmd#semi-join). You still need `!!`
+for a local code list inside `filter()`, e.g. `substr(c_diag, 2, 4) %in% !!CODES`.
 
-<details>
-<summary>Approach 1 - fetch specific diagnoses directly (start here for one outcome)</summary>
+## One outcome: filter on your codes {#one-outcome}
 
-Filter on specific codes **before** `collect()`. The example fetches diabetes mellitus (E10–E14) - replace `CODES_REGEX` with your own codes.
+The example fetches diabetes mellitus (E10-E14). Replace `CODES_REGEX` with your
+own codes. It runs in four steps, one per LPR generation plus the combine.
+
+**Setup.** The cohort's `pnr` and the codes you are looking for:
 
 ```r
-# Extract diabetes diagnoses from LPR (Approach 1) -----------------------------
 library(fastreg) # read_register - read a register by name
 library(arrow)   # open_dataset - fallback without fastreg
 library(dplyr)
 
 cohort_pnrs <- unique(kohort$pnr)
-CODES_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10–E14) - with D-prefix
+CODES_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10-E14) - with D-prefix
+```
 
-# LPR2 (somatic): lpr_adm + lpr_diag -------------------------------------------
+**Step 1 - LPR2 somatic** (`lpr_adm` + `lpr_diag`, up to March 2019). This is
+the shape all three steps follow: open both tables, keep your cohort, take
+`pnr` + key + date from the contact register, join the diagnosis register on the
+contact key, and only then `collect()`.
+
+```r
 lpr_adm  <- read_register("lpr_adm")  %>% rename_with(tolower)
 lpr_diag <- read_register("lpr_diag") %>% rename_with(tolower)
 
-# Here we combine LPR2's two tables: the contact register lpr_adm (pnr + dates) and the diagnosis
-# register lpr_diag (the ICD code), filter on your codes/diagnosis types, and select the columns you need.
-# You can pull as many codes at once as you like (via CODES_REGEX), and you choose the object name YOURSELF
-# (here 'lpr2_dm' = LPR2 + diabetes mellitus, because the example is diabetes).
 lpr2_dm <- lpr_adm %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%   # ONLY your cohort. OMIT this line if you want the WHOLE population
-  select(pnr, recnum, date_contact = d_inddto) %>%  # pick columns from LPR2; d_inddto is RENAMED to date_contact (see note below)
+  select(pnr, recnum, date_contact = d_inddto) %>%  # d_inddto is RENAMED to date_contact (see below)
   inner_join(
     lpr_diag %>%                                    # diagnosis register: has recnum + ICD code, but neither pnr nor date
-      filter(c_diagtype %in% c("A", "B"),           # A + B = action/secondary diagnoses; add "G" (-> c("A","B","G")) if you also want underlying conditions
+      filter(c_diagtype %in% c("A", "B"),           # A + B = action/secondary diagnoses; add "G" if you also want underlying conditions
              grepl(CODES_REGEX, c_diag)) %>%         # keep only your codes - filter BEFORE collect (D-prefix in the regex)
-      select(recnum, c_diag, c_diagtype),           # the diagnosis columns we need
+      select(recnum, c_diag, c_diagtype),
     by = "recnum"                                   # recnum = the key linking contact and diagnosis in LPR2
   ) %>%
   collect() %>%                                      # ONLY here is data pulled into RAM (everything above runs in the database)
   mutate(icd3 = substr(c_diag, 2, 4))                # strip the D-prefix: "DE11" -> "E11"
+```
 
-# LPR3: lpr_a_kontakt + lpr_a_diagnose -----------------------------------------
+**Step 2 - LPR3** (`lpr_a_kontakt` + `lpr_a_diagnose`, March 2019 onwards). Same
+shape, different table and column names, plus two things LPR2 does not have: the
+`lprindberetningssystem` filter and the retracted-diagnosis filter.
+
+```r
 lpr3_k <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
-  filter(lprindberetningssystem == "LPR3")   # keep only LPR3-system rows (avoid overlap - see warning at top)
+  filter(lprindberetningssystem == "LPR3")   # keep only LPR3-system rows (avoid the LPR2 overlap)
 lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower)
 
-lpr3_dm <- lpr3_k %>%                                 # same pattern as LPR2 - but LPR3 tables and different column names
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%   # ONLY your cohort. OMIT this line for the WHOLE population
-  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%  # LPR3's date column renamed to the SAME name: date_contact
+lpr3_dm <- lpr3_k %>%
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
+  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%  # LPR3's date column renamed to the SAME name
   inner_join(
     lpr3_d %>%
-      filter(diag_kode_type %in% c("A", "B"),         # as in LPR2: add "G" if you also want underlying conditions
+      filter(diag_kode_type %in% c("A", "B"),
              is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # drop withdrawn diagnoses (LPR3 only)
-             grepl(CODES_REGEX, diag_kode)) %>%        # same codes; filter BEFORE collect
+             grepl(CODES_REGEX, diag_kode)) %>%
       select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),  # rename LPR3 names -> same names as LPR2
     by = "dw_ek_kontakt"                               # LPR3's contact key (NOT recnum as in LPR2)
   ) %>%
   collect() %>%
   mutate(date_contact = as.Date(date_contact),         # the LPR3 date is a datetime -> make it a plain date
-         icd3 = substr(c_diag, 2, 4))                  # strip the D-prefix
+         icd3 = substr(c_diag, 2, 4))
+```
 
-# LPR2 psychiatric (up to March 2019) - OPTIONAL -------------------------------
-# Only if your outcome is an F-code (dementia, depression, ...)
+**Step 3 - LPR2 psychiatric, only if you need F-codes** (`t_psyk_adm` +
+`t_psyk_diag`). Skip this step entirely if your outcome is not an F-code.
+
+```r
 psyk_adm  <- read_register("t_psyk_adm")  %>%
   rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
 psyk_diag <- read_register("t_psyk_diag") %>%
@@ -168,30 +154,36 @@ lpr2_psyk_dm <- psyk_adm %>%
   ) %>%
   collect() %>%
   mutate(icd3 = substr(c_diag, 2, 4))
+```
 
-# Combine LPR2 (somatic + psych) + LPR3 into one extract -----------------------
-# Works because we gave the extracts the SAME column names above (date_contact, c_diag, ...):
-dm_dx <- bind_rows(lpr2_dm, lpr2_psyk_dm, lpr3_dm)     # drop lpr2_psyk_dm if you didn't pull psych
+**Step 4 - stack them.** This works only because all three steps produced the
+same column names:
+
+```r
+dm_dx <- bind_rows(lpr2_dm, lpr2_psyk_dm, lpr3_dm)   # drop lpr2_psyk_dm if you skipped step 3
 # Columns: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
 
-::: {.callout-note}
-**What is `date_contact = d_inddto`? (why is `date_contact` coloured?)** Inside `select()`, `new_name = old_name` means you **rename** a column. `d_inddto` is LPR2's actual date column, and `date_contact` is a name **you choose** - the editor colours it like an argument, but it's just the new column name (not a function argument). We rename because LPR3 has a *different* date column (`kont_starttidspunkt`); giving both the name `date_contact` makes the two extracts share column names, so `bind_rows()` can stack them.
+**What must match, and what you choose.** The register's own names (`pnr`,
+`recnum`, `d_inddto`, `c_diag`, `c_diagtype`, `dw_ek_kontakt`,
+`kont_starttidspunkt`, `diag_kode`) must be spelled exactly as they are in the
+register. The names on the left of `=` inside `select()` are yours:
+`date_contact` and `icd3` are chosen here, not required. The renaming is the
+point - LPR2's date column is `d_inddto` and LPR3's is `kont_starttidspunkt`, so
+giving both the name `date_contact` is what lets `bind_rows()` stack them in step
+4. Keep those harmonised names identical across the generations and the object
+names (`lpr2_dm`) can be whatever you like.
 
-**Must vs. choice:** the register names (`pnr`, `recnum`, `d_inddto`, `c_diag`, `c_diagtype`, `dw_ek_kontakt`, `kont_starttidspunkt`, `diag_kode` ...) **must** be spelled exactly as in the register. The new names (`date_contact`, `icd3`) and the object name (`lpr2_dm`) are **yours to choose** - just keep the harmonized names identical across LPR2 and LPR3.
-:::
+**Many codes?** Build the regex instead of typing it:
 
-::: {.callout-tip}
-**Many specific codes?** Build the regex programmatically:
 ```r
 codes <- c("E10", "E11", "E12", "E13", "E14")
 CODES_REGEX <- paste0("^D(", paste(codes, collapse = "|"), ")")
 ```
-:::
 
-::: {.callout-note}
-**Do you have F-codes (e.g. dementia, depression)?** Extend `CODES_REGEX` to include them, e.g. `"^DE1[0-4]|^DF0[0-3]|^DG30"`, and include the optional **LPR2 psychiatric** block above (F-diagnoses before March 2019 live only there).
-:::
+**F-codes (dementia, depression)?** Extend `CODES_REGEX`, e.g.
+`"^DE1[0-4]|^DF0[0-3]|^DG30"`, and do not skip step 3 - F-diagnoses before March
+2019 live only in the psychiatric registers.
 
 <details>
 <summary>Alternative: compact extraction (single-table approach)</summary>
@@ -218,90 +210,34 @@ It is shorter but has three pitfalls on DST data:
 
 </details>
 
-<details>
-<summary>Approach 2 - fetch all diagnoses + filter outcome (for multiple outcomes)</summary>
+## Several outcomes at once {#several-outcomes}
 
-**Part 1 - build `alle_dx`**
+If your study has more than one LPR outcome, do not run the steps above once per
+outcome - that re-scans the registers every time. Query LPR **once**, keep all A
+and B diagnoses in a table called `alle_dx`, and filter that table per outcome.
 
-```r
-# Fetch ALL diagnoses from LPR (Approach 2) ------------------------------------
-library(fastreg) # read_register - read a register by name
-library(arrow)   # open_dataset - fallback without fastreg
-library(dplyr)
+It is the same four steps, with three changes:
 
-cohort_pnrs <- unique(kohort$pnr)
+1. **Drop `CODES_REGEX` and the `grepl()` line** from every step. You are no
+   longer filtering on codes at the source.
+2. **Name the results `lpr2_dx`, `lpr3_dx`, `lpr2_psyk_dx`** and combine them
+   into `alle_dx` instead of `dm_dx`. Always include the psychiatric step here -
+   `alle_dx` is meant to serve outcomes you have not thought of yet.
+3. **Save it**, so later scripts reuse it rather than re-querying:
+   `saveRDS(alle_dx, "sti/til/alle_dx.rds")`.
 
-# LPR2 somatic (up to March 2019) ----------------------------------------------
-lpr_adm  <- read_register("lpr_adm")  %>% rename_with(tolower)
-lpr_diag <- read_register("lpr_diag") %>% rename_with(tolower)
+Everything else - the joins, the keys, the renames, `bind_rows()` - is unchanged.
 
-lpr2_dx <- lpr_adm %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
-  select(pnr, recnum, date_contact = d_inddto) %>%
-  inner_join(
-    lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B")) %>%
-      select(recnum, c_diag, c_diagtype),
-    by = "recnum"
-  ) %>%
-  collect() %>%
-  mutate(icd3 = substr(c_diag, 2, 4))
-
-# LPR3 (March 2019 and onwards) ------------------------------------------------
-lpr3_k <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
-  filter(lprindberetningssystem == "LPR3")   # keep only LPR3-system rows (avoid overlap - see warning at top)
-lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower)
-
-lpr3_dx <- lpr3_k %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
-  select(pnr, dw_ek_kontakt, date_contact = kont_starttidspunkt) %>%
-  inner_join(
-    lpr3_d %>%
-      filter(diag_kode_type %in% c("A", "B"),
-             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
-      select(dw_ek_kontakt, c_diag = diag_kode, c_diagtype = diag_kode_type),
-    by = "dw_ek_kontakt"
-  ) %>%
-  collect() %>%
-  mutate(date_contact = as.Date(date_contact), icd3 = substr(c_diag, 2, 4))
-
-# LPR2 psychiatric (up to March 2019) - only if you need F-codes ---------------
-psyk_adm  <- read_register("t_psyk_adm")  %>%
-  rename_with(tolower) %>% rename(pnr = v_cpr, recnum = k_recnum)
-psyk_diag <- read_register("t_psyk_diag") %>%
-  rename_with(tolower) %>% rename(recnum = v_recnum)
-
-lpr2_psyk_dx <- psyk_adm %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
-  select(pnr, recnum, date_contact = d_inddto) %>%
-  inner_join(
-    psyk_diag %>%
-      filter(c_diagtype %in% c("A", "B")) %>%
-      select(recnum, c_diag, c_diagtype),
-    by = "recnum"
-  ) %>%
-  collect() %>%
-  mutate(icd3 = substr(c_diag, 2, 4))
-
-# Combine LPR2 (somatic + psych) + LPR3 into one extract -----------------------
-alle_dx <- bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx)
-# Columns: pnr | date_contact | c_diag | c_diagtype | icd3
-```
-
-::: {.callout-note}
-**Why is LPR2 psychiatric included?** F-codes (dementia, depression,
-schizophrenia, alcohol/tobacco) recorded *before* March 2019 live in the separate
-psych registers `t_psyk_adm`/`t_psyk_diag`. The `rename()` calls above assume the
-DARTER column names `v_cpr`, `k_recnum` and `v_recnum`; DST's own lists say `pnr`
-and `recnum`, so check `colnames()` and drop the renames if you already have
-DST's names. They are included in the flow above. Omit them
-and your F-code outcomes miss everything before March 2019. If you don't need
-F-codes at all, drop the `lpr2_psyk_dx` block and leave it out of `bind_rows()`.
+::: {.callout-warning}
+**`alle_dx` is large.** You are pulling every A and B diagnosis for your whole
+cohort into RAM. On a big cohort, save it and then work from the `.rds` rather
+than keeping it and the registers open at once. Free it with `rm()` + `gc()`
+when you are done ([Phase 5](extraction-step-by-step.qmd)).
 :::
 
-::: {.callout-tip}
-**Using duckplyr?** `union_all()` combines tables before `collect()` and requires identical column names and types. Rename LPR3 columns to match the LPR2 format before combining - see the onboarding document for an example.
-:::
+Doing this by hand for each project is what
+[`get_lpr_diagnoses()`](#reusable-function) below is for: it is the four steps
+wrapped up, with the code list as an argument.
 
 **Filter your extracted table for specific outcomes**
 
@@ -326,14 +262,17 @@ result <- cohort %>%
 saveRDS(result, "sti/til/extract_dementia.rds")   # change filename for each new outcome
 ```
 
-::: {.callout-note}
-Exclusion of prevalent cases - persons who already had the diagnosis before index date - happens in [Phase 10, Step 3](build-study-population.qmd). Use `cohort_clean` instead of `cohort` in the code above after completing that step.
-:::
+Excluding prevalent cases - people who already had the diagnosis before index
+date - happens in [Phase 10, Step 3](build-study-population.qmd). Once you have
+done that, use `cohort_clean` in place of `cohort` above.
 
-</details>
+
+Using duckplyr instead of dplyr? `union_all()` combines before `collect()` and
+needs identical column names and types, so rename the LPR3 columns to the LPR2
+format first.
 
 <details>
-<summary>Try it yourself - runnable example with synthetic data (Approach 1)</summary>
+<summary>Try it yourself - runnable example with synthetic data</summary>
 
 ::: {.callout-important}
 This example requires **RStudio installed locally on your computer** - not the DST server.
@@ -342,7 +281,7 @@ Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudi
 It uses `open_dataset()` on local `synth_data/` folders; fastreg's `read_register()` is for a configured DST project, not ad-hoc local folders.
 :::
 
-The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the complete pattern from the theory section above, but runnable locally with synthetic data. It follows **Approach 1**: specific codes are filtered out *before* `collect()`.
+The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the complete pattern from the theory section above, but runnable locally with synthetic data. It follows the [one-outcome route](#one-outcome): specific codes are filtered out *before* `collect()`.
 
 The synthetic LPR data is generated with the `fakeregs` package, which you already know from [Phase 6 - First extraction](first-extraction.qmd#preparation-install-fakeregs-and-generate-synthetic-data). If you have already generated and saved data there, `synth_data/lpr_adm/` is ready and you can skip the preparation block.
 
@@ -380,7 +319,7 @@ write_parquet(lpr_a_d_synth,  "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet"
 If you have already run the preparation block in [Phase 6](first-extraction.qmd), `synth_data/lpr_adm/` is already saved.
 
 ```r
-# Extract CVD diagnoses (same pattern as Approach 1) ---------------------------
+# Extract CVD diagnoses (same four steps as above) -----------------------------
 # The ICD codes we are looking for - change these to your own outcome
 CVD_CODES <- c("I20", "I21", "I22", "I23", "I24", "I25")   # ischaemic heart disease
 
@@ -432,33 +371,26 @@ saveRDS(alle_cvd, "sti/til/extract_cvd.rds")                # save - change path
 
 </details>
 
-## Wrap the pattern in a reusable function (for multiple outcomes)
+## `get_lpr_diagnoses()` - the whole pattern as one function {#reusable-function}
 
-If you extract diagnoses for several outcomes, it pays off to encapsulate the
-Approach 2 pattern in one reusable function rather than copying \~40 lines for
-each new outcome. Define it at the top of your script or in a separate
-`functions.R` file. The function keeps the diagnosis-type column (`c_diagtype`)
-in its output, so you can later restrict the case definition for a sensitivity
-analysis (see [Diagnosis types](understand-lpr.qmd#diagtype)) without
-re-querying LPR.
+Everything above is the same four steps with the code list swapped. Rather than
+copy them per outcome, wrap them once: `get_lpr_diagnoses()` takes the code list
+as an argument and returns the combined extract. Define it at the top of your
+script, or in a `functions.R` you `source()`.
 
-**Advantages:**
+If you have more than one or two outcomes, this is the version to use.
 
-- One place to fix if something changes (e.g. a new register or a new column)
-- The code block for each outcome is reduced from \~40 lines to one function
-  call
-- Errors are introduced in one place instead of in each copy
+- One place to fix when a register or a column name changes, instead of one fix
+  per copy
+- Each outcome becomes a single call rather than ~40 lines
+- It keeps the diagnosis-type column (`c_diagtype`), so you can narrow the case
+  definition for a sensitivity analysis later (see [Diagnosis
+  types](understand-lpr.qmd#diagtype)) without re-querying LPR
 
-::: {.callout-tip}
-**Name or path?** The examples use `read_register("<register>")` (fastreg, by
-name). It requires fastreg set up with the path to your registers - see [Phase
-4](file-formats.qmd#convert-sas-to-parquet) if you did not convert them from
-SAS yourself. Without fastreg, replace `read_register("<register>")` with
-`open_dataset("E:/workdata/.../<register>/")` (by path). On **DARTER** fastreg
-is already set up; see [DARTER - overview and pipeline](darter-index.qmd) for
-the fully adapted variant - it is kept up to date with the current, confirmed
-register names (as of June 2026).
-:::
+Read the four steps above first: when a column name in your delivery differs
+from the one the function assumes, you need to recognise which step it belongs
+to. On DARTER, [DARTER - overview and pipeline](darter-index.qmd) carries this
+function already adapted, with the confirmed register names.
 
 <details>
 <summary>See the full <code>get_lpr_diagnoses()</code> function and usage</summary>
@@ -626,79 +558,6 @@ It gives one 0/1 flag per comorbidity per person, ready to enter your model as
 covariates. (The same `group_by(pnr) %>% summarise(any(.))` pattern is used on
 the [NMI](nmi.qmd) page, for example.)
 
-## Classify patient type: inpatient, outpatient or emergency {#patienttype}
-
-Many studies need to tell **inpatient** contacts apart from **outpatient**
-visits and **emergency-room** visits (e.g. only admissions as an outcome, or
-acute contacts as a marker). There is no single shared field across LPR2 and
-LPR3 - you derive the type.
-
-::: {.callout-warning}
-**Column names and codes must be verified against your own extract.** The logic
-itself is durable (the codes `ALCA00` and `ATA1` are confirmed LPR3 values as of
-2025), but the exact column names in LPR_A may differ from the example. Check
-with `arrow::schema()`/`colnames()` and look them up in [Overview of
-registers](register-reference.qmd). The pattern is adapted from [the
-Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview).
-:::
-
-**LPR2 (up to March 2019).** Patient type lives in `c_pattype`, but the
-emergency-room coding changed in 2014: code `"3"` was discontinued and ER visits
-arrive as `"2"` with an acute admission mode instead. Source: [Sundhedsdata-
-styrelsen's register documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5),
-section "Kendte databrud/aendringer".
-
-::: {.callout-important}
-**`c_pattype` and `c_indm` have to be in your extract.** DST documents both for
-every year of LPR_ADM, but a delivery only contains the variables the project
-ordered. In the DARTER delivery, for instance, `lpr_adm` has neither, while
-`t_psyk_adm` has both - the same register family, two different extract scopes.
-
-Run `colnames()` on your own `lpr_adm` before writing this code. If the columns
-are missing, no filtering trick recovers them: you have to ask DST to add them to
-the delivery.
-:::
-
-```r
-lpr2_type <- lpr_adm %>% # lpr_adm from the extract above
-  mutate(
-    patienttype = case_when(
-      c_pattype %in% c("0", "1") ~ "inpatient", # "0" full/admitted, "1" part-day
-      c_pattype == "3" ~ "emergency", # explicit ER, discontinued in 2014
-      c_pattype == "2" & c_indm == "1" ~ "emergency", # from 2014: "3" became "2" + acute
-      c_pattype == "2" ~ "outpatient",
-      TRUE ~ NA_character_
-    )
-  )
-```
-
-**LPR3 (March 2019 and onwards).** There is no direct `c_pattype`. The
-`kont_type` code `ALCA00` means **physical attendance** (not admission), and the
-`prioritet` code `ATA1` means **acute**. A common research approach derives
-patient type from the contact's **duration** plus an ER/acute marker:
-
-```r
-lpr3_type <- lpr3_k %>% # lpr3_k from the extract above
-  filter(kont_type == "ALCA00") %>% # keep physical attendances; drop phone/video
-  mutate(
-    duration_hours = as.numeric(
-      difftime(kont_sluttidspunkt, kont_starttidspunkt, units = "hours") # verify the end-time column name
-    ),
-    patienttype = case_when(
-      duration_hours >= 8 ~ "inpatient", # >= 8 hours ~ admission
-      enhedstype_ans == "skadestue" & prioritet == "ATA1" ~ "emergency", # acute ER
-      TRUE ~ "outpatient"
-    )
-  )
-```
-
-::: {.callout-note}
-**The 8-hour cut-off is a heuristic, not an official definition** - LPR3 has no
-"inpatient" field. Pick and document your own threshold, and clarify with your
-data manager. The column names for start/end time and unit type vary between
-deliveries; verify them before use.
-:::
-
 ## Remove unwanted diagnoses {#clean-diagnoses}
 
 A few codes are **administrative artefacts** rather than the patient's own
@@ -717,12 +576,10 @@ alle_dx <- alle_dx %>%
   )
 ```
 
-::: {.callout-note}
-What to remove depends on project and question - `DZ03*` (observation for
-suspected disease) is for instance relevant in some studies and should be kept
+What to remove depends on your project and question: `DZ03*` (observation for
+suspected disease) is genuinely relevant in some studies and should be kept
 there. The pattern is adapted from [the Plana-Ripoll group's code on
 OSF](https://osf.io/zhfyp/overview); verify against your own data.
-:::
 
 ## Next steps
 

@@ -1,0 +1,230 @@
+---
+title: "Parquet and fastreg"
+subtitle: "Point fastreg at your registers, convert SAS to parquet, and read the ones it cannot find by name"
+date: last-modified
+---
+
+Everything about getting registers into parquet and reading them with
+[`fastreg`](https://dp-next.github.io/fastreg/), in the order most people need
+it:
+
+1. **[Point fastreg at your registers](#fastreg-paths)** - one `options()` call
+   at the top of each script. Every `read_register()` example in this guide
+   assumes you have done this. If a colleague already converted the registers,
+   this is the only section you need.
+2. **[Convert SAS files to Parquet](#convert-sas-to-parquet)** - when your
+   project received `.sas7bdat` and nothing has been converted yet. Done once
+   per register, usually by one person for the whole project.
+3. **[When `read_register()` cannot find the
+   register](#when-read-register-fails)** - reading parquet that is not in
+   fastreg's layout.
+
+Which file types you meet on the server, and what opens each one, is [Phase 4 -
+File types and loading](file-formats.qmd).
+
+## Point fastreg at your registers {#fastreg-paths}
+
+If someone else already converted the registers, you do not convert anything.
+You tell fastreg where they are, **once per script**, and then read them by
+name. Ask whoever set the project up for the exact paths:
+
+```r
+# Point fastreg at the converted registers - done once per script
+library(fastreg)
+
+options(
+  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/",
+  fastreg.project_rawdata_dir = "E:/rawdata/[projectnumber]/"
+)
+```
+
+After that, `read_register("bef")` works by name, with no conversion and no path
+in each call.
+
+**Set it once, at the top of the script, next to the `library()` calls.** Every
+`read_register()` example in this guide assumes it has been set, and none of
+them repeat it: two lines of someone else's project paths in every code block
+would be noise, and it would suggest the call belongs next to each read rather
+than once at the top.
+
+Two things that otherwise cost you time:
+
+- **Write `E:/` with the colon**: the DST server is Windows, also when you log
+  in from a Mac. fastreg's own guide shows `E` without the colon, but only
+  because the example writes to a temporary folder with `fs::path_temp()`.
+- **The folder does not have to be the innermost one**: you can set the path to
+  `cleaned-data/` even though it holds several subfolders (`parquet-registers/`,
+  `parquet-external/`). `read_register()` searches further down for the register
+  name.
+
+## Convert SAS files to Parquet {#convert-sas-to-parquet}
+
+Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you
+can use them with `open_dataset()` and lazy evaluation, they must be converted
+to Parquet **once**. After that you use them exactly like any other register.
+
+::: {.callout-important}
+**Relevant for most projects outside DARTER.** If you are working on a project
+where the registers have not already been converted to parquet, this step is
+necessary before you can run extractions. Done once per register - after that
+the normal extraction pattern applies.
+:::
+
+<details>
+<summary>Why Parquet is worth it (SAS vs Parquet)</summary>
+
+| | SAS (.sas7bdat) | Parquet |
+|---|---|---|
+| Read time (1M rows) | ~30–120 sec | ~1–3 sec |
+| Disk space | Large | 50–75% smaller |
+| Requires package | `haven` | `arrow` |
+| Lazy evaluation | No - all into RAM | Yes - filter BEFORE collect |
+
+</details>
+
+### Recommended: convert with `fastreg`
+
+The recommended tool is the [`fastreg`](https://dp-next.github.io/fastreg/)
+package (dp-next, on CRAN). It converts SAS registers to Parquet (partitioned by
+year) and lets you read them back by **name**.
+
+::: {.callout-important}
+**Use fastreg's own guide for the conversion code.** The exact commands are
+documented - and kept up to date by the maintainers - in fastreg's [Getting
+started vignette](https://dp-next.github.io/fastreg/articles/fastreg.html). We
+link to the relevant section below instead of reproducing code that could drift
+out of date. You install it once with `install.packages("fastreg")` and point it
+at your raw-data and output folders as shown there.
+:::
+
+#### Convert a single file
+
+If you only need to convert **one** SAS file, use fastreg's `convert()` function -
+it writes a single register to Parquet. See the [Getting started
+vignette](https://dp-next.github.io/fastreg/articles/fastreg.html) for the exact
+call.
+
+#### Convert many files at once
+
+To convert a **whole workspace**, the fastreg team recommends its **`targets`
+pipeline**: `use_template()` copies a ready-to-run pipeline that converts all
+your registers in parallel - reproducibly, and re-runnable when a register is
+updated. See [Converting multiple registers in
+parallel](https://dp-next.github.io/fastreg/articles/fastreg.html#converting-multiple-registers-in-parallel).
+
+<details>
+<summary>If fastreg is not available on your project: convert manually with haven + arrow</summary>
+
+If you cannot install fastreg, you can convert a single register yourself. This is essentially what fastreg does under the hood:
+
+```r
+library(haven)    # read SAS file
+library(arrow)    # write Parquet
+
+sas_file  <- "E:/rawdata/[projectnumber]/rawdata/my_register.sas7bdat"
+parq_path <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/my_register/"
+
+# 1. Read the SAS file into R
+df <- read_sas(sas_file)            # reads the entire file into RAM - we call it "df", but you can use any name
+
+# 2. Standardise column names
+df <- df %>% rename_with(tolower)
+
+# 3. Write as Parquet
+dir.create(parq_path, recursive = TRUE, showWarnings = FALSE)
+write_parquet(df, file.path(parq_path, "my_register.parquet"))
+
+# 4. Verify - open it lazily like any other register
+open_dataset(parq_path) %>% glimpse()
+```
+
+::: {.callout-tip}
+**Read only what you need.** Even before converting you can save RAM by limiting what is read in:
+
+- `read_sas()` (`haven`) takes `col_select = c(pnr, alder, civst)` (pick columns), `n_max = 10000` (first rows only - good for testing) and `skip =`.
+- `heaven::import_SAS()` (pre-installed on DST) is even more efficient for large files and can filter on values - e.g. `keep = c("pnr","atc")`, `where = "..."` (filter rows) or `obs = 1000`.
+
+You can also convert to Parquet (or `.dta`) in **StatTransfer**, available on every server in the shared environment.
+:::
+
+</details>
+
+## When `read_register()` cannot find the register {#when-read-register-fails}
+
+This is the direct consequence of how the parquet was laid out, which is why it
+sits on the same page as the conversion. `read_register()` can **only** read
+registers that sit in fastreg's own format:
+
+```
+<register>/year=YYYY/part-XXX.parquet
+```
+
+Both halves count: the `year=` subfolder and the `part-` filename. This is not a
+bug but a deliberate choice. The function is built for data converted with
+fastreg's `convert()`, and is not meant to guess every way parquet files might
+otherwise be named. If the register is laid out differently - say as one flat
+folder of parquet files, or with filenames without `part-` - `read_register()`
+cannot see it, no matter how correctly you set the path.
+
+In that case you use one of fastreg's two other reading functions:
+
+  | Function                                    | You write                       | Used for                         |
+  | ------------------------------------------- | ------------------------------- | -------------------------------- |
+  | `read_register("name")`                     | the register **name**           | registers converted with fastreg |
+  | `read_parquet_dataset("path/to/folder")`    | the **full path** to the folder | a folder of parquet files        |
+  | `read_parquet_file("path/to/file.parquet")` | the **full path** to the file   | a single parquet file            |
+
+All three hand you a **DuckDB table**, so the rest of your code is exactly the
+same whichever one you use.
+
+::: {.callout-important}
+**`read_parquet_dataset()` does not use your `options()` path.** Only
+`read_register()` looks names up under the folders you set. The two
+`read_parquet_*()` functions need the **full path**, including any subfolders
+below the folder you set. So if you set the path to `cleaned-data/`, you still
+have to write the whole way down:
+`"E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"`.
+:::
+
+```r
+# Find the register when read_register() cannot look the name up
+library(fastreg)
+library(dplyr)
+
+# 1. Which names does read_register() know? It lists the datasets it can find
+#    under the paths you set with options() - always start here.
+list_parquet_datasets()
+
+# 2. If the register is not on the list, point at the folder with the full path
+lmdb <- read_parquet_dataset(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"
+)
+
+# 3. If it is a single file rather than a folder, use read_parquet_file()
+table <- read_parquet_file(
+  "E:/workdata/[projectnumber]/cleaned-data/parquet-external/my_table.parquet"
+)
+
+# From there the code is the same as after read_register()
+lmdb %>%
+  rename_with(tolower) %>%
+  filter(eksd >= as.Date("2010-01-01")) %>%
+  select(pnr, atc, eksd) %>%
+  collect()
+```
+
+::: {.callout-note}
+**On DARTER (project 708421)** the remaining registers are being converted to
+fastreg format during **August 2026**. Until then a few registers may need
+`read_parquet_dataset()` even though they are listed with `read_register()` in
+[DARTER - Register paths and
+datastores](darter-register-paths-datastores.qmd). After that, the name
+lookup works for all of them. *(Noted July 2026.)*
+:::
+
+## See also
+
+- [Phase 4 - File types and loading](file-formats.qmd): which file types you
+  meet, and what opens each one
+- [Phase 5 - Extracting data step by step](extraction-step-by-step.qmd): the
+  pattern you use once the registers are readable

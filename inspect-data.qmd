@@ -31,27 +31,7 @@ bef_data <- bef_data %>% filter(year == 2015) %>% collect() # filter and fetch i
 ```
 :::
 
-## Seeing a red error message? {#seeing-a-red-error-message}
-
-Before looking in the code - do this in order:
-
-1. **Read the error message:** which line is mentioned? Which object name
-   appears?
-2. **Run `class(object)`:** is it data (`"data.frame"`) or still a connection
-   (`"tbl_duckdb_connection"`)?
-3. **Run `names(object)`:** is the column named exactly what you think? A single
-   letter or difference in capitalisation is enough to fail.
-4. **Isolate the failing line:** run it alone and see what happens.
-5. **Use `?functionname`:** type e.g. `?colSums` in the console to open the help
-   documentation in the **Help** panel (bottom right). It shows what the
-   function does, which arguments it takes, and examples.
-6. **Ask a colleague or search for the error message:** see [2 - R: the bare
-   essentials](r-intro.qmd#when-you-get-stuck) for the prioritised help list.
-
-An overview of common error messages and what they typically mean is in [DST
-pitfalls](dst-pitfalls.qmd#the-most-common-error-messages-and-what-they-mean).
-
-## See what you have
+## The shape: size, columns and types {#the-shape}
 
 ```r
 dim(bef_data) # number of rows and columns - e.g. "1200 rows, 8 columns"
@@ -60,11 +40,24 @@ ncol(bef_data) # number of columns only
 names(bef_data) # column names as a vector
 ```
 
-To check the column names on a **lazy** object before `collect()`, use
-`colnames(bef)` - it works on both Arrow- and DuckDB-based lazy objects.
-(`names()` works on a data frame after `collect()`, but does not necessarily
-return the columns on a lazy DuckDB/`read_register()` object - use `colnames()`
-to be safe.)
+Checking the column names on a **lazy** object, before `collect()`, is fiddlier
+than it looks, and both of the obvious ways can mislead you:
+
+- `names()` on a lazy object returns the *connection's* parts (`src`,
+  `lazy_query`), not the table's columns.
+- `colnames()` works on the DuckDB objects `read_register()` gives you, but on a
+  lazy **Arrow** query that has been through `rename_with()` it can return an
+  **empty vector** without any error - so columns that exist look missing.
+  (Seen on arrow 23.0.1 outside DST; not yet confirmed on the server.)
+
+The reliable version fetches the structure with zero rows:
+
+```r
+names(collect(head(bef, 0))) # column names of a lazy object, nothing read
+```
+
+`arrow::schema(bef)` also works on an Arrow connection and gives you the types
+as well - see [`arrow::schema()`](function-guide.qmd#arrow-schema).
 
 <details>
 <summary>Example with simple data</summary>
@@ -82,7 +75,7 @@ names(df)
 
 </details>
 
-## Understand the structure
+**What type is each column?**
 
 ```r
 glimpse(bef_data) # column name, type and first values - compact and readable (requires dplyr)
@@ -110,7 +103,7 @@ strangely, or does your code fail with a mysterious message? Run
 step](extraction-step-by-step.qmd#check-do-you-have-data-or-just-a-connection).
 :::
 
-## See the first and last rows
+**What does a row actually look like?**
 
 ```r
 head(bef_data) # the first 6 rows - do the columns and types look right?
@@ -118,7 +111,7 @@ head(bef_data, 10) # the first 10 rows
 tail(bef_data) # the last 6 rows - useful for detecting incomplete datasets
 ```
 
-## Explore the contents
+## The values: what is actually in each column {#the-values}
 
 ::: {.callout-important}
 **Two things must be in place before the commands in the rest of this section

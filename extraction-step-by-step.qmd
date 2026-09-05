@@ -5,14 +5,9 @@ date: last-modified
 ---
 
 In Phase 4 you saw that registers are loaded *lazily*: you open a connection,
-not data. This page shows **the working method** that follows from that - the
-same pattern you will use in every single extraction for the rest of the guide.
-
-::: {.callout-important}
-**This is the most important pattern in the entire guide.** Every extraction
-from DST registers follows this structure. Learn it here once - you will
-recognise it everywhere from Phase 6 onwards.
-:::
+not data. This page shows **the working method** that follows from that. It is
+the most important pattern in the guide - every extraction from Phase 6 onwards
+is this same structure, so learn it here once.
 
 ::: {.callout-note}
 **Why can't we just load a register like a CSV file?** Because the registers are
@@ -34,26 +29,21 @@ with `collect()`.
 your project (the rest of the pattern is identical whichever you choose):
 
 ::: {.panel-tabset}
-## fastreg (recommended)
+#### fastreg (recommended)
 
 ```r
 library(fastreg)
 
-# Once per script, next to the library() calls. This is what lets
-# read_register() find a register by name. Ask whoever set the project up for
-# the paths - see Phase 4, "Point fastreg at your registers".
-options(
-  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/",
-  fastreg.project_rawdata_dir = "E:/rawdata/[projectnumber]/"
-)
-
 bef <- read_register("bef") %>% rename_with(tolower)
 ```
 
-The `options()` call is not repeated in the rest of the guide's examples: it
-belongs at the top of the script, once, not before each read.
+This assumes you have pointed fastreg at your registers with one `options()`
+call at the top of the script - see [Point fastreg at your
+registers](parquet-and-fastreg.qmd#fastreg-paths). That call is not repeated in
+the guide's examples: it belongs at the top of the script, once, not before each
+read.
 
-## arrow (any parquet)
+#### arrow (any parquet)
 
 ```r
 library(arrow)
@@ -212,39 +202,32 @@ The blue steps are **lazy** - they only build up a query. Data moves into R only
 at `collect()` (orange). That is why `filter()` and `select()` must come
 *before* `collect()`.
 
-<details>
-<summary>Want to know more? What are Parquet, Arrow and DuckDB really?</summary>
-
-You do not need to know these names to use the pattern above - but here is what happens under the hood.
-
-**Parquet** is a file format that stores data *column by column* rather than row by row. If you only want `pnr` and `year`, the computer reads only those two columns - not the rest. That is why it is fast.
-
-On the DARTER project (708421) most SAS datasets are already converted to parquet and can be opened directly with `read_register()` - see [DARTER - Register paths and datastores](darter-register-paths-datastores.qmd). On other projects you can convert SAS files to parquet yourself - see [Phase 4 - Convert SAS to parquet](file-formats.qmd#convert-sas-to-parquet).
-
-**Arrow** is the R package that reads parquet files and translates your dplyr commands into efficient parquet queries. `open_dataset()` uses Arrow.
-
-**DuckDB** is a database that runs directly inside your R session. It is very fast and supports almost all dplyr syntax. If you use `read_register()` (fastreg), Arrow and DuckDB are used under the hood. You just write normal dplyr code - both ways.
-
-</details>
-
 []{#arrow-vs-duckdb}
 
 <details>
-<summary>More technical: Arrow vs. DuckDB - when is which used?</summary>
+<summary>Want to know more? Parquet, Arrow and DuckDB - and when each is used</summary>
 
-Both engines use lazy evaluation and `collect()`.
+You do not need to know these names to use the pattern above, but here is what happens under the hood.
 
-**Arrow** is fast at reading parquet, but does not support all dplyr functions. `open_dataset()` gives you an Arrow connection.
+**Parquet** is a file format that stores data *column by column* rather than row by row. If you only want `pnr` and `year`, the computer reads only those two columns - not the rest. That is why it is fast. Getting your registers into parquet is [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet); on DARTER (708421) most of them are converted already, see [DARTER - Register paths and datastores](darter-register-paths-datastores.qmd).
 
-**DuckDB** supports almost all dplyr functions and is also very fast. To move an Arrow connection over to DuckDB, pipe through `to_duckdb()` (from the `arrow` package):
+**Arrow** and **DuckDB** are the two engines that run your query against the parquet. Both are lazy and both end at `collect()`, so your code looks the same either way. The difference is coverage:
+
+| | Arrow | DuckDB |
+|---|---|---|
+| You get one from | `open_dataset()` | `read_register()` (fastreg), or `to_duckdb()` |
+| Speed | fast at reading parquet | also very fast |
+| dplyr coverage | does not support every function | supports almost all of them |
+
+To move an Arrow connection over to DuckDB, pipe through `to_duckdb()` (from the `arrow` package):
 
 ```r
 bef <- open_dataset("path/to/bef/") %>% to_duckdb()   # now queried by DuckDB
 ```
 
-`read_register()` (fastreg) return a DuckDB connection already, so this step is built in - you do not call `to_duckdb()` yourself.
+`read_register()` hands you a DuckDB connection already, so this step is built in - you do not call `to_duckdb()` yourself.
 
-If you encounter an error about *"unsupported function"* in Arrow, switch to DuckDB with `to_duckdb()`, or `collect()` the data into R first and perform the operation after that.
+If you hit an error about an *"unsupported function"* in Arrow, that is the coverage gap: switch to DuckDB with `to_duckdb()`, or `collect()` into R first and do the operation there.
 
 </details>
 

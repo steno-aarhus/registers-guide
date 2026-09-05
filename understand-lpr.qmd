@@ -20,11 +20,6 @@ you need to know before you extract data. The concrete extraction recipes are in
 and you choose diagnosis types (A/B for outcomes, +G for baseline comorbidity).
 :::
 
-::: {.callout-tip}
-**Reading order:** Read this page first to understand the data. Then go to
-[Extract from LPR](extract-from-lpr.qmd) for the runnable code examples. You
-build the cohort itself in [Phase 10](build-study-population.qmd).
-:::
 
 ## LPR is split into two periods
 
@@ -51,8 +46,8 @@ Check `colnames()` and rename to `recnum` and `pnr` before joining. ² datetime
 format - convert with `as.Date()`.
 
 This table lists what the registers contain, not what your project was given.
-`c_pattype` in particular is often left out of somatic extracts, so check
-`colnames()` before you build anything on it.
+Run `colnames()` on your own extract before you build anything on a column here -
+`c_pattype` in particular is often left out (see [Patient type](#patienttype)).
 
 **Why two registers - contact and diagnosis?** LPR splits each hospital contact
 into two tables: the **contact register** (e.g. `lpr_adm`) has one row per
@@ -74,16 +69,8 @@ names differ - see the table footnotes above. From March 2019, LPR3 combines
 both: somatic and psychiatric contacts and diagnoses are in the same tables, and
 no separate psychiatric query is needed.
 
-**Even older psychiatry (1969-1994).** The Danish Psychiatric Central Register
-is electronic from 1969, but covers only **inpatients** until 1995 (outpatient
-visits were added only from 1995). Diagnoses before 1994 are coded in **ICD-8**
-(numeric codes, e.g. 290-315, where 290 covers dementia), not ICD-10 F-codes.
-These older data are normally not part of the standard LPR extract and are
-requested separately (see
-[Rigsarkivet](https://www.rigsarkivet.dk/vejledning/det-psykiatriske-centralregister-1969-1997/)
-and [NCRR, Aarhus
-University](https://ncrr.au.dk/danish-registers/the-danish-psychiatric-central-research-register)).
-If your study covers that period, remember to map ICD-8 to your F-code groups.
+Psychiatric data older than 1995 exists but is not part of a standard LPR
+extract - see [Overview of registers](register-reference.qmd#psyk-before-1995).
 :::
 
 ```{mermaid}
@@ -99,37 +86,30 @@ gantt
     lpr_a_kontakt + lpr_a_diagnose   :active, 2019, 2027
 ```
 
-LPR3 covers hospital contacts from March 2019 onwards, and you access them
-through the LPR_A files (`lpr_a_kontakt`, `lpr_a_diagnose`). Note that LPR_A
-also contains some outpatient data going back to around 2017, part of which is
-already in LPR2 - so it must be de-duplicated (see the pitfall below).
+You access LPR3 through the LPR_A files (`lpr_a_kontakt`, `lpr_a_diagnose`).
 
-::: {.callout-important}
-**New researcher / new project? Work with the LPR_A files only.** LPR3 has been
-delivered in two formats: the older **LPR_F** (`kontakter`, `diagnoser`,
-`forloeb`) and the current **LPR_A** (`lpr_a_kontakt`, `lpr_a_diagnose`). For
-new projects **LPR_F is effectively dead - use LPR_A**. Both may sit in your
-folder and cover the same years, so loading LPR_F as well (or mixing the two)
-gives you **duplicated rows**. Every example on this site uses `lpr_a_*`.
+::: {.callout-important #lpr-a-format}
+**Use the LPR_A files, and filter them. Two things, both easy to get wrong.**
+
+1. **LPR_A, not LPR_F.** LPR3 has been delivered in two formats: the older
+   **LPR_F** (`kontakter`, `diagnoser`, `forloeb`, a course-oriented model) and
+   the current **LPR_A** (`lpr_a_kontakt`, `lpr_a_diagnose`, contact-based).
+   Projects receive LPR_A today, and every example on this site uses `lpr_a_*`.
+   Both may sit in your folder covering the same years, and the two represent
+   the same contacts differently - so loading LPR_F as well, or mixing them,
+   gives you **duplicated rows**.
+2. **The reporting system starts in March 2019, but the files reach further
+   back.** `lpr_a_kontakt` holds contacts from around 2017 that LPR2 already
+   covers, so "LPR3" as a period and "LPR_A" as a file are not the same thing.
+   Filter with `lprindberetningssystem == "LPR3"`, or the same contact is
+   counted twice across the two generations. On DARTER this is [pitfall
+   5](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
+
+*(The LPR_F data model is documented in [Vejledning til
+LPR3_F](https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf)
+if you have inherited a project that used it. LPR_A documentation is still
+incomplete.)*
 :::
-
-::: {.callout-warning}
-**Pitfall: overlapping data.** `lpr_a_kontakt` contains older contacts (already
-covered by LPR2) folded into the LPR3 table. Remove them by filtering
-`lprindberetningssystem == "LPR3"`, so the same contact is not counted twice
-across LPR2 and LPR3. This is a general property of LPR_A; on DARTER it is
-spelled out in [pitfall
-5](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
-:::
-
-<details>
-<summary>Background: LPR_F vs LPR_A (safe to skip)</summary>
-
-When LPR3 launched in March 2019, the research data was first distributed in the **LPR_F** model: a course-oriented (`forloeb`) format with separate `kontakter`, `diagnoser` and `forloeb` tables. Forskerservice later moved to the contact-based **LPR_A** model (`lpr_a_kontakt`, `lpr_a_diagnose`), which is what projects receive today. The two represent the same underlying contacts differently, so they are **not** meant to be combined - pick LPR_A.
-
-The official LPR_F data model is documented in [Vejledning til LPR3_F](https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf) (and the other links at the bottom of this page). Documentation for LPR_A is still incomplete.
-
-</details>
 
 ## ICD codes and the D-prefix
 
@@ -177,6 +157,82 @@ column and lets you vary the case definition later - e.g. main analysis on A +
 B, sensitivity analysis on A only (primary diagnosis) or including G - without
 re-querying LPR.
 :::
+
+## Patient type: inpatient, outpatient or emergency {#patienttype}
+
+Some studies need to tell **inpatient** contacts apart from **outpatient** and
+**emergency-room** visits - only admissions as an outcome, say, or acute contacts
+as a marker. There is no single shared field across the two generations, so you
+derive it, and the two generations derive it differently.
+
+::: {.callout-important}
+**`c_pattype` and `c_indm` have to be in your extract.** DST documents both for
+every year of LPR_ADM, but a delivery only contains the variables the project
+ordered. In the DARTER delivery, for instance, `lpr_adm` has neither, while
+`t_psyk_adm` has both - the same register family, two different extract scopes.
+
+Run `colnames()` on your own `lpr_adm` first. If the columns are missing, no
+filtering trick recovers them: you have to ask DST to add them to the delivery.
+:::
+
+<details>
+<summary>How to derive it, in LPR2 and in LPR3</summary>
+
+The column names and codes must be verified against your own extract. The logic
+is durable (`ALCA00` and `ATA1` are confirmed LPR3 values as of 2025), but the
+exact column names in LPR_A may differ from the example - check with
+`arrow::schema()` or `colnames()` and look them up in [Overview of
+registers](register-reference.qmd). The pattern is adapted from [the
+Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview).
+
+**LPR2 (up to March 2019).** Patient type lives in `c_pattype`, but the
+emergency-room coding changed in 2014: code `"3"` was discontinued and ER visits
+arrive as `"2"` with an acute admission mode instead. Source: [Sundhedsdata-
+styrelsen's register documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5),
+section "Kendte databrud/aendringer".
+
+```r
+library(dplyr) # mutate, case_when
+
+lpr2_type <- lpr_adm %>% # your lpr_adm extract
+  mutate(
+    patienttype = case_when(
+      c_pattype %in% c("0", "1") ~ "inpatient", # "0" full/admitted, "1" part-day
+      c_pattype == "3" ~ "emergency", # explicit ER, discontinued in 2014
+      c_pattype == "2" & c_indm == "1" ~ "emergency", # from 2014: "3" became "2" + acute
+      c_pattype == "2" ~ "outpatient",
+      TRUE ~ NA_character_
+    )
+  )
+```
+
+**LPR3 (March 2019 and onwards).** There is no `c_pattype` at all. The
+`kont_type` code `ALCA00` means **physical attendance** (not admission), and the
+`prioritet` code `ATA1` means **acute**. A common research approach derives
+patient type from the contact's **duration** plus an ER/acute marker:
+
+```r
+library(dplyr) # filter, mutate, case_when
+
+lpr3_type <- lpr3_k %>% # your lpr_a_kontakt extract
+  filter(kont_type == "ALCA00") %>% # keep physical attendances; drop phone/video
+  mutate(
+    duration_hours = as.numeric(
+      difftime(kont_sluttidspunkt, kont_starttidspunkt, units = "hours") # verify the end-time column name
+    ),
+    patienttype = case_when(
+      duration_hours >= 8 ~ "inpatient", # >= 8 hours ~ admission
+      enhedstype_ans == "skadestue" & prioritet == "ATA1" ~ "emergency", # acute ER
+      TRUE ~ "outpatient"
+    )
+  )
+```
+
+**The 8-hour cut-off is a heuristic, not an official definition** - LPR3 has no
+"inpatient" field. Pick and document your own threshold, and clarify it with your
+data manager.
+
+</details>
 
 ## Retracted diagnoses in LPR3 (`senere_afkraeftet`)
 
@@ -247,35 +303,17 @@ to extract the diagnoses with code:
 
 ## See also
 
+- [Extract from LPR](extract-from-lpr.qmd): the runnable extraction recipes
 - [Overview of registers](register-reference.qmd): confirmed column names for
   all LPR registers
 - [DST pitfalls](dst-pitfalls.qmd): known issues with LPR on DST
 
-### External resources on LPR3 and the 2019 transition
+**Looking up a code:** [the SKS browser](https://medinfo.dk/sks/brows.php) for
+ICD diagnosis and SKS procedure codes, and esundhed.dk's [LPR code sheet
+(PDF)](https://www.esundhed.dk/Dokumentation/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx).
+Both in Danish.
 
-- [Sundhedsdatastyrelsen - "Vejledning til LPR3_F" (PDF, in
-  Danish)](https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf):
-  Forskerservice's official guide to the research-oriented LPR3_F data model
-  (content, keys and the LPR2→LPR3 transition). Danish only.
-- [Sundhedsdatastyrelsen - "Vejledning i udtræk fra Landspatientregisteret"
-  (PDF, in
-  Danish)](https://sundhedsdatastyrelsen.dk/Media/638675370025223404/Udtrek-Landspatientregisteret.pdf):
-  Forskerservice's general extraction guide; also covers the contact-based
-  LPR_A/LPR3 format. Danish only.
-- [ctpteam/DST - "Guide to LPR3"](https://github.com/ctpteam/DST): institutional
-  guide to the LPR3 structure
-- [Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3](https://github.com/Aarhus-Psychiatry-Research/diagnostic-stability-lpr2-lpr3):
-  peer-reviewed, thorough example of diagnostic stability across the LPR2→LPR3
-  transition (methodological inspiration, not code for reuse)
-
-### Code look-ups
-
-- [The SKS browser](https://medinfo.dk/sks/brows.php): look up ICD diagnosis and
-  SKS procedure codes (in Danish)
-- [LPR code sheet (PDF
-  download)](https://www.esundhed.dk/Dokumentation/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx):
-  esundhed.dk's combined code sheet for LPR (in Danish)
-- [DST TIMES - the DIAG
-  variable](https://www.dst.dk/da/Statistik/dokumentation/Times/forebyggelsesregistret/diag):
-  DST's value set for D-prefixed ICD diagnosis codes (documented under the
-  Prevention Register) (in Danish)
+**Going deeper on the 2019 transition:** Sundhedsdatastyrelsen's [extraction
+guide
+(PDF)](https://sundhedsdatastyrelsen.dk/Media/638675370025223404/Udtrek-Landspatientregisteret.pdf)
+covers the contact-based LPR_A format. Danish only.
