@@ -4,12 +4,6 @@ subtitle: "Extract drug exposure from LMDB - filtered to your cohort"
 date: last-modified
 ---
 
-::: {.callout-warning}
-**Under development.** Structural outline - to be expanded. The pattern is the
-same as in [Extract from LPR](extract-from-lpr.qmd): open the register,
-filter to the cohort, keep your codes, reduce to one row per person.
-:::
-
 Prescription medication lives in **LMDB** (the Prescription Register). The
 register has **one row per dispensed prescription**, so the same person can have
 hundreds of rows. The two columns you almost always use are:
@@ -18,6 +12,10 @@ hundreds of rows. The two columns you almost always use are:
   `"A10BA02"` for metformin.
 - **`eksd`:** the dispensing date (when the prescription was collected) - use it
   as the prescription date, just like `date_contact` in LPR.
+
+**LMDB starts in 1995, and is generally used from 1997.** There is no medication
+history before that, so a lookback window that reaches further back is empty
+rather than negative - and "no prescriptions" will look like "not a user".
 
 The full confirmed column list is in [Register
 reference](register-reference.qmd#lmdb).
@@ -90,6 +88,51 @@ guide](function-guide.qmd#filter-conditions). Reducing to **one row per
 person** is explained in [Long ↔ wide format](long-wide.qmd) - here
 `slice(1)` for the first dispensing, but it could also be ever/never or a count
 in a window (see the role table above).
+
+## From dispensings to "is this person a user?" {#defining-users}
+
+One dispensing is weak evidence of treatment: people fill a prescription once and
+stop. A common definition is therefore **at least two dispensings within a
+window**, with the onset date being the date the definition is first met.
+
+```r
+library(dplyr) # group_by, mutate, lag, filter, summarise
+
+# Does the person have `min_dispensings` fills inside `window_days`?
+# lag() looks back to the (min_dispensings - 1)th previous fill for that person,
+# so the gap between them is the span of the whole qualifying run.
+flag_users <- function(data, min_dispensings = 2, window_days = 365) {
+  data %>%
+    arrange(pnr, eksd) %>%                       # lag() needs the rows in date order
+    group_by(pnr) %>%
+    mutate(
+      lookback = lag(eksd, n = min_dispensings - 1),
+      gap_days = as.numeric(eksd - lookback)
+    ) %>%
+    ungroup() %>%
+    filter(!is.na(gap_days), gap_days <= window_days) %>%  # the run is short enough
+    group_by(pnr) %>%
+    summarise(onset_date = min(eksd), .groups = "drop")    # first date the rule is met
+}
+
+users <- flag_users(medication, min_dispensings = 2, window_days = 365)
+```
+
+The two numbers are **your** choices, not standards - write them into your
+methods. One dispensing is enough for a drug taken once; a chronic treatment
+usually wants two or more.
+
+This is also how medication can enter a **comorbidity** definition: for
+conditions treated largely outside hospital, LMDB catches people LPR never sees.
+Whether to define a condition from diagnoses, prescriptions or both is a design
+decision - see [Comorbidity - diagnoses, prescriptions, or
+both?](comorbidity.qmd#diagnoses-prescriptions-or-both).
+
+::: {.callout-warning}
+**`arrange()` before `lag()`, always.** `lag()` works on row order, not on dates.
+If the rows are not sorted by person and date, `gap_days` is computed against an
+arbitrary earlier row and the result is quietly wrong rather than an error.
+:::
 
 ## Which ATC column? {#atc-columns}
 

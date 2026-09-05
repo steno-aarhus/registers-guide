@@ -8,23 +8,10 @@ The later phases - extract variables ([Phase 11](extract-variables.qmd)),
 assemble the dataset ([Phase 12](data-manipulation.qmd)) and analysis ([Phase
 13](analysis.qmd)) - assume you already have a **cohort**: a table with `pnr`
 and `index_date` per person. This page shows how to identify your study
-population and give each person an index date; then you choose a study design.
-
-::: {.callout-tip}
-**In short:** First you identify your **cases/exposed** and give each an **index
-date**. After that, the path depends on your design:
-
-- **Prevalence study / cohort without a comparison group:** after this page you
-  are done building the study population; continue to [Phase 11 - Extract
-  variables](extract-variables.qmd).
-- **Cohort study with a comparison cohort:** after this page continue to →
-  [Comparison cohort](comparison-cohort.qmd).
-- **(Nested) case-control:** after this page continue to →
-  [Case-control](case-control.qmd).
-- **Self-controlled or family-based design:** lets the person (or family) be
-  their own control - see [Self-controlled and family-based
-  designs](special-designs.qmd).
-:::
+population: identify your **cases/exposed**, give each one an **index date**, and
+exclude those who already had the outcome. What you do after that depends on your
+study design, and that choice is laid out at the [end of this
+page](#what-now-choose-your-design).
 
 <details>
 <summary>**What is index date?**</summary>
@@ -38,19 +25,10 @@ Everything that follows - outcome date, covariates at baseline, follow-up time -
 
 </details>
 
-::: {.callout-warning}
-**This page is still under development.** The code needs further review and
-testing before being used directly. Use it as structural guidance and adapt to
-your own project.
-:::
-
-::: {.callout-note}
-**Functions used here.** `inner_join()` and `bind_rows()` are already shown in
-[Extract from LPR](extract-from-lpr.qmd) and explained in detail in [Link
-your extracts](joins.qmd#joins-link-two-tables). `group_by() + slice()` is
-explained in [Long ↔ wide format](long-wide.qmd). New in Step 3:
-`anti_join()`, `distinct()`, `pull()` plus `nrow()`, `cat()` and `stopifnot()` -
-see [Function guide](function-guide.qmd).
+::: {.callout-warning title="Structural guidance, not verified code"}
+The examples show the shape of each step. They have **not yet been run end to end
+on real register data**, so treat them as a starting point: check the column names
+against your own delivery, and check the logic against your analysis plan.
 :::
 
 ## Step 1 - Define the source population {#step-1 .step-heading}
@@ -131,14 +109,7 @@ residence at an index date in 2015.
   five years of lookback if the registers cover those five years too.
 :::
 
-::: {.callout-note}
-**Other data sources**
-
-The National Centre for Register-based Research also works with a register
-called "stamdata". If you have further information about this external dataset,
-please get in touch: **Sara Schwartz -
-[saras@clin.au.dk](mailto:saras@clin.au.dk)**
-
+::: {.callout-note title="Municipality codes: a second way to establish residence"}
 **Municipality codes can also be used to assess residence in Denmark.** CPR
 keeps a running residence history: one period per address, with municipality
 code and dates. With it you can look residence up directly (was there a period
@@ -214,12 +185,13 @@ applies, but it has to be used where the date exists - not here. The index date
 is not a property of the person:
 
 - **The exposed** get their index date in Step 2 (the exposure date). Residence
-  is therefore decided for them in Step 3 on [Comparison
+  is therefore decided for them when you prepare the exposed on [Comparison
   cohort](comparison-cohort.qmd).
 - **Comparison persons** are only assigned an index date at the match itself,
   and the *same* person can be a candidate at several different index dates -
   and be resident at one but not the other. So residence is decided per (person,
-  index date) at match time in Step 5, never once and for all.
+  index date) at match time on [Comparison cohort](comparison-cohort.qmd), never
+  once and for all.
 
 In short: the source population here is at **person level**, while eligibility
 at index is at **pair level** (person + date).
@@ -244,7 +216,7 @@ Register names may vary on your project - see [Overview of
 registers](register-reference.qmd).
 
 The examples use `read_register()`; it requires fastreg set up with the path to
-your registers - see [Prepare your registers](parquet-and-fastreg.qmd#convert-sas-to-parquet) if
+your registers - see [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if
 you did not convert them from SAS yourself.
 
 <details>
@@ -306,9 +278,10 @@ exposed <- bind_rows(exp_lpr2, exp_lpr3) %>%
 nrow(exposed)                                              # number of unique operated individuals
 ```
 
-::: {.callout-tip}
-`exposed` contains only the operated individuals. The full cohort (exposed + comparator cohort) is built on [Comparison cohort](comparison-cohort.qmd) and saved as `cohort`. It is `cohort` - not `exposed` - that you use as `cohort_pnrs` in the other phases.
-:::
+Note that `exposed` holds only the operated individuals. The full cohort
+(exposed + comparison group) is built on [Comparison
+cohort](comparison-cohort.qmd) and saved as `cohort` - and it is `cohort`, not
+`exposed`, that the later phases use as `cohort_pnrs`.
 
 </details>
 
@@ -405,19 +378,12 @@ stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # check: one row per perso
 
 </details>
 
-::: {.callout-tip}
-`nrow()`, `cat()` and `stopifnot()` are explained in the [Function
-guide](function-guide.qmd).
-:::
-
-::: {.callout-tip}
-**Planning a comparison cohort?** Then extract the outcome (and exposure) dates
-for the **whole population** already here - not just for the exposed - and reuse
-them: restricted to the exposed in Step 3 (as above), and later for the
-comparison pool (see [Comparison cohort](comparison-cohort.qmd)). The
-outcome extract on the diagnosis codes returns everyone with the diagnosis
-anyway, so you save an extra query against the registers.
-:::
+**Planning a comparison cohort?** Extract the outcome (and exposure) dates for
+the **whole population** here rather than just for the exposed, and reuse them:
+restricted to the exposed as above, and later for the comparison pool (see
+[Comparison cohort](comparison-cohort.qmd)). Filtering the diagnosis codes
+returns everyone with the diagnosis anyway, so it saves a second query against
+the registers.
 
 ## Participant flow diagram (STROBE)
 
@@ -473,8 +439,7 @@ before the diagram leaves DST. See [Phase 14 - Export and
 repatriation](export.qmd).
 :::
 
-::: {.callout-tip}
-**What now - choose your design:**
+## What now - choose your design {#what-now-choose-your-design}
 
 - **Prevalence study / cohort without a comparison group:** after this page you
   are done: you have your study population with an index date. Continue to
@@ -487,7 +452,9 @@ repatriation](export.qmd).
   [Case-control](case-control.qmd), where your "exposed" group above is
   instead your **cases**, and you sample controls who were at risk when the case
   had the outcome.
-:::
+- **Self-controlled or family-based design:** the person, or the family, is
+  their own control - see [Self-controlled and family-based
+  designs](special-designs.qmd).
 
 ## Further information
 

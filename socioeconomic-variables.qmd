@@ -27,31 +27,18 @@ shows how to extract and categorise them following the **SEPLINE** guideline.
 article for full justification, recommended reference groups and
 categorisations.
 
-::: {.callout-important}
-**Under development - code examples, not validated code.** The categorisations
-below are **not** validated and should not be used directly in analyses without
-review. They are shown as structural examples of how to code the variables - not
-as an approved implementation. If you have code that already works, or input on
-the categorisations, please get in touch: **Sara Schwartz -
-[saras@clin.au.dk](mailto:saras@clin.au.dk)**
+::: {.callout-important title="Structural guidance, not verified code"}
+The categorisations below are **not validated**. They show how to code the
+variables, not an approved implementation, so review them against your own
+analysis plan before you use them. Have working code, or input on the
+categorisations? [Get in touch](contribute.qmd).
 :::
 
-::: {.callout-note}
-**Accessing the registers - the ways:**
+The examples read registers by name with `read_register()`, which assumes
+[fastreg is pointed at your registers](parquet-and-fastreg.qmd#fastreg-paths).
+Without fastreg, use `open_dataset("path/to/akm/")` instead. Column names differ
+between deliveries, so check yours with `names(your_data)`.
 
-1. **fastreg (recommended):** Use `read_register("akm")` - reads by name,
-   fastreg knows the path (see [Point fastreg at your
-   registers](parquet-and-fastreg.qmd#fastreg-paths)). The examples below use this.
-2. **Parquet via `open_dataset()` (any project):** Use
-   `open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/")` +
-   `rename_with(tolower)`, if fastreg is not set up on your project.
-3. **SAS files (if parquet is not ready):** Use
-   `haven::read_sas("path/akm.sas7bdat")` - but this reads the entire file into
-   RAM. **Recommended:** convert to parquet once and work from that (see
-   [Convert SAS to parquet](parquet-and-fastreg.qmd#convert-sas-to-parquet)).
-
-Your columns may be named differently - check with `names(your_data)`.
-:::
 
 ::: {.callout-warning}
 **Fetch the variable for the year BEFORE index - not the index year itself.**
@@ -108,41 +95,14 @@ the index date is wrong, not that the data is incomplete.
 :::
 
 ::: {.callout-warning}
-**`year` is not a DST variable.** It comes from the partitioning when the
-register was converted to parquet, so the name is set by whoever built your
-files rather than by DST. The code below assumes `year`, which is the usual
-name, but a made column is not a guaranteed one - confirm it in your own files:
-
-```r
-colnames(read_register("akm") %>% rename_with(tolower))
-```
-
-It affects every join in this chapter, since they all join on person plus year.
+**Two things about `year` before you join on it.** It is not a DST variable - it
+comes from the parquet partitioning, so confirm the name in your own files
+([Phase 4](file-formats.qmd#year-column)). And do not assign to it: `mutate(year
+= ...)` overwrites the partition column rather than adding one, which silently
+breaks every join in this chapter, since they all join on person plus year. Give
+a derived year its own name, e.g. `index_year`.
 :::
 
-::: {.callout-warning}
-**Do not create a column called `year` when one already exists.** `lubridate`
-has a function `year()` that pulls the year out of a date, and your register has
-a *column* called `year`. Sharing the name is fine on its own: R can tell a
-function from a column, so `year(index_date)` still calls the function even when
-the column is there.
-
-The problem is assigning to it. `mutate(year = ...)` does not create a second
-column, it **overwrites** the one from the parquet folders, with no warning:
-
-```r
-akm %>% mutate(year = lubridate::year(index_date) - 1) # the folder year is now gone
-```
-
-After that line, `filter(year == 2015)` no longer picks a folder, it filters on
-whatever you just computed, and the query reads every year on disk while
-returning the wrong rows. Give the new column its own name - the examples below
-use `year_baseline` - and leave `year` alone.
-
-The examples also write `lubridate::year()` in full rather than `year()`. That
-is for the reader, not for R: with a column of the same name a step away, the
-prefix says which of the two you meant.
-:::
 
 ```r
 library(fastreg) # read_register() - reads registers by name
@@ -216,13 +176,10 @@ classifications, [DISCED-15 AUDD](https://www.dst.dk/da/Statistik/dokumentation/
 UDD](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-udd). `hfaudd` is completed, so it is an `audd` lookup you want.
 
 ::: {.callout-warning}
-**Do not derive the level from `substr(hfaudd, 1, 2)`.** It is the obvious thing
-to try, because the level codes (10, 15, 20, 30, 40, 70, 90) look just like the
-first two digits of an education code. It is wrong, and it fails silently:
-`4112` (electrician, vocational) becomes a *long higher education* because
-`41 >= 40`, while `141` (short cycle higher education) matches nothing and
-becomes *unknown*. Across the full code list that rule is right 58% of the time.
-The reasoning is spelled out in [Overview of
+**Do not derive the level from `substr(hfaudd, 1, 2)`.** The level codes (10, 15,
+20, 30, 40, 70, 90) look just like the first two digits of an education code, so
+it is the obvious thing to try - and it is wrong roughly 4 times in 10, silently.
+You need the lookup. Why it fails is set out in [Overview of
 registers](register-reference.qmd#udda---education-register).
 :::
 

@@ -1,13 +1,8 @@
 ---
 title: "Comorbidity"
-subtitle: "Comorbidity as a covariate: individual diagnoses or a combined score"
+subtitle: "Comorbidity as a covariate: individual diagnoses or a combined measure"
 date: last-modified
 ---
-
-::: {.callout-warning}
-**Under development.** Structural outline - to be expanded with concrete
-examples.
-:::
 
 Comorbidity at baseline is a common covariate. How you handle it belongs to your
 analysis plan and is typically governed by your DAG (see [Phase 1 - Choose your
@@ -18,32 +13,97 @@ essentially **two approaches**:
    diagnoses you identified as confounders in your DAG. You extract these as
    ordinary diagnosis variables (the same LPR pattern as
    [Outcomes](outcomes.qmd)).
-2. **Adjust for the overall comorbidity burden** with one summary index - a
-   multimorbidity index based on hospital ICD-10 diagnoses (a dedicated one is
-   in development). Use a ready-made, validated index rather than coding it from
-   scratch. Note: **NMI, despite its name, is a mortality-prediction score, not
-   a comorbidity-burden measure** - use it only for mortality risk (see
+2. **Adjust for the overall comorbidity burden** with one summary measure - a
+   count or index built from hospital diagnoses and, usually, prescriptions.
+   Note: **NMI, despite its name, is a mortality-prediction score, not a
+   comorbidity-burden measure** - use it only for mortality risk (see
    [NMI](nmi.qmd)).
 
 <details>
-<summary>Which is best: individual comorbidities or a combined score?</summary>
+<summary>Which is best: individual comorbidities or a combined measure?</summary>
 
 It depends on your DAG and your outcome:
 
 - **Individual comorbidities** give the most control and transparency, but require you to know in advance exactly which diagnoses are confounders. Use this when your DAG points to a few specific comorbidities.
-- **A combined multimorbidity index** captures the general comorbidity burden in one variable and is practical when many comorbidities are potential confounders, or when you just want to describe the burden in Table 1. (NMI is *not* such an index - it targets mortality; see [NMI](nmi.qmd).)
-- **Beware of over-adjustment:** a score like NMI is built to predict mortality, and **your own outcome must not be part of the score you adjust for**. If your outcome (or a strong predictor of it) is one of the diagnoses the score weights, you partly adjust for the outcome itself. NMI handles dementia studies, for example, by dropping the dementia predictor (see [NMI](nmi.qmd)).
+- **A combined measure** captures the general comorbidity burden in one variable and is practical when many comorbidities are potential confounders, or when you just want to describe the burden in Table 1. (NMI is *not* such a measure - it targets mortality; see [NMI](nmi.qmd).)
+- **Beware of over-adjustment:** **your own outcome must not be part of the measure you adjust for**. If your outcome, or a strong predictor of it, is one of the conditions it counts, you partly adjust for the outcome itself. NMI handles dementia studies, for example, by dropping the dementia predictor (see [NMI](nmi.qmd)).
 
 </details>
 
-If you use a combined index, the pattern is: take your LPR diagnoses (filtered
-to the cohort and to the time **before index**), run them through the algorithm,
-and get a score per `pnr`, which you save as `.rds` and link in [Phase
-12](data-manipulation.qmd).
+## Diagnoses, prescriptions, or both? {#diagnoses-prescriptions-or-both}
 
-`read_register()` requires fastreg set up with the path to your registers - see
-[Prepare your registers](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not convert
-them from SAS yourself.
+Whether a condition is defined from hospital diagnoses, from dispensed
+prescriptions, or from both is a **design decision you make per condition**, and
+it changes who counts as having it.
+
+Some conditions are captured well by LPR on its own - the ones that reliably
+bring people to hospital, such as myocardial infarction or hip fracture. Others
+are mostly treated outside hospital, and hypertension is the clearest case: many
+people with it are managed entirely in general practice and never appear in
+[LPR](understand-lpr.qmd) with an `I10` diagnosis, but they do collect
+antihypertensives and so appear in [LMDB](medication.qmd).
+
+Both single-source definitions fail, in opposite directions:
+
+- **Diagnoses only** miss everyone treated outside hospital - they look healthy.
+- **Prescriptions only** catch everyone on the drug, including those taking it
+  for something else. Antihypertensives are also prescribed for heart failure and
+  angina, so an ATC-only definition of hypertension over-counts.
+
+Combining the two is the usual compromise, and if you do, the halves normally
+need different rules:
+
+  |                          | Diagnoses (ICD-10, from LPR)        | Medication (ATC, from LMDB)          |
+  | ------------------------ | ----------------------------------- | ------------------------------------ |
+  | **Typical window**       | ever, or a lookback before index    | a recent window, e.g. the last year   |
+  | **How many events count**| one recorded diagnosis              | usually **more than one** dispensing  |
+  | **Onset date**           | first qualifying contact            | date the dispensing rule is first met |
+
+The middle row is the one people miss: a single dispensing is weak evidence of
+treatment, because people fill a prescription once and stop. The pattern for "at
+least N dispensings within a window" is on [Medication - from dispensings to is
+this person a user?](medication.qmd#defining-users).
+
+Whichever you choose, write the definition into your methods: "hypertension" is
+not one thing, and two studies using different definitions are not measuring the
+same variable.
+
+## An extraction package is in development {#regmorbidity}
+
+::: {.callout-note title="regmorbidity - not released yet"}
+Jie Zhang and Sara Schwartz are building **`regmorbidity`**, an R package for
+deriving comorbidity from Danish register data with editable code lists. It is
+not published yet and there is nothing to install - this note is here so you know
+it exists rather than building the same thing twice. If you would like to use it,
+or you have code lists to contribute, [get in touch](contribute.qmd).
+:::
+
+The design, in case it is useful for your own code:
+
+- **Conditions live in plain CSV code lists, not in R code.** One row per code,
+  with columns for the condition, the vocabulary (`ICD10` or `ATC`), the code,
+  the time frame and the minimum number of dispensings. So one condition can mix
+  diagnoses and prescriptions, and the definitions can be edited, extended and
+  version-controlled without touching the code that runs them.
+- **Medication conditions take a configurable count and window**, with the onset
+  date being the date of the qualifying dispensing.
+- **Conditions are extracted one at a time and checkpointed to disk**, so a long
+  run over the full register resumes after an interruption instead of starting
+  over.
+- **The starting code lists take Prior et al. (2016)
+  ([doi:10.1093/aje/kwv324](https://doi.org/10.1093/aje/kwv324)) as their
+  starting point** - a starting point only. This is not an implementation of
+  that index, and the lists are meant to be revised for your own study.
+
+Until it is available, build conditions with the ordinary patterns: diagnoses as
+in [Extract from LPR](extract-from-lpr.qmd), prescriptions as in
+[Medication](medication.qmd), then combine the two per person.
+
+## The extraction pattern
+
+Filter LPR to your cohort and to the window before index, then reduce to one row
+per person per condition. `read_register()` assumes [fastreg is pointed at your
+registers](parquet-and-fastreg.qmd#fastreg-paths).
 
 ```r
 library(fastreg) # read_register()
@@ -55,12 +115,18 @@ cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr)
 diagnoses_before_index <- read_register("lpr_diag") %>% # without fastreg: open_dataset("path/to/lpr_diag/")
   rename_with(tolower) %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>% # ONLY your cohort
-  # ... get the contact date, keep diagnoses before index_date ...
+  # ... join to lpr_adm for the contact date, keep diagnoses before index_date ...
   collect()
-# → pass the diagnoses to the multimorbidity algorithm to get a score per pnr
 ```
+
+Turning that event log into one 0/1 flag per condition per person is the `any()`
+pattern in [Extract from LPR - from event log to one row per
+person](extract-from-lpr.qmd#one-row-per-person). Save the result as `.rds` and
+link it in [Phase 12](data-manipulation.qmd).
 
 ## See also
 
+- [Medication (ATC)](medication.qmd): the prescription half of a condition
+  definition
 - [NMI](nmi.qmd) · [Algorithms & special packages](packages-overview.qmd)
 - [Phase 12 - Assemble and prepare the dataset](data-manipulation.qmd)

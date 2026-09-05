@@ -11,20 +11,12 @@ the outcome), and their **index date is the outcome date**. For each case you
 sample a number of **controls**: people without the outcome who were at risk
 exactly when the case had the outcome.
 
-::: {.callout-warning}
-**Still under development.** Structural guidance - adapt to your own project,
-and **confirm package names** (`heaven::incidenceMatch`, `Epi::ccwc`) on your
-project before use.
-:::
-
-::: {.callout-note}
-**Functions used here.** `left_join()` (attach a variable) and `transmute()`
-(create new columns, keep only those) are explained in [Comparison
-cohort](comparison-cohort.qmd) and [Link your
-extracts](joins.qmd#joins-link-two-tables). `pmin()`, `if_else()` and
-`as.factor()` are in the [Function guide](function-guide.qmd). New here:
-`incidenceMatch()` / `Epi::ccwc()` for sampling and `survival::clogit()` for the
-analysis.
+::: {.callout-warning title="Structural guidance, not verified code"}
+The examples show the shape of each step. They have **not yet been run end to end
+on real register data**, so treat them as a starting point: check the column names
+against your own delivery, and check the logic against your analysis plan.
+Confirm too that `heaven::incidenceMatch()` and `Epi::ccwc()` are available on
+your project.
 :::
 
 ::: {.callout-note}
@@ -57,7 +49,7 @@ cohort](comparison-cohort.qmd) - only the "event" has changed: here it is
 the *outcome* (case), not an exposure. So this page also reuses the person table
 from there.
 
-## Step 3 - Build the dataset for matching {.step-heading}
+## Step 1 - Build the dataset for matching {.step-heading}
 
 *(Steps 1 and 2 - identify cases and exclude prevalent cases - are on the
 [landing page](build-study-population.qmd).)*
@@ -80,7 +72,7 @@ emigration date + lookback). For case-control, though:
 <summary>Show the code: build the dataset for matching</summary>
 
 ```r
-# Step 3: build the dataset for matching ---------------------------------------
+# Step 1: build the dataset for matching ---------------------------------------
 # 'population' = one row per person from Comparison cohort (pnr, sex, birth_year,
 #                death_date, emigration_date, earliest_bef_year). See Comparison cohort, Steps 3-4.
 STUDY_END <- as.Date("2022-12-31")                # we choose: last day of the study
@@ -102,7 +94,7 @@ all_persons <- population %>%
 
 </details>
 
-## Step 4 - Sample controls {.step-heading}
+## Step 2 - Sample controls {.step-heading}
 
 Two routes. Both do incidence-density sampling; pick one.
 
@@ -113,7 +105,7 @@ Two routes. Both do incidence-density sampling; pick one.
 <summary>Show the code (Route A): sample with incidenceMatch()</summary>
 
 ```r
-# Step 4 (Route A): sample with incidenceMatch() -------------------------------
+# Step 2 (Route A): sample with incidenceMatch() -------------------------------
 library(heaven)   # incidenceMatch
 
 # Argument (left of =) <- value we set (usually a column name in quotes)
@@ -121,7 +113,7 @@ matched <- incidenceMatch(
   ptid         = "pnr",                  # the person-id column
   event        = "case",                 # the column that is 1 for case (outcome), 0 for potential control
   terms        = c("sex", "birth_year"), # matching variables (exact match; factor/character)
-  data         = all_persons,            # the dataset from Step 3
+  data         = all_persons,            # the dataset from Step 1
   n.controls   = 5,                      # controls per case
   case.index   = "case_index",           # the case's index date (the outcome date)
   end.followup = "end_fu",               # when a person stops being eligible as a control
@@ -139,13 +131,13 @@ exit times). Confirm arguments with `?Epi::ccwc`.
 <summary>Show the code (Route B): sample with Epi::ccwc()</summary>
 
 ```r
-# Step 4 (Route B): sample with Epi::ccwc() ------------------------------------
+# Step 2 (Route B): sample with Epi::ccwc() ------------------------------------
 library(Epi)   # ccwc - case-control within cohort
 
 cohort <- all_persons %>%
   mutate(
     entry = as.Date("2010-01-01"),                # study start (adapt; e.g. 18th birthday or first eligible date)
-    exit  = end_fu,                               # exit time = end of risk time (from Step 3)
+    exit  = end_fu,                               # exit time = end of risk time (from Step 1)
     fail  = case                                  # 1 if the person is a case at exit
   )
 
@@ -204,7 +196,7 @@ cc_pnrs <- unique(matched$pnr) # all pnr's (cases + controls) for the other extr
 ## See also
 
 - [Build your study population](build-study-population.qmd): identify your
-  cases (Step 1) and exclude prevalent cases (Step 2)
+  cases and exclude prevalent cases
 - [Comparison cohort](comparison-cohort.qmd): same risk-set mechanic for a
   cohort design; build the pool and understand replacement there
 - [Phase 1 - Study preparation](plan-your-study.qmd): cohort vs. case-control
