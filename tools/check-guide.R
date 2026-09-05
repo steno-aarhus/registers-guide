@@ -467,10 +467,15 @@ heading_id <- function(txt) {
 # derived heading ids. Repeated ids get -1, -2 ... as pandoc does.
 page_ids <- function(lines) {
   prose <- prose_lines(lines)
-  # {#id}, {#id .class} - the id ends at a space or }. A dot is allowed INSIDE
-  # an id (e.g. {#as.integer-x-1l}), so it must not terminate it.
-  explicit <- unlist(regmatches(prose, gregexpr("\\{#[^}[:space:]]+", prose)))
-  explicit <- sub("^\\{#", "", explicit)
+  # An id can sit anywhere in an attribute block, not only first: headings write
+  # {#id .class}, but callouts and fenced divs write {.callout-note #id}. So take
+  # the whole {...} block and pull every #token out of it. A dot is allowed
+  # INSIDE an id (e.g. {#as.integer-x-1l}), so it must not terminate it.
+  attrs <- unlist(regmatches(prose, gregexpr("\\{[^}]*\\}", prose)))
+  explicit <- unlist(regmatches(
+    attrs, gregexpr("(?<=[{[:space:]])#[^}[:space:]]+", attrs, perl = TRUE)
+  ))
+  explicit <- sub("^#", "", explicit)
 
   # raw HTML counts too: <details id="..."> and <div id="...">
   html <- unlist(regmatches(prose, gregexpr("id=\"[^\"]+\"", prose)))
