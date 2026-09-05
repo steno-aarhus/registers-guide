@@ -221,7 +221,7 @@ sheets together vertically.
 lpr2_dx # 45,000 rows - diagnoses up to March 2019
 lpr3_dx # 32,000 rows - diagnoses from March 2019 onwards
 
-alle_dx <- bind_rows(lpr2_dx, lpr3_dx) # 77,000 rows - both periods combined
+all_dx <- bind_rows(lpr2_dx, lpr3_dx) # 77,000 rows - both periods combined
 ```
 
 Columns missing in one table (e.g. a column that only exists in LPR3) are
@@ -250,17 +250,17 @@ library(tibble) # tibble()
 
 # Attach date of death (DOD) to the cohort -------------------------------------
 # Cohort data (one row per person):
-kohort <- readRDS("sti/til/full_cohort.rds")
+cohort <- readRDS("path/to/full_cohort.rds")
 
 # Death dates from DOD:
 dod <- read_register("dod") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")
   rename_with(tolower) %>%               # standardise column names
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
+  semi_join(tibble(pnr = cohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
   select(pnr, death_date = doddato) %>%   # rename doddato to death_date
   collect()                              # fetch into R
 
 # Join: all cohort members retained; the living get death_date = NA
-cohort_with_death <- kohort %>%
+cohort_with_death <- cohort %>%
   left_join(dod, by = "pnr")       # attach death date - NA = still alive
 ```
 
@@ -277,12 +277,12 @@ all is decided in [Phase 10, Step 1](build-study-population.qmd).
 # Emigration dates from VNDS:
 vnds <- read_register("vnds") %>%              # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/")
   rename_with(tolower) %>%                       # standardise column names
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
+  semi_join(tibble(pnr = cohort$pnr), by = "pnr") %>%   # only the cohort's pnr's
   filter(indud_kode == "U") %>%                  # "U" = udvandring/emigration (VNDS holds both in- and out-migration)
   select(pnr, haend_dato) %>%
   collect()
 
-emigration <- kohort %>%                         # the cohort has pnr + index_date
+emigration <- cohort %>%                         # the cohort has pnr + index_date
   left_join(vnds, by = "pnr") %>%
   filter(haend_dato > index_date) %>%            # only exits AFTER index - those are the ones that censor
   group_by(pnr) %>%                              # group to find the first of them
@@ -292,7 +292,7 @@ emigration <- kohort %>%                         # the cohort has pnr + index_da
   select(pnr, emigration_date = haend_dato)      # rename haend_dato to emigration_date
 
 # Join: all cohort members retained; non-emigrants get emigration_date = NA
-cohort_with_emigration <- kohort %>%
+cohort_with_emigration <- cohort %>%
   left_join(emigration, by = "pnr")              # NA = no exit after index
 ```
 
@@ -311,7 +311,7 @@ date and end of study period.
 study_end <- as.Date("2024-12-31") # replace with your actual study end date
 # format: "yyyy-mm-dd" (ISO 8601 - R's standard)
 
-kohort <- kohort %>%
+cohort <- cohort %>%
   mutate(
     # Censoring date = the earliest of all possible stopping reasons
     censor_date = pmin(
@@ -343,7 +343,7 @@ what happened *first*:
 
 ```r
 # Competing risks: a status with three values ----------------------------------
-kohort <- kohort %>%
+cohort <- cohort %>%
   mutate(
     # status_code: which date "won" the pmin() above?
     status_code = case_when(
@@ -376,7 +376,7 @@ this page only assembles the analysis dataset around it. Design choices
 **End with `select()` - keep only the columns the analysis requires.**
 
 ```r
-cohort_final <- kohort %>%
+cohort_final <- cohort %>%
   select(
     pnr,
     index_date,
@@ -391,7 +391,7 @@ cohort_final <- kohort %>%
     income_cat
   )
 
-saveRDS(cohort_final, "sti/til/analysis_dataset.rds") # save the final dataset
+saveRDS(cohort_final, "path/to/analysis_dataset.rds") # save the final dataset
 ```
 :::
 
@@ -402,41 +402,41 @@ saveRDS(cohort_final, "sti/til/analysis_dataset.rds") # save the final dataset
 # Complete recipe: cohort -> analysis-ready dataset ----------------------------
 
 # 0. Load your cohort (pnr + index_date, from Phase 6/9) -----------------------
-kohort <- readRDS("sti/til/full_cohort.rds")   # one row per person
+cohort <- readRDS("path/to/full_cohort.rds")   # one row per person
 
 # 1. Exclude prevalent cases (see Phase 9) -------------------------------------
-# ... cohort_clean <- kohort %>% anti_join(prevalent, by = "pnr")
+# ... cohort_clean <- cohort %>% anti_join(prevalent, by = "pnr")
 
 # 2. Link outcome (e.g. first dementia diagnosis after index) ------------------
-outcome  <- readRDS("sti/til/extract_dementia.rds")   # pnr + event_date (NA = no event)
-kohort <- kohort_clean %>% left_join(outcome, by = "pnr")
+outcome  <- readRDS("path/to/extract_dementia.rds")   # pnr + event_date (NA = no event)
+cohort <- cohort_clean %>% left_join(outcome, by = "pnr")
 
 # 3. Link censoring: death date and emigration ---------------------------------
 deaths <- read_register("dod") %>%   # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")
   rename_with(tolower) %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%
+  semi_join(tibble(pnr = cohort$pnr), by = "pnr") %>%
   select(pnr, death_date = doddato) %>% collect()
 
 vnds_data <- read_register("vnds") %>%    # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/")
   rename_with(tolower) %>%
-  semi_join(tibble(pnr = kohort$pnr), by = "pnr") %>%
+  semi_join(tibble(pnr = cohort$pnr), by = "pnr") %>%
   filter(indud_kode == "U") %>%
   select(pnr, haend_dato) %>% collect()
 
 # first exit AFTER index (not the first ever - see the section above)
-vnds_data <- kohort %>%
+vnds_data <- cohort %>%
   left_join(vnds_data, by = "pnr") %>%
   filter(haend_dato > index_date) %>%
   group_by(pnr) %>% arrange(haend_dato) %>% slice(1) %>% ungroup() %>%
   select(pnr, emigration_date = haend_dato)
 
-kohort <- kohort %>%
+cohort <- cohort %>%
   left_join(deaths,    by = "pnr") %>%
   left_join(vnds_data, by = "pnr")
 
 # 4. Calculate follow-up time and event variable -------------------------------
 study_end <- as.Date("2024-12-31")
-kohort <- kohort %>%
+cohort <- cohort %>%
   mutate(
     censor_date    = pmin(event_date, death_date, emigration_date, study_end, na.rm = TRUE),
     followup_years = as.numeric(censor_date - index_date) / 365.25,
@@ -444,21 +444,21 @@ kohort <- kohort %>%
   )
 
 # 5. Link covariates (demographic, SES, comorbidity) ---------------------------
-bef_data <- readRDS("sti/til/extract_bef.rds")    # age, sex from BEF
-ses_data <- readRDS("sti/til/extract_ses.rds")    # education, income, employment
-nmi_data <- readRDS("sti/til/extract_nmi.rds")    # NMI score
+bef_data <- readRDS("path/to/extract_bef.rds")    # age, sex from BEF
+ses_data <- readRDS("path/to/extract_ses.rds")    # education, income, employment
+nmi_data <- readRDS("path/to/extract_nmi.rds")    # NMI score
 
-kohort <- kohort %>%
+cohort <- cohort %>%
   left_join(bef_data, by = "pnr") %>%
   left_join(ses_data, by = "pnr") %>%
   left_join(nmi_data, by = "pnr")
 
 # 6. Keep ONLY the columns the analysis requires -------------------------------
-cohort_final <- kohort %>%
+cohort_final <- cohort %>%
   select(pnr, index_date, censor_date, followup_years, event,
          alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
 
-saveRDS(cohort_final, "sti/til/analysis_dataset.rds")   # save the final dataset
+saveRDS(cohort_final, "path/to/analysis_dataset.rds")   # save the final dataset
 nrow(cohort_final)                                        # verify number of persons
 names(cohort_final)                                       # verify column names
 ```

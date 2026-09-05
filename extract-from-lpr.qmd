@@ -16,7 +16,7 @@ You use the same extraction pattern as in [Phase
 applied to LPR's two generations. It is the most important and probably the most
 complex part of the guide.
 
-The examples assume you already have a cohort: `kohort`, a data.frame with `pnr`
+The examples assume you already have a cohort: `cohort`, a data.frame with `pnr`
 and `index_date` per person, built in [Phase
 10](build-study-population.qmd). That phase comes later and uses the pattern you
 learn here, so read them in order and come back to this code once your cohort
@@ -46,7 +46,7 @@ There is one decision to make, and it is about your study, not about LPR:
 - **One outcome** (or a couple): filter on your ICD codes inside the query, so
   only the matching rows are ever read. That is the worked example below.
 - **Several outcomes**: pull all A and B diagnoses once into a table called
-  `alle_dx`, then filter that table per outcome. Same code, three small changes -
+  `all_dx`, then filter that table per outcome. Same code, three small changes -
   see [Several outcomes at once](#several-outcomes). Querying LPR once and
   reusing the result is much faster than re-scanning the registers per outcome,
   and the reusable [`get_lpr_diagnoses()`](#reusable-function) function is built
@@ -81,7 +81,7 @@ library(fastreg) # read_register - read a register by name
 library(arrow)   # open_dataset - fallback without fastreg
 library(dplyr)
 
-cohort_pnrs <- unique(kohort$pnr)
+cohort_pnrs <- unique(cohort$pnr)
 CODES_REGEX <- "^DE1[0-4]"   # diabetes mellitus (E10-E14) - with D-prefix
 ```
 
@@ -214,22 +214,22 @@ It is shorter but has three pitfalls on DST data:
 
 If your study has more than one LPR outcome, do not run the steps above once per
 outcome - that re-scans the registers every time. Query LPR **once**, keep all A
-and B diagnoses in a table called `alle_dx`, and filter that table per outcome.
+and B diagnoses in a table called `all_dx`, and filter that table per outcome.
 
 It is the same four steps, with three changes:
 
 1. **Drop `CODES_REGEX` and the `grepl()` line** from every step. You are no
    longer filtering on codes at the source.
 2. **Name the results `lpr2_dx`, `lpr3_dx`, `lpr2_psyk_dx`** and combine them
-   into `alle_dx` instead of `dm_dx`. Always include the psychiatric step here -
-   `alle_dx` is meant to serve outcomes you have not thought of yet.
+   into `all_dx` instead of `dm_dx`. Always include the psychiatric step here -
+   `all_dx` is meant to serve outcomes you have not thought of yet.
 3. **Save it**, so later scripts reuse it rather than re-querying:
-   `saveRDS(alle_dx, "sti/til/alle_dx.rds")`.
+   `saveRDS(all_dx, "path/to/all_dx.rds")`.
 
 Everything else - the joins, the keys, the renames, `bind_rows()` - is unchanged.
 
 ::: {.callout-warning}
-**`alle_dx` is large.** You are pulling every A and B diagnosis for your whole
+**`all_dx` is large.** You are pulling every A and B diagnosis for your whole
 cohort into RAM. On a big cohort, save it and then work from the `.rds` rather
 than keeping it and the registers open at once. Free it with `rm()` + `gc()`
 when you are done ([Phase 5](extraction-step-by-step.qmd)).
@@ -241,26 +241,65 @@ wrapped up, with the code list as an argument.
 
 **Filter your extracted table for specific outcomes**
 
+`all_dx` has one row per diagnosis, so a person with five dementia contacts has
+five rows. An analysis dataset needs **one row per person**, with the date of
+their *first* qualifying diagnosis. The four lines from `group_by()` to
+`ungroup()` are what turn one into the other - see [From event log to one row per
+person](#one-row-per-person) for the other way of collapsing.
+
 ```r
+library(dplyr) # filter, inner_join, group_by, arrange, slice, left_join
+
 CODES <- c("G30", "F00", "F01", "F02", "F03")   # dementia - change to your outcome
 
-outcome <- alle_dx %>%
+outcome <- all_dx %>%
+  # 1. Keep only the diagnoses that count as your outcome
   filter(icd3 %in% CODES) %>%
-  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%   # use cohort_clean after exclusion (Phase 10 Step 2)
-  filter(date_contact > index_date) %>%   # post-index; use < for baseline covariate
-  group_by(pnr) %>%
-  arrange(date_contact) %>%
-  slice(1) %>%
-  ungroup() %>%
+
+  # 2. Attach each person's index_date. inner_join also DROPS anyone who is not
+  #    in the cohort, so this filters and adds a column in one step.
+  #    Use cohort_clean here once you have excluded prevalent cases (Phase 10).
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+
+  # 3. Keep only contacts AFTER index. This is what makes it an outcome rather
+  #    than pre-existing disease. Use < instead for a baseline covariate.
+  filter(date_contact > index_date) %>%
+
+  # 4. Reduce to the FIRST event per person:
+  group_by(pnr) %>%              #    handle each person separately
+  arrange(date_contact) %>%      #    oldest contact first
+  slice(1) %>%                   #    keep row 1 of each person = earliest contact
+  ungroup() %>%                  #    remove the grouping again (see note below)
+
+  # 5. Rename the surviving date to something that says what it is
   select(pnr, event_date = date_contact)
 
-# Join to cohort - NA = no event (censored at end of study)
+# Back onto the full cohort. left_join keeps EVERYONE, so people with no
+# diagnosis get NA in event_date - that is the correct value for "no event",
+# and they are censored at end of follow-up rather than dropped.
 result <- cohort %>%
   select(pnr) %>%
   left_join(outcome, by = "pnr")
 
-saveRDS(result, "sti/til/extract_dementia.rds")   # change filename for each new outcome
+saveRDS(result, "path/to/extract_dementia.rds")   # change filename for each new outcome
 ```
+
+**Why `slice(1)` and not `min()`.** `slice(n)` picks rows by **position**, not by
+value: `slice(1)` keeps the first row of each group. It only means "earliest"
+because `arrange(date_contact)` put the oldest first - swap that for
+`arrange(desc(date_contact))` and the same `slice(1)` gives you the *latest*
+contact instead. See [`slice()`](function-guide.qmd#slicen).
+
+Two things that catch people out:
+
+- **`ungroup()` is not optional.** A grouped table stays grouped, and every later
+  `mutate()` or `summarise()` silently operates per person instead of on the
+  whole table.
+- **Ties are broken arbitrarily.** If someone has two qualifying contacts on the
+  same date, `slice(1)` keeps whichever row came first, with no rule behind it.
+  That is usually fine for a first-event date, since the date is identical
+  either way - but not if you are also keeping columns that differ between those
+  two rows, such as the hospital or the specific ICD code.
 
 Excluding prevalent cases - people who already had the diagnosis before index
 date - happens in [Phase 10, Step 3](build-study-population.qmd). Once you have
@@ -360,13 +399,13 @@ lpr3_cvd <- lpr3_k %>%
   )
 
 # Combine and save -------------------------------------------------------------
-alle_cvd <- bind_rows(lpr2_cvd, lpr3_cvd)                   # stack LPR2 and LPR3
+all_cvd <- bind_rows(lpr2_cvd, lpr3_cvd)                   # stack LPR2 and LPR3
 
-nrow(alle_cvd)                                               # check: number of diagnosis rows
-length(unique(alle_cvd$pnr))                                 # check: number of unique individuals
-table(alle_cvd$icd3)                                         # distribution across codes
+nrow(all_cvd)                                               # check: number of diagnosis rows
+length(unique(all_cvd$pnr))                                 # check: number of unique individuals
+table(all_cvd$icd3)                                         # distribution across codes
 
-saveRDS(alle_cvd, "sti/til/extract_cvd.rds")                # save - change path to your own folder
+saveRDS(all_cvd, "path/to/extract_cvd.rds")                # save - change path to your own folder
 ```
 
 </details>
@@ -480,20 +519,20 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
 **Use the function** - one call per extraction, only change `CODES`:
 
 ```r
-cohort    <- readRDS("sti/til/full_cohort.rds")
+cohort    <- readRDS("path/to/full_cohort.rds")
 pnr_list  <- unique(cohort$pnr)
 
 # Fetch all diagnoses for the cohort (Phase 1 - see hospital contacts page)
-alle_dx <- get_lpr_diagnoses(
+all_dx <- get_lpr_diagnoses(
   pnr_vector    = pnr_list,
   diagtypes     = c("A", "B")    # A=action, B=secondary. To also include grundmorbus, add "G" (LPR2 only): c("A", "B", "G")
 )
 # Returns: pnr | date_contact | c_diag | c_diagtype | icd3
 
-# Extract one outcome from alle_dx - repeat per outcome (only if you pulled ALL, i.e. no icd_codes)
+# Extract one outcome from all_dx - repeat per outcome (only if you pulled ALL, i.e. no icd_codes)
 CODES <- c("F00", "F01", "F02", "F03", "G30", "G31")   # dementia
 
-dementia <- alle_dx %>%
+dementia <- all_dx %>%
   filter(icd3 %in% CODES) %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
   filter(date_contact > index_date) %>%
@@ -501,7 +540,7 @@ dementia <- alle_dx %>%
   select(pnr, dementia_date = date_contact)
 
 result <- cohort %>% select(pnr) %>% left_join(dementia, by = "pnr")
-saveRDS(result, "sti/til/extract_dementia.rds")
+saveRDS(result, "path/to/extract_dementia.rds")
 ```
 
 ::: {.callout-tip}
@@ -535,7 +574,7 @@ library(stringr)
 library(tidyr) # replace_na
 
 # 1. Build your flags (one expression per variable)
-diagnosis_flags <- alle_dx %>%
+diagnosis_flags <- all_dx %>%
   filter(date_contact <= index_date) %>% # before index only (baseline covariate)
   mutate(
     dx_diabetes = icd3 %in% c("E10", "E11"),
@@ -569,7 +608,7 @@ disease, and should typically be removed from both outcomes and comorbidity:
 - **"Diagnosis not found"/unspecified** from the ICD-8 era: `Y719`.
 
 ```r
-alle_dx <- alle_dx %>%
+all_dx <- all_dx %>%
   filter(
     !substr(toupper(c_diag), 1, 5) %in% c("DZ763", "DZ032", "DZ038", "DZ039"),
     substr(toupper(c_diag), 1, 4) != "Y719"
