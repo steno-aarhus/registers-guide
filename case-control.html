@@ -601,8 +601,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
    
   <ul>
   <li><a href="#the-principle-incidence-density-sampling" id="toc-the-principle-incidence-density-sampling" class="nav-link active" data-scroll-target="#the-principle-incidence-density-sampling">The principle: incidence-density sampling</a></li>
-  <li><a href="#step-3---build-the-dataset-for-matching" id="toc-step-3---build-the-dataset-for-matching" class="nav-link" data-scroll-target="#step-3---build-the-dataset-for-matching">Step 3 - Build the dataset for matching</a></li>
-  <li><a href="#step-4---sample-controls" id="toc-step-4---sample-controls" class="nav-link" data-scroll-target="#step-4---sample-controls">Step 4 - Sample controls</a></li>
+  <li><a href="#step-1---build-the-dataset-for-matching" id="toc-step-1---build-the-dataset-for-matching" class="nav-link" data-scroll-target="#step-1---build-the-dataset-for-matching">Step 1 - Build the dataset for matching</a></li>
+  <li><a href="#step-2---sample-controls" id="toc-step-2---sample-controls" class="nav-link" data-scroll-target="#step-2---sample-controls">Step 2 - Sample controls</a></li>
   <li><a href="#analysis-brief" id="toc-analysis-brief" class="nav-link" data-scroll-target="#analysis-brief">Analysis (brief)</a></li>
   <li><a href="#what-now" id="toc-what-now" class="nav-link" data-scroll-target="#what-now">What now?</a></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
@@ -639,24 +639,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>This page continues from <a href="./build-study-population.html">Build your study population</a>. In a <strong>nested case-control study</strong>, your group from the landing page is instead your <strong>cases</strong> (those who developed the outcome), and their <strong>index date is the outcome date</strong>. For each case you sample a number of <strong>controls</strong>: people without the outcome who were at risk exactly when the case had the outcome.</p>
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
+<div class="callout callout-style-simple callout-warning callout-titled" title="Structural guidance, not verified code">
+<div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-body-container">
-<p><strong>Still under development.</strong> Structural guidance - adapt to your own project, and <strong>confirm package names</strong> (<code>heaven::incidenceMatch</code>, <code>Epi::ccwc</code>) on your project before use.</p>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Structural guidance, not verified code
 </div>
 </div>
-</div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Functions used here.</strong> <code>left_join()</code> (attach a variable) and <code>transmute()</code> (create new columns, keep only those) are explained in <a href="./comparison-cohort.html">Comparison cohort</a> and <a href="./joins.html#joins-link-two-tables">Link your extracts</a>. <code>pmin()</code>, <code>if_else()</code> and <code>as.factor()</code> are in the <a href="./function-guide.html">Function guide</a>. New here: <code>incidenceMatch()</code> / <code>Epi::ccwc()</code> for sampling and <code>survival::clogit()</code> for the analysis.</p>
-</div>
+<div class="callout-body-container callout-body">
+<p>The examples show the shape of each step. They have <strong>not yet been run end to end on real register data</strong>, so treat them as a starting point: check the column names against your own delivery, and check the logic against your analysis plan. Confirm too that <code>heaven::incidenceMatch()</code> and <code>Epi::ccwc()</code> are available on your project.</p>
 </div>
 </div>
 <div class="callout callout-style-simple callout-note">
@@ -684,8 +677,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Controls are selected by <strong>risk-set / incidence-density sampling</strong>: for each case you draw controls who, on the case’s index date (= the outcome date), (1) have not yet developed the outcome and (2) meet the inclusion criteria. A person can be a control for one case and <em>later</em> become a case themselves - that is correct in this design (and is exactly what the risk set captures).</p>
 <p>It is the <strong>same mechanic</strong> as the matching in <a href="./comparison-cohort.html">Comparison cohort</a> - only the “event” has changed: here it is the <em>outcome</em> (case), not an exposure. So this page also reuses the person table from there.</p>
 </section>
-<section id="step-3---build-the-dataset-for-matching" class="level2 step-heading">
-<h2 class="step-heading anchored" data-anchor-id="step-3---build-the-dataset-for-matching">Step 3 - Build the dataset for matching</h2>
+<section id="step-1---build-the-dataset-for-matching" class="level2 step-heading">
+<h2 class="step-heading anchored" data-anchor-id="step-1---build-the-dataset-for-matching">Step 1 - Build the dataset for matching</h2>
 <p><em>(Steps 1 and 2 - identify cases and exclude prevalent cases - are on the <a href="./build-study-population.html">landing page</a>.)</em></p>
 <p>You need one row per person with matching variables and the dates eligibility depends on. Build it <strong>exactly like the pool in <a href="./comparison-cohort.html">Comparison cohort, Steps 3-4</a></strong> (demographics + <code>earliest_bef</code> + death date + emigration date + lookback). For case-control, though:</p>
 <ul>
@@ -696,7 +689,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <summary>
 Show the code: build the dataset for matching
 </summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: build the dataset for matching ---------------------------------------</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: build the dataset for matching ---------------------------------------</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 'population' = one row per person from Comparison cohort (pnr, sex, birth_year,</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#                death_date, emigration_date, earliest_bef_year). See Comparison cohort, Steps 3-4.</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>STUDY_END <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2022-12-31"</span>)                <span class="co"># we choose: last day of the study</span></span>
@@ -716,15 +709,15 @@ Show the code: build the dataset for matching
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </section>
-<section id="step-4---sample-controls" class="level2 step-heading">
-<h2 class="step-heading anchored" data-anchor-id="step-4---sample-controls">Step 4 - Sample controls</h2>
+<section id="step-2---sample-controls" class="level2 step-heading">
+<h2 class="step-heading anchored" data-anchor-id="step-2---sample-controls">Step 2 - Sample controls</h2>
 <p>Two routes. Both do incidence-density sampling; pick one.</p>
 <p><strong>Route A - <code>heaven::incidenceMatch()</code></strong> (sibling of <code>exposureMatch()</code> from <a href="./comparison-cohort.html">Comparison cohort</a>, but the “event” is the outcome).</p>
 <details>
 <summary>
 Show the code (Route A): sample with incidenceMatch()
 </summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 4 (Route A): sample with incidenceMatch() -------------------------------</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2 (Route A): sample with incidenceMatch() -------------------------------</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(heaven)   <span class="co"># incidenceMatch</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Argument (left of =) &lt;- value we set (usually a column name in quotes)</span></span>
@@ -732,7 +725,7 @@ Show the code (Route A): sample with incidenceMatch()
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">ptid         =</span> <span class="st">"pnr"</span>,                  <span class="co"># the person-id column</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">event        =</span> <span class="st">"case"</span>,                 <span class="co"># the column that is 1 for case (outcome), 0 for potential control</span></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">terms        =</span> <span class="fu">c</span>(<span class="st">"sex"</span>, <span class="st">"birth_year"</span>), <span class="co"># matching variables (exact match; factor/character)</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">data         =</span> all_persons,            <span class="co"># the dataset from Step 3</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">data         =</span> all_persons,            <span class="co"># the dataset from Step 1</span></span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">n.controls   =</span> <span class="dv">5</span>,                      <span class="co"># controls per case</span></span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">case.index   =</span> <span class="st">"case_index"</span>,           <span class="co"># the case's index date (the outcome date)</span></span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="at">end.followup =</span> <span class="st">"end_fu"</span>,               <span class="co"># when a person stops being eligible as a control</span></span>
@@ -745,13 +738,13 @@ Show the code (Route A): sample with incidenceMatch()
 <summary>
 Show the code (Route B): sample with Epi::ccwc()
 </summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 4 (Route B): sample with Epi::ccwc() ------------------------------------</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2 (Route B): sample with Epi::ccwc() ------------------------------------</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Epi)   <span class="co"># ccwc - case-control within cohort</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> all_persons <span class="sc">%&gt;%</span></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">entry =</span> <span class="fu">as.Date</span>(<span class="st">"2010-01-01"</span>),                <span class="co"># study start (adapt; e.g. 18th birthday or first eligible date)</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">exit  =</span> end_fu,                               <span class="co"># exit time = end of risk time (from Step 3)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">exit  =</span> end_fu,                               <span class="co"># exit time = end of risk time (from Step 1)</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">fail  =</span> case                                  <span class="co"># 1 if the person is a case at exit</span></span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
@@ -813,7 +806,7 @@ Show the code (Route B): sample with Epi::ccwc()
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
 <ul>
-<li><a href="./build-study-population.html">Build your study population</a>: identify your cases (Step 1) and exclude prevalent cases (Step 2)</li>
+<li><a href="./build-study-population.html">Build your study population</a>: identify your cases and exclude prevalent cases</li>
 <li><a href="./comparison-cohort.html">Comparison cohort</a>: same risk-set mechanic for a cohort design; build the pool and understand replacement there</li>
 <li><a href="./plan-your-study.html">Phase 1 - Study preparation</a>: cohort vs.&nbsp;case-control</li>
 <li><a href="https://pubmed.ncbi.nlm.nih.gov/30310326/">Heide-Jørgensen et al.&nbsp;(2018), <em>Clinical Epidemiology</em> 10:1325-1337</a>: sampling strategies and bias in risk-set sampling</li>

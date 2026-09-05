@@ -602,6 +602,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul>
   <li><a href="#exposure-outcome-or-covariate-same-extract" id="toc-exposure-outcome-or-covariate-same-extract" class="nav-link active" data-scroll-target="#exposure-outcome-or-covariate-same-extract">Exposure, outcome or covariate? Same extract</a></li>
   <li><a href="#the-pattern" id="toc-the-pattern" class="nav-link" data-scroll-target="#the-pattern">The pattern</a></li>
+  <li><a href="#defining-users" id="toc-defining-users" class="nav-link" data-scroll-target="#defining-users">From dispensings to “is this person a user?”</a></li>
   <li><a href="#atc-columns" id="toc-atc-columns" class="nav-link" data-scroll-target="#atc-columns">Which ATC column?</a>
   <ul class="collapse">
   <li><a href="#which-way-should-you-write-the-filter" id="toc-which-way-should-you-write-the-filter" class="nav-link" data-scroll-target="#which-way-should-you-write-the-filter">Which way should you write the filter?</a></li>
@@ -640,21 +641,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Under development.</strong> Structural outline - to be expanded. The pattern is the same as in <a href="./extract-from-lpr.html">Extract from LPR</a>: open the register, filter to the cohort, keep your codes, reduce to one row per person.</p>
-</div>
-</div>
-</div>
 <p>Prescription medication lives in <strong>LMDB</strong> (the Prescription Register). The register has <strong>one row per dispensed prescription</strong>, so the same person can have hundreds of rows. The two columns you almost always use are:</p>
 <ul>
 <li><strong><code>atc</code>:</strong> the drug’s ATC code (Anatomical Therapeutic Chemical), e.g. <code>"A10BA02"</code> for metformin.</li>
 <li><strong><code>eksd</code>:</strong> the dispensing date (when the prescription was collected) - use it as the prescription date, just like <code>date_contact</code> in LPR.</li>
 </ul>
+<p><strong>LMDB starts in 1995, and is generally used from 1997.</strong> There is no medication history before that, so a lookback window that reaches further back is empty rather than negative - and “no prescriptions” will look like “not a user”.</p>
 <p>The full confirmed column list is in <a href="./register-reference.html#lmdb">Register reference</a>.</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
@@ -730,6 +722,42 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication, <span class="st">"path/to/extract_medication.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>substr(atc, 1, 5) == "A10BJ"</code> matches the whole ATC level (all GLP-1 analogues). For several groups at once, use <a href="./extract-from-lpr.html">regex</a> as in LPR: <code>grepl("^A10BJ|^A10BA", atc)</code>. The code-matching pattern (regex, <code>%in%</code> with a code list, <code>!!</code>) is explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Function guide</a>. Reducing to <strong>one row per person</strong> is explained in <a href="./long-wide.html">Long ↔︎ wide format</a> - here <code>slice(1)</code> for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).</p>
 </section>
+<section id="defining-users" class="level2">
+<h2 class="anchored" data-anchor-id="defining-users">From dispensings to “is this person a user?”</h2>
+<p>One dispensing is weak evidence of treatment: people fill a prescription once and stop. A common definition is therefore <strong>at least two dispensings within a window</strong>, with the onset date being the date the definition is first met.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># group_by, mutate, lag, filter, summarise</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Does the person have `min_dispensings` fills inside `window_days`?</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># lag() looks back to the (min_dispensings - 1)th previous fill for that person,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co"># so the gap between them is the span of the whole qualifying run.</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>flag_users <span class="ot">&lt;-</span> <span class="cf">function</span>(data, <span class="at">min_dispensings =</span> <span class="dv">2</span>, <span class="at">window_days =</span> <span class="dv">365</span>) {</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  data <span class="sc">%&gt;%</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">arrange</span>(pnr, eksd) <span class="sc">%&gt;%</span>                       <span class="co"># lag() needs the rows in date order</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>      <span class="at">lookback =</span> <span class="fu">lag</span>(eksd, <span class="at">n =</span> min_dispensings <span class="sc">-</span> <span class="dv">1</span>),</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>      <span class="at">gap_days =</span> <span class="fu">as.numeric</span>(eksd <span class="sc">-</span> lookback)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(gap_days), gap_days <span class="sc">&lt;=</span> window_days) <span class="sc">%&gt;%</span>  <span class="co"># the run is short enough</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">onset_date =</span> <span class="fu">min</span>(eksd), <span class="at">.groups =</span> <span class="st">"drop"</span>)    <span class="co"># first date the rule is met</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>users <span class="ot">&lt;-</span> <span class="fu">flag_users</span>(medication, <span class="at">min_dispensings =</span> <span class="dv">2</span>, <span class="at">window_days =</span> <span class="dv">365</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The two numbers are <strong>your</strong> choices, not standards - write them into your methods. One dispensing is enough for a drug taken once; a chronic treatment usually wants two or more.</p>
+<p>This is also how medication can enter a <strong>comorbidity</strong> definition: for conditions treated largely outside hospital, LMDB catches people LPR never sees. Whether to define a condition from diagnoses, prescriptions or both is a design decision - see <a href="./comorbidity.html#diagnoses-prescriptions-or-both">Comorbidity - diagnoses, prescriptions, or both?</a>.</p>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong><code>arrange()</code> before <code>lag()</code>, always.</strong> <code>lag()</code> works on row order, not on dates. If the rows are not sorted by person and date, <code>gap_days</code> is computed against an arbitrary earlier row and the result is quietly wrong rather than an error.</p>
+</div>
+</div>
+</div>
+</section>
 <section id="atc-columns" class="level2">
 <h2 class="anchored" data-anchor-id="atc-columns">Which ATC column?</h2>
 <p>LMDB does not hold the ATC code once. It holds it <strong>five times</strong>, at five levels, in five separate columns. DST’s <a href="https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html">variable list for LMDB</a> labels them <code>ATC-kode detaljeret</code> and <code>ATC-niveau 1</code> to <code>ATC-niveau 4</code>. They are <strong>cumulative</strong>: each level repeats the levels above it and adds its own characters.</p>
@@ -800,13 +828,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <p><strong>So filter on <code>atc</code>, not on the level columns.</strong> It is seven characters, it contains every level as a prefix, and <code>substr(atc, 1, 3)</code> gives you exactly what <code>atc2</code> holds. There is no case where a level column lets you filter something <code>atc</code> cannot:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, select, collect</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Ischaemic heart disease treatment, defined as organic nitrates (C01DA):</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>ihd <span class="ot">&lt;-</span> lmdb <span class="sc">%&gt;%</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"^C01DA"</span>, atc)) <span class="sc">%&gt;%</span> <span class="co"># the full definition, in one filter</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, select, collect</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Ischaemic heart disease treatment, defined as organic nitrates (C01DA):</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>ihd <span class="ot">&lt;-</span> lmdb <span class="sc">%&gt;%</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"^C01DA"</span>, atc)) <span class="sc">%&gt;%</span> <span class="co"># the full definition, in one filter</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Use <code>^</code> to anchor the pattern at the start of the code. It costs nothing and it is the right habit from LPR, where a code genuinely can turn up mid-string.</p>
 <section id="which-way-should-you-write-the-filter" class="level3">
 <h3 class="anchored" data-anchor-id="which-way-should-you-write-the-filter">Which way should you write the filter?</h3>
@@ -838,21 +866,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tbody>
 </table>
 <p><strong>All codes the same length.</strong> Cut <code>atc</code> down to that length, then check whether the result is on your list:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, select, collect</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Four drug groups, all three characters long</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>my_codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"A10"</span>, <span class="st">"C09"</span>, <span class="st">"N02"</span>, <span class="st">"M01"</span>)</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">substr</span>(atc, <span class="dv">1</span>, <span class="dv">3</span>) <span class="sc">%in%</span> <span class="sc">!!</span>my_codes) <span class="sc">%&gt;%</span> <span class="co"># keep the first 3 characters, look them up</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, select, collect</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Four drug groups, all three characters long</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>my_codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"A10"</span>, <span class="st">"C09"</span>, <span class="st">"N02"</span>, <span class="st">"M01"</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">substr</span>(atc, <span class="dv">1</span>, <span class="dv">3</span>) <span class="sc">%in%</span> <span class="sc">!!</span>my_codes) <span class="sc">%&gt;%</span> <span class="co"># keep the first 3 characters, look them up</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>substr(atc, 1, 3)</code> means “the first three characters of <code>atc</code>”. Change the <code>3</code> to match your codes: use <code>1, 5</code> for five-character codes such as <code>A10BA</code>.</p>
 <p><strong>Codes of different lengths.</strong> One <code>substr()</code> cannot serve <code>N02</code> and <code>A10BA</code> at the same time, because they need different cut lengths. Use <code>grepl()</code> instead, which matches whatever you give it:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"^N02|^A10BA|^C09AA"</span>, atc)) <span class="sc">%&gt;%</span> <span class="co"># ^ means "starts with", | means "or"</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"^N02|^A10BA|^C09AA"</span>, atc)) <span class="sc">%&gt;%</span> <span class="co"># ^ means "starts with", | means "or"</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-tip">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -881,8 +909,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container">
 <p><strong>What the level columns are actually for: grouping, not filtering.</strong> When you want a descriptive breakdown by therapeutic subgroup, <code>atc2</code> is a ready-made grouping column and saves you a <code>substr()</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>medication <span class="sc">%&gt;%</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(atc2, <span class="at">sort =</span> <span class="cn">TRUE</span>) <span class="co"># dispensings per therapeutic subgroup</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>medication <span class="sc">%&gt;%</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(atc2, <span class="at">sort =</span> <span class="cn">TRUE</span>) <span class="co"># dispensings per therapeutic subgroup</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>That is the use case. Filtering is not.</p>
 </div>
 </div>
@@ -898,13 +926,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container callout-body">
 <p>Two minutes, and it settles both whether the columns exist and how they are coded:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># select, collect</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(lmdb) <span class="co"># do you even have atc1-atc4? Not every delivery does</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(atc, atc1, atc2, atc3, atc4) <span class="sc">%&gt;%</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">20</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># select, collect</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(lmdb) <span class="co"># do you even have atc1-atc4? Not every delivery does</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(atc, atc1, atc2, atc3, atc4) <span class="sc">%&gt;%</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">20</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Expect <code>C</code> / <code>C09</code> / <code>C09A</code> / <code>C09AA</code> / <code>C09AA05</code> across a row: each column repeating the one before it. If instead you see isolated fragments (<code>09</code> in <code>atc2</code>), every <code>^</code>-anchored pattern in this section is wrong for your delivery and you should filter on <code>atc</code> only.</p>
 <p>Note that <code>names(lmdb)</code> will <strong>not</strong> answer this. On a lazy connection it returns the connection object’s own parts (<code>src</code>, <code>lazy_query</code>), not the table’s columns, so it looks as though the columns are missing. <code>colnames()</code> works on the DuckDB object <code>read_register()</code> returns; if you opened LMDB with <code>open_dataset()</code> instead, use <code>names(collect(head(lmdb, 0)))</code> - see <a href="./inspect-data.html#the-shape">Phase 7 - The shape</a>.</p>
 </div>
@@ -932,14 +960,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>vnr</code> (varenummer):</strong> the unique key to the actual product (package). It is the only reliable way to isolate one specific product. The <code>vnr</code>-to-product lookup comes from the medicine taxonomy (KAT / Danish Health Data Authority); <code>name</code>/<code>packtext</code> hold the product text if you want to recognise it by eye.</li>
 <li><strong><code>indo</code> (indication code):</strong> a <em>coded</em> indication (from the Medicinpriser catalogue, LMS 25), not free text. The code is recorded <strong>only</strong> when the prescriber picks an indication from the drop-down menu in the electronic prescription. <strong>If the doctor types the indication as free text instead, it is not transferred to the register</strong> and <code>indo</code> is left blank. So it can in principle separate the same substance across indications, but it is <strong>often empty</strong>. Use <code>vnr</code> as the primary product key and <code>indo</code> as a supporting signal, not a clean filter.</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Build your own list of the varenumbers that belong to the product</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co">#    (look them up in the medicine taxonomy - one product has several varenumbers):</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>ozempic_vnr <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"xxxxxx"</span>, <span class="st">"yyyyyy"</span>) <span class="co"># placeholders - replace with your looked-up numbers</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Keep only the dispensings whose vnr is on your list:</span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>medication <span class="sc">%&gt;%</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(atc <span class="sc">==</span> <span class="st">"A10BJ06"</span>) <span class="sc">%&gt;%</span> <span class="co"># semaglutide (Ozempic AND Wegovy)</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(vnr <span class="sc">%in%</span> <span class="sc">!!</span>ozempic_vnr) <span class="co"># keep only rows with a vnr from your list</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Build your own list of the varenumbers that belong to the product</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co">#    (look them up in the medicine taxonomy - one product has several varenumbers):</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>ozempic_vnr <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"xxxxxx"</span>, <span class="st">"yyyyyy"</span>) <span class="co"># placeholders - replace with your looked-up numbers</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Keep only the dispensings whose vnr is on your list:</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>medication <span class="sc">%&gt;%</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(atc <span class="sc">==</span> <span class="st">"A10BJ06"</span>) <span class="sc">%&gt;%</span> <span class="co"># semaglutide (Ozempic AND Wegovy)</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(vnr <span class="sc">%in%</span> <span class="sc">!!</span>ozempic_vnr) <span class="co"># keep only rows with a vnr from your list</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Keep the two names in the last line apart: <strong><code>vnr</code></strong> (on its own) is the register’s <em>column</em> holding the varenummer - the product’s ID, just as <code>pnr</code> is the person’s ID. <strong><code>ozempic_vnr</code></strong> is your <em>own</em> R vector of the varenumbers you looked up for Ozempic; you choose the name yourself (same pattern as the code list in <a href="./extraction-step-by-step.html">Extracting data step by step</a>). <code>%in%</code> keeps the rows where <code>vnr</code> is found in your list, and <code>!!</code> sends your local list into the lazy query (explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Function guide</a>).</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
