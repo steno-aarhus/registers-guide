@@ -23,6 +23,30 @@ ALLOWED_SCOPES <- c("dst", "sds", "project")
 ALLOWED_TIMING <- c("ultimo", "status", "status_period", "course", "event")
 ALLOWED_CADENCE <- c("annual", "quarterly", "monthly", "continuous", "none")
 
+# `one_row_per` is what ONE ROW IS, which is a different fact from how often the
+# register is refreshed (`update_cadence`). BEF is refreshed quarterly and has
+# one row per person per reference date; LMDB is refreshed annually and has one
+# row per dispensed prescription. Generators need the first to decide how many
+# rows to write and how they join; `unknown` is a legitimate value and better
+# than a guess.
+ALLOWED_GRAIN <- c("person", "person_reference_date", "event_from_person",
+                   "expand_from_parent", "household_year", "unknown")
+
+# Where a consumer gets the real codes for a system we deliberately do not list.
+# "none" is a legitimate answer and is better than silence: it tells a generator
+# to stop rather than to invent.
+ALLOWED_VALUES_FROM <- c("csv", "package", "none")
+
+# Coverage granularity: a whole year, a month, or a quarter. YAML parses an
+# unquoted 1995-12 as a string, so all three arrive as character except a bare
+# year, which arrives as an integer.
+COVERAGE_PATTERN <- "^[0-9]{4}(-(0[1-9]|1[0-2])|-Q[1-4])?$"
+
+check_coverage_value <- function(x) {
+  if (is.null(x)) return(TRUE)
+  grepl(COVERAGE_PATTERN, as.character(x)[1])
+}
+
 # Returns a data frame with `severity` ("error" or "warning") and `message`.
 # Errors mean the schema is wrong. Warnings mean it is incomplete: a reference
 # to a register that has not been written yet is normal while the schema is
@@ -33,6 +57,16 @@ validate_schema <- function(schema = load_schema()) {
     problems[[length(problems) + 1]] <<- data.frame(
       severity = severity, message = paste0(...), stringsAsFactors = FALSE
     )
+  }
+
+  check_coverage <- function(cv, where) {
+    if (is.null(cv)) return(invisible(NULL))
+    for (end in c("from", "to")) {
+      if (!check_coverage_value(cv[[end]])) {
+        add(where, ": coverage.", end, " is '", as.character(cv[[end]])[1],
+            "', which is not YYYY, YYYY-MM or YYYY-Qn")
+      }
+    }
   }
 
   reg_ids <- names(schema$registers)
@@ -119,6 +153,23 @@ validate_schema <- function(schema = load_schema()) {
       add(where, ": has ", length(r$columns),
           " columns and none marked `key: true`, so its table would render empty",
           severity = "warning")
+    }
+
+    # Coverage is read by machines, not only printed. Three granularities are
+    # allowed and nothing else: a whole year, a month, or a quarter. Anything
+    # looser cannot be turned into a date range without guessing which end of
+    # the period is meant.
+    if (is.null(r$one_row_per)) {
+      add(where, ": missing `one_row_per`. It is what one row IS, which decides",
+          " how a generator writes rows and how they join")
+    } else if (!r$one_row_per %in% ALLOWED_GRAIN) {
+      add(where, ": one_row_per '", r$one_row_per, "' is not one of ",
+          paste(ALLOWED_GRAIN, collapse = "/"))
+    }
+
+    check_coverage(r$coverage, where)
+    for (cl in r$columns) {
+      check_coverage(cl$coverage, paste0(where, ", column '", cl$id %||% "?", "'"))
     }
 
     for (rel in r$relationships) {
@@ -209,6 +260,26 @@ validate_schema <- function(schema = load_schema()) {
       # unresolved(). Only flag the ambiguous case.
       if (is.null(cs$lookup) && is.null(cs$enumerated)) {
         add(cw, ": no `lookup` and no `enumerated: false`. Say which it is.")
+      }
+    }
+
+    # A system with no values is a hole a generator falls into silently: it
+    # draws meaningless noise instead of real codes and nothing errors. So say
+    # where the real codes come from, even if the answer is "nowhere machine
+    # readable".
+    if (identical(cs$enumerated, FALSE) && is.null(cs$values_from)) {
+      add(cw, ": `enumerated: false` but no `values_from`. Say where a consumer",
+          " gets the real codes, or `kind: none` if there is no such place.")
+    }
+    if (!is.null(cs$values_from)) {
+      k <- cs$values_from$kind
+      if (is.null(k) || !k %in% ALLOWED_VALUES_FROM) {
+        add(cw, ": values_from.kind '", k %||% "NULL", "' is not one of ",
+            paste(ALLOWED_VALUES_FROM, collapse = "/"))
+      } else if (identical(k, "csv") && is.null(cs$values_from$url)) {
+        add(cw, ": values_from.kind is 'csv' but there is no `url`")
+      } else if (identical(k, "package") && !length(cs$values_from$candidates)) {
+        add(cw, ": values_from.kind is 'package' but there are no `candidates`")
       }
     }
   }
