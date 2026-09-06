@@ -118,8 +118,9 @@ WHO's international system for classifying diseases and conditions. All hospital
 diagnoses in Denmark are coded with ICD-10, e.g. `G30` for Alzheimer's disease
 and `F00` for dementia in Alzheimer's.
 
-All ICD-10 codes in DST have a prepended `"D"`: `"DG30"` (Alzheimer's), `"DF00"`
-(dementia), `"DI21"` (acute myocardial infarction).
+ICD-10 codes **in LPR** have a prepended `"D"`: `"DG30"` (Alzheimer's), `"DF00"`
+(dementia), `"DI21"` (acute myocardial infarction). The D is a Danish addition
+from SKS, not part of the WHO code.
 
 **Strip the D-prefix before comparison** - it makes code more readable and
 easier to reuse:
@@ -131,8 +132,42 @@ mutate(icd4 = substr(c_diag, 2, 5)) # "DI219" → "I219" (4-digit code)
 
 `substr(x, start, stop)` keeps characters from position `start` up to and
 including `stop` (counted from 1). `substr(c_diag, 2, 4)` skips position 1 (the
-D-prefix) and keeps characters 2, 3 and 4: `"DG30"` → `"G30"`. Use 2--5 for
+D-prefix) and keeps characters 2, 3 and 4: `"DG30"` → `"G30"`. Use 2 to 5 for
 4-digit codes: `"DI219"` → `"I219"`.
+
+### The D is an LPR thing, not a DST thing {#d-prefix-not-everywhere}
+
+This is the part that costs people a result. The prefix belongs to the patient
+registers. Other registers store the **plain WHO code**, and stripping a
+character there removes a real one:
+
+  | Register | Column | What it holds | Example |
+  | --- | --- | --- | --- |
+  | LPR2, LPR3, psychiatric LPR | `c_diag`, `diag_kode`, `adiag` | D-prefixed | `DE119` |
+  | Cause of death (`dodsaars`, `dodsaasg`) | `c_dod1`, `c_dod_1a` | plain | `E119` |
+  | Cancer register | `c_icd10` | plain | `C509` |
+
+Run `substr(x, 2, 4)` on `"E119"` and you get `"119"`. It matches nothing, it
+raises no error, and the result looks like an empty subgroup rather than a bug.
+
+**A leading D is not always a prefix.** ICD-10 chapter D covers in-situ and
+benign neoplasms, so `D46` (myelodysplastic syndromes) and `D32` (benign
+meningeal tumour) are whole codes in their own right. In the cancer register
+they are exactly that. Strip the "prefix" and `D46` becomes `46`.
+
+### LPR2 before 1994 is not ICD-10 at all {#icd8}
+
+LPR2 starts in 1977, and Denmark did not move to ICD-10 until **1994**. The
+early years hold **ICD-8**: pure digits, no letter and no decimal point, so
+446.30 is stored as `44630`.
+
+Nothing about this announces itself. An ICD-10 code list matches no rows before
+1994, and `substr(c_diag, 2, 4)` on `"44630"` returns `"463"`, which is not a
+code in any classification. A study whose period starts before 1994 is reading
+two classifications out of one column and needs a code list for each.
+
+The same applies to `dodsaars`, which runs from 1970 and changes over in the
+same year.
 
 ## Diagnosis types: A, B and G {#diagtype}
 
