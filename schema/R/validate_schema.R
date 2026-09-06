@@ -20,7 +20,13 @@ ALLOWED_SCOPES <- c("dst", "sds", "project")
 # DST's own reference types, from its register overview: a snapshot on a date,
 # a population fixed on a date with values accumulated over a period, rows with
 # a start and an end, or one row per event.
-ALLOWED_TIMING <- c("ultimo", "status", "status_period", "course", "event")
+# DST classifies every register as one of exactly four reference types, and
+# this field is a transcription of that classification, not our own reading:
+# https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/registre-og-referencetyper
+# "ultimo" used to be a fifth value here. It is DST's reference TIME (the
+# snapshot falls at the end of the period), not a reference TYPE, so it does
+# not belong in this field. That reasoning lives in dst-pitfalls.qmd instead.
+ALLOWED_TIMING <- c("status", "status_period", "course", "event")
 ALLOWED_CADENCE <- c("annual", "quarterly", "monthly", "continuous", "none")
 
 # `one_row_per` is what ONE ROW IS, which is a different fact from how often the
