@@ -1,18 +1,18 @@
 <!-- Generated from schema/registers/dod.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier | 2025 to 2025 |
-| `doddato` | date | date | Date of death | 2025 to 2025 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |
+| `doddato` | date | date | Date of death |
 
 <details>
 <summary>All other columns (3)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `alder_haend` | integer | value | Age at the time of death | 2025 to 2025 |
-| `cprtjek` | character | value | CPR check | 2025 to 2025 |
-| `cprtype` | character | value | CPR type | 2025 to 2025 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `alder_haend` | integer | value | Age at the time of death |
+| `cprtjek` | character | value | CPR check |
+| `cprtype` | character | value | CPR type |
 
 </details>
 

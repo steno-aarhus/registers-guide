@@ -1,51 +1,51 @@
 <!-- Generated from schema/registers/t_psyk_adm.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier | 2019 to 2019 |
-| **`recnum`** | character | join key | Contact identifier | 2019 to 2019 |
-| `c_pattype` | character | code | Contact type | 2019 to 2019 |
-| `c_adiag` | character | code | Primary diagnosis | 2019 to 2019 |
-| `d_inddto` | date | date | Admission date | 2019 to 2019 |
-| `d_uddto` | date | date | Discharge date | 2019 to 2019 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |
+| **`recnum`** | character | join key | Contact identifier |
+| `c_pattype` | character | code | Contact type |
+| `c_adiag` | character | code | Primary diagnosis |
+| `d_inddto` | date | date | Admission date |
+| `d_uddto` | date | date | Discharge date |
 
 <details>
 <summary>All other columns (32)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `c_indm` | character | code | Admission mode | 2019 to 2019 |
-| `c_udm` | character | code | Discharge mode | 2019 to 2019 |
-| `c_sgh` | character | code | Hospital | 2019 to 2019 |
-| `c_afd` | character | code | Department | 2019 to 2019 |
-| `c_spec` | character | code | Specialty | 2019 to 2019 |
-| `v_indtime` | integer | value | Admission hour | 2019 to 2019 |
-| `v_indminut` | integer | value | Admission minute | 2019 to 2019 |
-| `v_udtime` | integer | value | Discharge hour | 2019 to 2019 |
-| `cprtjek` | character | code | CPR-tjek | 2019 to 2019 |
-| `cprtype` | character | code | CPR-type | 2019 to 2019 |
-| `c_amt` | character | code | AMT | 2019 to 2019 |
-| `c_blok` | character | code | Inddeling af speciale i blokke | 2019 to 2019 |
-| `c_hafd` | character | code | Henvisende afdeling | 2019 to 2019 |
-| `c_henm` | character | code | Henvisningsmåde | 2019 to 2019 |
-| `c_hsgh` | character | code | Henvisende sygehus | 2019 to 2019 |
-| `c_kom` | character | code | Kommune | 2019 to 2019 |
-| `c_kontaars` | character | code | Kontaktårsag | 2019 to 2019 |
-| `c_nyafd` | character | code |  | 2019 to 2019 |
-| `c_sex` | character | code | Køn | 2019 to 2019 |
-| `c_sghamt` | character | code | Sygehusamt | 2019 to 2019 |
-| `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) | 2019 to 2019 |
-| `d_fusdto` | date | date | Dato for forundersøgelse (Variabel udgået efter 31.12.2003) | 2019 to 2019 |
-| `d_hendto` | date | date | Henvisningsdato | 2019 to 2019 |
-| `d_opdatdto` | date | date | Intern dato for opdatering af kontakten | 2019 to 2019 |
-| `k_afd` | character | code | Afdelingskode | 2019 to 2019 |
-| `leverancedato` | date | date |  | 2019 to 2019 |
-| `version` | character | code | Version | 2019 to 2019 |
-| `v_alddg` | numeric | value | Alder i dage ved kontaktens start | 2019 to 2019 |
-| `v_alder` | numeric | value | Alder i år ved kontaktens start | 2019 to 2019 |
-| `v_aldmdr` | numeric | value | Alder i måneder ved kontaktens start | 2019 to 2019 |
-| `v_behdage` | numeric | value | Behandlingsdage (Variabel udgået efter 31.12.2001) | 2019 to 2019 |
-| `v_sengdage` | numeric | value | Sengedage | 2019 to 2019 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `c_indm` | character | code | Admission mode |
+| `c_udm` | character | code | Discharge mode |
+| `c_sgh` | character | code | Hospital |
+| `c_afd` | character | code | Department |
+| `c_spec` | character | code | Specialty |
+| `v_indtime` | integer | value | Admission hour |
+| `v_indminut` | integer | value | Admission minute |
+| `v_udtime` | integer | value | Discharge hour |
+| `cprtjek` | character | code | CPR-tjek |
+| `cprtype` | character | code | CPR-type |
+| `c_amt` | character | code | AMT |
+| `c_blok` | character | code | Inddeling af speciale i blokke |
+| `c_hafd` | character | code | Henvisende afdeling |
+| `c_henm` | character | code | Henvisningsmåde |
+| `c_hsgh` | character | code | Henvisende sygehus |
+| `c_kom` | character | code | Kommune |
+| `c_kontaars` | character | code | Kontaktårsag |
+| `c_nyafd` | character | code |  |
+| `c_sex` | character | code | Køn |
+| `c_sghamt` | character | code | Sygehusamt |
+| `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) |
+| `d_fusdto` | date | date | Dato for forundersøgelse (Variabel udgået efter 31.12.2003) |
+| `d_hendto` | date | date | Henvisningsdato |
+| `d_opdatdto` | date | date | Intern dato for opdatering af kontakten |
+| `k_afd` | character | code | Afdelingskode |
+| `leverancedato` | date | date |  |
+| `version` | character | code | Version |
+| `v_alddg` | numeric | value | Alder i dage ved kontaktens start |
+| `v_alder` | numeric | value | Alder i år ved kontaktens start |
+| `v_aldmdr` | numeric | value | Alder i måneder ved kontaktens start |
+| `v_behdage` | numeric | value | Behandlingsdage (Variabel udgået efter 31.12.2001) |
+| `v_sengdage` | numeric | value | Sengedage |
 
 </details>
 

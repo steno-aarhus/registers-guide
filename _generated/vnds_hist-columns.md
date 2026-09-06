@@ -1,19 +1,19 @@
 <!-- Generated from schema/registers/vnds_hist.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier | 2004 to 2004 |
-| `indud_kode` | character | code | Immigration or emigration | 2004 to 2004 |
-| `haend_dato` | date | date | Date of the migration event | 2004 to 2004 |
-| `indud_land` | character | code | Country migrated from or to | 2004 to 2004 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |
+| `indud_kode` | character | code | Immigration or emigration |
+| `haend_dato` | date | date | Date of the migration event |
+| `indud_land` | character | code | Country migrated from or to |
 
 <details>
 <summary>All other columns (2)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `cprtjek` | character | value |  | 2004 to 2004 |
-| `cprtype` | character | value |  | 2004 to 2004 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `cprtjek` | character | value |  |
+| `cprtype` | character | value |  |
 
 </details>
 

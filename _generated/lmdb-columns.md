@@ -30,8 +30,8 @@
 | `bald` | character | code |  | 1995 to 2011 |
 | `cprtjek` | character | code | CPR-tjek | 1995 to 2025 |
 | `cprtype` | character | code | CPR-type | 1995 to 2025 |
-| `cpr_kom` | date | date | CPR-bopælskommune på ekspeditionsdatoen | 2005 to 2025 |
-| `cpr_reg` | date | date | CPR-bopælsregion på ekspeditionsdatoen | 2005 to 2025 |
+| `cpr_kom` | character | code | CPR-bopælskommune på ekspeditionsdatoen | 2005 to 2025 |
+| `cpr_reg` | character | code | CPR-bopælsregion på ekspeditionsdatoen | 2005 to 2025 |
 | `dosform` | character | code | Lægemiddelform (s) | 1995 to 2025 |
 | `doso` | character | code | Doseringskode | 2004 to 2025 |
 | `edbl` | character | code |  | 2020 to 2025 |
@@ -87,17 +87,23 @@
 - `pnr` joins to **BEF** (many-to-one).
 
 <details>
-<summary>Value sets for the coded columns (1)</summary>
+<summary>Value sets for the coded columns (3)</summary>
 
 | Code system | Values |
 | --- | --- |
 | `atc` | Not listed here - see [DST's classification](https://atcddd.fhi.no/atc/structure_and_principles/) |
+| `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
+| `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
 
 - **`atc`:** As a rule, filter on the full 7-character code rather than on the level columns: `atc2` holds three characters, so a longer pattern matched against it can never match, and it returns nothing at all with no error. The level columns are well suited to grouping, and to filtering when every code you want is the same length as the column.
+- **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality.
+- **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 
 Where these values come from:
 
 - **`atc`:** [WHO ATC/DDD Index](https://atcddd.fhi.no/atc/structure_and_principles/).
+- **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
+- **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
 
 </details>
 

@@ -1,25 +1,25 @@
 <!-- Generated from schema/registers/lpr_a_diagnose.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| **`dw_ek_kontakt`** | character | join key | Contact identifier | 2025 to 2025 |
-| `diag_kode` | character | code | Diagnosis code | 2025 to 2025 |
-| `diag_kode_type` | character | code | Diagnosis type | 2025 to 2025 |
-| `senere_afkraeftet` | character | code | Later retracted | 2025 to 2025 |
-| `diag_kode_tekst` | character | value | Diagnosis code, text | 2025 to 2025 |
-| `year` | integer | date | Register year |  |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| **`dw_ek_kontakt`** | character | join key | Contact identifier |
+| `diag_kode` | character | code | Diagnosis code |
+| `diag_kode_type` | character | code | Diagnosis type |
+| `senere_afkraeftet` | character | code | Later retracted |
+| `diag_kode_tekst` | character | value | Diagnosis code, text |
+| `year` | integer | date | Register year |
 
 <details>
 <summary>All other columns (6)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `diag_parent_kode` | character | code | Parent diagnosis code | 2025 to 2025 |
-| `lprindberetningssystem` | character | code | Reporting system | 2025 to 2025 |
-| `diag_kode_type_tekst` | character | value | Diagnosis type, text | 2025 to 2025 |
-| `diag_parent_kode_tekst` | character | value | Parent diagnosis code, text | 2025 to 2025 |
-| `diag_parent_kode_type` | character | code | Parent diagnosis type | 2025 to 2025 |
-| `diag_parent_kode_type_tekst` | character | value | Parent diagnosis type, text | 2025 to 2025 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `diag_parent_kode` | character | code | Parent diagnosis code |
+| `lprindberetningssystem` | character | code | Reporting system |
+| `diag_kode_type_tekst` | character | value | Diagnosis type, text |
+| `diag_parent_kode_tekst` | character | value | Parent diagnosis code, text |
+| `diag_parent_kode_type` | character | code | Parent diagnosis type |
+| `diag_parent_kode_type_tekst` | character | value | Parent diagnosis type, text |
 
 - **`lprindberetningssystem`:** Filter to "LPR3": the table holds rows from two reporting formats, and not doing so duplicates rows.
 
