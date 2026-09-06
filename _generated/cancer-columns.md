@@ -52,6 +52,10 @@
 
 **Join key:** `k_cprnr`.
 
+**Joins to other registers:**
+
+- `k_cprnr` joins to **BEF** (many-to-one).
+
 <details>
 <summary>Value sets for the coded columns (3)</summary>
 

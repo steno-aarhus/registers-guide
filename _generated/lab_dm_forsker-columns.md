@@ -35,6 +35,10 @@
 
 **Join key:** `patient_cpr`.
 
+**Joins to other registers:**
+
+- `patient_cpr` joins to **BEF** (many-to-one).
+
 **Worth knowing:**
 
 - **`patient_cpr`:** Results carrying only a replacement CPR number are filtered out before the research table is built, so every row here has a real personal identifier. The narrower `laboratorieproevesvar` table calls this column `cprnummer`.

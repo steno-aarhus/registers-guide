@@ -20,6 +20,10 @@
 
 **Join key:** `pnr`.
 
+**Joins to other registers:**
+
+- `pnr` joins to **BEF** (many-to-one).
+
 **Worth knowing:**
 
 - **`doddato`:** This is the column to censor on. Not `d_dodsdto`, which belongs to DODSAARS and stops in 2001.

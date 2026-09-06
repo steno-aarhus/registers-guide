@@ -21,6 +21,10 @@
 
 **Join key:** `pnr`.
 
+**Joins to other registers:**
+
+- `pnr` joins to **BEF** (many-to-one).
+
 <details>
 <summary>Value sets for the coded columns (1)</summary>
 
