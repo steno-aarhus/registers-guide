@@ -17,7 +17,12 @@ build-search-index:
   Rscript tools/build-search-index.R
 
 # The weekly once-over: everything that can rot without the build noticing
-check-weekly: check-guide check-urls check-spelling
+check-weekly: check-guide check-urls check-spelling check-dst-overview
+
+# Check coverage, reference type and open/closed against DST's register overview.
+# DST wins: a disagreement means the schema is wrong. Needs network.
+check-dst-overview:
+  Rscript tools/check-dst-overview.R
 
 # Check the guide itself: R code parses, functions exist, links + anchors, house style
 # Sub-checks: just check-guide code | functions | links | style
