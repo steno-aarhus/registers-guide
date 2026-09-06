@@ -67,13 +67,13 @@
 
 | Code system | Values |
 | --- | --- |
-| `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
+| `icd10` | Not listed here - see [DST's classification](https://icd.who.int/browse10/) |
 
-- **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
+- **`icd10`:** Do not strip a leading D from these codes. The habit comes from LPR, where the D is really there, and applying it here removes the first character of a real code: E119 becomes 119, which matches nothing and raises no error. The danger is worst where a code genuinely begins with D. ICD-10 chapter D covers in-situ and benign neoplasms, so D46 is myelodysplastic syndrome, a whole code. Strip its "prefix" and you get 46, which looks like a code and is not one.
 
 Where these values come from:
 
-- **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`icd10`:** [WHO ICD-10 browser](https://icd.who.int/browse10/).
 
 </details>
 

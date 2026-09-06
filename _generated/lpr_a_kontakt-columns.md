@@ -87,19 +87,19 @@
 | Code system | Values |
 | --- | --- |
 | `kont_type` | Not listed here - see [DST's classification](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf) |
-| `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
+| `icd10_sks` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
 | `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
 
-- **`kont_type`:** `ALCA00` means physical attendance, which is the closest LPR3 gets to LPR2's inpatient flag. It marks attendance, not admission, so a study that treats it as "was admitted" will include outpatient visits.
-- **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
+- **`kont_type`:** `ALCA00` means physical attendance, which is the closest LPR3 gets to LPR2's inpatient flag. It marks attendance, not admission, so a study that treats it as "was admitted" will include outpatient visits. Check what your own delivery holds before filtering: single digits and SKS codes have been seen side by side in the same year, so `kont_type == "ALCA00"` can silently drop rows that are the same kind of contact recorded in the other form.
+- **`icd10_sks`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing. Do not carry the habit across to the cause-of-death registers: they hold the plain code, so stripping a D there removes the first real character instead.
 - **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality.
 
 Where these values come from:
 
 - **`kont_type`:** [Vejledning til indberetning til LPR3](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf), published on [medinfo.dk](https://medinfo.dk/sks/brows.php).
-- **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`icd10_sks`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
 

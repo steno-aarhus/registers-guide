@@ -78,26 +78,29 @@
 - `recnum` joins to **LPR_DIAG** (one-to-many).
 
 <details>
-<summary>Value sets for the coded columns (4)</summary>
+<summary>Value sets for the coded columns (5)</summary>
 
 | Code system | Values |
 | --- | --- |
 | `pattype` | `0` Heldoegnspatient (to 2001), Indlagt patient (2002-), `1` Dagpatient (to 1986), Deldoegnspatient (1987-2001), `2` Natpatient (to 1986), Ambulant patient (1987-), `3` Skadestuepatient |
-| `icd10` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
+| `icd10_sks` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `indm` | `1` Akut, `2` Ikke akut, `9` Uoplyst |
 | `sex_lpr` | `1` Mand (to 2004), `2` Kvinde (to 2004), `M` Mand (2005-), `K` Kvinde (2005-) |
+| `icd8` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer) |
 
 - **`pattype`:** There are four codes, not six, and they changed meaning. Code `1` was Dagpatient until 1986 and Deldoegnspatient from 1987; code `2` was Natpatient until 1986 and Ambulant from 1987. The register only started using `1`, `2` and `3` in 1994, so before that essentially every contact is `0`. Code `3` was discontinued at the end of 2013, and from 2014 an emergency-room visit arrives as `2` with an acute admission mode in `c_indm`. Reading `2` as outpatient across the whole register therefore mislabels night patients before 1987 and emergency visits after 2013.
-- **`icd10`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing.
+- **`icd10_sks`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing. Do not carry the habit across to the cause-of-death registers: they hold the plain code, so stripping a D there removes the first real character instead.
 - **`indm`:** From 2014 this is what separates an emergency-room visit from an ordinary outpatient one, because `c_pattype` code `3` was discontinued and both arrive as `2`. Code `9` (Uoplyst) stops at the end of 2003, so a missing value after that is genuinely missing rather than coded as unknown.
 - **`sex_lpr`:** The coding changed at the start of 2005: `1`/`2` until the end of 2004, `M`/`K` from 2005. A study spanning that year that filters on `c_sex == "2"` keeps only the women seen before 2005 and silently drops the rest, with no error and no empty result to warn you. Take sex from BEF instead, where it is `koen` coded `1`/`2` throughout, unless you specifically need what the hospital recorded.
+- **`icd8`:** A study whose period starts before 1994 is reading two classifications out of one column. ICD-10 codes match nothing in the early years, and the usual substr(c_diag, 2, 4) returns a meaningless fragment of an ICD-8 code rather than failing, so nothing tells you it went wrong.
 
 Where these values come from:
 
 - **`pattype`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
-- **`icd10`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`icd10_sks`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`indm`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
 - **`sex_lpr`:** [Kodeark for Landspatientregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5).
+- **`icd8`:** [Retired classification, no current DST page](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer).
 
 </details>
 
