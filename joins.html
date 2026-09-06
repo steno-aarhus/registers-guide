@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-05">
+<meta name="dcterms.date" content="2026-09-06">
 
 <title>Link your extracts – Register-based research at Statistics Denmark</title>
 <style>
@@ -455,12 +455,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text">Sensitivity analyses</span></a>
   </div>
 </li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="./substitution.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Substitution analyses</span></a>
-  </div>
-</li>
       </ul>
   </li>
           <li class="sidebar-item">
@@ -612,6 +606,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </ul></li>
   <li><a href="#validate-your-join" id="toc-validate-your-join" class="nav-link" data-scroll-target="#validate-your-join">Validate your join</a></li>
   <li><a href="#stack-tables-vertically---bind_rows" id="toc-stack-tables-vertically---bind_rows" class="nav-link" data-scroll-target="#stack-tables-vertically---bind_rows">Stack tables vertically - <code>bind_rows()</code></a></li>
+  <li><a href="#derived-variables-create-new-columns" id="toc-derived-variables-create-new-columns" class="nav-link" data-scroll-target="#derived-variables-create-new-columns">Derived variables: create new columns</a></li>
   <li><a href="#follow-up-time" id="toc-follow-up-time" class="nav-link" data-scroll-target="#follow-up-time">Calculate follow-up time and event variable</a></li>
   <li><a href="#assemble-the-final-analysis-dataset" id="toc-assemble-the-final-analysis-dataset" class="nav-link" data-scroll-target="#assemble-the-final-analysis-dataset">Assemble the final analysis dataset</a></li>
   <li><a href="#next-steps" id="toc-next-steps" class="nav-link" data-scroll-target="#next-steps">Next steps</a></li>
@@ -636,7 +631,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 5, 2026</p>
+      <p class="date">September 6, 2026</p>
     </div>
   </div>
   
@@ -649,16 +644,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>Your extracts from <a href="./first-extraction.html">Phase 6</a>, <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./extract-variables.html">Phase 11</a> are stored as separate RDS files. Once each extract is down to <strong>one row per person</strong> (<a href="./long-wide.html">Long ↔︎ wide format</a>), you join them on <code>pnr</code> into one analysis-ready dataset. Finally, you calculate follow-up time and the event variable.</p>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p>The code examples use generic paths and variable names. Adapt to your project’s folder structure and column names.</p>
-</div>
-</div>
-</div>
+<p><em>Paths and variable names in the examples are generic - replace them with your own.</em></p>
 <div class="callout callout-style-simple callout-important">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -956,31 +942,58 @@ Practical examples: join date of death and emigration to the cohort
 <span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(emigration, <span class="at">by =</span> <span class="st">"pnr"</span>)              <span class="co"># NA = no exit after index</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </section>
+<section id="derived-variables-create-new-columns" class="level2">
+<h2 class="anchored" data-anchor-id="derived-variables-create-new-columns">Derived variables: create new columns</h2>
+<p>Once the extracts are joined, you almost always need to <strong>compute new variables</strong> from the columns you now have. That is <code>mutate()</code>: it adds a column calculated from existing ones.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># mutate, if_else, case_when</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Age at index: days between two dates / 365.25 (a year is 365.25 days, leap years)</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">age_at_index =</span> <span class="fu">as.numeric</span>(index_date <span class="sc">-</span> foed_dag) <span class="sc">/</span> <span class="fl">365.25</span>,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># BMI from height (m) and weight (kg)</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">bmi =</span> weight_kg <span class="sc">/</span> (height_m<span class="sc">^</span><span class="dv">2</span>),</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Categorise a continuous variable into groups</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">age_group =</span> <span class="fu">case_when</span>(</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>      age_at_index <span class="sc">&lt;</span> <span class="dv">50</span> <span class="sc">~</span> <span class="st">"&lt;50"</span>,</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>      age_at_index <span class="sc">&lt;</span> <span class="dv">65</span> <span class="sc">~</span> <span class="st">"50-64"</span>,</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"65+"</span> <span class="co"># everything else (here: 65 and over)</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Two habits worth keeping:</p>
+<ul>
+<li><strong>Compute a variable once</strong> and reuse it, so age at index is the same number in the matching and in Table 1.</li>
+<li><strong><code>if_else()</code></strong> for yes/no, <strong><code>case_when()</code></strong> for several categories - and use the same type in every branch (<code>1L</code>/<code>0L</code>, or text in all of them). Both are in the <a href="./function-guide.html">Function guide</a>.</li>
+</ul>
+<p>The censoring date and the event indicator are derived variables too, but they need dates from several extracts at once, so they come next.</p>
+</section>
 <section id="follow-up-time" class="level2">
 <h2 class="anchored" data-anchor-id="follow-up-time">Calculate follow-up time and event variable</h2>
 <p>Before you can analyse, each cohort member needs a <strong>censoring date</strong> (when follow-up ends) and an <strong>event variable</strong> (did they experience the outcome?).</p>
 <p>The censoring date is the <em>earliest</em> of: event date, date of death, emigration date and end of study period.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate follow-up time and event variable ----------------------------------</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>study_end <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>) <span class="co"># replace with your actual study end date</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># format: "yyyy-mm-dd" (ISO 8601 - R's standard)</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Censoring date = the earliest of all possible stopping reasons</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">censor_date =</span> <span class="fu">pmin</span>(</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>      event_date,</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>      death_date,</span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>      emigration_date,</span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>      study_end,</span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">na.rm =</span> <span class="cn">TRUE</span></span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Follow-up time in years</span></span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">followup_years =</span> <span class="fu">as.numeric</span>(censor_date <span class="sc">-</span> index_date) <span class="sc">/</span> <span class="fl">365.25</span>,</span>
-<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Event variable: 1 = outcome occurred before censoring, 0 = censored</span></span>
-<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">event =</span> <span class="fu">as.integer</span>(<span class="sc">!</span><span class="fu">is.na</span>(event_date) <span class="sc">&amp;</span> event_date <span class="sc">&lt;=</span> censor_date)</span>
-<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate follow-up time and event variable ----------------------------------</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>study_end <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>) <span class="co"># replace with your actual study end date</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># format: "yyyy-mm-dd" (ISO 8601 - R's standard)</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Censoring date = the earliest of all possible stopping reasons</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">censor_date =</span> <span class="fu">pmin</span>(</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>      event_date,</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>      death_date,</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>      emigration_date,</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>      study_end,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">na.rm =</span> <span class="cn">TRUE</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Follow-up time in years</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">followup_years =</span> <span class="fu">as.numeric</span>(censor_date <span class="sc">-</span> index_date) <span class="sc">/</span> <span class="fl">365.25</span>,</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Event variable: 1 = outcome occurred before censoring, 0 = censored</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">event =</span> <span class="fu">as.integer</span>(<span class="sc">!</span><span class="fu">is.na</span>(event_date) <span class="sc">&amp;</span> event_date <span class="sc">&lt;=</span> censor_date)</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -992,16 +1005,16 @@ Practical examples: join date of death and emigration to the cohort
 </div>
 </div>
 <p><strong>Competing risks?</strong> If a competing event (typically death) must be handled separately (see <a href="./time-to-event.html#competing-risks">Time-to-event</a>), then instead of a binary <code>event</code> (0/1) build a <strong>status with three values</strong> - what happened <em>first</em>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Competing risks: a status with three values ----------------------------------</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># status_code: which date "won" the pmin() above?</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">status_code =</span> <span class="fu">case_when</span>(</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>      <span class="sc">!</span><span class="fu">is.na</span>(event_date) <span class="sc">&amp;</span> event_date <span class="sc">&lt;=</span> censor_date <span class="sc">~</span> <span class="dv">1</span>, <span class="co"># outcome first</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>      <span class="sc">!</span><span class="fu">is.na</span>(death_date) <span class="sc">&amp;</span> death_date <span class="sc">&lt;=</span> censor_date <span class="sc">~</span> <span class="dv">2</span>, <span class="co"># death first (competing risk)</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="dv">0</span> <span class="co"># otherwise censored (emigration/study end)</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Competing risks: a status with three values ----------------------------------</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># status_code: which date "won" the pmin() above?</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">status_code =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>      <span class="sc">!</span><span class="fu">is.na</span>(event_date) <span class="sc">&amp;</span> event_date <span class="sc">&lt;=</span> censor_date <span class="sc">~</span> <span class="dv">1</span>, <span class="co"># outcome first</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>      <span class="sc">!</span><span class="fu">is.na</span>(death_date) <span class="sc">&amp;</span> death_date <span class="sc">&lt;=</span> censor_date <span class="sc">~</span> <span class="dv">2</span>, <span class="co"># death first (competing risk)</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="dv">0</span> <span class="co"># otherwise censored (emigration/study end)</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="assemble-the-final-analysis-dataset" class="level2">
 <h2 class="anchored" data-anchor-id="assemble-the-final-analysis-dataset">Assemble the final analysis dataset</h2>
@@ -1023,22 +1036,22 @@ Practical examples: join date of death and emigration to the cohort
 </div>
 <div class="callout-body-container">
 <p><strong>End with <code>select()</code> - keep only the columns the analysis requires.</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>cohort_final <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    pnr,</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    index_date,</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    censor_date,</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    followup_years,</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    event,</span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    alder,</span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    koen,</span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    nmi_score,</span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    occupation_cat,</span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    education_cat,</span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    income_cat</span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort_final, <span class="st">"path/to/analysis_dataset.rds"</span>) <span class="co"># save the final dataset</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>cohort_final <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    pnr,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    index_date,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    censor_date,</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    followup_years,</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    event,</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    alder,</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    koen,</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    nmi_score,</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    occupation_cat,</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    education_cat,</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    income_cat</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort_final, <span class="st">"path/to/analysis_dataset.rds"</span>) <span class="co"># save the final dataset</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
 </div>
@@ -1046,68 +1059,86 @@ Practical examples: join date of death and emigration to the cohort
 <summary>
 Complete recipe - from cohort to analysis-ready dataset
 </summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Complete recipe: cohort -&gt; analysis-ready dataset ----------------------------</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 0. Load your cohort (pnr + index_date, from Phase 6/9) -----------------------</span></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)   <span class="co"># one row per person</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Exclude prevalent cases (see Phase 9) -------------------------------------</span></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="co"># ... cohort_clean &lt;- cohort %&gt;% anti_join(prevalent, by = "pnr")</span></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Link outcome (e.g. first dementia diagnosis after index) ------------------</span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>outcome  <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_dementia.rds"</span>)   <span class="co"># pnr + event_date (NA = no event)</span></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort_clean <span class="sc">%&gt;%</span> <span class="fu">left_join</span>(outcome, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Link censoring: death date and emigration ---------------------------------</span></span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span>   <span class="co"># without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")</span></span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span>
-<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>vnds_data <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"vnds"</span>) <span class="sc">%&gt;%</span>    <span class="co"># without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/")</span></span>
-<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(indud_kode <span class="sc">==</span> <span class="st">"U"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, haend_dato) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span>
-<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a><span class="co"># first exit AFTER index (not the first ever - see the section above)</span></span>
-<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>vnds_data <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds_data, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(haend_dato <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span></span>
-<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(haend_dato) <span class="sc">%&gt;%</span> <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">emigration_date =</span> haend_dato)</span>
-<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(deaths,    <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds_data, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
-<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Calculate follow-up time and event variable -------------------------------</span></span>
-<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>study_end <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)</span>
-<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">censor_date    =</span> <span class="fu">pmin</span>(event_date, death_date, emigration_date, study_end, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">followup_years =</span> <span class="fu">as.numeric</span>(censor_date <span class="sc">-</span> index_date) <span class="sc">/</span> <span class="fl">365.25</span>,</span>
-<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a>    <span class="at">event          =</span> <span class="fu">as.integer</span>(<span class="sc">!</span><span class="fu">is.na</span>(event_date) <span class="sc">&amp;</span> event_date <span class="sc">&lt;=</span> censor_date)</span>
-<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-45"><a href="#cb12-45" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Link covariates (demographic, SES, comorbidity) ---------------------------</span></span>
-<span id="cb12-46"><a href="#cb12-46" aria-hidden="true" tabindex="-1"></a>bef_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_bef.rds"</span>)    <span class="co"># age, sex from BEF</span></span>
-<span id="cb12-47"><a href="#cb12-47" aria-hidden="true" tabindex="-1"></a>ses_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_ses.rds"</span>)    <span class="co"># education, income, employment</span></span>
-<span id="cb12-48"><a href="#cb12-48" aria-hidden="true" tabindex="-1"></a>nmi_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_nmi.rds"</span>)    <span class="co"># NMI score</span></span>
-<span id="cb12-49"><a href="#cb12-49" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-50"><a href="#cb12-50" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb12-51"><a href="#cb12-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(bef_data, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-52"><a href="#cb12-52" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(ses_data, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-53"><a href="#cb12-53" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(nmi_data, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
-<span id="cb12-54"><a href="#cb12-54" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-55"><a href="#cb12-55" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Keep ONLY the columns the analysis requires -------------------------------</span></span>
-<span id="cb12-56"><a href="#cb12-56" aria-hidden="true" tabindex="-1"></a>cohort_final <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb12-57"><a href="#cb12-57" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, index_date, censor_date, followup_years, event,</span>
-<span id="cb12-58"><a href="#cb12-58" aria-hidden="true" tabindex="-1"></a>         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)</span>
-<span id="cb12-59"><a href="#cb12-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-60"><a href="#cb12-60" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort_final, <span class="st">"path/to/analysis_dataset.rds"</span>)   <span class="co"># save the final dataset</span></span>
-<span id="cb12-61"><a href="#cb12-61" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(cohort_final)                                        <span class="co"># verify number of persons</span></span>
-<span id="cb12-62"><a href="#cb12-62" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(cohort_final)                                       <span class="co"># verify column names</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Complete recipe: cohort -&gt; analysis-ready dataset ----------------------------</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register()</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)   <span class="co"># left_join, semi_join, mutate, group_by, slice</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tibble)  <span class="co"># tibble()</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 0. Load your cohort ----------------------------------------------------------</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)   <span class="co"># one row per person: pnr + index_date (Phase 10)</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Exclude prevalent cases ---------------------------------------------------</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co"># People who already had the outcome before index are not at risk of getting it,</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="co"># so they go BEFORE anything else is joined on. anti_join keeps the rows of</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="co"># `cohort` with NO match in `prevalent` - see Phase 10.</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="co"># cohort_clean &lt;- cohort %&gt;% anti_join(prevalent, by = "pnr")</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Link the outcome ----------------------------------------------------------</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a><span class="co"># One row per person with the FIRST event date after index, or no row at all.</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a><span class="co"># left_join keeps everyone, so people with no event get NA - which is exactly</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a><span class="co"># what "no event" means here, and what the event indicator in step 4 reads.</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>outcome  <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_dementia.rds"</span>)   <span class="co"># pnr + event_date</span></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort_clean <span class="sc">%&gt;%</span> <span class="fu">left_join</span>(outcome, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Link censoring: death date and emigration ---------------------------------</span></span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span>   <span class="co"># without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")</span></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>vnds_data <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"vnds"</span>) <span class="sc">%&gt;%</span>    <span class="co"># without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/vnds/")</span></span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(indud_kode <span class="sc">==</span> <span class="st">"U"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, haend_dato) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a><span class="co"># Emigration needs the first exit AFTER index, not the first ever: someone who</span></span>
+<span id="cb13-35"><a href="#cb13-35" aria-hidden="true" tabindex="-1"></a><span class="co"># lived abroad as a child and moved back is not censored at that childhood exit.</span></span>
+<span id="cb13-36"><a href="#cb13-36" aria-hidden="true" tabindex="-1"></a><span class="co"># So attach index_date first, filter, and only then take the earliest remaining.</span></span>
+<span id="cb13-37"><a href="#cb13-37" aria-hidden="true" tabindex="-1"></a>vnds_data <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb13-38"><a href="#cb13-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds_data, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-39"><a href="#cb13-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(haend_dato <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span></span>
+<span id="cb13-40"><a href="#cb13-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(haend_dato) <span class="sc">%&gt;%</span> <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb13-41"><a href="#cb13-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">emigration_date =</span> haend_dato)</span>
+<span id="cb13-42"><a href="#cb13-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-43"><a href="#cb13-43" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb13-44"><a href="#cb13-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(deaths,    <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-45"><a href="#cb13-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds_data, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
+<span id="cb13-46"><a href="#cb13-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-47"><a href="#cb13-47" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Follow-up time and the event indicator ------------------------------------</span></span>
+<span id="cb13-48"><a href="#cb13-48" aria-hidden="true" tabindex="-1"></a><span class="co"># censor_date = the FIRST of the four ways follow-up can end. pmin() with</span></span>
+<span id="cb13-49"><a href="#cb13-49" aria-hidden="true" tabindex="-1"></a><span class="co"># na.rm = TRUE takes the earliest date that actually exists, so someone who never</span></span>
+<span id="cb13-50"><a href="#cb13-50" aria-hidden="true" tabindex="-1"></a><span class="co"># died, never emigrated and never had the event simply ends at study_end.</span></span>
+<span id="cb13-51"><a href="#cb13-51" aria-hidden="true" tabindex="-1"></a><span class="co"># event = 1 only if the outcome happened at or before that date: a diagnosis</span></span>
+<span id="cb13-52"><a href="#cb13-52" aria-hidden="true" tabindex="-1"></a><span class="co"># recorded after the person emigrated does not count.</span></span>
+<span id="cb13-53"><a href="#cb13-53" aria-hidden="true" tabindex="-1"></a>study_end <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2024-12-31"</span>)</span>
+<span id="cb13-54"><a href="#cb13-54" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb13-55"><a href="#cb13-55" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb13-56"><a href="#cb13-56" aria-hidden="true" tabindex="-1"></a>    <span class="at">censor_date    =</span> <span class="fu">pmin</span>(event_date, death_date, emigration_date, study_end, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb13-57"><a href="#cb13-57" aria-hidden="true" tabindex="-1"></a>    <span class="at">followup_years =</span> <span class="fu">as.numeric</span>(censor_date <span class="sc">-</span> index_date) <span class="sc">/</span> <span class="fl">365.25</span>,   <span class="co"># 365.25 = leap years</span></span>
+<span id="cb13-58"><a href="#cb13-58" aria-hidden="true" tabindex="-1"></a>    <span class="at">event          =</span> <span class="fu">as.integer</span>(<span class="sc">!</span><span class="fu">is.na</span>(event_date) <span class="sc">&amp;</span> event_date <span class="sc">&lt;=</span> censor_date)</span>
+<span id="cb13-59"><a href="#cb13-59" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb13-60"><a href="#cb13-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-61"><a href="#cb13-61" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Link covariates (demographic, SES, comorbidity) ---------------------------</span></span>
+<span id="cb13-62"><a href="#cb13-62" aria-hidden="true" tabindex="-1"></a><span class="co"># Each of these must already be ONE row per person. If one is not, the join</span></span>
+<span id="cb13-63"><a href="#cb13-63" aria-hidden="true" tabindex="-1"></a><span class="co"># silently multiplies your rows - check with the validation code above.</span></span>
+<span id="cb13-64"><a href="#cb13-64" aria-hidden="true" tabindex="-1"></a>bef_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_bef.rds"</span>)    <span class="co"># age, sex from BEF</span></span>
+<span id="cb13-65"><a href="#cb13-65" aria-hidden="true" tabindex="-1"></a>ses_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_ses.rds"</span>)    <span class="co"># education, income, employment</span></span>
+<span id="cb13-66"><a href="#cb13-66" aria-hidden="true" tabindex="-1"></a>nmi_data <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/extract_nmi.rds"</span>)    <span class="co"># NMI score</span></span>
+<span id="cb13-67"><a href="#cb13-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-68"><a href="#cb13-68" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb13-69"><a href="#cb13-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(bef_data, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-70"><a href="#cb13-70" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(ses_data, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb13-71"><a href="#cb13-71" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(nmi_data, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
+<span id="cb13-72"><a href="#cb13-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-73"><a href="#cb13-73" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Keep ONLY the columns the analysis requires -------------------------------</span></span>
+<span id="cb13-74"><a href="#cb13-74" aria-hidden="true" tabindex="-1"></a>cohort_final <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb13-75"><a href="#cb13-75" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, index_date, censor_date, followup_years, event,</span>
+<span id="cb13-76"><a href="#cb13-76" aria-hidden="true" tabindex="-1"></a>         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)</span>
+<span id="cb13-77"><a href="#cb13-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-78"><a href="#cb13-78" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort_final, <span class="st">"path/to/analysis_dataset.rds"</span>)  <span class="co"># save the final dataset</span></span>
+<span id="cb13-79"><a href="#cb13-79" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(cohort_final)   <span class="co"># one row per person? compare with the cohort you started from</span></span>
+<span id="cb13-80"><a href="#cb13-80" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(cohort_final)  <span class="co"># did every join actually add the columns you expected?</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </section>
 <section id="next-steps" class="level2">
