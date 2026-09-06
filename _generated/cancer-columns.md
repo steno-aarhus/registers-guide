@@ -1,14 +1,14 @@
 <!-- Generated from schema/registers/cancer.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| `c_icd10` | character | code | ICD10 diagnose |
-| `c_morfo03` | character | code | ICD3 - Histologi og morfologi |
-| `c_topo3` | character | code | Tumorens lokalisation |
-| `d_diagnosedato` | date | date | Diagnosedato |
-| **`k_cprnr`** | character | join key | CPR-nummer |
-| `k_tumornr` | character | code | Tumor løbenr. |
-| `v_diagnosealder` | numeric | value | Patientens alder |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| `c_icd10` | character | code | ICD10 diagnose | 1978 to 2024 |
+| `c_morfo03` | character | code | ICD3 - Histologi og morfologi | 1978 to 2024 |
+| `c_topo3` | character | code | Tumorens lokalisation | 1978 to 2024 |
+| `d_diagnosedato` | date | date | Diagnosedato |  |
+| **`k_cprnr`** | character | join key | CPR-nummer |  |
+| `k_tumornr` | character | code | Tumor løbenr. |  |
+| `v_diagnosealder` | numeric | value | Patientens alder |  |
 
 <details>
 <summary>All other columns (28)</summary>
@@ -18,19 +18,19 @@
 | `c_amtf07` | character | code | Amtskode | 1968 to 2006 |
 | `c_behandling` | character | code | Behandlingskode | 1943 to 2003 |
 | `c_diaggr` | character | code | Diagnosegruppering ICD7 |  |
-| `c_diaggr_kp` | character | code | Diagnosegruppering KP |  |
+| `c_diaggr_kp` | character | code | Diagnosegruppering KP | 1978 to 2024 |
 | `c_diaggr_nordcan` | character | code | Diagnosegruppering NordCan |  |
 | `c_grad` | character | code | Gradering | 1943 to 2008 |
 | `c_idc7` | character | code | ICD7 diagnose | 1943 to 1977 |
 | `c_komf07` | character | code | Patientens bopælskommune | 1968 to 2006 |
-| `c_kommune` | character | code | Bopælskommune |  |
+| `c_kommune` | character | code | Bopælskommune | 1978 to 2024 |
 | `c_lateral` | character | code | Lateralitet |  |
 | `c_makrogrundlag` | character | code | Makroskopisk grundlag |  |
 | `c_mikrogrundlag` | character | code | Mikroskopisk grundlag |  |
 | `c_orggr` | character | code | ICD7 diagnosegruppering |  |
-| `c_orggr_idc10` | character | code | ICD10 diagnosegruppering |  |
-| `c_region` | character | code | Patientens bopælsregion |  |
-| `c_sarc` | character | code | Sarcom. eller ej |  |
+| `c_orggr_idc10` | character | code | ICD10 diagnosegruppering | 1978 to 2024 |
+| `c_region` | character | code | Patientens bopælsregion | 2006 to 2024 |
+| `c_sarc` | character | code | Sarcom. eller ej | 1943 to 2006 |
 | `c_sex` | character | code | Patientens køn |  |
 | `c_status` | character | code | Patientens status |  |
 | `c_tnm_m` | character | code | Angiver fjernmetastaser | 2004 to 2024 |
