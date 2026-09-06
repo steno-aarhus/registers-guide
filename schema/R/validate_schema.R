@@ -226,6 +226,23 @@ validate_schema <- function(schema = load_schema()) {
       if (!is.null(cl$code_system) && !cl$code_system %in% cs_ids) {
         add(cw, ": code_system '", cl$code_system, "' has no file in code-systems/")
       }
+
+      # A column can hold one classification early and another later: LPR2 and
+      # dodsaars both carry ICD-8 before 1994 and ICD-10 after. Without this the
+      # schema says only what the column holds TODAY, and a consumer reading the
+      # early years gets codes that match nothing and no warning that they are
+      # reading a different system.
+      pcs <- cl$previous_code_system
+      if (!is.null(pcs)) {
+        if (is.null(pcs$id) || !pcs$id %in% cs_ids) {
+          add(cw, ": previous_code_system.id '", pcs$id %||% "NULL",
+              "' has no file in code-systems/")
+        }
+        if (!check_coverage_value(pcs$until)) {
+          add(cw, ": previous_code_system.until is '", as.character(pcs$until)[1],
+              "', which is not YYYY, YYYY-MM or YYYY-Qn")
+        }
+      }
       st <- cl$provenance$source_type
       if (is.null(st)) {
         add(cw, ": no provenance.source_type - every fact must say where it came from")

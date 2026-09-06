@@ -146,7 +146,14 @@ build_register <- function(id, schema = load_schema()) {
   }
 
   # 3. code systems, folded away so the column table stays readable
-  used <- unique(Filter(Negate(is.null), lapply(reg$columns, function(x) x$code_system)))
+  # Both the system a column holds now and the one it held before. A column that
+  # changed classification part-way through is exactly the case a reader needs
+  # warning about, so leaving the old system out of the table would hide the
+  # thing the note exists to say.
+  used <- unique(Filter(Negate(is.null), c(
+    lapply(reg$columns, function(x) x$code_system),
+    lapply(reg$columns, function(x) x$previous_code_system$id)
+  )))
   if (length(used)) {
     tbl <- data.frame(
       `Code system` = paste0("`", unlist(used), "`"),
