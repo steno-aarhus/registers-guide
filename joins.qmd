@@ -13,10 +13,7 @@ person** ([Long ↔ wide format](long-wide.qmd)), you join them on `pnr` into
 one analysis-ready dataset. Finally, you calculate follow-up time and the event
 variable.
 
-::: {.callout-note}
-The code examples use generic paths and variable names. Adapt to your project's
-folder structure and column names.
-:::
+*Paths and variable names in the examples are generic - replace them with your own.*
 
 ::: {.callout-important}
 **First get each extract down to one row per person.** `left_join()` only
@@ -298,6 +295,43 @@ cohort_with_emigration <- cohort %>%
 
 </details>
 
+## Derived variables: create new columns {#derived-variables-create-new-columns}
+
+Once the extracts are joined, you almost always need to **compute new variables**
+from the columns you now have. That is `mutate()`: it adds a column calculated
+from existing ones.
+
+```r
+library(dplyr) # mutate, if_else, case_when
+
+cohort <- cohort %>%
+  mutate(
+    # Age at index: days between two dates / 365.25 (a year is 365.25 days, leap years)
+    age_at_index = as.numeric(index_date - foed_dag) / 365.25,
+
+    # BMI from height (m) and weight (kg)
+    bmi = weight_kg / (height_m^2),
+
+    # Categorise a continuous variable into groups
+    age_group = case_when(
+      age_at_index < 50 ~ "<50",
+      age_at_index < 65 ~ "50-64",
+      TRUE ~ "65+" # everything else (here: 65 and over)
+    )
+  )
+```
+
+Two habits worth keeping:
+
+- **Compute a variable once** and reuse it, so age at index is the same number in
+  the matching and in Table 1.
+- **`if_else()`** for yes/no, **`case_when()`** for several categories - and use
+  the same type in every branch (`1L`/`0L`, or text in all of them). Both are in
+  the [Function guide](function-guide.qmd).
+
+The censoring date and the event indicator are derived variables too, but they
+need dates from several extracts at once, so they come next.
+
 ## Calculate follow-up time and event variable {#follow-up-time}
 
 Before you can analyse, each cohort member needs a **censoring date** (when
@@ -400,15 +434,24 @@ saveRDS(cohort_final, "path/to/analysis_dataset.rds") # save the final dataset
 
 ```r
 # Complete recipe: cohort -> analysis-ready dataset ----------------------------
+library(fastreg) # read_register()
+library(dplyr)   # left_join, semi_join, mutate, group_by, slice
+library(tibble)  # tibble()
 
-# 0. Load your cohort (pnr + index_date, from Phase 6/9) -----------------------
-cohort <- readRDS("path/to/full_cohort.rds")   # one row per person
+# 0. Load your cohort ----------------------------------------------------------
+cohort <- readRDS("path/to/full_cohort.rds")   # one row per person: pnr + index_date (Phase 10)
 
-# 1. Exclude prevalent cases (see Phase 9) -------------------------------------
-# ... cohort_clean <- cohort %>% anti_join(prevalent, by = "pnr")
+# 1. Exclude prevalent cases ---------------------------------------------------
+# People who already had the outcome before index are not at risk of getting it,
+# so they go BEFORE anything else is joined on. anti_join keeps the rows of
+# `cohort` with NO match in `prevalent` - see Phase 10.
+# cohort_clean <- cohort %>% anti_join(prevalent, by = "pnr")
 
-# 2. Link outcome (e.g. first dementia diagnosis after index) ------------------
-outcome  <- readRDS("path/to/extract_dementia.rds")   # pnr + event_date (NA = no event)
+# 2. Link the outcome ----------------------------------------------------------
+# One row per person with the FIRST event date after index, or no row at all.
+# left_join keeps everyone, so people with no event get NA - which is exactly
+# what "no event" means here, and what the event indicator in step 4 reads.
+outcome  <- readRDS("path/to/extract_dementia.rds")   # pnr + event_date
 cohort <- cohort_clean %>% left_join(outcome, by = "pnr")
 
 # 3. Link censoring: death date and emigration ---------------------------------
@@ -423,7 +466,9 @@ vnds_data <- read_register("vnds") %>%    # without fastreg: open_dataset("E:/wo
   filter(indud_kode == "U") %>%
   select(pnr, haend_dato) %>% collect()
 
-# first exit AFTER index (not the first ever - see the section above)
+# Emigration needs the first exit AFTER index, not the first ever: someone who
+# lived abroad as a child and moved back is not censored at that childhood exit.
+# So attach index_date first, filter, and only then take the earliest remaining.
 vnds_data <- cohort %>%
   left_join(vnds_data, by = "pnr") %>%
   filter(haend_dato > index_date) %>%
@@ -434,16 +479,23 @@ cohort <- cohort %>%
   left_join(deaths,    by = "pnr") %>%
   left_join(vnds_data, by = "pnr")
 
-# 4. Calculate follow-up time and event variable -------------------------------
+# 4. Follow-up time and the event indicator ------------------------------------
+# censor_date = the FIRST of the four ways follow-up can end. pmin() with
+# na.rm = TRUE takes the earliest date that actually exists, so someone who never
+# died, never emigrated and never had the event simply ends at study_end.
+# event = 1 only if the outcome happened at or before that date: a diagnosis
+# recorded after the person emigrated does not count.
 study_end <- as.Date("2024-12-31")
 cohort <- cohort %>%
   mutate(
     censor_date    = pmin(event_date, death_date, emigration_date, study_end, na.rm = TRUE),
-    followup_years = as.numeric(censor_date - index_date) / 365.25,
+    followup_years = as.numeric(censor_date - index_date) / 365.25,   # 365.25 = leap years
     event          = as.integer(!is.na(event_date) & event_date <= censor_date)
   )
 
 # 5. Link covariates (demographic, SES, comorbidity) ---------------------------
+# Each of these must already be ONE row per person. If one is not, the join
+# silently multiplies your rows - check with the validation code above.
 bef_data <- readRDS("path/to/extract_bef.rds")    # age, sex from BEF
 ses_data <- readRDS("path/to/extract_ses.rds")    # education, income, employment
 nmi_data <- readRDS("path/to/extract_nmi.rds")    # NMI score
@@ -458,9 +510,9 @@ cohort_final <- cohort %>%
   select(pnr, index_date, censor_date, followup_years, event,
          alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
 
-saveRDS(cohort_final, "path/to/analysis_dataset.rds")   # save the final dataset
-nrow(cohort_final)                                        # verify number of persons
-names(cohort_final)                                       # verify column names
+saveRDS(cohort_final, "path/to/analysis_dataset.rds")  # save the final dataset
+nrow(cohort_final)   # one row per person? compare with the cohort you started from
+names(cohort_final)  # did every join actually add the columns you expected?
 ```
 
 </details>

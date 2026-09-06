@@ -27,11 +27,6 @@ That is what this phase is about. The technique for step 1 is either
 `group_by() + slice()` or `pivot_wider()` - the choice depends on what you want
 out of the register. Step 2 is always `left_join()`.
 
-::: {.callout-note}
-The code examples use generic paths and variable names. Adapt to your project's
-folder structure and column names.
-:::
-
 ## What is an analysis-ready dataset?
 
 An analysis-ready dataset has **one row per person** and **one column per
@@ -95,52 +90,6 @@ sound similar but do fundamentally different things:
 
 **Rule of thumb:** Use pivot when you want to change the *shape* of one table.
 Use join when you want to *combine* two tables.
-
-## Derived variables: create new columns
-
-Besides reshaping and joining, you almost always need to **compute new
-variables** from the ones you have. You do this with `mutate()` (introduced in
-[Phase 2](r-intro.qmd)): it adds a column computed from existing columns.
-
-```r
-library(dplyr)
-library(lubridate)
-
-df <- df %>%
-  mutate(
-    # Age at index: number of days between two dates / 365.25 (a year = 365.25 days, leap years)
-    age_at_index = as.numeric(index_date - foed_dag) / 365.25,
-
-    # BMI from height (m) and weight (kg)
-    bmi = weight_kg / (height_m^2),
-
-    # Binary event indicator: 1 if the outcome occurred before censoring, otherwise 0
-    event = if_else(!is.na(event_date) & event_date <= censor_date, 1L, 0L),
-
-    # Categorize a continuous variable into groups
-    age_group = case_when(
-      age_at_index < 50 ~ "<50",
-      age_at_index < 65 ~ "50-64",
-      TRUE ~ "65+" # everything else (here: 65 and over)
-    )
-  )
-```
-
-A few habits:
-
-- **Compute a variable ONCE** and reuse it - so e.g. age at index is the same in
-  the matching and in Table 1.
-- **`if_else()`** for yes/no (two outcomes); **`case_when()`** for several
-  categories. Use the same type in every branch (e.g. `1L`/`0L`, or text in
-  all).
-- **Follow-up time** (`censor_date - index_date`) is usually computed *after*
-  the join, because it uses dates from several extracts - see [Link your
-  extracts](joins.qmd).
-
-::: {.callout-tip}
-`mutate()`, `if_else()` and `case_when()` are explained in the [Function
-guide](function-guide.qmd).
-:::
 
 ## This phase's pages
 
