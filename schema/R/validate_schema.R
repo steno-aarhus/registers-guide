@@ -155,10 +155,6 @@ validate_schema <- function(schema = load_schema()) {
           severity = "warning")
     }
 
-    # Coverage is read by machines, not only printed. Three granularities are
-    # allowed and nothing else: a whole year, a month, or a quarter. Anything
-    # looser cannot be turned into a date range without guessing which end of
-    # the period is meant.
     if (is.null(r$one_row_per)) {
       add(where, ": missing `one_row_per`. It is what one row IS, which decides",
           " how a generator writes rows and how they join")
@@ -167,6 +163,16 @@ validate_schema <- function(schema = load_schema()) {
           paste(ALLOWED_GRAIN, collapse = "/"))
     }
 
+    # Coverage is read by machines, not only printed. Every register must say
+    # which years it spans, because a consumer that does not know cannot place a
+    # row in time at all. Three granularities are allowed and nothing else, a
+    # whole year, a month or a quarter: anything looser cannot be turned into a
+    # date range without guessing which end of the period is meant.
+    if (is.null(r$coverage$from) || is.null(r$coverage$to)) {
+      add(where, ": missing `coverage.from` or `coverage.to`. Take the years from",
+          " DST's register overview; a variable list page is a single-year",
+          " snapshot and gives you the documentation year instead")
+    }
     check_coverage(r$coverage, where)
     for (cl in r$columns) {
       check_coverage(cl$coverage, paste0(where, ", column '", cl$id %||% "?", "'"))
