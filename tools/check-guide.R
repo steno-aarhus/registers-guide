@@ -573,6 +573,31 @@ check_links <- function() {
     }
   }
 
+  # The schema points into the guide too, through provenance.guide_page. It is
+  # the link a reader follows from the variable finder, and nothing else checks
+  # it, so a page that gets renamed or a section that gets rewritten breaks it
+  # silently. An anchor is allowed and expected: landing at the top of a long
+  # page is barely better than no link.
+  schema_dir <- file.path(ROOT, "schema", "registers")
+  if (dir.exists(schema_dir)) {
+    for (yf in list.files(schema_dir, pattern = "\\.yaml$", full.names = TRUE)) {
+      yl <- readLines(yf, warn = FALSE)
+      for (i in seq_along(yl)) {
+        m <- regmatches(yl[i], regexpr("guide_page:[[:space:]]*[^[:space:]]+", yl[i]))
+        if (!length(m)) next
+        link <- sub("^guide_page:[[:space:]]*", "", m)
+        if (identical(link, "null")) next
+        target <- sub("#.*$", "", link)
+        anchor <- if (grepl("#", link)) sub("^[^#]*#", "", link) else ""
+        where <- paste0("schema/registers/", basename(yf), ":", i)
+        check_target(target, file.path(ROOT, target), where)
+        if (file.exists(file.path(ROOT, target))) {
+          check_anchor(file.path(ROOT, target), anchor, where, link)
+        }
+      }
+    }
+  }
+
   # the sidebar and navbar in _quarto.yml also point at files
   yml <- readLines(file.path(ROOT, "_quarto.yml"), warn = FALSE)
   hits <- regmatches(yml, regexpr("[[:alnum:]._/-]+\\.qmd", yml))
