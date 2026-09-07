@@ -202,6 +202,25 @@ leaves a silent hole in the middle of a series.
            esc(label) + "</a>.</p>";
   }
 
+  // A column that held a different classification earlier. This is a warning,
+  // not a detail: an ICD-10 code list matches nothing in the early years of
+  // LPR2 and raises no error, so it has to be visible on the card itself.
+  function prevCodeWarning(v) {
+    if (!v.prev_code_system) return "";
+    var cs = CS[v.prev_code_system];
+    return '<p class="vf-note vf-danger">Before ' +
+      esc(String(Number(v.prev_code_until) + 1 || v.prev_code_until)) +
+      " this column held <code>" + esc(v.prev_code_system) + "</code>" +
+      // Only add the name when it says something the id does not: "icd8,
+      // ICD-8" is noise, "hfaudd, DISCED-15 AUDD" is not.
+      (cs && cs.name &&
+       cs.name.toLowerCase().replace(/[^a-z0-9]/g, "") !== v.prev_code_system
+        ? ", " + esc(cs.name) : "") +
+      ", not <code>" + esc(v.code_system || "") + "</code>. " +
+      "A code list for one matches nothing in the other, and nothing errors." +
+      (cs && cs.note ? " " + esc(cs.note) : "") + "</p>";
+  }
+
   // Every claim on this page comes from somewhere. Saying where lets a reader
   // decide whether to trust it.
   var SRC_LABEL = {
@@ -240,6 +259,9 @@ leaves a silent hole in the middle of a series.
     var r = REG[id];
     if (!r) return "";
     var bits = [];
+    // What one row IS comes first. It decides whether joining this register
+    // multiplies your rows, which is the mistake this page exists to prevent.
+    if (r.grain) bits.push("<strong>" + esc(r.grain) + "</strong>");
     if (r.join_keys) bits.push("join on <code>" + esc(r.join_keys) + "</code>");
     if (r.coverage) bits.push(esc(r.coverage));
     if (r.timing) bits.push(esc(r.timing));
@@ -395,6 +417,7 @@ leaves a silent hole in the middle of a series.
              (v.derivation_source ? ' <a href="' + esc(v.derivation_source) + '">source</a>' : "") +
              "</p>" : "") +
           guideLink(v.guide_page) +
+          prevCodeWarning(v) +
           codeBlock(v.code_system) +
           regDesc(v.register) +
           sourceLine(v) +
