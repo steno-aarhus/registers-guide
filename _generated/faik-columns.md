@@ -106,6 +106,26 @@
 
 - `familie_id` joins to **BEF** (one-to-many).
 
+<details>
+<summary>Value sets for the coded columns (3)</summary>
+
+| Code system | Values |
+| --- | --- |
+| `famboligform` | `1` Ejerbolig, `2` Lejebolig, `9` Uoplyst |
+| `socio13` | `11` Selvstændige, `110` Selvstændige, `111` Selvstændige erhvervsdrivende med 10 eller flere ansatte, `112` Selvstændige erhvervsdrivende med 5-9 ansatte, `113` Selvstændige erhvervsdrivende med 1-4 ansatte, `114` Selvstændige erhvervsdrivende uden ansatte, `12` Medarbejdende ægtefælle, `120` Medarbejdende ægtefælle, `13` Lønmodtagere, `131` Lønmodtagere med ledelsesarbejde, `132` Lønmodtager i arbejde der forudsætter færdigheder på højeste niveau, `133` Lønmodtager i arbejde der forudsætter færdigheder på mellemniveau, `134` Lønmodtager i arbejde der forudsætter færdigheder på grundniveau, `135` Andre lønmodtagere, `139` Lønmodtager uden nærmere angivelse, `21` Arbejdsløs mindst halvdelen af året, `210` Arbejdsløse mindst halvdelen af året, `22` Sygedagpenge, orlov mv., `220` Modtager af sygedagpenge, uddannelsesgodtgørelse, orlovsydelser mv., `31` Uddannelsessøgende, `310` Under uddannelse, inkl. skoleelever på min. 15 år, `32` Pensionist/efterløn, `321` Førtidspensionister, `322` Folkepensionister, `323` Efterlønsmodtagere mv., `33` Kontanthjælp, `330` Kontanthjælpsmodtagere, `41` Andre, `410` Andre, `42` Børn, `420` Børn under 15 år, ultimo året |
+| `famtype` | `0` Ingen oplysninger, `1` Ægtepar forskelligt køn, `2` Registreret partnerskab, `3` Samlevende par, `4` Samboende par, `6` Enlig mænd (herunder også ikke hjemmeboende børn), `7` Enlig kvinder (herunder også ikke hjemmeboende børn), `8` Ægtepar samme køn |
+
+- **`socio13`:** Two codes are easy to misread. `410` is **Andre** (other), not unemployed: the unemployed are `210`. And `420` is **children under 15**, a known category rather than a missing value, so it appearing in an adult cohort means the index date is wrong rather than the data being incomplete.
+- **`famtype`:** There is no code 5. The sequence runs 0 to 4 and then 6 to 8, which is easy to read as a missing value rather than as a code that never existed.
+
+Where these values come from:
+
+- **`famboligform`:** [DST TIMES documentation: famboligform](https://www.dst.dk/da/Statistik/dokumentation/Times/familieindkomst/famboligform).
+- **`socio13`:** [DST's SOCIO classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/007fb11c-4b35-4c7a-ad2d-f0a2cb0155c0csv_da)).
+- **`famtype`:** [DST high-quality variable documentation: famtype](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/familieindkomst/famtype).
+
+</details>
+
 **How it is computed:**
 
 **`famaekvivadisp_13`**

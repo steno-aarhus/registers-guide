@@ -63,17 +63,23 @@
 - `pnr` joins to **BEF** (many-to-one).
 
 <details>
-<summary>Value sets for the coded columns (1)</summary>
+<summary>Value sets for the coded columns (3)</summary>
 
 | Code system | Values |
 | --- | --- |
 | `icd10` | Not listed here - see [DST's classification](https://icd.who.int/browse10/) |
+| `c_dodsmaade` | `1` Naturlig død, `2` Ulykke, `3` Selvmord, `4` Drab/vold, `5` Uoplyst |
+| `c_dodssted` | `-1` Ikke valgt (fordi afdøde er fundet død), `0` Død på sygehus eller hospice, `1` Død på bopælsadressen, `2` Død på kendt adresse, `3` Dødssted uden adresse |
 
 - **`icd10`:** Do not strip a leading D from these codes. The habit comes from LPR, where the D is really there, and applying it here removes the first character of a real code: E119 becomes 119, which matches nothing and raises no error. The danger is worst where a code genuinely begins with D. ICD-10 chapter D covers in-situ and benign neoplasms, so D46 is myelodysplastic syndrome, a whole code. Strip its "prefix" and you get 46, which looks like a code and is not one.
+- **`c_dodsmaade`:** Code 4 changed meaning. It was Selvmord until 31 December 1990 and Drab/vold from 1 January 1991. dodsaars runs from 1970 to 2001 and so contains both, in one column, with nothing to tell them apart except the date of death. Reading code 4 as one thing across the whole register counts homicides as suicides or the reverse. Codes 6 (Drab/vold) and 9 (Uoplyst) belong only to the old set and stop at the end of 1990; codes 3 and 5 only start in 1991.
+- **`c_dodssted`:** All five codes are valid from 1 January 2002. The variable says nothing about deaths before that, which is the whole period dodsaars covers.
 
 Where these values come from:
 
 - **`icd10`:** [WHO ICD-10 browser](https://icd.who.int/browse10/).
+- **`c_dodsmaade`:** [Kodeark for Doedsaarsagsregisteret (DAR)](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx).
+- **`c_dodssted`:** [Kodeark for Doedsaarsagsregisteret (DAR)](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx).
 
 </details>
 
