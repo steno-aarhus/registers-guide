@@ -10,8 +10,12 @@
 
 ALLOWED_TYPES <- c("character", "factor", "date", "datetime", "integer", "numeric")
 ALLOWED_ROLES <- c("join_key", "identifier", "date", "value", "code", "derived")
+# `esundhed_kodeark` is its own type on purpose. The code sheets are published by
+# Sundhedsdatastyrelsen, not DST, so calling them dst_documentation is wrong on
+# the face of it, and they are a different kind of source: they carry the value
+# set AND a validity window per code, which no DST variable list does.
 ALLOWED_SOURCE_TYPES <- c("dst_variable_list", "dst_documentation", "nomenclature",
-                          "unverified", "unknown")
+                          "esundhed_kodeark", "unverified", "unknown")
 ALLOWED_ORIGINS <- c("dst", "tooling")
 # "sds" is a register held by Sundhedsdatastyrelsen rather than DST. It reaches
 # a project through Forskerservice, so the documentation, the naming and the

@@ -45,12 +45,19 @@ Every fact records where it came from:
 ```yaml
 provenance:
   source_url: ...
-  source_type: dst_variable_list | dst_documentation | nomenclature | unverified | unknown
+  source_type: dst_variable_list | dst_documentation | esundhed_kodeark | nomenclature | unverified | unknown
   verified_on: 2026-08-31
   verified_against: "DST variable list BEF"
   guide_page: register-reference.qmd
   credit: null
 ```
+
+`esundhed_kodeark` is the strongest of these. Sundhedsdatastyrelsen publishes a
+code sheet per health register, and unlike a DST variable list it gives the
+value set AND a validity window for every code. That is where the fact that LPR2
+code `c_kontaars` 4 meant self-inflicted injury until 1993 and suicide from 1994
+comes from. It is deliberately not `dst_documentation`: these sheets are not
+DST's.
 
 A boolean `confirmed` would blur two very different things: documented by DST,
 and asserted with no published source behind it. For anyone generating synthetic
