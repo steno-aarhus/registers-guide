@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-06">
+<meta name="dcterms.date" content="2026-09-07">
 
 <title>Find a variable – Register-based research at Statistics Denmark</title>
 <style>
@@ -574,7 +574,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 6, 2026</p>
+      <p class="date">September 7, 2026</p>
     </div>
   </div>
   
@@ -673,6 +673,9 @@ ul.task-list li input[type="checkbox"] {
 .vf-regdesc { font-size: .85rem; opacity: .75; margin: .5rem 0 0;
               padding-left: .6rem; border-left: 2px solid var(--bs-border-color, #ddd); }
 .vf-danger { border-left: 2px solid #b8860b; padding-left: .5rem; }
+  /* A code-system caveat: quieter than vf-danger, but it must not read as
+     body text, because it is the sentence that stops a wrong analysis. */
+  .vf-caveat { border-left: 2px solid #6c757d; padding-left: .5rem; }
 .vf-reg .vf-meta { margin-top: .15rem; }
 @media (max-width: 620px) { .vf-hit { grid-template-columns: 1fr; } }
 </style>
@@ -740,6 +743,21 @@ ul.task-list li input[type="checkbox"] {
       var grp = expanded[t];
       return grp && grp.some(function (x) { return hay.indexOf(x) !== -1; });
     });
+  }
+
+  // "page.qmd#section" has to become "page.html#section", so the .qmd cannot be
+  // matched at the end of the string. A column that names a section gets a link
+  // straight to it, because landing at the top of a long page and hunting for
+  // the paragraph is the same as having no link.
+  function guideLink(gp) {
+    if (!gp) return "";
+    var hash = gp.indexOf("#");
+    var page = hash === -1 ? gp : gp.slice(0, hash);
+    var frag = hash === -1 ? "" : gp.slice(hash);
+    var href = page.replace(/\.qmd$/, ".html") + frag;
+    var label = page.replace(/\.qmd$/, "") + (frag ? " " + frag.slice(1).replace(/-/g, " ") : "");
+    return '<p class="vf-note">Explained in <a href="' + esc(href) + '">' +
+           esc(label) + "</a>.</p>";
   }
 
   // Every claim on this page comes from somewhere. Saying where lets a reader
@@ -833,10 +851,15 @@ ul.task-list li input[type="checkbox"] {
     } else {
       body = '<p class="vf-note">Too many codes to list here.' + (src ? " See" + src + "." : "") + "</p>";
     }
-    return '<details class="vf-cs"><summary>' +
+    // The caveat stays OUTSIDE the fold. The fold exists so a hundred codes do
+    // not swamp the card, and a warning is not a code list: for hfaudd the note
+    // is that the code is an identifier and not a scale, which is the one thing
+    // a reader has to know before using the column at all. Behind a click it
+    // may as well not be there.
+    return (cs.note ? '<p class="vf-note vf-caveat">' + esc(cs.note) + "</p>" : "") +
+      '<details class="vf-cs"><summary>' +
       (cs.values && cs.values.length ? cs.values.length + " values" : "Code system") +
       ": " + esc(cs.name || id) + "</summary>" + body +
-      (cs.note ? '<p class="vf-note">' + esc(cs.note) + "</p>" : "") +
       (cs.values && cs.values.length && src ? '<p class="vf-note">Source:' + src + ".</p>" : "") +
       "</details>";
   }
@@ -864,8 +887,33 @@ ul.task-list li input[type="checkbox"] {
       if (!groups[v.name]) { groups[v.name] = []; order.push(v.name); }
       groups[v.name].push(v);
     });
+    // Ranking, in this order:
+    //   1. how well the NAME answers what was typed. Searching a column name
+    //      and not getting that column first is the one result nobody forgives.
+    //   2. `key` columns, which the schema marks as the handful a researcher
+    //      actually reaches for.
+    //   3. names shared by several registers, which is the finding this page
+    //      was built to show.
+    //   4. alphabetical, so the order is stable.
+    var typed = q.value.trim().toLowerCase();
+    function rel(name) {
+      var n = name.toLowerCase();
+      if (n === typed || terms.indexOf(n) !== -1) return 0;              // exact
+      if (n.indexOf(typed) === 0) return 1;                              // prefix
+      if (terms.some(function (t) { return n.indexOf(t) === 0; })) return 1;
+      if (n.indexOf(typed) !== -1) return 2;                             // inside
+      if (terms.some(function (t) { return n.indexOf(t) !== -1; })) return 2;
+      return 3;                                                          // matched
+    }                                                                    // on label
+    function anyKey(name) {
+      return groups[name].some(function (v) { return v.key; });
+    }
     order.sort(function (a, b) {
-      var d = groups[b].length - groups[a].length;   // shared names first
+      var r = rel(a) - rel(b);
+      if (r !== 0) return r;
+      var k = (anyKey(b) ? 1 : 0) - (anyKey(a) ? 1 : 0);
+      if (k !== 0) return k;
+      var d = groups[b].length - groups[a].length;
       return d !== 0 ? d : a.localeCompare(b);
     });
 
@@ -904,9 +952,7 @@ ul.task-list li input[type="checkbox"] {
              esc(v.derivation) + "</code>" +
              (v.derivation_source ? ' <a href="' + esc(v.derivation_source) + '">source</a>' : "") +
              "</p>" : "") +
-          (v.guide_page ? '<p class="vf-note">Explained in <a href="' +
-             esc(v.guide_page.replace(/\.qmd$/, ".html")) + '">' +
-             esc(v.guide_page.replace(/\.qmd$/, "")) + "</a>.</p>" : "") +
+          guideLink(v.guide_page) +
           codeBlock(v.code_system) +
           regDesc(v.register) +
           sourceLine(v) +
@@ -926,12 +972,16 @@ ul.task-list li input[type="checkbox"] {
           EXPAND[t.toLowerCase()] = g.map(function (x) { return x.toLowerCase(); });
         });
       });
-      // The value labels are searchable too: "ugift" should find civst.
+      // The value labels are searchable too: "ugift" should find civst. So is
+      // the code system's caveat, which is often the only place a word like
+      // "electrician" or "suicide" appears: a system with no value list, such
+      // as hfaudd, has nothing else to search but its name.
       Object.keys(CS).forEach(function (id) {
         var v = CS[id].values || [];
         CS[id]._text = v.map(function (x) {
           return x.code + " " + (x.en || "") + " " + (x.da || "");
-        }).join(" ").toLowerCase() + " " + (CS[id].name || "").toLowerCase();
+        }).join(" ").toLowerCase() + " " + (CS[id].name || "").toLowerCase() +
+          " " + (CS[id].note || "").toLowerCase();
       });
       DATA.forEach(function (v) { byName[v.register] = v.register_name || v.register; });
       Object.keys(byName).sort().forEach(function (k) {
