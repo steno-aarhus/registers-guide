@@ -24,7 +24,7 @@ registers/<id>.yaml      # id matches fastreg's read_register() name
 families/<id>.yaml       # facts shared by several datasets, e.g. the LPR2/LPR3 boundary
 code-systems/<id>.yaml   # koen, civst, reg, and later icd10, atc ...
 R/load_schema.R          # loader and query helpers
-REVIEW.md                # local only, gitignored: see below
+REVIEW.md                # local only, gitignored: everything still unresolved
 ```
 
 ## Using it
@@ -124,92 +124,111 @@ description of one:
 documented as `PNR12` but arrives as `pnr`. Treat a name here as a starting
 point and confirm with `colnames()`.
 
-## Conventions learned the hard way
+## What one row is, and how registers join
 
-**Record the value domain the format table publishes, not a shorter list.** The
-format tables hold codes a given delivery may never contain: `civst` has `9`
-(Uoplyst) and `reg` has `0`. A generator built from a shortened list produces
-data that is too clean, and code never meets an "Uoplyst" until it meets real
-data.
+Four fields carry most of the weight for anything reading this schema
+mechanically. They are what a consumer needs before it can place a row at all.
 
-**Codes are version-dependent, and versions of the same thing look alike.** The
-first geography format table opened here was `AMT_V1_KT`: the 16 pre-2007
-counties (11-14, 21-24, 31-37, 88). The regions are 0 and 81-85, created by the
-2007 reform. Mapping one onto the other would have put a county name on every
-region code. The same applies to `kom`: v4 is valid from 2007, and before that
-the same number can mean a different municipality.
+**`one_row_per`** is what one row IS, which is a different fact from how often
+the register is refreshed. BEF is refreshed quarterly and holds one row per
+person per reference date; LMDB is refreshed annually and holds one row per
+dispensed prescription. Allowed values are `person`, `person_reference_date`,
+`event_from_person`, `expand_from_parent`, `household_year` and `unknown`.
+`unknown` is a legitimate answer and better than a guess.
 
-**Check whether the source has already answered it before writing a query.** The
-VNDS successors overlap the old register by twenty years, and the obvious next
-step was a row count on the server to see whether they were a copy. DST's own
-two-paragraph notice about the split said outright that the old register
-contained duplicates and that the split was the fix. The query would also have
-been impossible: the project at hand has no VNDS_UD.
+**`relationships`** name the register a key joins to, the key, and the
+cardinality. Where the two sides use different column names, `to_key` gives the
+other one: `cancer` joins on `k_cprnr` and `lab_dm_forsker` on `patient_cpr`,
+both to BEF's `pnr`.
 
-**A delivery is narrower than the register.** DST's variable list describes the
-register; a project receives only the variables it ordered. Document what DST
-publishes and warn that it has to be ordered - never delete a column because one
-delivery lacks it. The clean proof: `lpr_adm` in one delivery has no
-`c_pattype`, `c_indm`, `c_sgh`, `c_afd` or `v_alder`, while `t_psyk_adm` in the
-*same* delivery has all of them.
+**`code_system`** on a column names the code set it holds. A column can hold
+different code sets at different times, and `previous_code_system` records that:
+
+```yaml
+code_system: icd10_sks
+previous_code_system: {id: icd8, until: 1993}
+```
+
+LPR2 runs from 1977 and Denmark changed to ICD-10 in 1994, so its diagnosis
+columns hold ICD-8 for the first seventeen years. Without this the schema would
+describe only what a column holds today, and a consumer reading the early years
+would get codes that match nothing.
+
+**`values_from`** says where a consumer gets the real codes for a system that is
+not enumerated here. `kind` is `csv`, `package` or `none`, and `none` is a real
+answer: it tells a generator to stop rather than to invent. Where the values
+come from a package, `dataset` and `filter` narrow it to the right branch.
+
+## Code sets
+
+**The value domain is what the format table publishes, not what a delivery
+contains.** The format tables hold codes a given delivery may never contain:
+`civst` has `9` (Uoplyst) and `reg` has `0`. A generator built from a shortened
+list produces data that is too clean, and code never meets an "Uoplyst" until it
+meets real data.
+
+**Codes are version-dependent, and versions of the same thing look alike.**
+`AMT_V1_KT` holds the 16 pre-2007 counties (11-14, 21-24, 31-37, 88). The
+regions are 0 and 81-85, created by the 2007 reform. Mapping one onto the other
+puts a county name on every region code. The same applies to `kom`: v4 is valid
+from 2007, and before that the same number can mean a different municipality.
+DST's municipality CSV lists both eras with no validity column, which is
+recorded as `mixes_eras`.
+
+**Small sets are enumerated, large ones are linked.** `reg` (6 codes) is listed
+inline. `kom` is `enumerated: false` with a link to DST's classification and its
+CSV download: transcribing 98 codes by hand is 98 chances at an error nobody
+would notice. Where they are needed inline they come from the CSV, not from
+prose.
+
+**A code system is named for the form it holds, not for the classification
+behind it.** `icd10` is the plain WHO code (`E119`), which the cause-of-death
+registers and the cancer register hold. `icd10_sks` is the Danish form with a D
+in front (`DE119`), which is what LPR holds. The D belongs to LPR and is not a
+property of Danish ICD-10.
+
+## A delivery is narrower than the register
+
+DST's variable list describes the register; a project receives only the
+variables it ordered. This schema documents what DST publishes, and a column
+missing from one delivery is not deleted from it.
 
 **Column names can come from the data processing.** DST gives both psychiatric
 tables `RECNUM` and `PNR`; one delivery hands them over as `k_recnum`,
 `v_recnum` and `v_cpr`, so one key ends up with three names. DST's names are
-canonical here and in the general chapters, with the delivery-specific name in a
-`reader_note`. The `darter-*` pages use the DARTER names, which is correct there.
+canonical here, with the delivery-specific name in a `reader_note`. The
+`darter-*` pages in the guide use the delivery's names, which is correct there.
 
 **The guide is not an independent source.** Every word of it was written from
-one delivery, so when the guide and the data agree that is one source, not two.
-Corroboration means DST's own documentation, or a second delivery. This produced
-a real error: `c_dod1` to `c_dod4` were deleted from the site because DST's page
-supposedly lacked them. It did not.
+one delivery, so when the guide and that delivery agree, that is one source and
+not two. Corroboration means DST's own documentation, or a second delivery.
 
-**DST publishes no data types. Do not look again.** Checked 2026-09-02 against
-the BEF and AKM variable lists, the order list, DST's own documentation overview
-(*"no reference to formats whatsoever"*) and the per-variable Times pages, which
-give a definition and nothing technical. So a `type` on a DST register is a
-reading of the column name unless `provenance.type_source` says otherwise. When
-FAIK was finally checked against data, six of nine `character` guesses were
-wrong.
+## Types
 
-Two things do exist. Sundhedsdatastyrelsen publishes `Format` and `Laengde` per
-variable on [esundhed.dk](https://www.esundhed.dk/Dokumentation), which covers
-LPR2, LMDB, the death registers and the cancer register. And on the server, a
-SAS format whose name starts with `$` is a character format, so the format
-catalogue implies the type - but `sapply(class)` on one row answers it directly
-and is the method the review list uses.
+**DST publishes no data types.** A `type` on a DST register is therefore a
+reading of the column name unless `provenance.type_source` says otherwise.
 
-It matters most for code columns stored as numbers, which lose their leading
-zeros.
+Two sources do exist. Sundhedsdatastyrelsen publishes `Format` and `Laengde` per
+variable on [esundhed.dk](https://www.esundhed.dk/Dokumentation), covering LPR2,
+LMDB, the death registers and the cancer register. And on the server, a SAS
+format whose name starts with `$` is a character format, so the format catalogue
+implies the type. It matters most for code columns stored as numbers, which lose
+their leading zeros.
 
-**Establishing a type must not require taking data out.** Use `head(0)`, which
-returns the column structure with zero rows: the classes are still correct
-because a data frame carries its types independently of its contents, and the
-output is a list of names and the words character, numeric, Date. `glimpse()`
-and `head(1)` print real values from real records, so they are the right tools
-for looking at data inside DST and the wrong ones for producing anything that
-leaves. Everything that leaves goes through the official results-export
-procedure, a list of column types included.
+**A type read off data is evidence about one delivery, not about the register.**
+`class()` can only be run on the columns a project ordered, so a register
+documented at 40 columns may only ever get types for the 12 it received. The
+rest stay inferred. The type also comes from whoever converted the SAS files to
+parquet, so another project could get a different one for the same column.
+`type_source` names the delivery and the date for that reason.
 
-**A type checked against data is evidence about one delivery, not the register.**
-`class()` can only be run on the columns a project actually ordered, so a
-register documented at 40 columns may only ever get types for the 12 it
-received. The rest stay inferred until somebody with a wider delivery checks
-them, and that is a permanent limitation rather than a task on a list. The type
-also comes from whoever converted the SAS files to parquet, so a second project
-could in principle get a different one for the same column. `type_source` names
-the delivery and the date for exactly this reason.
+**Reading a type does not require taking data out.** `head(0)` returns the
+column structure with zero rows, and the classes are still correct because a
+table carries its types independently of its contents. `glimpse()` and `head(1)`
+print real values from real records.
 
-**Never guess a label.** A guess that turns out right teaches the next person
-that guessing is fine here; a guess that turns out wrong is invisible until
-someone reports a result by region. Unresolved labels stay `null` and go on the
-review list.
-
-**Enumerate small sets, link out for large ones.** `reg` (6 codes) is listed
-inline. `kom` (98) is `enumerated: false` with a link to DST's classification and
-its CSV download: transcribing 98 codes by hand is 98 chances at an error nobody
-would notice. If they are ever needed inline, they come from the CSV, not prose.
+**An unresolved label stays `null`.** It is not guessed. A wrong guess is
+invisible until someone reports a result by region.
 
 ## Validation
 
