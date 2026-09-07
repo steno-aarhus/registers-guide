@@ -316,6 +316,14 @@ build_variable_index <- function(schema = load_schema()) {
             if (identical(cl$origin, "tooling"))
               paste0("not a DST variable - added by ", cl$added_by %||% "the conversion")
             else NULL)),
+          # A column that changed classification part-way through. Without this
+          # the variable finder shows only what the column holds today, and the
+          # first seventeen years of an LPR2 diagnosis column are a different
+          # code system with nothing to say so.
+          paste0('"prev_code_system":', json_string(cl$previous_code_system$id)),
+          paste0('"prev_code_until":',
+                 json_string(if (is.null(cl$previous_code_system$until)) NULL
+                             else as.character(cl$previous_code_system$until))),
           paste0('"guide_page":', json_string(cl$provenance$guide_page)),
           # Where this column's facts come from, so a reader can judge them
           # rather than take them on faith.
@@ -375,6 +383,18 @@ build_variable_index <- function(schema = load_schema()) {
       paste0('"join_keys":', json_string(paste(unlist(r$join_keys), collapse = ", "))),
       paste0('"coverage":', json_string(paste0(r$coverage$from %||% "?", " to ", r$coverage$to %||% "?"))),
       paste0('"timing":', json_string(gsub("_", " ", r$reference_timing %||% ""))),
+      # What one row IS, spelled out. `one_row_per` is the field the schema
+      # spent the most effort establishing, and a reader who has just found a
+      # column needs it before anything else: it decides whether a join
+      # multiplies their rows.
+      paste0('"grain":', json_string(switch(
+        r$one_row_per %||% "unknown",
+        person                = "one row per person",
+        person_reference_date = "one row per person per period",
+        event_from_person     = "one row per event",
+        expand_from_parent    = "several rows per record in the parent table",
+        household_year        = "one row per family per year",
+        NULL))),
       paste0('"scope":', json_string(r$scope)),
       paste0('"deprecated":', if (isTRUE(r$deprecated)) "true" else "false"),
       paste0('"superseded_by":', json_string(paste(unlist(r$superseded_by), collapse = ", "))),
