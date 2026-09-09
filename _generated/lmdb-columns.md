@@ -78,7 +78,7 @@
 
 </details>
 
-*No published source gives a data type for 48 of these 65 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
+*No published source gives a data type for 28 of these 65 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
 
 **Join key:** `pnr`.
 
@@ -109,7 +109,7 @@ Where these values come from:
 
 **Worth knowing:**
 
-- **`pnr`:** DST's variable list calls this column `PNR12`. Check whether your variable is named `pnr` or `pnr12`.
+- **`pnr`:** DST's variable list calls this column `PNR12`. Check whether your variable is named `pnr` or `pnr12`. Do not confuse this with the `pnr` documented on esundhed's page for this register (DocumentationExtended?id=14): that `pnr` is the pharmacy or manufacturer's production-unit number, length 10, not a person. Same name, unrelated variable, on the two pages that between them cover this register.
 - **`eksd`:** The date the prescription was collected at the pharmacy. Not the date it was prescribed, and not evidence that the medicine was taken.
 - **`vnr`:** The only reliable way to isolate one specific product. Two brands with the same active substance share an ATC code but have different item numbers.
 - **`year`:** Not a DST variable. It comes from fastreg's parquet conversion, which concatenates the yearly deliveries, so it exists in the data you read but not in DST's own documentation of this register.

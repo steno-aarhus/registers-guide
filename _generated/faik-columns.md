@@ -96,6 +96,8 @@
 | `famvirkoverskud_13` | numeric | value | Total profit from self-employment |  |
 | `version` | numeric | code | Module data version |  |
 
+- **`famaekvivadisp`:** The same weighting scheme as FAMAEKVIVADISP_13 below, just algebraically rearranged on the source page: the first adult over 14 counts as 1.0, each further person over 14 as 0.5, and each child under 15 as 0.3. All persons belonging to the same family on 31 December of the income year (same E-familienummer), including resident children under 25, are assigned the family's equivalised income. `FAMDISPONIBEL` is the same money before that division.
+
 </details>
 
 *No published source gives a data type for 67 of these 87 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
@@ -132,6 +134,11 @@ Where these values come from:
 
 ```
 FAMAEKVIVADISP_13 = FAMDISPONIBEL_13 / (1 + (0.5 * (number of people over 14 in the family - 1)) + (0.3 * number of people under 15 in the family))
+```
+**`famaekvivadisp`**
+
+```
+FAMAEKVIVADISP = FAMDISPONIBEL / (0.5 + (0.5 * number of people over 14 in the family) + (0.3 * number of people under 15 in the family))
 ```
 
 **Worth knowing:**

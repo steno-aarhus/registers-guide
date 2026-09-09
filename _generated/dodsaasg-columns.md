@@ -68,18 +68,18 @@
 | Code system | Values |
 | --- | --- |
 | `icd10` | Not listed here - see [DST's classification](https://icd.who.int/browse10/) |
-| `c_dodsmaade` | `1` Naturlig død, `2` Ulykke, `3` Selvmord, `4` Drab/vold, `5` Uoplyst |
+| `c_dodsmaade_2002` | `0` Ulykke, `1` Voldshandling, `2` Selvmord, `4` Uoplyst, `5` Naturlig død |
 | `c_dodssted` | `-1` Ikke valgt (fordi afdøde er fundet død), `0` Død på sygehus eller hospice, `1` Død på bopælsadressen, `2` Død på kendt adresse, `3` Dødssted uden adresse |
 
 - **`icd10`:** Do not strip a leading D from these codes. The habit comes from LPR, where the D is really there, and applying it here removes the first character of a real code: E119 becomes 119, which matches nothing and raises no error. The danger is worst where a code genuinely begins with D. ICD-10 chapter D covers in-situ and benign neoplasms, so D46 is myelodysplastic syndrome, a whole code. Strip its "prefix" and you get 46, which looks like a code and is not one.
-- **`c_dodsmaade`:** Code 4 changed meaning. It was Selvmord until 31 December 1990 and Drab/vold from 1 January 1991. dodsaars runs from 1970 to 2001 and so contains both, in one column, with nothing to tell them apart except the date of death. Reading code 4 as one thing across the whole register counts homicides as suicides or the reverse. Codes 6 (Drab/vold) and 9 (Uoplyst) belong only to the old set and stop at the end of 1990; codes 3 and 5 only start in 1991.
+- **`c_dodsmaade_2002`:** This is the set behind the `c_dodsmaade` column in dodsaasg, and the numbers do not mean what the same numbers mean in `dodsaars`. There, under `c_dodsmaade`, 1 is Naturlig død, 2 is Ulykke and 5 is Uoplyst. Here 1 is Voldshandling, 2 is Selvmord and 5 is Naturlig død. A study that spans 2001 and 2002 is reading two different code sets out of two columns with the same name, and every value maps to something plausible in the other set, so nothing looks wrong. A blank is a registration error, not a missing manner of death.
 - **`c_dodssted`:** All five codes are valid from 1 January 2002. The variable says nothing about deaths before that, which is the whole period dodsaars covers.
 
 Where these values come from:
 
 - **`icd10`:** [WHO ICD-10 browser](https://icd.who.int/browse10/).
-- **`c_dodsmaade`:** [Kodeark for Doedsaarsagsregisteret (DAR)](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx).
-- **`c_dodssted`:** [Kodeark for Doedsaarsagsregisteret (DAR)](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx).
+- **`c_dodsmaade_2002`:** [Kodeark for Doedsaarsagsregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=17).
+- **`c_dodssted`:** [Kodeark for Doedsaarsagsregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=17).
 
 </details>
 

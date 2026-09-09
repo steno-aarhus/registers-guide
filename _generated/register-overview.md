@@ -19,7 +19,7 @@
 | [LPR_DIAG](https://www.dst.dk/extranet/ForskningVariabellister/LPR_DIAG%20-%20Landspatientregistret%20-%20diagnoser.html) | `"lpr_diag"` | `recnum` | 1977 to 2019-03 | `c_diag`, `c_diagtype`, `c_tildiag` |
 | [LPR_SKSOPR](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSOPR%20-%20Landspatientregistret%20-%20operationer.html) | `"lpr_sksopr"` | `recnum` | 1996 to 2019 | `c_opr`, `c_oprart`, `c_osgh` |
 | [LPR_SKSUBE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSUBE%20-%20Landspatientregistret%20-%20unders%C3%B8gelser%20og%20behandlinger.html) | `"lpr_sksube"` | `recnum` | 1999 to 2019 | `c_opr`, `d_odto`, `year` |
-| [MFR](https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx) | `"mfr"` | `cpr_barn` | 1997 to 2018 | `alder_moder`, `bmi_moder`, `cpr_moder` |
+| [MFR](https://www.dst.dk/extranet/ForskningVariabellister/MFR%20-%20Levendef%C3%B8dte%20fra%20det%20medicinske%20f%C3%B8dselsregister.html) | `"mfr"` | `cpr_barn` | 1997 to 2018 | `alder_moder`, `bmi_moder`, `cpr_moder` |
 | [SSSY](https://www.dst.dk/extranet/ForskningVariabellister/SSSY%20-%20Sygesikring%20%286-cifret%29.html) | `"sssy"` | `pnr` | 2005 to 2025 | `ydernr`, `speciale`, `ydlant` |
 | [SYSI](https://www.dst.dk/extranet/ForskningVariabellister/SYSI%20-%20Sygesikring%20%286-cifret%29.html) | `"sysi"` | `pnr` | 1990 to 2005 | `ydernr`, `speciale`, `ydlant` |
 | [T_PSYK_ADM](https://www.dst.dk/extranet/ForskningVariabellister/PSYK_ADM%20-%20Landspatientregistret%20psykiatri%20-%20administrative%20oplysninger.html) | `"t_psyk_adm"` | `recnum` | 1995 to 2019 | `pnr`, `c_pattype`, `c_adiag` |

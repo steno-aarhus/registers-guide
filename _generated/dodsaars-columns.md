@@ -67,7 +67,7 @@
 | `atc` | Not listed here - see [DST's classification](https://atcddd.fhi.no/atc/structure_and_principles/) |
 | `icd8` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer) |
 
-- **`c_dodsmaade`:** Code 4 changed meaning. It was Selvmord until 31 December 1990 and Drab/vold from 1 January 1991. dodsaars runs from 1970 to 2001 and so contains both, in one column, with nothing to tell them apart except the date of death. Reading code 4 as one thing across the whole register counts homicides as suicides or the reverse. Codes 6 (Drab/vold) and 9 (Uoplyst) belong only to the old set and stop at the end of 1990; codes 3 and 5 only start in 1991.
+- **`c_dodsmaade`:** Two separate traps. First, this code set is NOT the one used from 2002: in dodsaasg the same column holds `c_dodsmaade_2002`, where 1 is Voldshandling rather than Naturlig død. Second, code 4 changed meaning. It was Selvmord until 31 December 1990 and Drab/vold from 1 January 1991. dodsaars runs from 1970 to 2001 and so contains both, in one column, with nothing to tell them apart except the date of death. Reading code 4 as one thing across the whole register counts homicides as suicides or the reverse. Codes 6 (Drab/vold) and 9 (Uoplyst) belong only to the old set and stop at the end of 1990; codes 3 and 5 only start in 1991.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality.
 - **`icd10`:** Do not strip a leading D from these codes. The habit comes from LPR, where the D is really there, and applying it here removes the first character of a real code: E119 becomes 119, which matches nothing and raises no error. The danger is worst where a code genuinely begins with D. ICD-10 chapter D covers in-situ and benign neoplasms, so D46 is myelodysplastic syndrome, a whole code. Strip its "prefix" and you get 46, which looks like a code and is not one.
 - **`atc`:** As a rule, filter on the full 7-character code rather than on the level columns: `atc2` holds three characters, so a longer pattern matched against it can never match, and it returns nothing at all with no error. The level columns are well suited to grouping, and to filtering when every code you want is the same length as the column.
@@ -75,7 +75,7 @@
 
 Where these values come from:
 
-- **`c_dodsmaade`:** [Kodeark for Doedsaarsagsregisteret (DAR)](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx).
+- **`c_dodsmaade`:** [Kodeark for Doedsaarsagsregisteret](https://www.esundhed.dk/-/media/Files/Dokumentation/Doedsaarsagsregisteret/17_Kodeark_DAR---pdf.ashx), published on [www.esundhed.dk](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=17).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
 - **`icd10`:** [WHO ICD-10 browser](https://icd.who.int/browse10/).
 - **`atc`:** [WHO ATC/DDD Index](https://atcddd.fhi.no/atc/structure_and_principles/).
