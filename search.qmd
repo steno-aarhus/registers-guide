@@ -49,8 +49,8 @@ register instead.
   // Without this, "folk der flytter til udlandet" matches almost every section,
   // because "der" and "til" are everywhere and drown the one word that matters.
   var STOP = ("a an and are as at be but by can do does for from has have how i " +
-    "if in is it its me my of on or that the their then there they this to was " +
-    "what when where which who why will with you your " +
+    "if in is it its me my of on or people person someone that the their then " +
+    "there they this to was what when where which who why will with you your " +
     "af alle at bruge da de den der det dette du eller en er et for fra gør har " +
     "hvad hvor hvordan hvorfor hvilke hvilken i ikke jeg kan man med mig min mine " +
     "og om på selv skal som til ved vi").split(" ");
@@ -74,6 +74,23 @@ register instead.
     });
   }
 
+  // Danish inflects and compounds: "stien" should reach "sti", and
+  // "doedsdato" should reach "doed". English inflects too: a reader types
+  // "move abroad" or "moves abroad", the synonym list says "moved abroad". A
+  // shared prefix with a bounded leftover on each side covers all of that.
+  // The floor is three characters and the leftover is capped at six, which
+  // covers -en, -et, -erne, -ed, -es and a joined second word without
+  // letting "kom" swallow "kommunikation".
+  function stemMatch(term, w) {
+    if (w === term) return true;
+    if (term.length < 3 || w.length < 3) return false;
+    // Shared prefix rather than strict containment, so "moves" reaches
+    // "moved" even though neither word contains the other outright.
+    var n = 0, max = Math.min(term.length, w.length);
+    while (n < max && term[n] === w[n]) n++;
+    return n >= 3 && term.length - n <= 6 && w.length - n <= 6;
+  }
+
   function expand(query) {
     var lower = " " + query.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, " ") + " ";
     var words = lower.trim().split(/\s+/).filter(Boolean);
@@ -84,20 +101,15 @@ register instead.
     Object.keys(EXPAND).forEach(function (term) {
       var hit;
       if (term.indexOf(" ") !== -1) {
-        hit = lower.indexOf(" " + term + " ") !== -1;
-      } else {
-        // Danish inflects and compounds: "stien" should reach "sti", and
-        // "doedsdato" should reach "doed". A prefix match in either direction
-        // does both. The floor is three characters and the ending is capped at
-        // six, which covers -en, -et, -erne and a joined second word without
-        // letting "kom" swallow "kommunikation".
-        hit = terms.some(function (w) {
-          if (w === term) return true;
-          if (term.length < 3 || w.length < 3) return false;
-          if (w.indexOf(term) === 0) return w.length - term.length <= 6;
-          if (term.indexOf(w) === 0) return term.length - w.length <= 6;
-          return false;
+        // A multi-word synonym like "moved abroad" used to require that exact
+        // phrase. Match it word by word instead, order and tense free of
+        // each other, so "people who move abroad" reaches it too.
+        var parts = term.split(" ");
+        hit = parts.every(function (p) {
+          return terms.some(function (w) { return stemMatch(p, w); });
         });
+      } else {
+        hit = terms.some(function (w) { return stemMatch(term, w); });
       }
       if (hit) {
         EXPAND[term].forEach(function (t) { if (extra.indexOf(t) === -1) extra.push(t); });
