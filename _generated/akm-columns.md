@@ -100,7 +100,7 @@
 - **`discotyp`:** A different question from the DISCO occupation code itself: this says where that code came from, not what the job was. DST's own page states that DISCO code quality is best when discotyp is 1, 2, 4 or 10, and that the remaining codes mean the DISCO code was set by imputation.
 - **`nace_old`:** Do not read a code here against DB07/NACE Rev.2's published list (nace_db07.yaml): the 2007-2008 revision changed the code structure, and a code that means one industry under DB07 is not guaranteed to mean the same thing, or to exist at all, under this older scheme.
 - **`nystgr`:** Retired in 1995 and replaced by DISCO. A code's meaning can shift within the window a study covers: DST's own page notes that code 5100 changed meaning in 1992 (the group it now names used code 5500 before that year), so a series spanning 1992 needs the year-by-year note on the source page, not just the current label.
-- **`omfang`:** Code 2 changed meaning at the 2002 boundary: before 2002 (and again 2002-2009) it also absorbed children under 15 with no income or wealth, a group that codes 0 and 4 cover separately in other years. Code 5 (died, not settled) only exists from 2002; before that, a death with no settled income was coded 2 instead. DST's own publications and statistikbanktabeller are restricted to omfang=1: an analysis that does not filter on it silently includes partial-year residents, the newly dead, and unsettled records alongside ordinary full-year taxpayers.
+- **`omfang`:** Code 2 changed meaning at the 2002 boundary: before 2002 (and again 2002-2009) it also absorbed children under 15 with no income or wealth, a group that codes 0 and 4 cover separately in other years. Code 5 (died, not settled) only exists from 2002; before that, a death with no settled income was coded 2 instead. DST does not publish exact boundary dates for this drift the way it does for codes 0 and 3 (see above), so treat "2002" as DST's own rounding, not a verified cutover date. DST's own publications and statistikbanktabeller are restricted to omfang=1: an analysis that does not filter on it silently includes partial-year residents, the newly dead, and unsettled records alongside ordinary full-year taxpayers.
 
 Where these values come from:
 
@@ -114,7 +114,7 @@ Where these values come from:
 - **`discotyp`:** [DST high-quality variable documentation: DISCOTYP](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/Personers-tilknytning-til-arbejdsmarkedet-set-over-hele-aaret--AKM-/DISCOTYP).
 - **`nace_old`:** [DST high-quality variable documentation: NACE](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/Personers-tilknytning-til-arbejdsmarkedet-set-over-hele-aaret--AKM-/NACE).
 - **`nystgr`:** [DST high-quality variable documentation: NYSTGR](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/Personers-tilknytning-til-arbejdsmarkedet-set-over-hele-aaret--AKM-/NYSTGR).
-- **`omfang`:** [DST high-quality variable documentation: OMFANG](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/Personers-tilknytning-til-arbejdsmarkedet-set-over-hele-aaret--AKM-/OMFANG).
+- **`omfang`:** [DST high-quality variable documentation: OMFANG](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/personindkomster/omfang).
 
 </details>
 
