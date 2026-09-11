@@ -1,0 +1,984 @@
+# Nyfoedte - the main table of the 2019+ Medical Birth Register, a complete
+# restructuring of MFR that mirrors LPR3's own contact/diagnosis/procedure
+# model. Not delivered by DST: apply through Sundhedsdatastyrelsen's
+# Forskerservice, the same route as lpr_a_kontakt and kont_type.
+#
+# This is the THIRD of three MFR eras, each with its own data model:
+# 1973-1996 (paper forms; the ORIGINAL source rows are not a digital MFR
+# table, but DST's own ftbarn/ftforael/ftnaevn datasets, coverage 1973-2023
+# per DST's register overview, incorporate MFR content back through this
+# whole period - see the note under `mfr.yaml`), 1997-2018 (DST's wide
+# "Levendefødte" table, see mfr.yaml, deprecated, plus mfrhjmfo.yaml for the
+# home-birth subset's extra detail), and 2019+ (this file, plus ten
+# satellite tables: mfr_barn_forloeb/kontakter/diagnoser/procedurer/
+# resultater.yaml and the same five mfr_mor_*.yaml). mfr.yaml's
+# `superseded_by: null` predates this file: DST's own register overview
+# never named a successor because the successor is an SDS, not a DST,
+# delivery.
+#
+# Two structural changes from the old wide table, not just a rename:
+# 1. Population: 1973-2018 required the MOTHER to have a Danish CPR-number.
+#    2019+ drops that requirement - any birth reported to Sundhedsdatastyrelsen
+#    counts, regardless of the mother's CPR status. A study spanning this
+#    boundary is comparing two different populations, not just two table
+#    shapes.
+# 2. Live births and stillbirths are unified in one table for the first time
+#    (LevendefoedtDoedfoedt), where 1997-2018's "Levendefødte" table held
+#    only live births by construction. Filter explicitly.
+
+id: mfr_nyfoedte
+name: "Nyfoedte - Medicinsk Foedselsregister 2019+"
+scope: sds
+family: mfr2019
+reference_timing: event
+one_row_per: event_from_person
+description: >-
+  One row per newborn (live-born or stillborn) in Denmark from 1 January
+  2019 onwards. Carries basic facts about the child, mother and father plus
+  a curated set of medical facts (birth diagnosis, weight, Apgar score,
+  smoking status, and more) resolved from LPR3 contacts within 42 days of
+  birth (or, for the mother, from the start of pregnancy). Detailed
+  diagnosis/procedure/result history sits in ten satellite tables (family
+  mfr2019) joined via DW_EK_Nyfoedt (child) or DW_EK_Foedsel (mother).
+source_url: https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret
+coverage: {from: 2019, to: 2026}
+
+join_keys: [CPRnummer_Barn]
+relationships:
+  - to: bef
+    key: CPRnummer_Barn
+    to_key: pnr
+    cardinality: many_to_one
+    provenance:
+      source_type: inferred
+      verified_on: 2026-09-12
+  - to: lpr_a_kontakt
+    key: DW_EK_Kontakt_Barn
+    to_key: dw_ek_kontakt
+    cardinality: many_to_one
+    provenance:
+      source_type: unverified
+      verified_on: 2026-09-12
+      guide_page: register-reference.qmd
+
+columns:
+  - id: dw_ek_nyfoedt
+    name: DW_EK_Nyfoedt
+    label: {da: null, en: "Newborn key"}
+    type: character
+    role: join_key
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: primary key of Nyfoedte, also the join key into every Barn_* satellite table."
+    reader_note: >-
+      One row per newborn, not per birth: a twin birth produces two rows
+      sharing one DW_EK_Foedsel but each with its own DW_EK_Nyfoedt. Use
+      DW_EK_Nyfoedt to join Barn_* satellite tables, DW_EK_Foedsel to join
+      Mor_* satellite tables.
+  - id: dw_ek_foedsel
+    name: DW_EK_Foedsel
+    label: {da: null, en: "Birth event key"}
+    type: character
+    role: join_key
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: key into the Mor_* satellite tables."
+  - id: foedsel
+    name: Foedsel
+    label: {da: null, en: "First-born-of-this-birth indicator"}
+    type: numeric
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: 1 for the (computed) first-born of a multiple birth, 0 for the rest."
+    reader_note: >-
+      Filter to `Foedsel == 1` to count births instead of newborns: a twin
+      birth otherwise contributes two rows to any count of "births".
+  - id: foedselsaar
+    name: FoedselsAar
+    label: {da: null, en: "Birth year"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: levendefoedtdoedfoedt
+    name: LevendefoedtDoedfoedt
+    label: {da: null, en: "Live birth or stillbirth"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    code_system: mfr_levendefoedt_doedfoedt
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: gestationsalder
+    name: Gestationsalder
+    label: {da: null, en: "Gestational age (days)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. 283 for 40 weeks + 3 days."
+  - id: gestationsalderuger
+    name: GestationsalderUger
+    label: {da: null, en: "Gestational age (full weeks)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: foedested_faktisk
+    name: Foedested_Faktisk
+    label: {da: null, en: "Actual place of birth"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_foedested_faktisk
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet, full derivation logic - see mfr_foedested_faktisk.yaml."
+  - id: foedselsdiagnose_barn
+    name: FoedselsDiagnose_Barn
+    label: {da: null, en: "Child's birth diagnosis"}
+    type: character
+    role: code
+    origin: dst
+    code_system: icd10
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: the action diagnosis on the child's birth contact (LPR) or birth-report form."
+    reader_note: >-
+      D-prefixed like LPR (e.g. DZ389), not the plain WHO code cancer/
+      dodsaars use. See [ICD codes and the D-prefix](understand-lpr.qmd#d-prefix-not-everywhere).
+  - id: foedselsdiagnose_mor
+    name: FoedselsDiagnose_Mor
+    label: {da: null, en: "Mother's birth diagnosis"}
+    type: character
+    role: code
+    origin: dst
+    code_system: icd10
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: the action diagnosis on the mother's birth contact (LPR) or birth-report form."
+  - id: kejsersnit
+    name: Kejsersnit
+    label: {da: null, en: "Caesarean section procedure code"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: a KMCA* SKS procedure code, with a documented
+        priority order across 15 specific KMCA* variants when more than one
+        is reported within +/-90 days of the birth date.
+    reader_note: >-
+      An open SKS procedure code space, not a small enumerated set: no
+      `code_system` is attached here because the underlying classification
+      is the general SKS procedure catalogue (see kont_type.yaml's own
+      reader_note on the same issue), not a birth-specific value list. A
+      non-missing value means a caesarean happened; treat the specific
+      KMCA* variant as a procedure detail, not a category to enumerate.
+  - id: igangsaettelse_medicinsk
+    name: Igangsaettelse_Medicinsk
+    label: {da: null, en: "Medical labour induction"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: Ja/Nej, derived from a BKHD2* procedure on the mother within +/-90 days of the birth date."
+    reader_note: >-
+      Multiple induction methods can co-occur and are reported as separate
+      indicator columns (this one, Igangsaettelse_HSP, Igangsaettelse_Ballonkateter):
+      they are not mutually exclusive categories of one variable.
+  - id: igangsaettelse_hsp
+    name: Igangsaettelse_HSP
+    label: {da: null, en: "Labour induction by membrane rupture (HSP)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: Ja/Nej, derived from a KMAC00 procedure on the mother within +/-90 days of the birth date."
+  - id: igangsaettelse_ballonkateter
+    name: Igangsaettelse_Ballonkateter
+    label: {da: null, en: "Labour induction by balloon catheter"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: Ja/Nej, derived from a KMAC96A procedure on the mother within +/-90 days of the birth date."
+  - id: primaervandafgang
+    name: PrimaerVandafgang
+    label: {da: null, en: "Primary rupture of membranes (incl. PROM/PPROM)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: Ja/Nej, derived from a DO42* diagnosis on the mother."
+  - id: fosterpraesentation
+    name: Fosterpraesentation
+    label: {da: null, en: "Fetal presentation"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_fosterpraesentation
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: antalboernifoedslen
+    name: AntalBoernIFoedslen
+    label: {da: null, en: "Number of children in this birth"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: antallevendefoedteifoedslen
+    name: AntalLevendefoedteIFoedslen
+    label: {da: null, en: "Number of live-born children in this birth"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: antaldoedfoedteifoedslen
+    name: AntalDoedfoedteIFoedslen
+    label: {da: null, en: "Number of stillborn children in this birth"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: barnsnummerifoedslen
+    name: BarnsNummerIFoedslen
+    label: {da: null, en: "Child's number within this birth"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: apgarscore
+    name: Apgarscore
+    label: {da: null, en: "5-minute Apgar score"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: 0-10, -1 = not stated; values outside 0-10 are set to -1 by Sundhedsdatastyrelsen."
+    reader_note: >-
+      -1 means not stated, not a real score - exclude or recode before
+      computing a mean. Every stillbirth is set to 0 by definition, not -1:
+      a naive "average Apgar score" across LevendefoedtDoedfoedt values will
+      be pulled down by stillbirths unless filtered first.
+  - id: vaegt_barn
+    name: Vaegt_Barn
+    label: {da: null, en: "Child's birth weight (grams)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: -1 = not stated; values outside 100-9998 are set to -1."
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: laengde_barn
+    name: Laengde_Barn
+    label: {da: null, en: "Child's birth length (cm)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: -1 = not stated; values outside 11-98 are set to -1."
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: hovedomfang
+    name: Hovedomfang
+    label: {da: null, en: "Child's head circumference (cm)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: -1 = not stated; values outside 10-98 are set to -1."
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: abdominalomfang
+    name: Abdominalomfang
+    label: {da: null, en: "Child's abdominal circumference (cm)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: -1 = not stated; values outside 10-98 are set to -1."
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: placentavaegt
+    name: Placentavaegt
+    label: {da: null, en: "Placental weight (grams)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: -1 = not stated; values outside 100-3998 are set to -1."
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: paritet
+    name: Paritet
+    label: {da: null, en: "Parity (completed pregnancies, incl. current)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: -1 = not stated. When the reported parity is not
+        stated or is lower than the mother's number of births already on
+        record in MFR, Sundhedsdatastyrelsen substitutes the count of her
+        births in MFR (only births from 2005 onwards count towards this).
+    reader_note: >-
+      -1 means not stated. Also note the substitution rule above: this
+      column is not always a direct report, it can be a computed fallback
+      that only sees MFR's own 2005+ history, undercounting a mother's true
+      parity if she had earlier children before 2005 or outside Denmark.
+  - id: vaegt_mor
+    name: Vaegt_Mor
+    label: {da: null, en: "Mother's pre-pregnancy weight (kg)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: -1 = not stated; values outside 30-249 are set to
+        -1. Weights under 140 are prioritised over weights above 140 when
+        multiple sources disagree, since the mother's height is sometimes
+        mistakenly reported as her weight.
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: hoejde_mor
+    name: Hoejde_Mor
+    label: {da: null, en: "Mother's pre-pregnancy height (cm)"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: -1 = not stated; values outside 50-219 are set to -1."
+    reader_note: "-1 means not stated. Recode before analysis, the same trap as Apgarscore above."
+  - id: bmi_mor
+    name: BMI_Mor
+    label: {da: null, en: "Mother's pre-pregnancy BMI"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: computed from Vaegt_Mor/Hoejde_Mor, one decimal, -1.0 = not stated."
+    reader_note: >-
+      -1.0 means not stated, and is computed from Vaegt_Mor/Hoejde_Mor: if
+      either of those is itself -1 (not stated), this column will be too.
+      Bliddal et al. 2018 (mined for this guide) reports pre-pregnancy BMI
+      as structurally, not randomly, missing before 2003 in the older MFR
+      eras - the field did not exist yet, distinct from this -1 sentinel.
+  - id: tobaksforbrug
+    name: Tobaksforbrug
+    label: {da: null, en: "Mother's smoking status in pregnancy"}
+    type: character
+    role: code
+    origin: dst
+    code_system: tobaksforbrug
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet - see tobaksforbrug.yaml for the full value set and its two-era coding."
+  - id: ansvarligregion_geo_kode
+    name: AnsvarligRegion_Geo_Kode
+    label: {da: null, en: "Geographic region of the reporting institution (code)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. 1081."
+    reader_note: >-
+      Not the same numbering as DST's own `reg` code system (which uses
+      81-84): this is Sundhedsdatastyrelsen's organisational region code, a
+      different value space, despite both being called "region". Do not
+      join or compare against `reg` without confirming the mapping first.
+      Missing for some home and clinic births.
+  - id: ansvarligregion_geo_tekst
+    name: AnsvarligRegion_Geo_Tekst
+    label: {da: null, en: "Geographic region of the reporting institution (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. Region Nordjylland."
+  - id: ansvarligregion_org_kode
+    name: AnsvarligRegion_Org_Kode
+    label: {da: null, en: "Organisational region of the reporting hospital (code)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: filled only when SOR_EjerEnhedsType = 'region'."
+  - id: ansvarligregion_org_tekst
+    name: AnsvarligRegion_Org_Tekst
+    label: {da: null, en: "Organisational region of the reporting hospital (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: filled only when SOR_EjerEnhedsType = 'region'."
+  - id: ansvarliginstitution_kode
+    name: AnsvarligInstitution_Kode
+    label: {da: null, en: "Reporting institution (code)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+    reader_note: >-
+      The code TYPE flips at the LPR3 cutover (Feb/March 2019): a SHAK
+      hospital-department code before it, a SOR health-institution code
+      after. AnsvarligInstitution_KodeType says which one a given row holds
+      - check it before comparing codes across the boundary, since a SHAK
+      code and a SOR code for the same physical hospital do not look alike.
+  - id: ansvarliginstitution_tekst
+    name: AnsvarligInstitution_Tekst
+    label: {da: null, en: "Reporting institution (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. Rigshospitalet."
+  - id: ansvarliginstitution_kodetype
+    name: AnsvarligInstitution_KodeType
+    label: {da: null, en: "Code type of AnsvarligInstitution_Kode"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: SHAK, SOR, or Lokal kode."
+  - id: sor_ejerenhedstype
+    name: SOR_EjerEnhedsType
+    label: {da: null, en: "SOR owner type (public/private) of the reporting unit"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: mostly filled from 2019 on, only partially before."
+  - id: sor_sundhedsinstitution
+    name: SOR_SundhedsInstitution
+    label: {da: null, en: "SOR health institution code"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: sor_enhed
+    name: SOR_Enhed
+    label: {da: null, en: "SOR unit code"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: shak_sygehus
+    name: SHAK_Sygehus
+    label: {da: null, en: "SHAK hospital code (4 characters)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: public hospitals only; for LPR3-era rows this is mapped back from SOR and sometimes not stated."
+  - id: shak_afdeling
+    name: SHAK_Afdeling
+    label: {da: null, en: "SHAK department code (6 characters)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: public hospitals only; for LPR3-era rows this is mapped back from SOR and sometimes not stated."
+  - id: shak_afsnit
+    name: SHAK_Afsnit
+    label: {da: null, en: "SHAK ward code (7 characters)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: public hospitals only; for LPR3-era rows this is mapped back from SOR and sometimes not stated."
+  - id: doedfoersteaar_barn
+    name: DoedFoersteAar_Barn
+    label: {da: null, en: "Days to the child's death within its first year of life"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: 0-364, or NULL if the child did not die within its first year."
+    reader_note: "NULL means no death within the first year, it is not a missing-data code."
+  - id: doedfoersteaar_mor
+    name: DoedFoersteAar_Mor
+    label: {da: null, en: "Days from birth to the mother's death within the first year after"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: 0-364, or NULL if the mother did not die within that year."
+    reader_note: "NULL means no death within that year, it is not a missing-data code."
+  - id: cprnummer_barn
+    name: CPRnummer_Barn
+    label: {da: null, en: "Child's CPR-number"}
+    type: character
+    role: join_key
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: DDMMYYXXXX format."
+    reader_note: >-
+      A stillborn child may never receive a real CPR-number. Check
+      ErCPRnummerGyldigt_Barn before joining this onward to bef or any other
+      CPR-keyed register.
+  - id: ercprnummergyldigt_barn
+    name: ErCPRnummerGyldigt_Barn
+    label: {da: null, en: "Validity type of the child's CPR-number"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_er_cprnummer_gyldigt
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: koen_barn
+    name: Koen_Barn
+    label: {da: null, en: "Child's sex"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_koen
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: from Dim.Borger.KoenID, or the stillbirth form, or
+        inferred from CPRnummer_Barn where a real CPR-number exists.
+  - id: foedselsdato_barn
+    name: FoedselsDato_Barn
+    label: {da: null, en: "Child's date of birth"}
+    type: date
+    role: date
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: foedselstidspunkt
+    name: FoedselsTidspunkt
+    label: {da: null, en: "Child's time of birth"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: HH-MM-SS."
+  - id: kilde_barn
+    name: Kilde_Barn
+    label: {da: null, en: "Source of the child's birth record"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_kilde_barn
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: indberetningssystem_barn
+    name: IndberetningsSystem_Barn
+    label: {da: null, en: "Reporting system for the child's birth contact"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet gives only examples ("fx LPR3 eller Blanket -
+        Hjemmefødsel"), not an exhaustive value list.
+    reader_note: >-
+      No `code_system` attached: unlike `lprindberetningssystem` on the LPR3
+      tables, Sundhedsdatastyrelsen's own documentation gives only two
+      examples here, not a closed list, and this column's values are not
+      confirmed to be identical to lprindberetningssystem's ("LPR3",
+      "MiniPAS", "LPR2", "LPR1") since this column also has to cover the
+      non-LPR paper-form sources (Kilde_Barn = 2 or 3). Confirm with
+      `count(IndberetningsSystem_Barn)` before filtering on it.
+  - id: dw_ek_kontakt_barn
+    name: DW_EK_Kontakt_Barn
+    label: {da: null, en: "Child's LPR birth contact key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only set when Kilde_Barn = 1."
+    reader_note: >-
+      Only populated for LPR-sourced births (Kilde_Barn = 1): NULL for the
+      home-birth and stillbirth paper-form cases, which have no LPR contact
+      to key against. A join to lpr_a_kontakt on this column silently drops
+      every paper-form birth.
+  - id: dw_id_hjem_barn
+    name: DW_ID_Hjem_Barn
+    label: {da: null, en: "Home/clinic birth paper-form key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only set when Kilde_Barn = 2 (and Kilde_Mor = 2)."
+  - id: dw_id_doed_barn
+    name: DW_ID_Doed_Barn
+    label: {da: null, en: "Stillbirth paper-form key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: set when Kilde_Barn = 3, and also when a stillbirth
+        form supplements an LPR3-reported birth.
+  - id: cprnummer_mor
+    name: CPRnummer_Mor
+    label: {da: null, en: "Mother's CPR-number"}
+    type: character
+    role: join_key
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: DDMMYYXXXX format."
+    reader_note: >-
+      Since 2019, a birth counts even if the mother has no Danish
+      CPR-number. Check ErCPRnummerGyldigt_Mor before joining this onward.
+  - id: ercprnummergyldigt_mor
+    name: ErCPRnummerGyldigt_Mor
+    label: {da: null, en: "Validity type of the mother's CPR-number"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_er_cprnummer_gyldigt
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: koen_mor
+    name: Koen_Mor
+    label: {da: null, en: "Sex on the mother's CPR-like number"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_koen
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: foedselsdato_mor
+    name: FoedselsDato_Mor
+    label: {da: null, en: "Mother's date of birth"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: alder_mor
+    name: Alder_Mor
+    label: {da: null, en: "Mother's age at the child's birth"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: bopaelskommune_mor
+    name: BopaelsKommune_Mor
+    label: {da: null, en: "Mother's municipality of residence at the child's birth"}
+    type: character
+    role: code
+    origin: dst
+    code_system: kom
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet examples (101, 851) match DST's own kom.yaml
+        numbering (København, Aalborg) - the same code system, unlike
+        AnsvarligRegion_Geo_Kode below.
+  - id: bopaelsregion_mor
+    name: BopaelsRegion_Mor
+    label: {da: null, en: "Mother's region of residence at the child's birth"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. 1081."
+    reader_note: >-
+      Same caution as AnsvarligRegion_Geo_Kode: this does not look like
+      DST's own `reg` numbering (81-84). Not confirmed against `reg`, do not
+      assume they are the same code space.
+  - id: kilde_mor
+    name: Kilde_Mor
+    label: {da: null, en: "Source of the mother's record"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_kilde_forael
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: dw_ek_kontakt_mor
+    name: DW_EK_Kontakt_Mor
+    label: {da: null, en: "Mother's LPR birth contact key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: only set for LPR-sourced mothers. When more than one
+        birth contact is reported for the mother, the one whose start time
+        best matches the child's birth time is chosen.
+  - id: cprnummer_far
+    name: CPRnummer_Far
+    label: {da: null, en: "Father's CPR-number"}
+    type: character
+    role: join_key
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: DDMMYYXXXX format."
+  - id: ercprnummergyldigt_far
+    name: ErCPRnummerGyldigt_Far
+    label: {da: null, en: "Validity type of the father's CPR-number"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_er_cprnummer_gyldigt
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: koen_far
+    name: Koen_Far
+    label: {da: null, en: "Sex on the father's CPR-like number"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_koen
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: foedselsdato_far
+    name: FoedselsDato_Far
+    label: {da: null, en: "Father's date of birth"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: alder_far
+    name: Alder_Far
+    label: {da: null, en: "Father's age at the child's birth"}
+    type: numeric
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: kilde_far
+    name: Kilde_Far
+    label: {da: null, en: "Source of the father's record"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_kilde_forael
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+    reader_note: >-
+      "9 = Uoplyst" (unknown paternity) is a real, common value here, not a
+      data-quality problem to filter out - see mfr_kilde_forael.yaml.
+
+reader_note: >-
+  This table alone does not give you the mother's or child's diagnoses,
+  procedures or contact history in any detail: those live in the ten
+  satellite tables (mfr_barn_forloeb, mfr_barn_kontakter, mfr_barn_diagnoser,
+  mfr_barn_procedurer, mfr_barn_resultater, and the matching five mfr_mor_*
+  files). Nyfoedte only carries a curated subset that Sundhedsdatastyrelsen
+  has already resolved into single columns (birth weight, Apgar score,
+  smoking status, and so on) using the priority rules documented column by
+  column above.

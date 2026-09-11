@@ -1,0 +1,416 @@
+# Mirror of mfr_barn_resultater.yaml for the mother: one row per reported
+# clinical result (weight, height, BMI, smoking status, and more) tied to a
+# pregnancy/birth contact or course element for the mother. Join to
+# mfr_nyfoedte via DW_EK_Foedsel. Many of mfr_nyfoedte's own resolved
+# columns for the mother (Vaegt_Mor, Hoejde_Mor, BMI_Mor, Paritet,
+# Tobaksforbrug's RGAB* half) are built FROM rows in this exact table.
+
+id: mfr_mor_resultater
+name: "Mor_Resultater - MFR 2019+ satellite table"
+scope: sds
+family: mfr2019
+reference_timing: event
+one_row_per: event_from_person
+description: >-
+  One row per reported clinical result for the mother, tied to a contact or
+  course element from the start of pregnancy through 42 days after birth.
+  `ResultatVaerdi` is polymorphic, same as mfr_barn_resultater (though this
+  table's documented value shapes omit the boolean/text-string cases seen
+  there).
+source_url: https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret
+coverage: {from: 2019, to: 2026}
+
+join_keys: [DW_EK_Foedsel]
+relationships:
+  - to: mfr_nyfoedte
+    key: DW_EK_Foedsel
+    to_key: DW_EK_Foedsel
+    cardinality: many_to_one
+  - to: mfr_mor_kontakter
+    key: DW_EK_Kontakt
+    to_key: DW_EK_Kontakt
+    cardinality: many_to_one
+  - to: mfr_mor_forloeb
+    key: DW_EK_Forloeb
+    to_key: DW_EK_Forloeb
+    cardinality: many_to_one
+
+columns:
+  - id: dw_ek_foedsel
+    name: DW_EK_Foedsel
+    label: {da: null, en: "Birth event key"}
+    type: character
+    role: join_key
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: resultatindberetningstype
+    name: ResultatIndberetningsType
+    label: {da: null, en: "Result-report type"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: SKS code, e.g. RAA02."
+  - id: resultatindberetningsstatus
+    name: ResultatIndberetningsStatus
+    label: {da: null, en: "Result-report status (complete/incomplete)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: RAS00 = Inkomplet, RAS01 = Komplet, same pre-LPR3 default as mfr_barn_resultater.yaml."
+    reader_note: "See mfr_barn_resultater.yaml's ResultatIndberetningsStatus for the resolution-priority explanation - the same rule applies here for Vaegt_Mor, Hoejde_Mor and others."
+  - id: resultattype
+    name: ResultatType
+    label: {da: null, en: "Result type"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: SKS code, e.g. RDA20 or RDA22, from the same RDAnn family as mfr_barn_resultater.yaml."
+    reader_note: "No `code_system` attached, same reasoning as mfr_barn_resultater.yaml's ResultatType."
+  - id: resultatvaerdi
+    name: ResultatVaerdi
+    label: {da: null, en: "Result value (polymorphic)"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: "SKS-kode (fx RGAB00), heltal (antal, cm, kg eller
+        ml) eller datotid (YYYYMMDDHHMMSS)" verbatim - narrower than
+        mfr_barn_resultater's documented shapes (no boolean or free-text
+        string case listed here), but treat that as what Sundhedsdatastyrelsen
+        chose to document, not a guarantee no other shape occurs.
+    reader_note: "Branch on `ResultatType` before parsing, same trap as mfr_barn_resultater.yaml's ResultatVaerdi."
+  - id: dato_resultat
+    name: Dato_Resultat
+    label: {da: null, en: "Result date"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: optional to report."
+  - id: tidspunkt_resultat
+    name: Tidspunkt_Resultat
+    label: {da: null, en: "Result time"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: HH:MM:SS, optional to report."
+  - id: ansvarligregion_geo_kode
+    name: AnsvarligRegion_Geo_Kode
+    label: {da: null, en: "Geographic region of the responsible unit (code)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+    reader_note: "Not DST's `reg` numbering - see mfr_nyfoedte.yaml's AnsvarligRegion_Geo_Kode."
+  - id: ansvarligregion_geo_tekst
+    name: AnsvarligRegion_Geo_Tekst
+    label: {da: null, en: "Geographic region of the responsible unit (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: ansvarligregion_org_kode
+    name: AnsvarligRegion_Org_Kode
+    label: {da: null, en: "Organisational region of the responsible unit (code)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: filled only when SOR_EjerEnhedsType = 'region'."
+  - id: ansvarligregion_org_tekst
+    name: AnsvarligRegion_Org_Tekst
+    label: {da: null, en: "Organisational region of the responsible unit (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: filled only when SOR_EjerEnhedsType = 'region'."
+  - id: ansvarliginstitution_kode
+    name: AnsvarligInstitution_Kode
+    label: {da: null, en: "Responsible institution (code)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: SOR/SHAK for LPR-reported results, local code for home/clinic-birth paper-form results."
+    reader_note: "SHAK before the LPR3 cutover, SOR from it, local code for paper-form results - see mfr_nyfoedte.yaml's AnsvarligInstitution_Kode."
+  - id: ansvarliginstitution_tekst
+    name: AnsvarligInstitution_Tekst
+    label: {da: null, en: "Responsible institution (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: ansvarliginstitution_kodetype
+    name: AnsvarligInstitution_KodeType
+    label: {da: null, en: "Code type of AnsvarligInstitution_Kode"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: SHAK, SOR, or Lokal kode."
+  - id: enhedensspecialer
+    name: EnhedensSpecialer
+    label: {da: null, en: "Specialties of the responsible unit"}
+    type: character
+    role: value
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: free text."
+  - id: sor_ejerenhedstype
+    name: SOR_EjerEnhedsType
+    label: {da: null, en: "SOR owner type (public/private) of the responsible unit"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: sor_enhedstype
+    name: SOR_EnhedsType
+    label: {da: null, en: "SOR unit type (clinical/administrative)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: sor_sundhedsinstitution
+    name: SOR_SundhedsInstitution
+    label: {da: null, en: "SOR health institution code"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: sor_enhed
+    name: SOR_Enhed
+    label: {da: null, en: "SOR unit code"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: shak_sygehus
+    name: SHAK_Sygehus
+    label: {da: null, en: "SHAK hospital code (4 characters)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: shak_afdeling
+    name: SHAK_Afdeling
+    label: {da: null, en: "SHAK department code (6 characters)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: shak_afsnit
+    name: SHAK_Afsnit
+    label: {da: null, en: "SHAK ward code (7 characters)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: aktionsdiagnose
+    name: AktionsDiagnose
+    label: {da: null, en: "Action diagnosis of the contact this result belongs to"}
+    type: character
+    role: code
+    origin: dst
+    code_system: icd10
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. DZ340 or DO809."
+  - id: startdato_kontakt
+    name: StartDato_Kontakt
+    label: {da: null, en: "Start date of the contact this result belongs to"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: slutdato_kontakt
+    name: SlutDato_Kontakt
+    label: {da: null, en: "End date of the contact this result belongs to"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: forloeblabel
+    name: ForloebLabel
+    label: {da: null, en: "Course-element label"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only present after the LPR3 cutover."
+  - id: startdato_forloeb
+    name: StartDato_Forloeb
+    label: {da: null, en: "Start date of the course element"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: slutdato_forloeb
+    name: SlutDato_Forloeb
+    label: {da: null, en: "End date of the course element"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: indberetningssystem
+    name: IndberetningsSystem
+    label: {da: null, en: "Reporting system for the result"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: examples 'fx LPR3 eller Blanket - Hjemmefødsel'."
+    reader_note: "No `code_system` attached, same reasoning as mfr_barn_resultater.yaml's IndberetningsSystem."
+  - id: prioriteretfoedselsanmeldelse
+    name: PrioriteretFoedselsanmeldelse
+    label: {da: null, en: "Priority birth-record indicator"}
+    type: numeric
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: 1 = tied to the mother's own prioritised birth contact/record, 0 = other."
+    reader_note: "Filter to `== 1` to reproduce Nyfoedte's own choice, same logic as the other satellite tables."
+  - id: dw_ek_kontakt
+    name: DW_EK_Kontakt
+    label: {da: null, en: "LPR contact key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: joins to mfr_mor_kontakter."
+  - id: dw_ek_forloeb
+    name: DW_EK_Forloeb
+    label: {da: null, en: "LPR course-element key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: joins to mfr_mor_forloeb."
+  - id: dw_id_hjem
+    name: DW_ID_Hjem
+    label: {da: null, en: "Home/clinic birth paper-form key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only set for results reported via the home/clinic-birth paper form."

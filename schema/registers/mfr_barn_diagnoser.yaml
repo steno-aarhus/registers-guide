@@ -1,0 +1,306 @@
+# Satellite table for the child, one row per diagnosis/contact-reason/add-on
+# code attached to a birth-related contact. Join to mfr_nyfoedte via
+# DW_EK_Nyfoedt. See mfr_barn_forloeb.yaml's header for the shared
+# organisational-column note (not repeated here, this table has none of
+# those columns anyway).
+
+id: mfr_barn_diagnoser
+name: "Barn_Diagnoser - MFR 2019+ satellite table"
+scope: sds
+family: mfr2019
+reference_timing: event
+one_row_per: event_from_person
+description: >-
+  One row per diagnosis, contact reason, or diagnosis add-on code for the
+  child, tied to a contact starting within 42 days of birth. Structurally
+  the same idea as lpr_a_diagnose. `tobaksforbrug`'s DUT* codes and
+  `mfr_fosterpraesentation`'s DUP* codes, before the LPR3 cutover, are
+  add-on rows in this exact table (DiagnoseType = "+").
+source_url: https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret
+coverage: {from: 2019, to: 2026}
+
+join_keys: [DW_EK_Nyfoedt]
+relationships:
+  - to: mfr_nyfoedte
+    key: DW_EK_Nyfoedt
+    to_key: DW_EK_Nyfoedt
+    cardinality: many_to_one
+  - to: mfr_barn_kontakter
+    key: DW_EK_Kontakt
+    to_key: DW_EK_Kontakt
+    cardinality: many_to_one
+  - to: mfr_barn_forloeb
+    key: DW_EK_Forloeb
+    to_key: DW_EK_Forloeb
+    cardinality: many_to_one
+
+columns:
+  - id: dw_ek_nyfoedt
+    name: DW_EK_Nyfoedt
+    label: {da: null, en: "Newborn key"}
+    type: character
+    role: join_key
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: diagnosekode
+    name: DiagnoseKode
+    label: {da: null, en: "Diagnosis, contact-reason, or add-on code"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    code_system: icd10
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: e.g. DZ389 (diagnosis), DVA10 (Apgar add-on) or ALCC90 (contact reason)."
+    reader_note: >-
+      `code_system: icd10` fits the diagnosis case only: this column also
+      holds non-ICD-10 SKS add-on and contact-reason codes (see
+      DiagnoseType), which will not resolve against the ICD-10 lookup. Check
+      DiagnoseType before assuming a value here is a diagnosis.
+  - id: diagnosetype
+    name: DiagnoseType
+    label: {da: null, en: "Diagnosis role"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    code_system: mfr_diagnose_type
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: diagnosetype_tekst
+    name: DiagnoseType_Tekst
+    label: {da: null, en: "Diagnosis role (text)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: senereafkraeftet
+    name: SenereAfkraeftet
+    label: {da: null, en: "Later disproven"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: Ja/Nej. Only meaningfully populated for rows
+        reported after the LPR3 cutover; defaults to "Nej" for older data,
+        which is not the same as having actually been checked and confirmed.
+    reader_note: >-
+      A pre-LPR3 "Nej" here does not mean the diagnosis was verified, it
+      means the concept of tracking retraction did not exist yet and
+      everything defaults to "Nej". Do not treat pre- and post-cutover "Nej"
+      as equally informative.
+  - id: diagnosekode_parent
+    name: DiagnoseKode_Parent
+    label: {da: null, en: "Parent diagnosis code (when DiagnoseType = +)"}
+    type: character
+    role: code
+    origin: dst
+    code_system: icd10
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only relevant when DiagnoseType = '+'."
+  - id: diagnosetype_parent
+    name: DiagnoseType_Parent
+    label: {da: null, en: "Role of the parent diagnosis (when DiagnoseType = +)"}
+    type: character
+    role: code
+    origin: dst
+    code_system: mfr_diagnose_type
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only relevant when DiagnoseType = '+'."
+    reader_note: >-
+      A narrower set than the full mfr_diagnose_type lookup: only
+      A/B/C/G/H/M are valid here (no K or +), since an add-on cannot itself
+      be a contact reason or another add-on.
+  - id: diagnosetype_parent_tekst
+    name: DiagnoseType_Parent_Tekst
+    label: {da: null, en: "Role of the parent diagnosis, text (when DiagnoseType = +)"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only relevant when DiagnoseType = '+'."
+  - id: senereafkraeftet_parent
+    name: SenereAfkraeftet_Parent
+    label: {da: null, en: "Whether the parent diagnosis was later disproven (when DiagnoseType = +)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet: Ja/Nej, only relevant when DiagnoseType = '+'. Same
+        pre-LPR3 default-to-'Nej' caveat as SenereAfkraeftet above.
+  - id: aktionsdiagnose
+    name: AktionsDiagnose
+    label: {da: null, en: "Action diagnosis of the contact this row belongs to"}
+    type: character
+    role: code
+    origin: dst
+    code_system: icd10
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: startdato_kontakt
+    name: StartDato_Kontakt
+    label: {da: null, en: "Start date of the contact this row belongs to"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: slutdato_kontakt
+    name: SlutDato_Kontakt
+    label: {da: null, en: "End date of the contact this row belongs to"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: forloeblabel
+    name: ForloebLabel
+    label: {da: null, en: "Course-element label (via the contact)"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only present after the LPR3 cutover."
+  - id: startdato_forloeb
+    name: StartDato_Forloeb
+    label: {da: null, en: "Start date of the course element (via the contact)"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: slutdato_forloeb
+    name: SlutDato_Forloeb
+    label: {da: null, en: "End date of the course element (via the contact)"}
+    type: date
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet."
+  - id: indberetningssystem
+    name: Indberetningssystem
+    label: {da: null, en: "Reporting system for the diagnosis"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        Kolonner sheet gives only examples ("fx LPR3 eller Blanket -
+        Hjemmefødsel"), not an exhaustive value list, unlike the plain
+        IndberetningsSystem columns on Forloeb/Kontakter/Procedurer which
+        DST exemplifies with only LPR2/LPR3.
+    reader_note: >-
+      No `code_system` attached, same reasoning as
+      mfr_nyfoedte.yaml's IndberetningsSystem_Barn: this column also covers
+      non-LPR paper-form sources, so it is not confirmed to share
+      `lprindberetningssystem`'s exact value set. Confirm with
+      `count(Indberetningssystem)` before filtering on it.
+  - id: prioriteretfoedselsanmeldelse
+    name: PrioriteretFoedselsanmeldelse
+    label: {da: null, en: "Priority birth-record indicator"}
+    type: numeric
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: 1 = tied to the child's own prioritised birth contact/record, 0 = other."
+    reader_note: "Filter to `== 1` to reproduce Nyfoedte's own choice, same logic as the other satellite tables."
+  - id: dw_ek_kontakt
+    name: DW_EK_Kontakt
+    label: {da: null, en: "LPR contact key"}
+    type: character
+    role: join_key
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: joins to mfr_barn_kontakter and lpr_a_kontakt."
+  - id: dw_ek_forloeb
+    name: DW_EK_Forloeb
+    label: {da: null, en: "LPR course-element key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: joins to mfr_barn_forloeb."
+  - id: dw_id_hjem
+    name: DW_ID_Hjem
+    label: {da: null, en: "Home/clinic birth paper-form key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only set for diagnoses reported via the home/clinic-birth paper form."
+  - id: dw_id_doed
+    name: DW_ID_Doed
+    label: {da: null, en: "Stillbirth paper-form key"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: "Kolonner sheet: only set for diagnoses reported via the stillbirth paper form."
