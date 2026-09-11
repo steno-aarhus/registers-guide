@@ -82,16 +82,18 @@
 - `dw_ek_kontakt` joins to **LPR_A_DIAGNOSE** (one-to-many).
 
 <details>
-<summary>Value sets for the coded columns (4)</summary>
+<summary>Value sets for the coded columns (5)</summary>
 
 | Code system | Values |
 | --- | --- |
 | `kont_type` | Not listed here - see [DST's classification](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf) |
+| `lprindberetningssystem` | `LPR3`, `MiniPAS`, `LPR2`, `LPR1` |
 | `icd10_sks` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
 | `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
 | `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
 
 - **`kont_type`:** `ALCA00` means physical attendance, which is the closest LPR3 gets to LPR2's inpatient flag. It marks attendance, not admission, so a study that treats it as "was admitted" will include outpatient visits. Check what your own delivery holds before filtering: single digits and SKS codes have been seen side by side in the same year, so `kont_type == "ALCA00"` can silently drop rows that are the same kind of contact recorded in the other form. Cross-tabulate it against `lprindberetningssystem` first. MiniPAS was the route private providers reported through, so the two forms are not only two notations, they are also two different parts of the health service.
+- **`lprindberetningssystem`:** Confirm the exact strings with `count(lprindberetningssystem)` before relying on "LPR2" or "LPR1" in a filter: they are well-established as concepts in this guide, but nobody has pasted the literal value back from DARTER the way pitfall 5 did for "LPR3". "MiniPAS" is safe to rely on, since kont_type.yaml's coalescing logic already depends on it being exactly that string. This column is unrelated to LPR_F vs LPR_A: that choice is made before you open a file, this one lives inside the file you already chose.
 - **`icd10_sks`:** The D prefix is a Danish addition, not part of the WHO code. Matching WHO codes directly against LPR without allowing for it returns nothing. Do not carry the habit across to the cause-of-death registers: they hold the plain code, so stripping a D there removes the first real character instead.
 - **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality - confirmed for two reused codes against a current-only DST source: 707 is Norddjurs today, not its pre-2007 meaning, and likewise 849 is Jammerbugt. `lookup:` below covers only this post-2007 set (99 entries), not the full 278-code `values_from` file. Christiansø (411) is included in `lookup:` even though it is not a municipality (see description above): it is a real value a `kom` column can hold, and DST's own current-only classification lists it as its own area code alongside the 98 municipalities. Excluding it would just move the "unhandled code" problem this fix is meant to solve onto that one value.
@@ -99,6 +101,7 @@
 Where these values come from:
 
 - **`kont_type`:** [Vejledning til indberetning til LPR3](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf), published on [medinfo.dk](https://medinfo.dk/sks/brows.php).
+- **`lprindberetningssystem`:** [No DST/Sundhedsdatastyrelsen kodeark for this column exists; the value set below is reconstructed from DARTER-team-confirmed facts already established elsewhere in this guide (this pitfalls page, and kont_type.yaml), not from a published code list.](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
 - **`icd10_sks`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
@@ -110,7 +113,7 @@ Where these values come from:
 - **`dw_ek_kontakt`:** The key the diagnosis and procedure tables join on.
 - **`dw_ek_forloeb`:** One level above the contact: a course of treatment can span several contacts, so joining on this is not the same as joining on the contact.
 - **`kont_starttidspunkt`:** A datetime, not a date. as.Date() it before comparing with an index date.
-- **`lprindberetningssystem`:** Filter to "LPR3". The table reaches back to 2017, and the outpatient contacts from before March 2019 are also in LPR2, so combining the two without this filter counts the same contact twice. The column also separates the two delivery formats, LPR_F and LPR_A.
+- **`lprindberetningssystem`:** Filter to "LPR3". The table reaches back to 2017, and the outpatient contacts from before March 2019 are also in LPR2, so combining the two without this filter counts the same contact twice. This is a different thing from LPR_F vs LPR_A: those are two file formats, a choice made before you even open a file, not a value this column can hold. See the lprindberetningssystem code system for the full value set and its confidence levels.
 - **`adiag`:** The contact's action diagnosis, repeated here so simple analyses need not join lpr_a_diagnose. Secondary diagnoses are only in the diagnosis table, so filtering on this column alone misses them.
 - **`prioritet`:** The code ATA1 marks an acute contact. Together with the contact's duration this is how LPR3 substitutes for LPR2's c_pattype.
 - **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.

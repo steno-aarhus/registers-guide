@@ -80,7 +80,7 @@ Where these values come from:
 **Worth knowing:**
 
 - **`c_icd10`:** The modern diagnosis code. Older years also carry ICD-7 in c_idc7, so a series running back before ICD-10 has to use both.
-- **`c_morfo03`:** Histology and morphology, ICD-O-3. Together with c_topo3 (site) this is what distinguishes tumour types; the ICD-10 code alone does not.
+- **`c_morfo03`:** Histology and morphology, ICD-O-3. Together with c_topo3 (site) this is what distinguishes tumour types; the ICD-10 code alone does not. M9999X is not an ordinary missing value: the cancer logic sets it as a temporary placeholder when it cannot match a tumour to a confirmed morphology from the Danish Pathology Register, or not within the expected time window of the diagnosis date. It is cleared later by manual review once the real morphology is found. Filtering out only blank/NA values will not catch it.
 - **`d_diagnosedato`:** The diagnosis date, which is the incidence date for this register.
 - **`k_cprnr`:** The person key. Named k_cprnr rather than pnr, so rename before joining to a DST register.
 - **`k_tumornr`:** One person can appear several times: the register counts incident tumours, not people. Deduplicating on the person alone collapses second primaries.

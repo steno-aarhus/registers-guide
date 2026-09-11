@@ -31,6 +31,8 @@
 | `sikreamt` | character | code | Sikredes amt |  |
 | `vagtomr` | character | code | VAGTOMRÅDE | 1997 to 2005 |
 
+- **`barnmak`:** Until 1 January 1996, services provided to a child under 16 were reported under the PARENT's CPR-number, not the child's own (Sahl Andersen et al. 2011, Scand J Public Health 39(Suppl 7):34-37, citing Pedersen PA et al., Individual registration of children in the Danish National Health Service Register, Ugeskr Laeger 1999;161:6351-4). This column's window (1990-2005) straddles that boundary. DST's own variable list does not explain what barnmak is for, so this is informed context for the practice it likely exists to flag, not a confirmed mechanism: do not assume every child-relevant record before 1996 carries the child's own CPR-number in this register.
+
 </details>
 
 *No published source gives a data type for 21 of these 22 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*

@@ -44,17 +44,20 @@
 - `dw_ek_kontakt` joins to **LPR_A_KONTAKT** (many-to-one).
 
 <details>
-<summary>Value sets for the coded columns (1)</summary>
+<summary>Value sets for the coded columns (2)</summary>
 
 | Code system | Values |
 | --- | --- |
 | `sks` | Not listed here - see [DST's classification](https://medinfo.dk/sks/brows.php) |
+| `lprindberetningssystem` | `LPR3`, `MiniPAS`, `LPR2`, `LPR1` |
 
 - **`sks`:** The codes are hierarchical, so a prefix match selects a whole branch. That also makes it easy to select more than you meant: check how many characters your intended group actually needs before filtering with starts_with().
+- **`lprindberetningssystem`:** Confirm the exact strings with `count(lprindberetningssystem)` before relying on "LPR2" or "LPR1" in a filter: they are well-established as concepts in this guide, but nobody has pasted the literal value back from DARTER the way pitfall 5 did for "LPR3". "MiniPAS" is safe to rely on, since kont_type.yaml's coalescing logic already depends on it being exactly that string. This column is unrelated to LPR_F vs LPR_A: that choice is made before you open a file, this one lives inside the file you already chose.
 
 Where these values come from:
 
 - **`sks`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
+- **`lprindberetningssystem`:** [No DST/Sundhedsdatastyrelsen kodeark for this column exists; the value set below is reconstructed from DARTER-team-confirmed facts already established elsewhere in this guide (this pitfalls page, and kont_type.yaml), not from a published code list.](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
 
 </details>
 
