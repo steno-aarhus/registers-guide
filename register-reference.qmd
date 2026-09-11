@@ -524,20 +524,162 @@ One row per birth, carrying both mother and child. The mother appears once per
 birth, so a mother of three has three rows; the register is keyed on the child
 through `cpr_barn`.
 
-<details>
-<summary>Two versions of the same MFR register exist</summary>
+::: {.callout-important}
+**Three eras, three different data models, not one register with minor
+revisions.** 1973-1996 was paper form reports; not an "MFR" table, but not
+undocumented either - DST's own **`ftbarn`**/**`ftforael`**/**`ftnaevn`**
+("Fertilitet - børn/forælder/Nævner") datasets cover **1973-2023** and
+explicitly incorporate MFR content (`ftbarn`'s weight/length columns are
+documented as matching MFR, alongside its own `MFR_OPLYSNING` column). These
+are demography datasets (parity, birth spacing, fertility-rate denominators),
+not a clinical birth-event table - see below. 1997-2018 is the wide DST
+table below (`mfr`), marked closed by DST with **no successor named on
+DST's own overview** - because the successor is delivered by
+**Sundhedsdatastyrelsen's Forskerservice**, not DST, the same pattern as
+`lpr_a_kontakt`. From 2019 onwards the register was fully restructured into
+a main table (`Nyfoedte`) plus ten LPR3-style satellite tables per mother
+and child (`Barn_Forloeb`/`Kontakter`/`Diagnoser`/`Procedurer`/`Resultater`
+and the same five `Mor_*` tables) - see [`mfr_nyfoedte`](#mfr-nyfoedte)
+below. This replaces an earlier, incorrect version of this page's guidance,
+which guessed the split was simply `MFR_MOR_*`/`MFR_BARN_*` tables.
 
- DST delivers MFR as one wide table,
-1997-2018. Sundhedsdatastyrelsen publishes it split across `MFR_MOR_*` and
-`MFR_BARN_*` tables. Check which one your project has before writing code
-against column names.
+The 2019+ population also differs from the two older eras: 1973-2018
+required the **mother** to have a Danish CPR-number, 2019+ does not. A study
+spanning this boundary is comparing two different populations, not only two
+table shapes.
+:::
+
+### FTBARN / FTFORAEL / FTNAEVN - the pre-1997 period {#ftbarn}
+
+Three separate DST datasets, not one register split three ways: `ftbarn`
+(one row per child), `ftforael` (one row per parent-child link, up to two
+per child), and `ftnaevn` (one row per person per year - the fertility-rate
+**denominator**, not a birth-event table at all). All three cover
+1973-2023, so they overlap with `mfr` and `mfr_nyfoedte` in time; use them
+for the years those two do not reach, 1973-1996.
+
+::: {.callout-warning}
+**DST's own variable-list pages for these three give a short Danish label
+for some columns and none at all for others - no value/code definitions
+anywhere.** Unlike `mfr_nyfoedte`, there is no `code_system` on any coded
+column here (`KOEN`, `LEVENDE_ELLER_DOEDFOEDT`, `CPRTYPE`, `MOR_FAR`, and
+more): inventing a lookup neither DST nor any other source confirms would
+be actively misleading. Confirm actual values with `count()`/`table()` on
+real data before writing code that filters or recodes on any of them.
+:::
+
+`ftforael`'s four parity/spacing variants
+(`DEMOGRAFISK_`/`ENKELT_`/`FAMILIE_`/`MEDICINSK_PARITET`, and the matching
+`_SPACING` columns) are not further defined by DST relative to each other or
+to the simpler `PARITET` column - see `ftforael.yaml`'s reader_note before
+picking one for an analysis.
+
+{{< include _generated/ftbarn-columns.md >}}
+
+{{< include _generated/ftforael-columns.md >}}
+
+{{< include _generated/ftnaevn-columns.md >}}
 
 `gestationsalder_dage` is in **days**, not weeks. `paritet` counts previous
 births, which is not the same as the number of children currently alive.
 
-</details>
-
 {{< include _generated/mfr-columns.md >}}
+
+### MFRHJMFO - home births, 1997-2018 {#mfrhjmfo}
+
+Supplementary clinical detail for the home-birth subset of `mfr`, joined via
+`FK_MFR` - **not** a separate population: `mfr` already includes home
+births, flagged via its own `FOEDESTED` and `MARKOER_HJEMMEFOEDSEL_BEREGNET`
+columns. This is the DST-native counterpart to a data-management convention
+of splitting the 1997-2018 era into "home" and "not-home" deliveries.
+
+::: {.callout-warning}
+**DST's page gives no Danish label at all for any column here**, not even
+the partial labelling `ftbarn`/`ftforael`/`ftnaevn` have - the thinnest
+documentation of any register in this schema. Every reader_note on this
+register's columns is an informed guess from the variable name alone
+(Danish administrative/clinical vocabulary), not a sourced fact.
+:::
+
+{{< include _generated/mfrhjmfo-columns.md >}}
+
+### Nyfoedte - Medical Birth Register, 2019 onwards {#mfr-nyfoedte}
+
+The current MFR. One row per newborn (live-born or stillborn, unified in one
+table for the first time - the 1997-2018 table above held only live births).
+Join `Barn_*` satellite tables via `DW_EK_Nyfoedt`, `Mor_*` satellite tables
+via `DW_EK_Foedsel` (see the ten satellite tables below). `Nyfoedte` itself
+already carries a curated subset of medical facts (diagnosis, weight, Apgar
+score, smoking status) that Sundhedsdatastyrelsen resolves from the
+underlying LPR3 contacts.
+
+::: {.callout-warning}
+**Numeric fields use -1 as "not stated", not `NA`.** `Vaegt_Barn`,
+`Laengde_Barn`, `Hovedomfang`, `Abdominalomfang`, `Placentavaegt`, `Paritet`,
+`Apgarscore` and `BMI_Mor` (as `-1.0`) all use this sentinel. A mean computed
+without recoding it first will be pulled sharply downward. Every stillbirth
+also gets `Apgarscore = 0` by definition, not `-1` - filter on
+`LevendefoedtDoedfoedt` before summarising Apgar scores.
+:::
+
+::: {.callout-tip}
+**Mother's smoking status (`Tobaksforbrug`) uses two SKS code families for
+the same nine categories.** `DUT*` before the LPR3 cutover (Feb/March 2019),
+`RGAB*` from it onwards - `DUT20` and `RGAB20` mean the same thing. See
+`tobaksforbrug.yaml` for the full mapping (resolved via the `sksr` package,
+since Sundhedsdatastyrelsen's own documentation names both prefixes but not
+the per-code labels).
+:::
+
+{{< include _generated/mfr_nyfoedte-columns.md >}}
+
+<details>
+<summary>The ten satellite tables (Barn_*/Mor_* diagnoses, procedures, contacts, course elements, results)</summary>
+
+Same idea as `lpr_a_kontakt`/`lpr_a_diagnose`/`lpr_a_procregistrering`, just
+scoped to birth-related contacts and split by child (`Barn_*`) vs mother
+(`Mor_*`). Join `Barn_*` tables to `Nyfoedte` via `DW_EK_Nyfoedt`, `Mor_*`
+tables via `DW_EK_Foedsel`.
+
+#### Barn_Forloeb / Mor_Forloeb - course elements
+
+{{< include _generated/mfr_barn_forloeb-columns.md >}}
+
+{{< include _generated/mfr_mor_forloeb-columns.md >}}
+
+#### Barn_Kontakter / Mor_Kontakter - contacts
+
+{{< include _generated/mfr_barn_kontakter-columns.md >}}
+
+{{< include _generated/mfr_mor_kontakter-columns.md >}}
+
+#### Barn_Diagnoser / Mor_Diagnoser - diagnoses
+
+{{< include _generated/mfr_barn_diagnoser-columns.md >}}
+
+{{< include _generated/mfr_mor_diagnoser-columns.md >}}
+
+#### Barn_Procedurer / Mor_Procedurer - procedures
+
+{{< include _generated/mfr_barn_procedurer-columns.md >}}
+
+{{< include _generated/mfr_mor_procedurer-columns.md >}}
+
+#### Barn_Resultater / Mor_Resultater - results
+
+::: {.callout-warning}
+**`ResultatVaerdi` is polymorphic.** Depending on `ResultatType`, it holds an
+SKS code, an integer, a boolean, a decimal, a datetime, or a text string.
+`Nyfoedte`'s own resolved columns (`Vaegt_Barn`, `Apgarscore`,
+`Tobaksforbrug`'s `RGAB*` half, and more) are all built from rows in these
+two tables. Branch on `ResultatType` before parsing `ResultatVaerdi`.
+:::
+
+{{< include _generated/mfr_barn_resultater-columns.md >}}
+
+{{< include _generated/mfr_mor_resultater-columns.md >}}
+
+</details>
 
 ### The Cancer Register
 

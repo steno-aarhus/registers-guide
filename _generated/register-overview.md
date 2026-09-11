@@ -10,6 +10,9 @@
 | [DODSAARSAGER](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARSAGER%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaarsager"` | `pnr` | 2022 to 2024 | `doedsdato`, `doedsaarsag_tilgrundliggende`, `doedsaarsag_kode_1` |
 | [DODSAASG](https://www.dst.dk/extranet/ForskningVariabellister/DODSAASG%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaasg"` | `pnr` | 2002 to 2022 | `d_dodsdato`, `c_dodtilgrundl_acme`, `c_dod_1a` |
 | [FAIK](https://www.dst.dk/extranet/ForskningVariabellister/FAIK%20-%20Familieindkomster.html) | `"faik"` | `familie_id` | 1987 to 2024 | `pnr`, `famaekvivadisp_13`, `year` |
+| [FTBARN](https://www.dst.dk/extranet/ForskningVariabellister/FTBARN%20-%20Fertilitet%20-%20b%C3%B8rn.html) | `"ftbarn"` | `PNR` | 1973 to 2023 | `FOED_DAG`, `LEVENDE_ELLER_DOEDFOEDT` |
+| [FTFORAEL](https://www.dst.dk/extranet/ForskningVariabellister/FTFORAEL%20-%20Fertilitet%20-%20for%C3%A6lder.html) | `"ftforael"` | `PNR` | 1973 to 2023 | `FORAELDER_PNR`, `MOR_FAR` |
+| [FTNAEVN](https://www.dst.dk/extranet/ForskningVariabellister/FTNAEVN%20-%20Fertilitet%20-%20N%C3%A6vner.html) | `"ftnaevn"` | `PNR`, `AAR` | 1973 to 2023 |  |
 | [LAB_DM_FORSKER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen) | `"lab_dm_forsker"` | `patient_cpr` | 2008 to 2025 | `samplingdate`, `analysiscode`, `value` |
 | [LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html) | `"lmdb"` | `pnr` | 1995-12 to 2025-12 | `eksd`, `atc`, `atc1` |
 | [LPR_A_DIAGNOSE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_DIAGNOSE%20-%20Landspatientregistret%20%28LPR3%29%20-Diagnoseoplysning.html) | `"lpr_a_diagnose"` | `dw_ek_kontakt` | 2019 to 2025 | `diag_kode`, `diag_kode_type`, `senere_afkraeftet` |
@@ -20,6 +23,18 @@
 | [LPR_SKSOPR](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSOPR%20-%20Landspatientregistret%20-%20operationer.html) | `"lpr_sksopr"` | `recnum` | 1996 to 2019 | `c_opr`, `c_oprart`, `c_osgh` |
 | [LPR_SKSUBE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSUBE%20-%20Landspatientregistret%20-%20unders%C3%B8gelser%20og%20behandlinger.html) | `"lpr_sksube"` | `recnum` | 1999 to 2019 | `c_opr`, `d_odto`, `year` |
 | [MFR](https://www.dst.dk/extranet/ForskningVariabellister/MFR%20-%20Levendef%C3%B8dte%20fra%20det%20medicinske%20f%C3%B8dselsregister.html) | `"mfr"` | `cpr_barn` | 1997 to 2018 | `alder_moder`, `bmi_moder`, `cpr_moder` |
+| [MFR_BARN_DIAGNOSER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_diagnoser"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `DiagnoseKode`, `DiagnoseType` |
+| [MFR_BARN_FORLOEB](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_forloeb"` | `DW_EK_Nyfoedt` | 2019 to 2026 |  |
+| [MFR_BARN_KONTAKTER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_kontakter"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `StartDato_Kontakt` |
+| [MFR_BARN_PROCEDURER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_procedurer"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `ProcedureKode`, `ProcedureType` |
+| [MFR_BARN_RESULTATER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_resultater"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `ResultatType` |
+| [MFR_MOR_DIAGNOSER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_diagnoser"` | `DW_EK_Foedsel` | 2019 to 2026 | `DiagnoseKode`, `DiagnoseType` |
+| [MFR_MOR_FORLOEB](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_forloeb"` | `DW_EK_Foedsel` | 2019 to 2026 |  |
+| [MFR_MOR_KONTAKTER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_kontakter"` | `DW_EK_Foedsel` | 2019 to 2026 | `StartDato_Kontakt` |
+| [MFR_MOR_PROCEDURER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_procedurer"` | `DW_EK_Foedsel` | 2019 to 2026 | `ProcedureKode`, `ProcedureType` |
+| [MFR_MOR_RESULTATER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_resultater"` | `DW_EK_Foedsel` | 2019 to 2026 | `ResultatType` |
+| [MFR_NYFOEDTE](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_nyfoedte"` | `CPRnummer_Barn` | 2019 to 2026 | `DW_EK_Nyfoedt`, `LevendefoedtDoedfoedt`, `FoedselsDato_Barn` |
+| [MFRHJMFO](https://www.dst.dk/extranet/ForskningVariabellister/MFRHJMFO%20-%20Hjemmef%C3%B8dsler%20fra%20det%20medicinske%20f%C3%B8dselsregister.html) | `"mfrhjmfo"` | `FK_MFR` | 1997 to 2018 |  |
 | [SSSY](https://www.dst.dk/extranet/ForskningVariabellister/SSSY%20-%20Sygesikring%20%286-cifret%29.html) | `"sssy"` | `pnr` | 2005 to 2025 | `ydernr`, `speciale`, `ydlant` |
 | [SYSI](https://www.dst.dk/extranet/ForskningVariabellister/SYSI%20-%20Sygesikring%20%286-cifret%29.html) | `"sysi"` | `pnr` | 1990 to 2005 | `ydernr`, `speciale`, `ydlant` |
 | [T_PSYK_ADM](https://www.dst.dk/extranet/ForskningVariabellister/PSYK_ADM%20-%20Landspatientregistret%20psykiatri%20-%20administrative%20oplysninger.html) | `"t_psyk_adm"` | `recnum` | 1995 to 2019 | `pnr`, `c_pattype`, `c_adiag` |
