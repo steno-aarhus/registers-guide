@@ -34,17 +34,33 @@ json_string <- function(x) {
   paste0('"', trimws(x), '"')
 }
 
-# Quarto builds an anchor from the heading text: lowercase, punctuation dropped,
-# spaces to dashes. An explicit {#id} on the heading wins.
+# Quarto builds an anchor from the heading text using pandoc's auto_identifiers
+# rules, in this order: (1) strip formatting, (2) drop everything that isn't
+# alphanumeric/underscore/hyphen/dot, (3) THEN turn spaces into hyphens, (4)
+# lowercase, (5) drop leading non-letters. The order of (2) and (3) matters: a
+# literal " - " in the heading text survives step 2 as a hyphen, then each of
+# its surrounding spaces becomes another hyphen in step 3, so "MFR - Medical"
+# becomes "mfr---medical" (three hyphens), not "mfr-medical". Getting this
+# wrong means every search hit for a register whose heading uses " - " (nearly
+# all of them: "MFR - Medical Birth Register", "DODSAASG - the 2002-2021 link
+# in the chain", ...) lands at the top of register-reference.qmd instead of at
+# its own section.
+#
+# This must stay in lockstep with heading_id() in tools/check-guide.R, which
+# derives the same ids to verify every internal link and anchor in the guide
+# actually resolves. That check passing is what proves this algorithm right;
+# if the two ever drift apart, one of them is wrong.
 anchor_for <- function(heading) {
   m <- regmatches(heading, regexpr("\\{#([^}]+)\\}", heading))
   if (length(m)) return(sub("\\{#(.*)\\}", "\\1", m))
   h <- sub("^#{2,3}\\s+", "", heading)
-  h <- gsub("\\{[^}]*\\}", "", h)
-  h <- gsub("`|\\*|\\[|\\]|\\(|\\)", "", h)
-  h <- tolower(trimws(h))
-  h <- gsub("[^a-z0-9æøå ]+", "", h)
-  gsub(" +", "-", trimws(h))
+  h <- gsub("\\{[^}]*\\}\\s*$", "", h)
+  h <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", h)
+  h <- gsub("[*_`]", "", h)
+  h <- gsub("[^[:alnum:] _.-]", "", h)
+  h <- gsub("[[:space:]]+", "-", trimws(h))
+  h <- tolower(h)
+  sub("^[^a-z]+", "", h)
 }
 
 heading_text <- function(heading) {
