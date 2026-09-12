@@ -1,0 +1,233 @@
+# LPR_A_BETALINGSOPLYSNINGER - payment/billing information for a contact
+# or a procedure with its own separate payer. Missed when
+# lpr_a_kontakt/diagnose/procregistrering were first built; found by
+# cross-checking DST's full order list (Bestillingsliste.xlsx) against the
+# schema on 2026-09-12.
+#
+# Sundhedsdatastyrelsen's own LPR3_F guidance describes this concept in
+# detail under the table name "Betaler" (section 3.6) - a related but not
+# confirmed-identical sibling of this LPR_A_* register (DST separately
+# publishes an LPR_F_BETALER page, distinct from LPR_A_BETALINGSOPLYSNINGER,
+# under a different name entirely).
+
+id: lpr_a_betalingsoplysninger
+hide_from_overview: true
+name: "LPR_A_BETALINGSOPLYSNINGER - Landspatientregistret (LPR3) - Betalingsoplysninger"
+family: lpr3
+scope: dst
+reference_timing: event
+one_row_per: event_from_person
+description: >-
+  One row per set of payment/billing information for a contact, or for a
+  procedure that has its own separate payer. A payment-information set
+  covers three facts: the payment agreement (ALFA-codes), the payer
+  (ALFB-codes), and the specialisation level (ALFC-codes). No unique key: a
+  row hangs on the contact or procedure it was registered on.
+source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+coverage: {from: 2025, to: 2025}
+
+join_keys: [DW_EK_KONTAKT, DW_EK_PROCEDUREREGISTRERING]
+relationships:
+  - to: lpr_a_kontakt
+    key: DW_EK_KONTAKT
+    to_key: dw_ek_kontakt
+    cardinality: many_to_one
+    provenance:
+      source_type: inferred
+      verified_on: 2026-09-12
+  - to: lpr_a_procregistrering
+    key: DW_EK_PROCEDUREREGISTRERING
+    to_key: dw_ek_procedureregistrering
+    cardinality: many_to_one
+    provenance:
+      source_type: inferred
+      verified_on: 2026-09-12
+
+columns:
+  - id: betaler
+    name: BETALER
+    label: {da: null, en: "Payer code"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        LPR3_F guidance, section 3.6: payer is one of three facts in a
+        payment-information set, coded as "ALFB" SKS codes. Individual code
+        values were not independently browsed for this schema.
+  - id: betaler_tekst
+    name: BETALER_TEKST
+    label: {da: null, en: "Payer, text"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list (Bestillingsliste.xlsx): name only, no label. DST's own dedicated pages for sibling LPR_A_* tables explicitly say 'Ingen label' rather than simply omitting one."
+      type_inferred: true
+  - id: bet_aftale
+    name: BET_AFTALE
+    label: {da: null, en: "Payment agreement code"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        LPR3_F guidance, section 3.6: the payment agreement, coded as
+        "ALFA" SKS codes. Individual code values were not independently
+        browsed for this schema.
+  - id: bet_aftale_tekst
+    name: BET_AFTALE_TEKST
+    label: {da: null, en: "Payment agreement, text"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+  - id: bet_opl_indb_tidspunkt
+    name: BET_OPL_INDB_TIDSPUNKT
+    label: {da: null, en: "Payment info reporting time"}
+    type: datetime
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+  - id: bet_opl_sluttidspunkt
+    name: BET_OPL_SLUTTIDSPUNKT
+    label: {da: null, en: "Payment info end"}
+    type: datetime
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+    reader_note: >-
+      LPR3_F's guidance (section 3.6) confirms several consecutive payment-
+      information sets can be reported for one contact/procedure over time:
+      this and BET_OPL_STARTTIDSPUNKT are what let a project pick the
+      validity window that applies at a given point in the care episode.
+  - id: bet_opl_spec_niv
+    name: BET_OPL_SPEC_NIV
+    label: {da: null, en: "Payment info specification level code"}
+    type: character
+    role: code
+    key: true
+    origin: dst
+    provenance:
+      source_url: https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf
+      source_type: dst_documentation
+      verified_on: 2026-09-12
+      verified_against: >-
+        LPR3_F guidance, section 3.6: specialisation level, coded as
+        "ALFC" SKS codes. Individual code values were not independently
+        browsed for this schema.
+  - id: bet_opl_spec_niv_tekst
+    name: BET_OPL_SPEC_NIV_TEKST
+    label: {da: null, en: "Payment info specification level, text"}
+    type: character
+    role: derived
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+  - id: bet_opl_starttidspunkt
+    name: BET_OPL_STARTTIDSPUNKT
+    label: {da: null, en: "Payment info start"}
+    type: datetime
+    role: date
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+  - id: dw_ek_betalingsoplysning
+    name: DW_EK_BETALINGSOPLYSNING
+    label: {da: null, en: "Payment information identifier"}
+    type: character
+    role: identifier
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+  - id: dw_ek_kontakt
+    name: DW_EK_KONTAKT
+    label: {da: null, en: "Contact identifier"}
+    type: character
+    role: join_key
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+    reader_note: >-
+      Populated when the payment info is registered directly on a contact
+      rather than on a specific procedure - LPR3_F's guidance (section 3.6)
+      says a row "hangs" on exactly one of dw_ek_kontakt or
+      dw_ek_procedureregistrering, not necessarily both.
+  - id: dw_ek_procedureregistrering
+    name: DW_EK_PROCEDUREREGISTRERING
+    label: {da: null, en: "Procedure registration identifier"}
+    type: character
+    role: join_key
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+    reader_note: "Populated when a specific procedure has its own separate payer, distinct from the contact's."
+  - id: flag_bet_opl_kont
+    name: FLAG_BET_OPL_KONT
+    label: {da: null, en: "Payment info tied to a contact"}
+    type: character
+    role: code
+    origin: dst
+    provenance:
+      source_url: https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx
+      source_type: dst_variable_list
+      verified_on: 2026-09-12
+      verified_against: "DST order list: name only, no label."
+      type_inferred: true
+    reader_note: "By the variable name, likely a convenience flag mirroring whether dw_ek_kontakt (vs. dw_ek_procedureregistrering) is the populated key - not confirmed by any DST documentation found."
+
+reader_note: >-
+  No unique key exists for this table (Sundhedsdatastyrelsen's LPR3_F
+  guidance, section 3.6, describing the sibling "Betaler" table): a payment-
+  information row hangs on whichever contact or procedure it was
+  registered against, and several such sets can be reported in sequence
+  for the same contact/procedure over time. That guidance documents
+  LPR3_F's table, a related but not confirmed-identical sibling of this
+  LPR_A_* register: DST's own variable-list page gives no column labels at
+  all for LPR_A_BETALINGSOPLYSNINGER specifically.
