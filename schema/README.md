@@ -279,3 +279,29 @@ the same as being unusable: LPR2, `vnds_hist`, `sysi` and the older death
 registers are each the only source for their own years, and `vnds` is still the
 only migration register many projects have, because the three replacements are
 so new.
+
+## Another editorial field: what belongs on the overview page
+
+`hide_from_overview: true` on a register keeps it out of
+`register-overview.md` (the table on the "Overview of registers" page) without
+removing it from the schema. Every column of a hidden register is still built
+into `assets/variables.json`, so it is fully searchable on "Find a variable"
+and still gets its own `<register>-columns.md` page - hiding is about the
+front door, not about the content.
+
+Set it on a register that is a satellite of a table already on the overview
+page: something a reader only goes looking for once they already know, from a
+join key or a column name, that it exists (`lpr_a_forloebsmarkoer`, the twenty
+`mfr_markers` sub-cuts, every LPR2/PSYK table beyond `*_adm`/`*_diag`/
+`*_sksopr`/`*_sksube`). Do not set it on a register that is itself a primary
+source for its own population or era, even a thin one - `ftbarn`/`ftforael`/
+`ftnaevn` are the only source for 1973-1996 births and stay on the overview
+page despite being sparsely documented, but `mfrhjmfo` (a satellite of `mfr`
+for its home-birth subset) does not need to compete for space with `mfr`
+itself.
+
+The test: would a reader scanning "what registers exist" need to see this one
+to know it exists, or would they only ever arrive at it already knowing its
+name? The overview page answers the first question; "Find a variable"
+(`assets/variables.json`) answers the second, for every register regardless
+of this flag.

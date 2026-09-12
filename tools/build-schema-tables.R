@@ -241,7 +241,14 @@ build_register <- function(id, schema = load_schema()) {
 # "approx. 1994+" against DST's 1995Q2. Same facts, one source.
 
 build_overview <- function(schema = load_schema()) {
-  ids <- sort(names(schema$registers))
+  all_ids <- sort(names(schema$registers))
+  # A satellite register (a table only ever reached once a reader already
+  # knows its name, from a join key or a column elsewhere) does not belong in
+  # a list meant to answer "what registers exist". It stays fully in the
+  # schema and fully searchable on Find a variable - see schema/README.md,
+  # "Another editorial field: what belongs on the overview page".
+  hidden <- Filter(function(id) isTRUE(get_register(id, schema)$hide_from_overview), all_ids)
+  ids <- setdiff(all_ids, hidden)
   rows <- lapply(ids, function(id) {
     r <- get_register(id, schema)
     per <- {
@@ -263,6 +270,14 @@ build_overview <- function(schema = load_schema()) {
   out <- c(
     "<!-- Generated from schema/registers/ by tools/build-schema-tables.R. Do not edit by hand. -->",
     "", md_table(do.call(rbind, rows)))
+  if (length(hidden)) {
+    out <- c(out, "", paste0(
+      "*", length(hidden), " further satellite/detail register",
+      if (length(hidden) == 1) "" else "s",
+      " exist and are fully documented, but are not listed here to keep this ",
+      "table to what most projects actually need first. Look them up by name ",
+      "or by column on [Find a variable](find-a-variable.qmd) instead.*"))
+  }
   path <- file.path(OUT, "register-overview.md")
   writeLines(out, path)
   cat("wrote", normalizePath(path, mustWork = FALSE), "\n")
@@ -397,6 +412,10 @@ build_variable_index <- function(schema = load_schema()) {
         NULL))),
       paste0('"scope":', json_string(r$scope)),
       paste0('"deprecated":', if (isTRUE(r$deprecated)) "true" else "false"),
+      # Lets Find a variable prefer the register a reader already knows about
+      # (the one on the overview page) when the same column name shows up on
+      # several registers with nothing else to tell them apart.
+      paste0('"hidden":', if (isTRUE(r$hide_from_overview)) "true" else "false"),
       paste0('"superseded_by":', json_string(paste(unlist(r$superseded_by), collapse = ", "))),
       paste0('"overlap_note":', json_string(if (is.null(r$overlap_note)) NULL
                                             else gsub("\\s+", " ", r$overlap_note))),
