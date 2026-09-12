@@ -100,6 +100,28 @@
 | `tidligerespontaneaborter` | character | code | TIDLIGERESPONTANEABORTER |  |
 | `vakuumekstraktion` | character | code | VAKUUMEKSTRAKTION |  |
 
+- **`levende_eller_doedfoedt`:** Stillbirths flagged here have their own richer detail table, mfrdfoed (see mfrdfoed.yaml), joined via FK_MFR - not confirmed one-to-one, but every stillbirth row here is expected to have a match there.
+- **`markoer_accreta`:** A flag only - the actual SKS-coded placenta accreta finding is in a separate dataset, mfraccre (see mfraccre.yaml), joined via FK_MFR.
+- **`markoer_anaestesi_til_operation`:** A flag only - the actual SKS-coded anaesthesia for an operation finding is in a separate dataset, mfranaes (see mfranaes.yaml), joined via FK_MFR.
+- **`markoer_andre_foedselskomplikati`:** A flag only - the actual SKS-coded other birth complications not covered by the more specific sub-cuts finding is in a separate dataset, mfrakmpl (see mfrakmpl.yaml), joined via FK_MFR.
+- **`markoer_b_misdannelse`:** A flag only - the actual SKS-coded congenital malformation finding is in a separate dataset, mfrmisda (see mfrmisda.yaml), joined via FK_MFR.
+- **`markoer_cardiomyopati`:** A flag only - the actual SKS-coded cardiomyopathy finding is in a separate dataset, mfrcardi (see mfrcardi.yaml), joined via FK_MFR.
+- **`markoer_graviditetskomplikatio`:** A flag only - the actual SKS-coded pregnancy complications finding is in a separate dataset, mfrgkmpl (see mfrgkmpl.yaml), joined via FK_MFR.
+- **`markoer_haemoperitoneum`:** A flag only - the actual SKS-coded haemoperitoneum finding is in a separate dataset, mfrhaemo (see mfrhaemo.yaml), joined via FK_MFR.
+- **`markoer_hjemmefoedsel_beregnet`:** A flag only - the actual SKS-coded home births finding is in a separate dataset, mfrhjmfo (see mfrhjmfo.yaml), joined via FK_MFR.
+- **`markoer_igangsaettelse`:** A flag only - the actual SKS-coded labour induction finding is in a separate dataset, mfrigang (see mfrigang.yaml), joined via FK_MFR.
+- **`markoer_infektioner`:** A flag only - the actual SKS-coded infections finding is in a separate dataset, mfrinfek (see mfrinfek.yaml), joined via FK_MFR.
+- **`markoer_kejsersnit`:** A flag only - the actual SKS-coded caesarean section finding is in a separate dataset, mfrkjsnt (see mfrkjsnt.yaml), joined via FK_MFR.
+- **`markoer_medicinske_sygdomme`:** A flag only - the actual SKS-coded medical conditions finding is in a separate dataset, mfrmedsg (see mfrmedsg.yaml), joined via FK_MFR.
+- **`markoer_navlesnorsblod_analyse`:** A flag only - the actual SKS-coded umbilical cord blood analysis, with the actual pH/base excess values finding is in a separate dataset, mfrnvlan (see mfrnvlan.yaml), joined via FK_MFR.
+- **`markoer_perineal_bristning`:** A flag only - the actual SKS-coded perineal tears finding is in a separate dataset, mfrbrist (see mfrbrist.yaml), joined via FK_MFR.
+- **`markoer_post_partum_bloedning`:** A flag only - the actual SKS-coded postpartum blood loss, with the actual measured amount finding is in a separate dataset, mfrblodm (see mfrblodm.yaml), joined via FK_MFR.
+- **`markoer_ruptur`:** A flag only - the actual SKS-coded rupture finding is in a separate dataset, mfrruptu (see mfrruptu.yaml), joined via FK_MFR.
+- **`markoer_smertelindring`:** A flag only - the actual SKS-coded pain relief finding is in a separate dataset, mfrsmlin (see mfrsmlin.yaml), joined via FK_MFR.
+- **`markoer_ultralyd`:** A flag only - the actual SKS-coded ultrasound finding is in a separate dataset, mfrultra (see mfrultra.yaml), joined via FK_MFR.
+- **`markoer_vestimulation`:** A flag only - the actual SKS-coded labour stimulation finding is in a separate dataset, mfrvestm (see mfrvestm.yaml), joined via FK_MFR.
+- **`markoer_ydre_vending`:** A flag only - the actual SKS-coded external cephalic version finding is in a separate dataset, mfryvend (see mfryvend.yaml), joined via FK_MFR.
+
 </details>
 
 *No published source gives a data type for 91 of these 91 columns, so the Type column is our own assumption. Check with `sapply(class)` on a row of your own data before relying on it, especially for code columns, which lose their leading zeros if they arrive as numbers.*
