@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-11">
+<meta name="dcterms.date" content="2026-09-12">
 
 <title>Find a variable – Register-based research at Statistics Denmark</title>
 <style>
@@ -574,7 +574,7 @@ ul.task-list li input[type="checkbox"] {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 11, 2026</p>
+      <p class="date">September 12, 2026</p>
     </div>
   </div>
   
@@ -664,6 +664,9 @@ ul.task-list li input[type="checkbox"] {
 .vf-empty { padding: 1.5rem 0; opacity: .8; }
 .vf-cs { margin: .45rem 0 0; font-size: .85rem; }
 .vf-cs > summary { cursor: pointer; opacity: .85; }
+.vf-rest { margin: .5rem 0 0 .25rem; font-size: .85rem; }
+.vf-rest > summary { cursor: pointer; opacity: .85; }
+.vf-rest > summary::marker { content: "+ "; }
 .vf-codes { margin: .4rem 0 .2rem; font-size: .85rem; border-collapse: collapse; }
 .vf-codes td { padding: .12rem .8rem .12rem 0; vertical-align: top; }
 .vf-codes td:first-child { white-space: nowrap; }
@@ -903,19 +906,41 @@ ul.task-list li input[type="checkbox"] {
       return true;
     });
 
-    // Group by column name: the same name in several registers is the finding.
+    // Group by column name: the same name in several registers is the finding
+    // ONLY when it actually means different things there - see divergent()
+    // below. A join key like recnum is deliberately identical everywhere it
+    // appears, and grouping 26 identical copies together is noise, not a
+    // finding.
     var groups = {}, order = [];
     hits.forEach(function (v) {
       if (!groups[v.name]) { groups[v.name] = []; order.push(v.name); }
       groups[v.name].push(v);
     });
+
+    // True when the schema itself disagrees about what this name is: a
+    // different type, role, or code system in at least one register. This is
+    // deliberately narrow - it does not (and cannot, from the schema alone)
+    // check whether the VALUES mean the same thing, only whether the shape
+    // does. `koen` in BEF vs. `c_sex` in LPR2 trips this; `recnum` shared by
+    // every LPR2/LPR3 satellite table does not.
+    function divergent(name) {
+      var g = groups[name];
+      if (g.length < 2) return false;
+      return g.some(function (v) {
+        return v.type !== g[0].type || v.role !== g[0].role || v.code_system !== g[0].code_system;
+      });
+    }
+
     // Ranking, in this order:
     //   1. how well the NAME answers what was typed. Searching a column name
     //      and not getting that column first is the one result nobody forgives.
     //   2. `key` columns, which the schema marks as the handful a researcher
     //      actually reaches for.
-    //   3. names shared by several registers, which is the finding this page
-    //      was built to show.
+    //   3. names that mean different things in different registers, which is
+    //      the finding this page was built to show. A name that is merely
+    //      REPEATED (same type/role/code system everywhere, e.g. a join key)
+    //      does not get this boost: appearing in 26 tables is not more
+    //      relevant than appearing in one, when it is the same fact 26 times.
     //   4. alphabetical, so the order is stable.
     var typed = q.value.trim().toLowerCase();
     function rel(name) {
@@ -935,7 +960,7 @@ ul.task-list li input[type="checkbox"] {
       if (r !== 0) return r;
       var k = (anyKey(b) ? 1 : 0) - (anyKey(a) ? 1 : 0);
       if (k !== 0) return k;
-      var d = groups[b].length - groups[a].length;
+      var d = (divergent(b) ? groups[b].length : 0) - (divergent(a) ? groups[a].length : 0);
       return d !== 0 ? d : a.localeCompare(b);
     });
 
@@ -949,39 +974,69 @@ ul.task-list li input[type="checkbox"] {
       return;
     }
 
+    function hitCard(v) {
+      var tags = [];
+      tags.push('<span class="vf-tag">' + esc(v.type) +
+                (v.type_inferred ? ", unverified" : "") + "</span>");
+      tags.push('<span class="vf-tag">' + esc((v.role || "").replace(/_/g, " ")) + "</span>");
+      if (v.coverage) tags.push('<span class="vf-tag vf-warn" title="This column covers a ' +
+          'different period from the rest of the register">' + esc(v.coverage) + "</span>");
+      if (v.code_system) tags.push('<span class="vf-tag">codes: ' + esc(v.code_system) + "</span>");
+      return '<div class="vf-hit">' +
+        '<div class="vf-reg"><a href="' + esc(v.source_url) + '">' + esc(v.register) + "</a>" +
+          regLine(v.register) + "</div>" +
+        "<div>" + (v.label ? esc(v.label) : "<em>no label published</em>") +
+        '<div class="vf-meta">' + tags.join("") + "</div>" +
+        (v.origin ? '<p class="vf-note"><strong>' + esc(v.origin) + "</strong></p>" : "") +
+        (v.superseded_by ? '<p class="vf-note vf-danger">Replaced by <code>' +
+           esc(v.superseded_by) + "</code>. Using this one alone leaves a gap.</p>" : "") +
+        (v.note ? '<p class="vf-note">' + esc(v.note) + "</p>" : "") +
+        (v.derivation ? '<p class="vf-note">How it is computed: <code>' +
+           esc(v.derivation) + "</code>" +
+           (v.derivation_source ? ' <a href="' + esc(v.derivation_source) + '">source</a>' : "") +
+           "</p>" : "") +
+        guideLink(v.guide_page) +
+        prevCodeWarning(v) +
+        codeBlock(v.code_system) +
+        regDesc(v.register) +
+        sourceLine(v) +
+        "</div></div>";
+    }
+
+    // The register on the overview page (not a hidden satellite - see
+    // schema/README.md) is the one a reader already has some idea about, so
+    // it is the natural single representative when a name is not the finding.
+    function pickRepresentative(g) {
+      var anchor = g.find(function (v) { return !(REG[v.register] || {}).hidden; });
+      var key = g.find(function (v) { return v.key; });
+      return anchor || key || g[0];
+    }
+
     out.innerHTML = order.slice(0, 300).map(function (name) {
       var g = groups[name];
-      var multi = g.length > 1
-        ? '<span class="vf-multi">in ' + g.length + ' registers, and not the same everywhere</span>' : "";
-      var rows = g.map(function (v) {
-        var tags = [];
-        tags.push('<span class="vf-tag">' + esc(v.type) +
-                  (v.type_inferred ? ", unverified" : "") + "</span>");
-        tags.push('<span class="vf-tag">' + esc((v.role || "").replace(/_/g, " ")) + "</span>");
-        if (v.coverage) tags.push('<span class="vf-tag vf-warn" title="This column covers a ' +
-            'different period from the rest of the register">' + esc(v.coverage) + "</span>");
-        if (v.code_system) tags.push('<span class="vf-tag">codes: ' + esc(v.code_system) + "</span>");
-        return '<div class="vf-hit">' +
-          '<div class="vf-reg"><a href="' + esc(v.source_url) + '">' + esc(v.register) + "</a>" +
-            regLine(v.register) + "</div>" +
-          "<div>" + (v.label ? esc(v.label) : "<em>no label published</em>") +
-          '<div class="vf-meta">' + tags.join("") + "</div>" +
-          (v.origin ? '<p class="vf-note"><strong>' + esc(v.origin) + "</strong></p>" : "") +
-          (v.superseded_by ? '<p class="vf-note vf-danger">Replaced by <code>' +
-             esc(v.superseded_by) + "</code>. Using this one alone leaves a gap.</p>" : "") +
-          (v.note ? '<p class="vf-note">' + esc(v.note) + "</p>" : "") +
-          (v.derivation ? '<p class="vf-note">How it is computed: <code>' +
-             esc(v.derivation) + "</code>" +
-             (v.derivation_source ? ' <a href="' + esc(v.derivation_source) + '">source</a>' : "") +
-             "</p>" : "") +
-          guideLink(v.guide_page) +
-          prevCodeWarning(v) +
-          codeBlock(v.code_system) +
-          regDesc(v.register) +
-          sourceLine(v) +
-          "</div></div>";
-      }).join("");
-      return '<div class="vf-group"><span class="vf-name">' + esc(name) + "</span>" + multi + rows + "</div>";
+      if (g.length <= 1) {
+        return '<div class="vf-group"><span class="vf-name">' + esc(name) + "</span>" +
+          hitCard(g[0]) + "</div>";
+      }
+      if (divergent(name)) {
+        var multi = '<span class="vf-multi">in ' + g.length +
+          ' registers, and not the same everywhere</span>';
+        return '<div class="vf-group"><span class="vf-name">' + esc(name) + "</span>" + multi +
+          g.map(hitCard).join("") + "</div>";
+      }
+      // Not the finding this page exists for: same type, role and code system
+      // everywhere, almost always a join key or other plumbing column shared
+      // by a family of satellite tables. Show one representative in full and
+      // collapse the rest behind a click rather than repeating a near-
+      // identical card once per register.
+      var rep = pickRepresentative(g);
+      var rest = g.filter(function (v) { return v !== rep; });
+      var same = '<span class="vf-multi">same in ' + g.length + ' registers</span>';
+      return '<div class="vf-group"><span class="vf-name">' + esc(name) + "</span>" + same +
+        hitCard(rep) +
+        '<details class="vf-rest"><summary>Also in: ' +
+        rest.map(function (v) { return esc(v.register); }).join(", ") + "</summary>" +
+        rest.map(hitCard).join("") + "</details></div>";
     }).join("") + (order.length > 300
       ? '<p class="vf-empty">Showing the first 300 names. Narrow the search to see the rest.</p>' : "");
   }
