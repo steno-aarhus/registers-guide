@@ -23,18 +23,7 @@
 | [LPR_SKSOPR](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSOPR%20-%20Landspatientregistret%20-%20operationer.html) | `"lpr_sksopr"` | `recnum` | 1996 to 2019 | `c_opr`, `c_oprart`, `c_osgh` |
 | [LPR_SKSUBE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_SKSUBE%20-%20Landspatientregistret%20-%20unders%C3%B8gelser%20og%20behandlinger.html) | `"lpr_sksube"` | `recnum` | 1999 to 2019 | `c_opr`, `d_odto`, `year` |
 | [MFR](https://www.dst.dk/extranet/ForskningVariabellister/MFR%20-%20Levendef%C3%B8dte%20fra%20det%20medicinske%20f%C3%B8dselsregister.html) | `"mfr"` | `cpr_barn` | 1997 to 2018 | `alder_moder`, `bmi_moder`, `cpr_moder` |
-| [MFR_BARN_DIAGNOSER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_diagnoser"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `DiagnoseKode`, `DiagnoseType` |
-| [MFR_BARN_FORLOEB](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_forloeb"` | `DW_EK_Nyfoedt` | 2019 to 2026 |  |
-| [MFR_BARN_KONTAKTER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_kontakter"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `StartDato_Kontakt` |
-| [MFR_BARN_PROCEDURER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_procedurer"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `ProcedureKode`, `ProcedureType` |
-| [MFR_BARN_RESULTATER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_barn_resultater"` | `DW_EK_Nyfoedt` | 2019 to 2026 | `ResultatType` |
-| [MFR_MOR_DIAGNOSER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_diagnoser"` | `DW_EK_Foedsel` | 2019 to 2026 | `DiagnoseKode`, `DiagnoseType` |
-| [MFR_MOR_FORLOEB](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_forloeb"` | `DW_EK_Foedsel` | 2019 to 2026 |  |
-| [MFR_MOR_KONTAKTER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_kontakter"` | `DW_EK_Foedsel` | 2019 to 2026 | `StartDato_Kontakt` |
-| [MFR_MOR_PROCEDURER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_procedurer"` | `DW_EK_Foedsel` | 2019 to 2026 | `ProcedureKode`, `ProcedureType` |
-| [MFR_MOR_RESULTATER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_mor_resultater"` | `DW_EK_Foedsel` | 2019 to 2026 | `ResultatType` |
 | [MFR_NYFOEDTE](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret) | `"mfr_nyfoedte"` | `CPRnummer_Barn` | 2019 to 2026 | `DW_EK_Nyfoedt`, `LevendefoedtDoedfoedt`, `FoedselsDato_Barn` |
-| [MFRHJMFO](https://www.dst.dk/extranet/ForskningVariabellister/MFRHJMFO%20-%20Hjemmef%C3%B8dsler%20fra%20det%20medicinske%20f%C3%B8dselsregister.html) | `"mfrhjmfo"` | `FK_MFR` | 1997 to 2018 |  |
 | [SSSY](https://www.dst.dk/extranet/ForskningVariabellister/SSSY%20-%20Sygesikring%20%286-cifret%29.html) | `"sssy"` | `pnr` | 2005 to 2025 | `ydernr`, `speciale`, `ydlant` |
 | [SYSI](https://www.dst.dk/extranet/ForskningVariabellister/SYSI%20-%20Sygesikring%20%286-cifret%29.html) | `"sysi"` | `pnr` | 1990 to 2005 | `ydernr`, `speciale`, `ydlant` |
 | [T_PSYK_ADM](https://www.dst.dk/extranet/ForskningVariabellister/PSYK_ADM%20-%20Landspatientregistret%20psykiatri%20-%20administrative%20oplysninger.html) | `"t_psyk_adm"` | `recnum` | 1995 to 2019 | `pnr`, `c_pattype`, `c_adiag` |
@@ -44,3 +33,5 @@
 | [VNDS_HIST](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_HIST%20-%20Historiske%20vandringer%20fra%201973%20til%202004.html) | `"vnds_hist"` | `pnr` | 1973 to 2004 | `indud_kode`, `haend_dato`, `indud_land` |
 | [VNDS_IND](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_IND%20-%20Indvandringer.html) | `"vnds_ind"` | `pnr` | 2005 to 2025 | `haend_dato`, `indv_land`, `indvmd` |
 | [VNDS_UD](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_UD%20-%20Udvandringer.html) | `"vnds_ud"` | `pnr` | 2005 to 2025 | `haend_dato`, `udv_land`, `udvmd` |
+
+*58 further satellite/detail registers exist and are fully documented, but are not listed here to keep this table to what most projects actually need first. Look them up by name or by column on [Find a variable](find-a-variable.qmd) instead.*

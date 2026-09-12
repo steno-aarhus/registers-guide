@@ -66,6 +66,8 @@
 - **`v_sengdage`:** Starts in 1994. Before that, compute the stay from d_inddto and d_uddto instead.
 - **`v_behdage`:** Ends in 2001.
 - **`c_sex`:** The coding changes in 2005, from 1/2 to M/K. Prefer koen from BEF for a study variable.
+- **`c_kom`:** A finer subdivision briefly existed below municipality level: LPR2 had its own table, LPR_DISTKOD, giving a social district (socialdistrikt) for residents of large municipalities only, 1995-2003. Not modelled as a separate register here (per Sundhedsdatastyrelsen's own LPR documentation, esundhed.dk table t_distkod) - only relevant to a study needing sub-municipality geography for that narrow window and population.
+- **`d_opdatdto`:** Before 2005, the same fact (a contact's last-update date) lived in its own table, LPR_OPDTDTO, covering 2000-2004 - not modelled as a separate register here since Sundhedsdatastyrelsen's own LPR documentation (esundhed.dk, table t_opdatdto) confirms the fact simply moved onto lpr_adm from 2005 onward. A study needing this fact before 2005 has no column to read it from; DST's order list shows no earlier source.
 
 </details>
 
