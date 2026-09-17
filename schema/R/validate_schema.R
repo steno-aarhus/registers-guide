@@ -20,7 +20,13 @@ ALLOWED_ORIGINS <- c("dst", "tooling")
 # "sds" is a register held by Sundhedsdatastyrelsen rather than DST. It reaches
 # a project through Forskerservice, so the documentation, the naming and the
 # ordering process are all different from a DST register's.
-ALLOWED_SCOPES <- c("dst", "sds", "project")
+# "external" is neither DST nor Sundhedsdatastyrelsen: a resource held by a
+# separate institution with its own application process entirely outside the
+# DST/Forskerservice pipeline (e.g. LABKA, held by Aarhus University
+# Hospital's Department of Clinical Epidemiology). Expect thinner sourcing
+# than "dst"/"sds": there is no published variable list to check column names
+# against, only descriptions in the clinical-epidemiology literature.
+ALLOWED_SCOPES <- c("dst", "sds", "project", "external")
 # DST's own reference types, from its register overview: a snapshot on a date,
 # a population fixed on a date with values accumulated over a period, rows with
 # a start and an end, or one row per event.
