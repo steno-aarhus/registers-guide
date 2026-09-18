@@ -14,7 +14,6 @@
 | [FTFORAEL](https://www.dst.dk/extranet/ForskningVariabellister/FTFORAEL%20-%20Fertilitet%20-%20for%C3%A6lder.html) | `"ftforael"` | `PNR` | 1973 to 2023 | `FORAELDER_PNR`, `MOR_FAR` |
 | [FTNAEVN](https://www.dst.dk/extranet/ForskningVariabellister/FTNAEVN%20-%20Fertilitet%20-%20N%C3%A6vner.html) | `"ftnaevn"` | `PNR`, `AAR` | 1973 to 2023 |  |
 | [LAB_DM_FORSKER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen) | `"lab_dm_forsker"` | `patient_cpr` | 2008 to 2025 | `samplingdate`, `analysiscode`, `value` |
-| [LABKA](https://doi.org/10.2147/CLEP.S245060) | `"labka"` | `cpr` | 2005 to 2025 | `samplingdate`, `analysiscode`, `value` |
 | [LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html) | `"lmdb"` | `pnr` | 1995-12 to 2025-12 | `eksd`, `atc`, `atc1` |
 | [LPR_A_DIAGNOSE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_DIAGNOSE%20-%20Landspatientregistret%20%28LPR3%29%20-Diagnoseoplysning.html) | `"lpr_a_diagnose"` | `dw_ek_kontakt` | 2019 to 2025 | `diag_kode`, `diag_kode_type`, `senere_afkraeftet` |
 | [LPR_A_KONTAKT](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_KONTAKT%20-%20Landspatientregistret%20%28LPR3%29%20-Kontaktoplysninger%20omkring%20de%20enkelte%20kontakter.html) | `"lpr_a_kontakt"` | `dw_ek_kontakt` | 2017 to 2025 | `dw_ek_forloeb`, `pnr`, `kont_starttidspunkt` |

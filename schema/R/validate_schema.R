@@ -22,10 +22,14 @@ ALLOWED_ORIGINS <- c("dst", "tooling")
 # ordering process are all different from a DST register's.
 # "external" is neither DST nor Sundhedsdatastyrelsen: a resource held by a
 # separate institution with its own application process entirely outside the
-# DST/Forskerservice pipeline (e.g. LABKA, held by Aarhus University
-# Hospital's Department of Clinical Epidemiology). Expect thinner sourcing
-# than "dst"/"sds": there is no published variable list to check column names
-# against, only descriptions in the clinical-epidemiology literature.
+# DST/Forskerservice pipeline (e.g. a regional research database, or a
+# clinical quality database run by RKKP). No register currently uses this
+# scope - LABKA was removed 2026-09-17 because neither of its two source
+# papers gives literal column names, only prose descriptions, so there was
+# nothing to check a real delivery against. Before adding one back, confirm
+# the source actually publishes column-level documentation (some, like
+# RKKP's per-database variable lists, do; a plain review article does not),
+# and expect thinner sourcing than "dst"/"sds" either way.
 ALLOWED_SCOPES <- c("dst", "sds", "project", "external")
 # DST's own reference types, from its register overview: a snapshot on a date,
 # a population fixed on a date with values accumulated over a period, rows with
