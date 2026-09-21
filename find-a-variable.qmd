@@ -183,6 +183,37 @@ leaves a silent hole in the middle of a series.
     });
   }
 
+  // Same "term or a synonym of it" test as matches(), but against one field
+  // instead of the whole haystack, so ranking can tell WHERE a match landed.
+  function fieldMatch(hay, terms, expanded) {
+    return terms.some(function (t) {
+      if (hay.indexOf(t) !== -1) return true;
+      var grp = expanded[t];
+      return grp && grp.some(function (x) { return hay.indexOf(x) !== -1; });
+    });
+  }
+
+  // How central a match is, for a column whose NAME does not answer the
+  // query at all: 0 = its own label or register, 1 = a note/derivation or
+  // the register's prose description, 2 = only the value list of the code
+  // system it happens to use. Code system values are worth searching (see
+  // haystack() above - "ugift" should find civst), but a column that matches
+  // only because its code system's value list contains the word should not
+  // outrank one that is actually about it. "education" matches
+  // famsociogrup_13 only because SOCIO13 has an "under uddannelse" category;
+  // it should not outrank hfaudd, whose own label IS "Highest completed
+  // education".
+  function matchDepth(v, terms, expanded) {
+    var own = (v.name + " " + (v.label || "") + " " + v.register + " " +
+               (v.register_name || "")).toLowerCase();
+    if (fieldMatch(own, terms, expanded)) return 0;
+    var r = REG[v.register] || {};
+    var mid = ((v.note || "") + " " + (v.derivation || "") + " " +
+               (r.description || "")).toLowerCase();
+    if (fieldMatch(mid, terms, expanded)) return 1;
+    return 2;
+  }
+
   // "page.qmd#section" has to become "page.html#section", so the .qmd cannot be
   // matched at the end of the string. A column that names a section gets a link
   // straight to it, because landing at the top of a long page and hunting for
@@ -370,6 +401,9 @@ leaves a silent hole in the middle of a series.
     // Ranking, in this order:
     //   1. how well the NAME answers what was typed. Searching a column name
     //      and not getting that column first is the one result nobody forgives.
+    //      When the name itself does not match at all, fall back to WHERE the
+    //      match lives instead of treating every non-name hit as equal - see
+    //      matchDepth() above.
     //   2. `key` columns, which the schema marks as the handful a researcher
     //      actually reaches for.
     //   3. names that mean different things in different registers, which is
@@ -386,8 +420,13 @@ leaves a silent hole in the middle of a series.
       if (terms.some(function (t) { return n.indexOf(t) === 0; })) return 1;
       if (n.indexOf(typed) !== -1) return 2;                             // inside
       if (terms.some(function (t) { return n.indexOf(t) !== -1; })) return 2;
-      return 3;                                                          // matched
-    }                                                                    // on label
+      var best = 2;
+      groups[name].forEach(function (v) {
+        var d = matchDepth(v, terms, expanded);
+        if (d < best) best = d;
+      });
+      return 3 + best;                                    // 3 label/register,
+    }                                                      // 4 note/description, 5 code system only
     function anyKey(name) {
       return groups[name].some(function (v) { return v.key; });
     }
