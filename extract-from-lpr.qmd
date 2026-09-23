@@ -38,6 +38,49 @@ on: use the **LPR_A** files and filter them with `lprindberetningssystem ==
 diagnosis counts around 2019-2020** if your analysis counts diagnoses or looks
 at trends ([why](understand-lpr.qmd#lpr3-spike)).
 
+::: {#lpr3-filter-caveat .callout-warning}
+**The `lprindberetningssystem == "LPR3"` filter below is under active
+investigation, and may be dropping real contacts, not just duplicates.**
+
+The filter exists to solve one confirmed problem: `lpr_a_kontakt` also
+contains older LPR2 contacts, reloaded into the new table, which would be
+counted twice if not filtered out. An internal check on DARTER's own data
+now suggests it also removes a large number of LPR2-tagged rows from 2019
+onwards that do not look like duplicates - different contact keys, dates
+spread out over weeks or months rather than clustered near a known
+admission, the pattern of a person's ordinary healthcare contacts rather
+than the same event counted twice.
+
+**Private hospitals are not in `lpr_adm`/`lpr_diag` at all.** LPR2, as this
+guide defines it, is public hospitals only. Before 2019, private hospitals
+and clinics reported to a separate register, **MiniPas - LPR** (acronym
+`MPA`, held by Sundhedsdatastyrelsen, its own documentation on esundhed.dk,
+id 19) - a different table set (`t_adm`, `t_diag`, and satellites for
+procedures, waiting times and outpatient visits), covering 2002 onwards, that
+has to be **requested separately** from LPR2 in a Forskerservice application.
+This page does not extract it, and neither `lpr_adm` nor the LPR3 step below
+will surface it: **if your study needs private-hospital diagnoses from before
+2019, order MiniPas - LPR directly, it will not appear from filtering LPR2 or
+LPR3 harder.** What DARTER (and likely most existing deliveries) has instead
+is only the fragment of MiniPas that was later carried into `lpr_a_kontakt`
+under `lprindberetningssystem == "MiniPAS"` - not the full register, and
+currently dropped entirely by the `== "LPR3"` filter below.
+
+One related gap is still open, not resolved: **a possible delivery-specific
+gap.** `lpr_adm` can end earlier in your project's delivery than DST's own
+register does (DST runs to 31 March 2019). If the first quarter of 2019 is
+simply missing from your `lpr_adm`, the LPR3-only filter would be dropping
+contacts that exist nowhere else in the delivery, not duplicates of something
+already counted. Check the last date in your own `lpr_adm` before trusting
+counts near 2019.
+
+**Nothing in the recipe below has changed while this is investigated** -
+there is no confirmed better rule to replace it with yet. If your study
+period includes 2019, treat any count or trend near that year as
+provisional. Found something relevant, or want to help narrow it down? Use
+the feedback box at the bottom of this page.
+:::
+
 ## Fetch diagnoses from LPR
 
 There is one decision to make, and it is about your study, not about LPR:
@@ -113,12 +156,13 @@ lpr2_dm <- lpr_adm %>%
 
 **Step 2 - LPR3** (`lpr_a_kontakt` + `lpr_a_diagnose`, March 2019 onwards). Same
 shape, different table and column names, plus two things LPR2 does not have: the
-`lprindberetningssystem` filter and the retracted-diagnosis filter.
+`lprindberetningssystem` filter on both tables and the retracted-diagnosis filter.
 
 ```r
 lpr3_k <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
   filter(lprindberetningssystem == "LPR3")   # keep only LPR3-system rows (avoid the LPR2 overlap)
-lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower)
+lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3")   # same column on the diagnosis table; the join key does not carry it
 
 lpr3_dm <- lpr3_k %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>%
@@ -472,7 +516,8 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
     rename(recnum = v_recnum)                                          # LPR2 psychiatric diagnoses
   lpr3_k    <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
     filter(lprindberetningssystem == "LPR3")
-  lpr3_d    <- read_register("lpr_a_diagnose") %>% rename_with(tolower)  # LPR3 diagnoses
+  lpr3_d    <- read_register("lpr_a_diagnose") %>% rename_with(tolower) %>%
+    filter(lprindberetningssystem == "LPR3")                            # same filter as the contact table
 
   # LPR2 somatic
   lpr2_dx <- lpr_adm %>%

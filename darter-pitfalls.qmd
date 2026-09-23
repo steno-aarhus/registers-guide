@@ -112,19 +112,37 @@ Besides the actual LPR3 reports, `lpr_a_kontakt` also contains **older data that
 is already present in LPR2** (`lpr_adm`), loaded into the new LPR_A table. If
 you combine LPR2 and LPR3 without filtering, the same contacts are counted twice -
 you get **duplicated rows**. `lprindberetningssystem == "LPR3"` keeps only the
-rows from the LPR3 system (confirmed by Anders Aasted Isaksen, DARTER team
-2026).
+rows from the LPR3 system - the fix Anders Aasted Isaksen (DARTER team, 2026)
+originally suggested for this duplication problem.
+
+The same column is on `lpr_a_diagnose`. Filter that table too. A join on
+`dw_ek_kontakt` matches the key only, so a diagnosis from another reporting
+system still attaches when the key coincides.
 
 ```r
-# CORRECT - filter to LPR_A format only:
+# CORRECT - filter both tables to LPR3-system rows:
 lpr3_k <- read_register("lpr_a_kontakt") %>%
   rename_with(tolower) %>%
   filter(lprindberetningssystem == "LPR3") # keep only rows from the LPR3 system - removes overlapping rows
+lpr3_d <- read_register("lpr_a_diagnose") %>%
+  rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3") # same column on the diagnosis table
 ```
 
 ::: {.callout-warning}
 `get_lpr_diagnoses()` in `darter-index.qmd` is updated with this filter. If
 you have copies of LPR3 code in your own scripts, you must add it manually.
+:::
+
+::: {.callout-warning}
+**This filter is under active review.** An internal check on DARTER's own
+data suggests it also drops a large number of rows that do not look like
+duplicates. Separately: private hospitals are **not** in `lpr_adm`/`lpr_diag`
+at all - before 2019 they reported to a different register, **MiniPas -
+LPR**, which must be requested separately and is not recovered by filtering
+LPR2 or LPR3 harder. See the fuller caveat in [Extract from
+LPR](extract-from-lpr.qmd#lpr3-filter-caveat) before relying on counts that
+span 2019. The filter itself has not changed while this is investigated.
 :::
 
 ## 6. FAIK changed structure from 2022 {#faik-2022}
