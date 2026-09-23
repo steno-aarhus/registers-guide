@@ -212,8 +212,8 @@ if (requireNamespace("osdc", quietly = TRUE)) {
 cat("\n=== 8. LPR3 duplicate filter ===\n")
 
 # lpr_a_kontakt also holds 2017-2018 contacts that are already in LPR2. Without
-# the filter the same contacts are counted twice. The column sits on the CONTACT
-# table, not on the diagnosis table.
+# the filter the same contacts are counted twice. The column is on both the
+# contact table and the diagnosis table; the guide filters both.
 lpr3_k <- read_register("lpr_a_kontakt") %>% rename_with(tolower)
 cat("  lprindberetningssystem on lpr_a_kontakt:",
     "lprindberetningssystem" %in% colnames(lpr3_k), "\n")
@@ -221,8 +221,7 @@ lpr3_k %>% count(lprindberetningssystem) %>% collect() %>% print()
 
 lpr3_d <- read_register("lpr_a_diagnose") %>% rename_with(tolower)
 cat("  lprindberetningssystem on lpr_a_diagnose:",
-    "lprindberetningssystem" %in% colnames(lpr3_d),
-    "  <- expected FALSE; filter the CONTACT table\n")
+    "lprindberetningssystem" %in% colnames(lpr3_d), "\n")
 
 cat("\n=== done ===\n")
 cat("Anything unexpected above means the guide's example for that register\n")
