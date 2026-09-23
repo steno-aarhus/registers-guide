@@ -663,6 +663,36 @@ sum(!exposed$pnr %in% n_per_exp$match_id) # exposed without ANY comparison perso
 saveRDS(cohort, "path/to/full_cohort.rds")
 ```
 
+::: {.callout-important}
+**If line 655 printed a number greater than 0, every join you do next needs
+one more thing than [Link your extracts](joins.qmd) shows by default.** That
+page - and most of this guide - assumes one row per `pnr` in `cohort`. With
+replacement, that is no longer true: the same `pnr` can carry several
+different `index_date`s, one per matched set it was drawn into. A downstream
+`left_join(..., by = "pnr")` - for outcomes, diagnoses, medication flags, SES
+variables, anything measured relative to `index_date` - will then silently
+mix values across that person's different index dates: no error, no `NA`,
+just a value from the wrong window attached to the wrong row.
+
+**The fix:** give `cohort` a stable row id before you extract anything else,
+and use it (or `pnr` + `index_date` together) as the join key from here on,
+instead of `pnr` alone:
+
+```r
+cohort <- cohort %>%
+  mutate(row_id = row_number()) # one id per cohort row - stays unique even if pnr repeats
+```
+
+[Socioeconomic variables](socioeconomic-variables.qmd#before-you-extract-anything-give-the-cohort-a-stable-row-id)
+works through this pattern end to end - why a plain `pnr` join goes wrong and
+how to carry the id through every subsequent extraction - use it as a
+template regardless of which variable you are attaching.
+
+**If line 655 printed 0** (no replacement, or none needed - the common case
+for most studies), none of this applies: `pnr` alone is a safe join key
+throughout the rest of the guide, and you can ignore this callout entirely.
+:::
+
 `bind_rows()` here, and the `left_join()` you use next to attach outcomes and
 covariates, are explained in [Link your
 extracts](joins.qmd#joins-link-two-tables).
