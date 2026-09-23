@@ -20,7 +20,7 @@
 | `ydersamt` | character | code | Provider's county |  |
 | `bruhon` | numeric | value | Gross fee to the provider |  |
 | `honuge` | character | date | Fee week |  |
-| `barnmak` | character | code | Child marker |  |
+| `barnmak` | integer | code | Child marker |  |
 | `pattyp` | character | code | Patient type |  |
 | `praktyp` | character | code | Practice type |  |
 | `sikrekom` | character | code | Municipality of the insured |  |
