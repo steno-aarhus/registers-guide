@@ -80,7 +80,7 @@ The most important symbol in all the code is `%>%`, "the pipe".
 
 ```r
 lpr_adm %>%
-  semi_join(tibble(pnr = my_pnrs), by = "pnr") %>%
+  semi_join(tibble(pnr = my_pnrs), by = "pnr", copy = TRUE) %>%
   select(pnr, recnum) %>%
   collect()
 ```
@@ -93,14 +93,14 @@ as the first argument to the function on the right.
 ```r
 # Without the pipe - from inside out, like Russian dolls:
 collect(select(
-  semi_join(lpr_adm, tibble(pnr = my_pnrs), by = "pnr"),
+  semi_join(lpr_adm, tibble(pnr = my_pnrs), by = "pnr", copy = TRUE),
   pnr,
   recnum
 ))
 
 # With the pipe - from top to bottom, like a recipe:
 lpr_adm %>%
-  semi_join(tibble(pnr = my_pnrs), by = "pnr") %>%
+  semi_join(tibble(pnr = my_pnrs), by = "pnr", copy = TRUE) %>%
   select(pnr, recnum) %>%
   collect()
 ```
@@ -232,7 +232,7 @@ moved.
 
 ```r
 result <- large_register %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") %>% # only the cohort's pnr's
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # only the cohort's pnr's
   select(pnr, d_inddto) %>% # only the two columns we use
   collect() # data is pulled into R's memory
 ```
@@ -605,7 +605,7 @@ nothing.
 
 For **pnr** against the whole cohort, prefer the `semi_join()` form - it is the
 same idea, and cohort lists are long:
-`semi_join(tibble(pnr = cohort_pnrs), by = "pnr")`.
+`semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)`.
 :::
 
 ### `distinct(col1, col2)`
@@ -715,7 +715,7 @@ tables.
 
 ```r
 lpr_adm %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr") # keep only the cohort's rows
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) # keep only the cohort's rows
 ```
 
 **Where is the local list?** The list itself is the `tibble` you pass as the
@@ -724,6 +724,19 @@ where the list is. Because `y` is an ordinary table, you do **not** need `!!`.
 That is the difference from `filter(pnr %in% !!cohort_pnrs)`, where the vector
 sits directly in the condition and `!!` is what injects it. Use `semi_join` to
 filter a register down to the cohort.
+
+**Add `copy = TRUE` - it is cheap insurance, not just a fix for an error you
+already hit.** `y` (your local tibble) and the left table (the register) can
+come from different connections - e.g. if `read_register()` routes through a
+database engine like DuckDB rather than plain Arrow, which depends on your
+fastreg version and setup. dplyr will not silently join across two different
+sources: `copy = TRUE` is your explicit permission to copy the small local
+table into that source so the join can run there. Without it, the join errors
+outright rather than giving a wrong answer - but that also means code that
+works fine on your own machine can fail the first time someone runs it
+against a different backend. Harmless to add even when it turns out not to be
+needed, which is why every `semi_join()` example in this guide now includes
+it by default.
 
 **What it does:** keeps **all** rows from the left table. Rows without a match
 in the right table get `NA` for the columns that came from the right.
@@ -784,7 +797,7 @@ inside `filter()` calls.
 
 ::: {.callout-note}
 For **pnr** filtering against the cohort, use
-`semi_join(tibble(pnr = cohort_pnrs), by = "pnr")`, which takes the local table
+`semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)`, which takes the local table
 directly and needs no `!!`.
 :::
 
