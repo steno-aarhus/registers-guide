@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-18">
+<meta name="dcterms.date" content="2026-09-23">
 
 <title>DARTER pitfalls – Register-based research at Statistics Denmark</title>
 <style>
@@ -622,7 +622,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 18, 2026</p>
+      <p class="date">September 23, 2026</p>
     </div>
   </div>
   
@@ -741,11 +741,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="lpr3-lprindberetningssystem" class="level2">
 <h2 class="anchored" data-anchor-id="lpr3-lprindberetningssystem">5. LPR3 - filter on <code>lprindberetningssystem == "LPR3"</code></h2>
-<p>Besides the actual LPR3 reports, <code>lpr_a_kontakt</code> also contains <strong>older data that is already present in LPR2</strong> (<code>lpr_adm</code>), loaded into the new LPR_A table. If you combine LPR2 and LPR3 without filtering, the same contacts are counted twice - you get <strong>duplicated rows</strong>. <code>lprindberetningssystem == "LPR3"</code> keeps only the rows from the LPR3 system (confirmed by Anders Aasted Isaksen, DARTER team 2026).</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - filter to LPR_A format only:</span></span>
+<p>Besides the actual LPR3 reports, <code>lpr_a_kontakt</code> also contains <strong>older data that is already present in LPR2</strong> (<code>lpr_adm</code>), loaded into the new LPR_A table. If you combine LPR2 and LPR3 without filtering, the same contacts are counted twice - you get <strong>duplicated rows</strong>. <code>lprindberetningssystem == "LPR3"</code> keeps only the rows from the LPR3 system - the fix Anders Aasted Isaksen (DARTER team, 2026) originally suggested for this duplication problem.</p>
+<p>The same column is on <code>lpr_a_diagnose</code>. Filter that table too. A join on <code>dw_ek_kontakt</code> matches the key only, so a diagnosis from another reporting system still attaches when the key coincides.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - filter both tables to LPR3-system rows:</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>) <span class="co"># keep only rows from the LPR3 system - removes overlapping rows</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>) <span class="co"># keep only rows from the LPR3 system - removes overlapping rows</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>lpr3_d <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_diagnose"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>) <span class="co"># same column on the diagnosis table</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -753,6 +757,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container">
 <p><code>get_lpr_diagnoses()</code> in <code>darter-index.qmd</code> is updated with this filter. If you have copies of LPR3 code in your own scripts, you must add it manually.</p>
+</div>
+</div>
+</div>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>This filter is under active review.</strong> An internal check on DARTER’s own data suggests it also drops a large number of rows that do not look like duplicates. Separately: private hospitals are <strong>not</strong> in <code>lpr_adm</code>/<code>lpr_diag</code> at all - before 2019 they reported to a different register, <strong>MiniPas - LPR</strong>, which must be requested separately and is not recovered by filtering LPR2 or LPR3 harder. See the fuller caveat in <a href="./extract-from-lpr.html#lpr3-filter-caveat">Extract from LPR</a> before relying on counts that span 2019. The filter itself has not changed while this is investigated.</p>
 </div>
 </div>
 </div>
