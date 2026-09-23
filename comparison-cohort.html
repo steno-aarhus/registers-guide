@@ -1159,6 +1159,21 @@ Performance: pre-split the pool (large datasets)
 <span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="sc">!</span>exposed<span class="sc">$</span>pnr <span class="sc">%in%</span> n_per_exp<span class="sc">$</span>match_id) <span class="co"># exposed without ANY comparison person</span></span>
 <span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort, <span class="st">"path/to/full_cohort.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-simple callout-important">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>If line 655 printed a number greater than 0, every join you do next needs one more thing than <a href="./joins.html">Link your extracts</a> shows by default.</strong> That page - and most of this guide - assumes one row per <code>pnr</code> in <code>cohort</code>. With replacement, that is no longer true: the same <code>pnr</code> can carry several different <code>index_date</code>s, one per matched set it was drawn into. A downstream <code>left_join(..., by = "pnr")</code> - for outcomes, diagnoses, medication flags, SES variables, anything measured relative to <code>index_date</code> - will then silently mix values across that person’s different index dates: no error, no <code>NA</code>, just a value from the wrong window attached to the wrong row.</p>
+<p><strong>The fix:</strong> give <code>cohort</code> a stable row id before you extract anything else, and use it (or <code>pnr</code> + <code>index_date</code> together) as the join key from here on, instead of <code>pnr</code> alone:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">row_id =</span> <span class="fu">row_number</span>()) <span class="co"># one id per cohort row - stays unique even if pnr repeats</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><a href="./socioeconomic-variables.html#before-you-extract-anything-give-the-cohort-a-stable-row-id">Socioeconomic variables</a> works through this pattern end to end - why a plain <code>pnr</code> join goes wrong and how to carry the id through every subsequent extraction - use it as a template regardless of which variable you are attaching.</p>
+<p><strong>If line 655 printed 0</strong> (no replacement, or none needed - the common case for most studies), none of this applies: <code>pnr</code> alone is a safe join key throughout the rest of the guide, and you can ignore this callout entirely.</p>
+</div>
+</div>
+</div>
 <p><code>bind_rows()</code> here, and the <code>left_join()</code> you use next to attach outcomes and covariates, are explained in <a href="./joins.html#joins-link-two-tables">Link your extracts</a>.</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
@@ -1206,8 +1221,8 @@ Performance: pre-split the pool (large datasets)
 <section id="what-now" class="level2">
 <h2 class="anchored" data-anchor-id="what-now">What now?</h2>
 <p>You have <code>full_cohort.rds</code> - one row per person with <code>pnr</code> and <code>index_date</code> for <strong>both groups</strong> (exposed + comparison group). Use it in all subsequent extractions:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr) <span class="co"># vector with all pnr's - both exposed and comparison persons</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr) <span class="co"># vector with all pnr's - both exposed and comparison persons</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>cohort_pnrs</code> thus contains the pnr’s for <strong>both exposed and comparison persons</strong> - not just the exposed. Extraction of outcomes and covariates must cover the entire study population.</p>
 <table class="caption-top table">
 <thead>
