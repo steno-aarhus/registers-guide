@@ -115,9 +115,9 @@ you get **duplicated rows**. `lprindberetningssystem == "LPR3"` keeps only the
 rows from the LPR3 system - the fix Anders Aasted Isaksen (DARTER team, 2026)
 originally suggested for this duplication problem.
 
-The same column is on `lpr_a_diagnose`. Filter that table too. A join on
-`dw_ek_kontakt` matches the key only, so a diagnosis from another reporting
-system still attaches when the key coincides.
+The same column is on `lpr_a_diagnose`. Filter that table too - for the same
+reason as the contact table: an unfiltered diagnosis table still carries the
+same LPR2-reload overlap, and double-counts the same way.
 
 ```r
 # CORRECT - filter both tables to LPR3-system rows:
@@ -162,34 +162,39 @@ yet.
 # LPR2-tagged rows in lpr_a_kontakt are genuine duplicates (already in
 # lpr_adm) versus genuinely missing from lpr_adm (the gap to recover).
 lpr_adm_last_date <- read_register("lpr_adm") %>%
+  rename_with(tolower) %>%
   summarise(max_date = max(d_inddto, na.rm = TRUE)) %>%
   collect() %>%
   pull(max_date)
 
-# 2. Contacts: read in the two systems that can possibly duplicate lpr_adm
-# (LPR1 and MiniPAS never do, so they stay excluded), then drop only the
-# LPR2-tagged rows lpr_adm already covers. What survives is every genuine
-# LPR3 contact, plus the LPR2-tagged contacts for the gap lpr_adm is missing.
-lpr3_k <- read_register("lpr_a_kontakt") %>%
+# 2. Contacts: read_register() does not resolve lpr_a_kontakt on DARTER yet -
+# use read_parquet_dataset() with the full path as a temporary workaround
+# (see Parquet and fastreg). This is expected to be fixed soon; once
+# read_register("lpr_a_kontakt") resolves, switch back to it. Drop all of
+# LPR1 and MiniPAS (private hospitals), then drop only the LPR2-tagged rows
+# lpr_adm already covers. What survives is every genuine LPR3 contact, plus
+# the LPR2-tagged contacts for the gap lpr_adm is missing.
+lpr3_k <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_kontakt") %>%
   rename_with(tolower) %>%
   filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>% # only the two systems that can duplicate lpr_adm
   mutate(start_date = as.Date(kont_starttidspunkt)) %>%
   filter(!(lprindberetningssystem == "LPR2" & start_date <= lpr_adm_last_date)) # drop only the LPR2 rows lpr_adm already has
 
-# 3. Diagnoses: this table carries no date of its own (unlike kontakt), so
-# it cannot repeat step 2's date logic directly. Instead, keep only the
-# diagnosis rows that belong to a contact step 2 already decided to keep -
-# matched on BOTH dw_ek_kontakt and lprindberetningssystem, since the key
-# alone does not carry the reporting system (see the join-key warning
-# above). Filtering this table to "LPR3" only would silently drop the
-# diagnosis codes for the recovered gap-window LPR2 contacts, making them
-# look like contacts with no diagnosis at all.
-lpr3_d <- read_register("lpr_a_diagnose") %>%
+# 3. Diagnoses: same temporary read_parquet_dataset() workaround as step 2 -
+# switch back to read_register("lpr_a_diagnose") once it resolves on DARTER.
+# This table carries no date of its own (unlike kontakt), so it cannot
+# repeat step 2's date logic directly. Instead, keep only the diagnosis
+# rows that belong to a contact step 2 already decided to keep, matched on
+# dw_ek_kontakt. Filtering this table to "LPR3" only would silently drop
+# the diagnosis codes for the recovered gap-window LPR2 contacts, making
+# them look like contacts with no diagnosis at all - that is the actual
+# reason for the semi_join below.
+lpr3_d <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_diagnose") %>%
   rename_with(tolower) %>%
   filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>%
   semi_join(
-    lpr3_k %>% select(dw_ek_kontakt, lprindberetningssystem),
-    by = c("dw_ek_kontakt", "lprindberetningssystem")
+    lpr3_k %>% select(dw_ek_kontakt),
+    by = "dw_ek_kontakt"
   )
 ```
 
