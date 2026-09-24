@@ -23,7 +23,7 @@ learn here, so read them in order and come back to this code once your cohort
 exists. They also use `inner_join()` and `bind_rows()`, explained in [Phase
 12](data-manipulation.qmd).
 
-::: {.callout-warning}
+::: {.callout-tip}
 **Check the column names in your own delivery before you load.** The examples
 use the names the registers typically have, but LPR_A renamed a number of them,
 and [what you were given is not what the register
@@ -39,13 +39,33 @@ diagnosis counts around 2019-2020** if your analysis counts diagnoses or looks
 at trends ([why](understand-lpr.qmd#lpr3-spike)).
 
 ::: {#lpr3-filter-caveat .callout-warning}
-**The `lprindberetningssystem == "LPR3"` filter below can silently drop a
-real quarter of contacts - check the coverage of your own LPR2-delivery (lpr_adm).**
+**Check your own delivery's actual coverage before trusting a system-change
+filter alone.** A register that switched systems or formats - LPR2 → LPR3,
+MFR's own version changes, and others like it - has an *official* cutover
+date from DST, but your specific delivery's real coverage can end earlier or
+later than that. `lprindberetningssystem == "LPR3"` solves one confirmed
+problem (`lpr_a_kontakt` also holds older LPR2 contacts, reloaded into the
+new table, which would be double-counted if you do not filter them out) -
+it does not by itself guarantee your combined series has no gap around the
+transition.
 
-The lpr_a-filter on "lprindberetningssystem" exists to solve one confirmed problem: `lpr_a_kontakt` also
-contains older LPR2 contacts, reloaded into the new table, which would be
-counted twice if you already have them in your LPR2-delivery and do not filter them out from your LPR3 (lpr_a) delivery.
+Confirm it yourself before relying on a count that spans the transition:
 
+```r
+read_register("lpr_adm") %>% rename_with(tolower) %>%
+  summarise(max_date = max(d_inddto, na.rm = TRUE)) %>%
+  collect()
+```
+
+If that date reaches DST's own cutover (31 March 2019 for LPR2/LPR3), the
+simple filter is safe as written. If it does not, do not just drop the
+`lprindberetningssystem` filter to get the gap back - that reintroduces the
+duplicates it exists to remove. See [DARTER pitfalls,
+5](darter-pitfalls.qmd#lpr3-lprindberetningssystem) for one worked fix (a
+date cutover instead of a blanket filter).
+:::
+
+::: {.callout-warning}
 **Private hospitals are not in `lpr_adm`/`lpr_diag` at all.** LPR2, as this
 guide defines it, is public hospitals only. Before 2019, private hospitals
 and clinics reported to a separate register, **MiniPas - LPR** (acronym
@@ -59,6 +79,7 @@ will surface it: **if your study needs private-hospital diagnoses from before
 LPR3 harder.** What DARTER (and likely most existing deliveries) has instead
 is only the fragment of MiniPas that was later carried into `lpr_a_kontakt`
 under `lprindberetningssystem == "MiniPAS"` - not the full register.
+:::
 
 ## Fetch diagnoses from LPR
 
