@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-23">
+<meta name="dcterms.date" content="2026-09-24">
 
 <title>DARTER pitfalls – Register-based research at Statistics Denmark</title>
 <style>
@@ -622,7 +622,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 23, 2026</p>
+      <p class="date">September 24, 2026</p>
     </div>
   </div>
   
@@ -742,7 +742,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="lpr3-lprindberetningssystem" class="level2">
 <h2 class="anchored" data-anchor-id="lpr3-lprindberetningssystem">5. LPR3 - filter on <code>lprindberetningssystem == "LPR3"</code></h2>
 <p>Besides the actual LPR3 reports, <code>lpr_a_kontakt</code> also contains <strong>older data that is already present in LPR2</strong> (<code>lpr_adm</code>), loaded into the new LPR_A table. If you combine LPR2 and LPR3 without filtering, the same contacts are counted twice - you get <strong>duplicated rows</strong>. <code>lprindberetningssystem == "LPR3"</code> keeps only the rows from the LPR3 system - the fix Anders Aasted Isaksen (DARTER team, 2026) originally suggested for this duplication problem.</p>
-<p>The same column is on <code>lpr_a_diagnose</code>. Filter that table too. A join on <code>dw_ek_kontakt</code> matches the key only, so a diagnosis from another reporting system still attaches when the key coincides.</p>
+<p>The same column is on <code>lpr_a_diagnose</code>. Filter that table too - for the same reason as the contact table: an unfiltered diagnosis table still carries the same LPR2-reload overlap, and double-counts the same way.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - filter both tables to LPR3-system rows:</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
@@ -772,35 +772,40 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co"># LPR2-tagged rows in lpr_a_kontakt are genuine duplicates (already in</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co"># lpr_adm) versus genuinely missing from lpr_adm (the gap to recover).</span></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>lpr_adm_last_date <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_adm"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">max_date =</span> <span class="fu">max</span>(d_inddto, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(max_date)</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Contacts: read in the two systems that can possibly duplicate lpr_adm</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co"># (LPR1 and MiniPAS never do, so they stay excluded), then drop only the</span></span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="co"># LPR2-tagged rows lpr_adm already covers. What survives is every genuine</span></span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="co"># LPR3 contact, plus the LPR2-tagged contacts for the gap lpr_adm is missing.</span></span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"LPR2"</span>, <span class="st">"LPR3"</span>)) <span class="sc">%&gt;%</span> <span class="co"># only the two systems that can duplicate lpr_adm</span></span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">start_date =</span> <span class="fu">as.Date</span>(kont_starttidspunkt)) <span class="sc">%&gt;%</span></span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR2"</span> <span class="sc">&amp;</span> start_date <span class="sc">&lt;=</span> lpr_adm_last_date)) <span class="co"># drop only the LPR2 rows lpr_adm already has</span></span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Diagnoses: this table carries no date of its own (unlike kontakt), so</span></span>
-<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="co"># it cannot repeat step 2's date logic directly. Instead, keep only the</span></span>
-<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="co"># diagnosis rows that belong to a contact step 2 already decided to keep -</span></span>
-<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="co"># matched on BOTH dw_ek_kontakt and lprindberetningssystem, since the key</span></span>
-<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="co"># alone does not carry the reporting system (see the join-key warning</span></span>
-<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a><span class="co"># above). Filtering this table to "LPR3" only would silently drop the</span></span>
-<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a><span class="co"># diagnosis codes for the recovered gap-window LPR2 contacts, making them</span></span>
-<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a><span class="co"># look like contacts with no diagnosis at all.</span></span>
-<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>lpr3_d <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_diagnose"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"LPR2"</span>, <span class="st">"LPR3"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(</span>
-<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>    lpr3_k <span class="sc">%&gt;%</span> <span class="fu">select</span>(dw_ek_kontakt, lprindberetningssystem),</span>
-<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"dw_ek_kontakt"</span>, <span class="st">"lprindberetningssystem"</span>)</span>
-<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">max_date =</span> <span class="fu">max</span>(d_inddto, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(max_date)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Contacts: read_register() does not resolve lpr_a_kontakt on DARTER yet -</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="co"># use read_parquet_dataset() with the full path as a temporary workaround</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="co"># (see Parquet and fastreg). This is expected to be fixed soon; once</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="co"># read_register("lpr_a_kontakt") resolves, switch back to it. Drop all of</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="co"># LPR1 and MiniPAS (private hospitals), then drop only the LPR2-tagged rows</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="co"># lpr_adm already covers. What survives is every genuine LPR3 contact, plus</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="co"># the LPR2-tagged contacts for the gap lpr_adm is missing.</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> <span class="fu">read_parquet_dataset</span>(<span class="st">"E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"LPR2"</span>, <span class="st">"LPR3"</span>)) <span class="sc">%&gt;%</span> <span class="co"># only the two systems that can duplicate lpr_adm</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">start_date =</span> <span class="fu">as.Date</span>(kont_starttidspunkt)) <span class="sc">%&gt;%</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR2"</span> <span class="sc">&amp;</span> start_date <span class="sc">&lt;=</span> lpr_adm_last_date)) <span class="co"># drop only the LPR2 rows lpr_adm already has</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Diagnoses: same temporary read_parquet_dataset() workaround as step 2 -</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a><span class="co"># switch back to read_register("lpr_a_diagnose") once it resolves on DARTER.</span></span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a><span class="co"># This table carries no date of its own (unlike kontakt), so it cannot</span></span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a><span class="co"># repeat step 2's date logic directly. Instead, keep only the diagnosis</span></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a><span class="co"># rows that belong to a contact step 2 already decided to keep, matched on</span></span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a><span class="co"># dw_ek_kontakt. Filtering this table to "LPR3" only would silently drop</span></span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a><span class="co"># the diagnosis codes for the recovered gap-window LPR2 contacts, making</span></span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a><span class="co"># them look like contacts with no diagnosis at all - that is the actual</span></span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a><span class="co"># reason for the semi_join below.</span></span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>lpr3_d <span class="ot">&lt;-</span> <span class="fu">read_parquet_dataset</span>(<span class="st">"E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_diagnose"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"LPR2"</span>, <span class="st">"LPR3"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(</span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>    lpr3_k <span class="sc">%&gt;%</span> <span class="fu">select</span>(dw_ek_kontakt),</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span></span>
+<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The 2017-2018 LPR2-tagged rows stay excluded in both tables (their <code>start_date</code> is before <code>lpr_adm_last_date</code>, so step 2’s <code>filter()</code> removes them, and step 3 only keeps what step 2 kept) - only the January-March 2019 gap gets pulled back in, diagnosis codes included. This is also self-correcting: once Marie’s delivery update lands and <code>lpr_adm_last_date</code> reaches 31 March 2019, step 2’s <code>LPR2</code> branch stops matching anything and both tables quietly become equivalent to <code>lprindberetningssystem == "LPR3"</code> again - no need to remember to remove this code later.</p>
 <p>Separately: private hospitals are <strong>not</strong> in <code>lpr_adm</code>/<code>lpr_diag</code> at all - before 2019 they reported to a different register, <strong>MiniPas - LPR</strong>, which must be requested separately and is not recovered by filtering LPR2 or LPR3 harder. See the fuller caveat in <a href="./extract-from-lpr.html#lpr3-filter-caveat">Extract from LPR</a> before relying on counts that span 2019.</p>
 </div>
