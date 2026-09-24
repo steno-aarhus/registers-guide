@@ -358,6 +358,13 @@ prior_outcome_pnrs <- function(diagnoses, codes, cohort) {
     filter(icd3 %in% codes) %>%
     inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%   # attach each person's index
     filter(date_contact < index_date) %>%                            # only contacts BEFORE index
+    # distinct(pnr) alone is only correct if pnr is unique in your cohort. If
+    # it is not (e.g. a comparison cohort matched with replacement, so the
+    # same pnr has several index_dates), this over-excludes: a diagnosis that
+    # predates only ONE of a person's index_dates would drop them from ALL of
+    # their occurrences below, not just that one. Fix: distinct(pnr,
+    # index_date) here, and anti_join(prevalent, by = c("pnr", "index_date"))
+    # in place of the filter(!pnr %in% prevalent) below - same idea as nmi.qmd.
     distinct(pnr) %>%                                                 # one row per person
     pull(pnr)                                                         # vector of pnr's to exclude
 }
@@ -366,7 +373,7 @@ prevalent <- prior_outcome_pnrs(diagnoses, OUTCOME_CODES, exposed)
 
 n_before <- nrow(exposed)                     # nrow() = number of rows (here: number of persons)
 exposed <- exposed %>%
-  filter(!pnr %in% prevalent)                 # keep only those WITHOUT a prevalent outcome
+  filter(!pnr %in% prevalent)                 # keep only those WITHOUT a prevalent outcome - see the comment above if pnr repeats
 
 # cat() simply prints a readable line in the console so you can follow the attrition.
 cat("After prevalence exclusion:", nrow(exposed),
