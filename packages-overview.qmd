@@ -195,27 +195,55 @@ You must extract a lookback period from LPR yourself (typically 5 years before i
 # Example: extract lookback and pass all diagnoses
 # pnr and d_inddto are in lpr_adm - not lpr_diag
 
-# Step 1: broadest possible time window for the entire cohort
-min_lookback <- min(cohort$index_date) - 365.25 * 5   # earliest lookback start
+# One row per (pnr, index_date), with each person's own 5-year lookback
+# window already attached - this table is the size of your cohort, not the
+# register. If your cohort has repeated pnr (e.g. matched with replacement),
+# each occurrence gets its own row and its own window here.
+lookback_keys <- cohort %>%
+  mutate(window_start = index_date - 365.25 * 5,
+         window_end   = index_date - 1)
 
-# Step 2: fetch contacts and join to diagnoses
 lpr2_lookback <- lpr_adm %>%
-  semi_join(tibble(pnr = cohort$pnr), by = "pnr", copy = TRUE) %>%   # only the cohort's pnr's
-  filter(d_inddto >= !!min_lookback) %>%              # broad pre-filter
   select(pnr, recnum, d_inddto) %>%
+  # Coarse filter first (cheap): narrow to the union of every window in the
+  # cohort, before the join - !! injects a single computed value, not a column
+  filter(d_inddto >= !!min(lookback_keys$window_start)) %>%
+  # copy = TRUE sends the small lookback_keys table into the database, so the
+  # join runs there, not in R. This matters more here than almost anywhere
+  # else in the guide: Charlson needs EVERY A/B/G diagnosis in the window,
+  # not a filtered-down code list, so the unjoined, unwindowed data for a
+  # whole cohort can be large. Collecting it all into R FIRST and only then
+  # joining to cohort/filtering by index_date (the previous version of this
+  # example did exactly that) has been known to pull tens of GB into RAM and
+  # crash the R session - the same failure mode documented for NMI's LMDB
+  # extraction, see nmi.qmd, fixed the same way.
+  inner_join(lookback_keys, by = "pnr", copy = TRUE) %>%
+  # Precise filter (correctness): each row against its OWN window, not the global one
+  filter(d_inddto >= window_start, d_inddto < index_date) %>%
   inner_join(
     lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B", "G")) %>%   # A/B/G for comorbidity
+      filter(c_diagtype %in% c("A", "B", "G")) %>%   # A/B/G for comorbidity - Charlson needs all of them, no ICD filter
       select(recnum, c_diag),
     by = "recnum"
   ) %>%
-  collect() %>%
-  left_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
-  filter(d_inddto >= index_date - 365.25 * 5,        # precise per-person lookback
-         d_inddto < index_date)
+  select(pnr, index_date, d_inddto, c_diag) %>%
+  collect()
 
 charlson <- charlson_score(data = lpr2_lookback, id = "pnr", icd_codes = "c_diag")
 ```
+:::
+
+::: {.callout-warning}
+**`id = "pnr"` alone is not enough if your cohort has repeated `pnr`.**
+`lpr2_lookback` above is correctly windowed per `(pnr, index_date)`, but
+`charlson_score()` itself only groups by the single `id` column you give it -
+it has no way to know about `index_date`. For a comparison cohort matched
+**with replacement**, that means diagnoses from *all* of a person's
+`index_date` windows get pooled into one Charlson score, silently reattached
+to every occurrence of their `pnr`. If this applies to you, build a single
+combined key first (e.g. `mutate(pnr_index = paste(pnr, index_date))`) and
+pass `id = "pnr_index"` instead, then split the two columns back apart from
+the result afterwards.
 :::
 
 </details>
