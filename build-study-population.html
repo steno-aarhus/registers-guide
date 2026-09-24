@@ -83,7 +83,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-bb62276ab45c84d9efd712f51ff97b5a.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-70e22857e649eb8dbb242daf460359f9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6cf8edd3e5aea6c78d7bb65f741656f6.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -988,22 +988,29 @@ Show the code: exclude prevalent cases
 <span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(icd3 <span class="sc">%in%</span> codes) <span class="sc">%&gt;%</span></span>
 <span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>   <span class="co"># attach each person's index</span></span>
 <span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(date_contact <span class="sc">&lt;</span> index_date) <span class="sc">%&gt;%</span>                            <span class="co"># only contacts BEFORE index</span></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">distinct</span>(pnr) <span class="sc">%&gt;%</span>                                                 <span class="co"># one row per person</span></span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pull</span>(pnr)                                                         <span class="co"># vector of pnr's to exclude</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>prevalent <span class="ot">&lt;-</span> <span class="fu">prior_outcome_pnrs</span>(diagnoses, OUTCOME_CODES, exposed)</span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>n_before <span class="ot">&lt;-</span> <span class="fu">nrow</span>(exposed)                     <span class="co"># nrow() = number of rows (here: number of persons)</span></span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>exposed <span class="ot">&lt;-</span> exposed <span class="sc">%&gt;%</span></span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>pnr <span class="sc">%in%</span> prevalent)                 <span class="co"># keep only those WITHOUT a prevalent outcome</span></span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="co"># cat() simply prints a readable line in the console so you can follow the attrition.</span></span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"After prevalence exclusion:"</span>, <span class="fu">nrow</span>(exposed),</span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="st">"| excluded:"</span>, n_before <span class="sc">-</span> <span class="fu">nrow</span>(exposed), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a><span class="co"># If the message is only for yourself, you can settle for:  nrow(exposed)   # number remaining</span></span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">n_distinct</span>(exposed<span class="sc">$</span>pnr) <span class="sc">==</span> <span class="fu">nrow</span>(exposed))   <span class="co"># check: one row per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># distinct(pnr) alone is only correct if pnr is unique in your cohort. If</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># it is not (e.g. a comparison cohort matched with replacement, so the</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># same pnr has several index_dates), this over-excludes: a diagnosis that</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># predates only ONE of a person's index_dates would drop them from ALL of</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># their occurrences below, not just that one. Fix: distinct(pnr,</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="co"># index_date) here, and anti_join(prevalent, by = c("pnr", "index_date"))</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># in place of the filter(!pnr %in% prevalent) below - same idea as nmi.qmd.</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">distinct</span>(pnr) <span class="sc">%&gt;%</span>                                                 <span class="co"># one row per person</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pull</span>(pnr)                                                         <span class="co"># vector of pnr's to exclude</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>prevalent <span class="ot">&lt;-</span> <span class="fu">prior_outcome_pnrs</span>(diagnoses, OUTCOME_CODES, exposed)</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>n_before <span class="ot">&lt;-</span> <span class="fu">nrow</span>(exposed)                     <span class="co"># nrow() = number of rows (here: number of persons)</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>exposed <span class="ot">&lt;-</span> exposed <span class="sc">%&gt;%</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>pnr <span class="sc">%in%</span> prevalent)                 <span class="co"># keep only those WITHOUT a prevalent outcome - see the comment above if pnr repeats</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a><span class="co"># cat() simply prints a readable line in the console so you can follow the attrition.</span></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"After prevalence exclusion:"</span>, <span class="fu">nrow</span>(exposed),</span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>    <span class="st">"| excluded:"</span>, n_before <span class="sc">-</span> <span class="fu">nrow</span>(exposed), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a><span class="co"># If the message is only for yourself, you can settle for:  nrow(exposed)   # number remaining</span></span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">n_distinct</span>(exposed<span class="sc">$</span>pnr) <span class="sc">==</span> <span class="fu">nrow</span>(exposed))   <span class="co"># check: one row per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <p><strong>Planning a comparison cohort?</strong> Extract the outcome (and exposure) dates for the <strong>whole population</strong> here rather than just for the exposed, and reuse them: restricted to the exposed as above, and later for the comparison pool (see <a href="./comparison-cohort.html">Comparison cohort</a>). Filtering the diagnosis codes returns everyone with the diagnosis anyway, so it saves a second query against the registers.</p>
 <p><strong>If that comparison group is matched with replacement, know what <code>distinct(pnr) %&gt;% pull(pnr)</code> actually excludes.</strong> <code>prior_outcome_pnrs()</code> correctly checks each row against <em>that row’s own</em> <code>index_date</code> (the <code>inner_join</code> before the filter), but the final <code>distinct(pnr)</code> collapses the result to a plain list of people - so <code>filter(!pnr %in% prevalent)</code> at line 369 drops <strong>every</strong> row for that <code>pnr</code>, not just the one instance where they had a prevalent outcome. If the same person is matched to a different case with an earlier <code>index_date</code>, where they did not yet have the outcome, that instance gets excluded too. That may be exactly the conservative rule you want - but decide it on purpose. See <a href="./comparison-cohort.html#step-4---assemble-validate-and-save">comparison cohort’s callout on it</a> for the general repeated-<code>pnr</code> problem this is one version of.</p>
