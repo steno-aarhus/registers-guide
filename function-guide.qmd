@@ -274,6 +274,10 @@ Used to load SAS files - e.g. DST's format tables or registers not yet converted
 to parquet. See [File types](file-formats.qmd) and [Format
 tables](formatting-tables.qmd) for practical examples.
 
+**`read_csv("path/file.csv")`** (from `readr`) is the equivalent for a `.csv`
+file - a plain text table, not a register format, but common for a code list
+or a small file someone hands you outside DST.
+
 ### `arrow::write_parquet(df, "path/file.parquet")`
 
 **What it does:** saves a data frame as a parquet file.
@@ -393,6 +397,23 @@ select(-year) # removes the column year; keeps all others
 When renaming inside `select()`, the direction is `new_name = old_name` - the
 new name on the left, the existing column name on the right.
 
+### `pull(column)`
+
+**What it does:** takes one column out of a data frame as a plain vector,
+instead of a data frame with one column.
+
+**Analogy:** `select(col)` gives you a one-column spreadsheet; `pull(col)`
+gives you just the values, no spreadsheet around them. Use it when the next
+step needs a bare vector, not a table - e.g. before `%in%`, or after
+`summarise()` when you only want the single number out.
+
+```r
+lpr_adm_last_date <- lpr_adm %>%
+  summarise(max_date = max(d_inddto, na.rm = TRUE)) %>%
+  collect() %>%
+  pull(max_date) # a single Date value, not a 1x1 tibble
+```
+
 ### `mutate(new_column = expression)`
 
 **What it does:** adds a new column (or modifies an existing one), computed from
@@ -505,6 +526,16 @@ that produces flag columns.
 coalesce(mi_flag, 0L) # NA (= not found) -> 0 (= absent)
 ```
 
+### `replace_na(x, replacement)` <small>- `tidyr`</small>
+
+**What it does:** the same job as `coalesce()` above - replaces `NA` with a
+value - but written for use inside `across()`, where you are naming a
+function rather than writing out one column at a time.
+
+```r
+mutate(across(starts_with("dx_"), ~ replace_na(., 0))) # every dx_ column: NA -> 0 (no match found)
+```
+
 ### `across(columns, function)`
 
 **What it does:** applies the same function to many columns at once inside
@@ -517,6 +548,11 @@ mutate(across(all_of(nmi_variables), ~ coalesce(.x, 0L))) # replace NA with 0 in
 `~ coalesce(.x, 0L)` is an anonymous function: `~` means "function of", and `.x`
 is the current column. It is equivalent to `function(x) coalesce(x, 0L)` - but
 shorter. `across()` calls this function once per column in `nmi_variables`.
+
+**`starts_with("prefix")`** picks columns by name pattern instead of naming
+them one by one - `across(starts_with("dx_"), ...)` applies to every column
+that starts with `dx_`, however many there are. Common inside `across()` when
+you built the columns yourself with a shared prefix (`dx_`, `rx_`).
 
 ### `rowSums(matrix, na.rm = TRUE)`
 
@@ -628,6 +664,12 @@ group_by(pnr) %>% # group per person
   slice(1) # keeps the newest record per person
 ```
 
+**`slice_max(column, n = 1)`** and **`slice_sample(n = 1)`** do the same job as
+`arrange() %>% slice()` above, without a separate `arrange()` step:
+`slice_max(date_contact, n = 1)` keeps the row with the latest date per group
+directly; `slice_sample(n = 200)` picks a random sample of rows instead (used
+for a practice cohort, not for choosing a real one).
+
 ## Groups and aggregation {#groups-and-aggregation}
 
 ### `group_by(col1, col2)`
@@ -673,6 +715,32 @@ group_by(pnr) %>% # group per person
 
 `.groups = "drop"` removes the grouping automatically afterwards.
 
+### `count(col1, col2)`
+
+**What it does:** shorthand for `group_by(col1, col2) %>% summarise(n = n())`
+- how many rows share each combination of values.
+
+**Analogy:** You want to know how many contacts fall in each calendar year.
+`count(year)` gives you that table directly, without writing `group_by()` and
+`summarise()` yourself.
+
+```r
+all_dx %>%
+  mutate(contact_year = year(date_contact)) %>%
+  count(contact_year) %>% # one row per year, with n = number of contacts
+  arrange(contact_year)
+```
+
+### `n_distinct(column)`
+
+**What it does:** counts how many *different* values a column has - not how
+many rows.
+
+**Analogy:** `count(pnr)` tells you how many rows each `pnr` has (useful for
+finding duplicates); `n_distinct(pnr)` tells you how many *different* people
+there are in total, in one number. Often used inside `summarise()` alongside
+other counts, or on its own: `n_distinct(cohort$pnr)`.
+
 ### `ntile(x, n)`
 
 **What it does:** divides rows into `n` equal groups (quantiles).
@@ -684,11 +752,24 @@ guidelines. SEPLINE recommends comparing against population-specific cut-points
 `ntile()` on your cohort alone. See [SEPLINE](socioeconomic-variables.qmd).
 :::
 
+**`row_number()`** numbers the rows 1, 2, 3... within each group (after
+`group_by()`), instead of dividing them into buckets like `ntile()` does -
+useful for keeping, say, only the first 3 contacts per person:
+`filter(row_number() <= 3)`.
+
 ## Join - assemble tables {#join-assemble-tables}
 
 This is one of the things that takes the longest to understand, but is essential
 for all register work. A join puts two tables together based on a shared key -
 typically `pnr`.
+
+The three joins below (`inner_join`, `semi_join`, `left_join`) are the ones
+this guide actually uses, and are explained here because each has a DST- or
+DuckDB-specific catch worth knowing before you rely on it. `right_join`,
+`full_join` and `anti_join` are real too, just rarely needed here - see
+[Joins - link two tables](joins.qmd#joins-link-two-tables) for the full
+comparison table across all five, multi-key joins, and how to validate a join
+after running it.
 
 ### `inner_join(y, by = "key")`
 
@@ -738,6 +819,8 @@ against a different backend. Harmless to add even when it turns out not to be
 needed, which is why every `semi_join()` example in this guide now includes
 it by default.
 
+### `left_join(y, by = "key")`
+
 **What it does:** keeps **all** rows from the left table. Rows without a match
 in the right table get `NA` for the columns that came from the right.
 
@@ -766,6 +849,11 @@ bind_rows(lpr2_results, lpr2_psyk_results, lpr3_results) # combine all three sou
 
 ## Reshaping {#reshaping}
 
+`pivot_wider()` and `pivot_longer()` (below) are explained briefly here as
+functions; for when to reshape at all, and the `group_by() + slice()`
+alternative that avoids it for most cohort work, see [Long ↔ wide
+format](long-wide.qmd).
+
 ### `pivot_wider(names_from = col, values_from = col)`
 
 **What it does:** transforms a long format (one row per visit) to a wide format
@@ -775,6 +863,17 @@ bind_rows(lpr2_results, lpr2_psyk_results, lpr3_results) # combine all three sou
 column with five rows. `pivot_wider()` transforms it into one single row with
 five columns: `weight_3mo`, `weight_6mo`, `weight_12mo`, etc. Used in extraction
 of weight and insulin outcomes.
+
+### `pivot_longer(cols, names_to, values_to)`
+
+**What it does:** the reverse of `pivot_wider()` - takes several columns and
+stacks them into two: one naming which column each value came from, one
+holding the value itself.
+
+```r
+df %>%
+  pivot_longer(cols = starts_with("weight_"), names_to = "timepoint", values_to = "weight")
+```
 
 ## Lazy query
 
@@ -902,6 +1001,21 @@ grepl("^C34", icd4) # TRUE for "C340", "C341", "C342", etc.
 
 Used e.g. to match ICD codes against diagnosis patterns in comorbidity measures
 such as NMI (Nordic Multimorbidity Index).
+
+### `str_detect(x, pattern)` <small>- `stringr`</small>
+
+**What it does:** the same job as `grepl()` above, just from the `stringr`
+package instead of base R, with the arguments in the opposite order
+(`str_detect(x, pattern)` vs. `grepl(pattern, x)`). Returns the same
+`TRUE`/`FALSE` per element.
+
+```r
+str_detect(c_diag, "^DE1[0-4]") # TRUE for any diabetes code E10-E14 (with D-prefix)
+```
+
+Used throughout the guide's diagnosis- and ATC-matching code (e.g.
+[NMI](nmi.qmd)) - functionally interchangeable with `grepl()`, pick whichever
+reads better in context.
 
 ## Numbers and dates {#numbers-and-dates}
 
@@ -1047,6 +1161,11 @@ Safer than `1:n` in loops, because it handles the case `n = 0` correctly.
 
 ## Diagnostics and debugging {#diagnostics-and-debugging}
 
+The functions below help you find out *what went wrong*. For the actual list
+of known error messages and what fixes them - "code stopped" or "code gave
+nothing back" - see [Troubleshooting](troubleshooting.qmd); for "the code ran
+fine but the answer is wrong," see [DST pitfalls](dst-pitfalls.qmd).
+
 ### `class(x)`
 
 **What it does:** tells you what type of object `x` is.
@@ -1065,6 +1184,11 @@ Always check `class()` first if you get a strange error.
 **What it does:** returns the number of rows.
 
 Used to print cohort sizes and verify that exclusions have worked.
+
+**`glimpse(df)`** (from `dplyr`) gives a quick look at every column at once -
+name, type, and the first few values - transposed so it fits on screen even
+with many columns. A faster first check than `head()` when you just landed a
+new extract and want to see what you got.
 
 ### `cat("text\n")`
 
