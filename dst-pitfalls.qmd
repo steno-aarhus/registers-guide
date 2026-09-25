@@ -353,6 +353,37 @@ in your code. Check what the publication actually counted before assuming your
 extraction is wrong.
 :::
 
+## 13. `lpr_a_kontakt`/`lpr_a_diagnose` are not pure LPR3 {#lpr-a-not-pure-lpr3}
+
+The name suggests these tables hold LPR3 data only. They do not: LPR_A also
+carries older LPR1, LPR2 and MiniPAS (private-hospital) rows, reloaded into
+the same table and tagged by `lprindberetningssystem`, going back to around
+2017 - see [Understand LPR](understand-lpr.qmd#lpr-a-format) for why LPR_A is
+built this way.
+
+If you combine LPR2 (`lpr_adm`) and LPR_A without filtering, the same contacts
+get counted twice - once from each table. Filter both `lpr_a_kontakt` and
+`lpr_a_diagnose` to `lprindberetningssystem == "LPR3"` before using them
+alongside `lpr_adm`/`lpr_diag`:
+
+```r
+lpr3_k <- lpr_a_kontakt %>%
+  filter(lprindberetningssystem == "LPR3")   # keep only genuine LPR3 rows
+lpr3_d <- lpr_a_diagnose %>%
+  filter(lprindberetningssystem == "LPR3")   # same column on the diagnosis table
+```
+
+::: {.callout-warning}
+**This filter is not free of its own problems.** Your own `lpr_adm`
+delivery's actual coverage can end earlier than DST's official LPR2 cutover
+date, in which case the simple filter above silently drops real, unique
+contacts along with the duplicates. See [Extract from
+LPR](extract-from-lpr.qmd#lpr3-filter-caveat) for how to check your own
+delivery's coverage before trusting it. On DARTER specifically, see [DARTER
+pitfalls, 5](darter-pitfalls.qmd#lpr3-lprindberetningssystem) for a worked
+fix.
+:::
+
 ## Something actually broke?
 
 Every pitfall above is a case where the code runs and the answer is quietly
