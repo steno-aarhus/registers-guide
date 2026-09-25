@@ -606,6 +606,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#immortal-time-bias" id="toc-immortal-time-bias" class="nav-link" data-scroll-target="#immortal-time-bias">10. Immortal time bias - exposure defined using the future</a></li>
   <li><a href="#year-is-not-a-date" id="toc-year-is-not-a-date" class="nav-link" data-scroll-target="#year-is-not-a-date">11. <code>year</code> is a folder name, not a date</a></li>
   <li><a href="#dsts-own-published-totals-do-not-agree-with-each-other" id="toc-dsts-own-published-totals-do-not-agree-with-each-other" class="nav-link" data-scroll-target="#dsts-own-published-totals-do-not-agree-with-each-other">12. DST’s own published totals do not agree with each other</a></li>
+  <li><a href="#lpr-a-not-pure-lpr3" id="toc-lpr-a-not-pure-lpr3" class="nav-link" data-scroll-target="#lpr-a-not-pure-lpr3">13. <code>lpr_a_kontakt</code>/<code>lpr_a_diagnose</code> are not pure LPR3</a></li>
   <li><a href="#something-actually-broke" id="toc-something-actually-broke" class="nav-link" data-scroll-target="#something-actually-broke">Something actually broke?</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/dst-pitfalls.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/dst-pitfalls.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -971,6 +972,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container">
 <p><strong>Do not use a published aggregate as ground truth for your own extraction without checking its exact population.</strong> If your row count from <code>lpr_a_kontakt</code> does not match a number you found in a DST or Sundhedsdata- styrelsen publication, the mismatch may be the publication’s population definition (which wards, which hospital types, which patient type), not a bug in your code. Check what the publication actually counted before assuming your extraction is wrong.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="lpr-a-not-pure-lpr3" class="level2">
+<h2 class="anchored" data-anchor-id="lpr-a-not-pure-lpr3">13. <code>lpr_a_kontakt</code>/<code>lpr_a_diagnose</code> are not pure LPR3</h2>
+<p>The name suggests these tables hold LPR3 data only. They do not: LPR_A also carries older LPR1, LPR2 and MiniPAS (private-hospital) rows, reloaded into the same table and tagged by <code>lprindberetningssystem</code>, going back to around 2017 - see <a href="./understand-lpr.html#lpr-a-format">Understand LPR</a> for why LPR_A is built this way.</p>
+<p>If you combine LPR2 (<code>lpr_adm</code>) and LPR_A without filtering, the same contacts get counted twice - once from each table. Filter both <code>lpr_a_kontakt</code> and <code>lpr_a_diagnose</code> to <code>lprindberetningssystem == "LPR3"</code> before using them alongside <code>lpr_adm</code>/<code>lpr_diag</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> lpr_a_kontakt <span class="sc">%&gt;%</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)   <span class="co"># keep only genuine LPR3 rows</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>lpr3_d <span class="ot">&lt;-</span> lpr_a_diagnose <span class="sc">%&gt;%</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)   <span class="co"># same column on the diagnosis table</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>This filter is not free of its own problems.</strong> Your own <code>lpr_adm</code> delivery’s actual coverage can end earlier than DST’s official LPR2 cutover date, in which case the simple filter above silently drops real, unique contacts along with the duplicates. See <a href="./extract-from-lpr.html#lpr3-filter-caveat">Extract from LPR</a> for how to check your own delivery’s coverage before trusting it. On DARTER specifically, see <a href="./darter-pitfalls.html#lpr3-lprindberetningssystem">DARTER pitfalls, 5</a> for a worked fix.</p>
 </div>
 </div>
 </div>
