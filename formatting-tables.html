@@ -848,27 +848,27 @@ Disced/                  ← education, SAS format catalog (see note)
 <tr class="odd">
 <td><code>c_</code> / <code>n_</code></td>
 <td>the <strong>c</strong>haracter or <strong>n</strong>umeric version</td>
-<td>the one matching <code>class(hfaudd)</code> in your data; the wrong one matches nothing and gives <code>NA</code> without an error</td>
+<td>the one matching the type of <code>hfaudd</code> in your data, or simply <code>c_</code> after converting <code>hfaudd</code> to text (see <a href="#c-or-n">Character or numeric</a>)</td>
 </tr>
 <tr class="even">
 <td><code>audd</code> / <code>udd</code></td>
 <td><strong>a</strong>fsluttet (completed) or igangværende/afbrudt (ongoing or interrupted) education</td>
-<td><code>audd</code> for <code>hfaudd</code></td>
+<td><code>audd</code> for <code>hfaudd</code> (see <a href="#audd-vs-udd">why</a>)</td>
 </tr>
 <tr class="odd">
 <td><code>2015</code>, <code>2023</code>, …</td>
 <td>which version of the format</td>
-<td>the newest only; it covers older years too</td>
+<td>the newest only; it covers older years too (see <a href="#education-checks">Four things to check</a>)</td>
 </tr>
 <tr class="even">
 <td><code>hoved</code>, <code>type</code>, <code>niveau</code>, <code>fag</code></td>
 <td>which of the four DISCED-15 dimensions you group by (see below)</td>
-<td><code>hoved</code> for short/medium/long, as SEPLINE does</td>
+<td><code>hoved</code> for short/medium/long, as SEPLINE does (see <a href="#disced-dimensions">The four dimensions</a>)</td>
 </tr>
 <tr class="odd">
 <td><code>l1l5</code></td>
 <td>from level 1 (the four-digit code) to level 5 (the coarsest grouping)</td>
-<td><code>l1l5</code> to go from <code>hfaudd</code> to the two-digit main area</td>
+<td><code>l1l5</code> to go from <code>hfaudd</code> to the two-digit main area (see <a href="#disced-levels">The five levels</a>)</td>
 </tr>
 <tr class="even">
 <td><code>_k</code> / <code>_t</code> / <code>_kt</code></td>
@@ -878,17 +878,22 @@ Disced/                  ← education, SAS format catalog (see note)
 </tbody>
 </table>
 <p><strong>Why there are several files for what looks like one lookup.</strong> DST’s guide says it makes <strong>up to six variants</strong> of every format: character or numeric, each as <code>_k</code>, <code>_t</code> and <code>_kt</code>, “where possible”. Seeing five or six files with the same stem is therefore normal. They hold the same mapping and differ only in the type they expect and what they return.</p>
+<p><span id="c-or-n"><strong>Character or numeric: how to tell.</strong></span> Ask R what type <code>hfaudd</code> is in your delivery. <code>head(0)</code> returns the column types with zero rows, so no data is printed:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>udda <span class="sc">%&gt;%</span> <span class="fu">head</span>(<span class="dv">0</span>) <span class="sc">%&gt;%</span> <span class="fu">collect</span>() <span class="sc">%&gt;%</span> <span class="fu">str</span>()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># hfaudd: chr        -&gt; use a c_ file</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># hfaudd: num or int -&gt; use an n_ file</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The simpler rule that always works: convert <code>hfaudd</code> to text with <code>as.character()</code> and always use the <code>c_</code> file, as the code further down does. Text is also the safer type for education codes, because some DISCED-15 codes start with a zero (<code>0001</code> Ingen uddannelse), and stored as a number that code becomes <code>1</code> and no longer matches the lookup.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong><code>hfaudd</code> is a <em>completed</em> education, so you want an <code>audd</code> file, not a <code>udd</code> one.</strong> DISCED-15 distinguishes between the code for an <strong>ongoing or interrupted</strong> education (<a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-udd"><code>UDD</code></a>) and for a <strong>completed</strong> one (<a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd"><code>AUDD</code></a>) - DST documents the two separately - and there are format files for both. The name gives it away: <code>hfaudd</code> is <em>højest fuldførte AUDD</em>, the highest completed education. A <code>udd</code> lookup joined to <code>hfaudd</code> will match some rows, miss others, and never tell you.</p>
+<p><span id="audd-vs-udd"><strong><code>hfaudd</code> is a <em>completed</em> education, so you want an <code>audd</code> file, not a <code>udd</code> one.</strong></span> DISCED-15 distinguishes between the code for an <strong>ongoing or interrupted</strong> education (<a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-udd"><code>UDD</code></a>) and for a <strong>completed</strong> one (<a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd"><code>AUDD</code></a>) - DST documents the two separately - and there are format files for both. The name gives it away: <code>hfaudd</code> is <em>højest fuldførte AUDD</em>, the highest completed education. A <code>udd</code> lookup joined to <code>hfaudd</code> will match some rows, miss others, and never tell you.</p>
 </div>
 </div>
 </div>
-<p><strong>The four dimensions.</strong> <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd">DISCED-15 for completed education</a> groups the same four-digit codes in four different ways, and each has its own format. Pick the one that answers your question:</p>
+<p><span id="disced-dimensions"><strong>The four dimensions.</strong></span> <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd">DISCED-15 for completed education</a> groups the same four-digit codes in four different ways, and each has its own format. Pick the one that answers your question:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 16%">
@@ -932,37 +937,95 @@ Disced/                  ← education, SAS format catalog (see note)
 </tbody>
 </table>
 <p>The same number means different things in different dimensions (<code>50</code> is MVU in <code>hoved</code> and bachelor programmes in <code>type</code>), so a code is only meaningful together with the file it came from. Record the filename in your analysis script.</p>
-<p>In the Hovedområde hierarchy the four-digit education code sits under groupings of eight, six, four and two digits, ending in the two-digit main area. That is why the file from <code>hfaudd</code> to the main area is an <strong>L1 → L5</strong> file.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(haven) <span class="co"># read_sas()</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Look first - the version and the exact names vary, so do not copy a filename</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># from this page. Check both folders (see the note under "Where are the format</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co"># tables?").</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>fmt_root <span class="ot">&lt;-</span> <span class="st">"E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/"</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(<span class="fu">paste0</span>(fmt_root, <span class="st">"Disced/"</span>), <span class="at">pattern =</span> <span class="st">"audd"</span>, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(<span class="fu">paste0</span>(fmt_root, <span class="st">"Uddannelser/"</span>), <span class="at">pattern =</span> <span class="st">"audd"</span>, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Then read the newest completed-education, main-area, level 1 -&gt; 5 file in</span></span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="co"># the type that matches hfaudd (c_ for character, n_ for numeric), code only.</span></span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="co"># The filename below is the pattern to look for, not a confirmed name.</span></span>
-<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>udda_level <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="fu">paste0</span>(fmt_root, <span class="st">"Disced/c_audd2023_hoved_l1l5_k.sas7bdat"</span>))</span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(udda_level) <span class="co"># find the START column and the label column</span></span>
-<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(udda_level)</span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Join it on, then check how many found no match</span></span>
-<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>udda_data <span class="ot">&lt;-</span> udda_data <span class="sc">%&gt;%</span></span>
-<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd)) <span class="sc">%&gt;%</span> <span class="co"># match the type in the format table</span></span>
-<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(udda_level, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"hfaudd"</span> <span class="ot">=</span> <span class="st">"START"</span>))</span>
-<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>udda_data <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="at">unmatched =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(.data[[<span class="fu">names</span>(udda_level)[<span class="dv">2</span>]]])), <span class="at">total =</span> <span class="fu">n</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><span id="disced-levels"><strong>The five levels.</strong></span> Within a dimension, DST groups every education in a tree with five levels. Level 1 is the four-digit code you have in <code>hfaudd</code>; each level above it is a broader group, and level 5 is the two-digit main area. The <code>l1l5</code> in a filename means “give me a level-1 code, and I return its level-5 group”. A file named <code>l1l2</code> would instead return the level just above the code, which is still very detailed. For short, medium and long education you want the two-digit main areas, so an <strong>L1 → L5</strong> file.</p>
+<div class="callout callout-style-simple callout-tip callout-titled" title="Example: one education through all five levels">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Example: one education through all five levels
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>Sygeplejerske, prof.bach. in the Hovedområde dimension, from DST’s <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd">DISCED-15 AUDD</a> classification:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 8%">
+<col style="width: 14%">
+<col style="width: 76%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Level</th>
+<th>Code</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>L1</strong></td>
+<td><code>5166</code></td>
+<td>Sygeplejerske, prof.bach. - the value in <code>hfaudd</code></td>
+</tr>
+<tr class="even">
+<td>L2</td>
+<td><code>50893510</code></td>
+<td>Sygepleje og sundhedspleje, MVU (eight digits)</td>
+</tr>
+<tr class="odd">
+<td>L3</td>
+<td><code>508935</code></td>
+<td>Sygepleje og sundhedspleje, MVU (six digits)</td>
+</tr>
+<tr class="even">
+<td>L4</td>
+<td><code>5089</code></td>
+<td>a broader group within MVU (four digits)</td>
+</tr>
+<tr class="odd">
+<td><strong>L5</strong></td>
+<td><code>50</code></td>
+<td>Mellemlange videregående uddannelser, MVU</td>
+</tr>
+</tbody>
+</table>
+<p>An <code>l1l5</code> file turns <code>5166</code> into <code>50</code>; an <code>l1l2</code> file would turn it into <code>50893510</code>. Note that the level-4 group has four digits, like an education code, so a four-digit value is not by itself proof that you are looking at <code>hfaudd</code>.</p>
+</div>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(haven) <span class="co"># read_sas()</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Look first - the version and the exact names vary, so do not copy a filename</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="co"># from this page. Check both folders (see the note under "Where are the format</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="co"># tables?").</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>fmt_root <span class="ot">&lt;-</span> <span class="st">"E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/"</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(<span class="fu">paste0</span>(fmt_root, <span class="st">"Disced/"</span>), <span class="at">pattern =</span> <span class="st">"audd"</span>, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(<span class="fu">paste0</span>(fmt_root, <span class="st">"Uddannelser/"</span>), <span class="at">pattern =</span> <span class="st">"audd"</span>, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Then read the newest completed-education, main-area, level 1 -&gt; 5 file in</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="co"># the type that matches hfaudd (c_ for character, n_ for numeric), code only.</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="co"># The filename below is the pattern to look for, not a confirmed name.</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>udda_level <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="fu">paste0</span>(fmt_root, <span class="st">"Disced/c_audd2023_hoved_l1l5_k.sas7bdat"</span>))</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(udda_level) <span class="co"># find the START column and the label column</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(udda_level)</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Join it on, then check how many found no match</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>udda_data <span class="ot">&lt;-</span> udda_data <span class="sc">%&gt;%</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd)) <span class="sc">%&gt;%</span> <span class="co"># match the type in the format table</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(udda_level, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"hfaudd"</span> <span class="ot">=</span> <span class="st">"START"</span>))</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>udda_data <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="at">unmatched =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(.data[[<span class="fu">names</span>(udda_level)[<span class="dv">2</span>]]])), <span class="at">total =</span> <span class="fu">n</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Four things to check before you trust the result.</strong></p>
+<p><span id="education-checks"><strong>Four things to check before you trust the result.</strong></span></p>
 <ul>
 <li><strong>Use the newest version, and only that one.</strong> The folders hold several versions side by side and it is tempting to think you need one per study year. You do not. DST’s guide says the education statistics are updated every year with the newest codes <strong>backwards in time as well</strong>, so the latest version already covers the older codes. One file, for the whole study period.</li>
 <li><strong>DISCED-15 or an older classification.</strong> From 2015 DST uses DISCED-15, which replaced Forspalte, ISCED1997 and DUN. A file with no dimension in its name (for example <code>c_audd2015_l1l5_kt</code>) may belong to one of the older classifications, whose levels and codes are not the ones in the table above. Check the top-level codes with <code>head()</code> against the table before you use it.</li>
@@ -1026,8 +1089,8 @@ Disced/                  ← education, SAS format catalog (see note)
 <li>Use <code>list.files()</code> on the subfolder, and expect several files per format (<code>c_</code>/<code>n_</code> times <code>_k</code>/<code>_t</code>/<code>_kt</code>)</li>
 <li>Load the table and look at the columns with <code>names()</code> and <code>head()</code></li>
 </ol>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(mun_table) <span class="co"># see what the columns are called - find START and the label column</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(mun_table) <span class="co"># see the first rows and understand the structure</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(mun_table) <span class="co"># see what the columns are called - find START and the label column</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(mun_table) <span class="co"># see the first rows and understand the structure</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
