@@ -34,4 +34,4 @@
 | [VNDS_IND](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_IND%20-%20Indvandringer.html) | `"vnds_ind"` | `pnr` | 2005 to 2025 | `haend_dato`, `indv_land`, `indvmd` |
 | [VNDS_UD](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_UD%20-%20Udvandringer.html) | `"vnds_ud"` | `pnr` | 2005 to 2025 | `haend_dato`, `udv_land`, `udvmd` |
 
-*58 further satellite/detail registers exist and are fully documented, but are not listed here to keep this table to what most projects actually need first. Look them up by name or by column on [Find a variable](find-a-variable.qmd) instead.*
+*60 further satellite/detail registers exist and are fully documented, but are not listed here to keep this table to what most projects actually need first. Look them up by name or by column on [Find a variable](find-a-variable.qmd) instead.*
