@@ -2,46 +2,46 @@
 
 | Column | Type | Role | Label |
 | --- | --- | --- | --- |
-| **`PNR`** | character | join key | Personnummer |
-| `FOED_DAG` | date | date | Fødselsdato |
-| `LEVENDE_ELLER_DOEDFOEDT` | character | code | Levende eller dødfødt barn |
+| **`PNR`** | character | join key | Personal identifier |
+| `FOED_DAG` | date | date | Date of birth |
+| `LEVENDE_ELLER_DOEDFOEDT` | character | code | Live birth or stillbirth |
 
 <details>
 <summary>All other columns (31)</summary>
 
 | Column | Type | Role | Label |
 | --- | --- | --- | --- |
-| `FOEDAAR` | numeric | value |  |
-| `KOEN` | character | code | Køn |
-| `FLERFOLD` | character | code |  |
-| `VAEGT_BARN` | numeric | value | Barnets fødselsvægt |
-| `LAENGDE_BARN` | numeric | value |  |
-| `MFR_OPLYSNING` | character | code | Oplysninger fra MFR |
-| `FOEDREG_DK` | character | code | Fødselsregistrering i Danmark |
-| `FOEDREG_KODE` | character | code | Kode for personens fødselsregistreringssted |
-| `FOEDTE_POPULATION` | character | code |  |
-| `INDDAG` | numeric | value | Barnets alder ved første registrering i CPR (dage) |
-| `CPRTJEK` | character | code | CPR-tjek |
-| `CPRTYPE` | character | code | CPR-type |
-| `MOR1` | character | code | Tidligste mor |
-| `MOR2` | character | code | Seneste mor |
-| `MOR_ALDER` | numeric | value | Moderens alder |
-| `MOR_ALDER_ULT` | numeric | value | Moderens alder ultimo året |
-| `MOR_FOED_ADOP` | character | code | Mors relation til barnet |
-| `MOR_KOEN` | character | code |  |
-| `MOR_VFRA` | character | value |  |
-| `M_KILDE` | character | code | Kilde til mor1-oplysningen |
-| `FAR1` | character | code | Tidligste far registreret |
-| `FAR2` | character | code | Seneste far |
-| `FAR_ALDER` | numeric | value | Fars alder |
-| `FAR_ALDER_ULT` | numeric | value |  |
-| `FAR_FOED_ADOP` | character | code | Fars relation til barnet |
-| `FAR_KOEN` | character | code | Fars køn |
-| `FAR_VFRA` | character | value |  |
-| `F_KILDE` | character | code | Kilde til far1-oplysningen |
-| `B_KILDE` | character | code | Kilde til barnets oplysninger |
-| `MDOED` | character | code | Markering af evt. død |
-| `VERSION` | character | value | Moduldata version |
+| `FOEDAAR` | numeric | value | Year of birth |
+| `KOEN` | character | code | Sex |
+| `FLERFOLD` | character | code | Multiple birth (single, twin, triplet, quadruplet) |
+| `VAEGT_BARN` | numeric | value | Birth weight in grams (from MFR) |
+| `LAENGDE_BARN` | numeric | value | Birth length in cm (from MFR) |
+| `MFR_OPLYSNING` | character | code | Child found in the Medical Birth Register (MFR) |
+| `FOEDREG_DK` | character | code | Birth registered with a Danish authority code |
+| `FOEDREG_KODE` | character | code | Birth registration authority code |
+| `FOEDTE_POPULATION` | character | code | Population boundary relative to DST's births statistics |
+| `INDDAG` | numeric | value | Child's age in days at first CPR registration |
+| `CPRTJEK` | character | code | CPR check |
+| `CPRTYPE` | character | code | CPR type |
+| `MOR1` | character | code | Earliest registered mother |
+| `MOR2` | character | code | Latest mother, if different from mor1 |
+| `MOR_ALDER` | numeric | value | Mother's age |
+| `MOR_ALDER_ULT` | numeric | value | Mother's age at the end of the year |
+| `MOR_FOED_ADOP` | character | code | Mother's relation to the child (adoptive or other non-biological) |
+| `MOR_KOEN` | character | code | Mother's (mor1) sex |
+| `MOR_VFRA` | character | value | Date the current mother became the parent |
+| `M_KILDE` | character | code | Source of the mor1 information |
+| `FAR1` | character | code | Earliest registered father/co-mother |
+| `FAR2` | character | code | Latest father/co-mother, if different from far1 |
+| `FAR_ALDER` | numeric | value | Father's (far1) age on the child's birthday |
+| `FAR_ALDER_ULT` | numeric | value | Father's (far1) age at the end of the birth year |
+| `FAR_FOED_ADOP` | character | code | Father's relation to the child (adoptive or other non-biological) |
+| `FAR_KOEN` | character | code | Father's (far1) sex |
+| `FAR_VFRA` | character | value | Date the current father/co-mother became the parent |
+| `F_KILDE` | character | code | Source of the far1 information |
+| `B_KILDE` | character | code | Source of the child's data |
+| `MDOED` | character | code | Death marker (stillborn, died in first year, survived first year, died later) |
+| `VERSION` | character | value | Module data version |
 
 - **`KOEN`:** Not confirmed against either `koen` (DST's numeric 1/2/9) or `mfr_koen` (SDS's letter K/M/Ukendt): DST's page for this register gives no value definitions at all, so which encoding this register actually uses is unverified. Check with `table()` on real data before assuming either.
 - **`FLERFOLD`:** Multiple-birth indicator, by the variable name - not confirmed by any DST description text.

@@ -2,27 +2,27 @@
 
 | Column | Type | Role | Label |
 | --- | --- | --- | --- |
-| **`PNR`** | character | join key | Personnummer |
-| `AAR` | numeric | date | Register-, eller tællingsår |
+| **`PNR`** | character | join key | Personal identifier |
+| `AAR` | numeric | date | Register or census year |
 
 <details>
 <summary>All other columns (13)</summary>
 
 | Column | Type | Role | Label |
 | --- | --- | --- | --- |
-| `FOED_DAG` | date | date | Fødselsdato |
-| `KOEN` | character | code | Køn |
-| `ALDER_START` | numeric | value |  |
-| `ALDER_SLUT` | numeric | value |  |
-| `ANDEL` | numeric | value | Andel af fertile alder |
-| `ANTAL_BOERN_START` | numeric | value |  |
-| `ANTAL_BOERN_SLUT` | numeric | value |  |
-| `ANTAL_DAGE_START` | numeric | value |  |
-| `ANTAL_DAGE_SLUT` | numeric | value |  |
-| `PRIMO_ULTIMO` | character | code |  |
-| `CPRTJEK` | character | code | CPR-tjek |
-| `CPRTYPE` | character | code | CPR-type |
-| `VERSION` | character | value | Moduldata version |
+| `FOED_DAG` | date | date | Date of birth |
+| `KOEN` | character | code | Sex |
+| `ALDER_START` | numeric | value | Age at the start of the year |
+| `ALDER_SLUT` | numeric | value | Age at the end of the year |
+| `ANDEL` | numeric | value | Share of the fertile age interval lived in the population (percent) |
+| `ANTAL_BOERN_START` | numeric | value | Number of children (as mor1/far1) at the start of the year |
+| `ANTAL_BOERN_SLUT` | numeric | value | Number of children (as mor1/far1) at the end of the year |
+| `ANTAL_DAGE_START` | numeric | value | Days in the population at the start-of-year age |
+| `ANTAL_DAGE_SLUT` | numeric | value | Days in the population at the end-of-year age |
+| `PRIMO_ULTIMO` | character | code | In the population at the start, end or both of the year |
+| `CPRTJEK` | character | code | CPR check |
+| `CPRTYPE` | character | code | CPR type |
+| `VERSION` | character | value | Module data version |
 
 - **`KOEN`:** Not confirmed against either `koen` (DST's numeric 1/2/9) or `mfr_koen` (SDS's letter K/M/Ukendt) - see ftbarn.yaml's own KOEN column for the same unresolved question.
 - **`ALDER_START`:** Age at the start of the reference year, by the variable name.
