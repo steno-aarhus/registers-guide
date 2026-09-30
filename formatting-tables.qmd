@@ -220,11 +220,11 @@ in lower case, with `c_` or `n_` in front and usually a version year:
 
   | Part                 | Means                                                   | What to pick |
   | -------------------- | ------------------------------------------------------- | ------------ |
-  | `c_` / `n_`          | the **c**haracter or **n**umeric version                | the one matching `class(hfaudd)` in your data; the wrong one matches nothing and gives `NA` without an error |
-  | `audd` / `udd`       | **a**fsluttet (completed) or igangværende/afbrudt (ongoing or interrupted) education | `audd` for `hfaudd` |
-  | `2015`, `2023`, ...  | which version of the format                             | the newest only; it covers older years too |
-  | `hoved`, `type`, `niveau`, `fag` | which of the four DISCED-15 dimensions you group by (see below) | `hoved` for short/medium/long, as SEPLINE does |
-  | `l1l5`               | from level 1 (the four-digit code) to level 5 (the coarsest grouping) | `l1l5` to go from `hfaudd` to the two-digit main area |
+  | `c_` / `n_`          | the **c**haracter or **n**umeric version                | the one matching the type of `hfaudd` in your data, or simply `c_` after converting `hfaudd` to text (see [Character or numeric](#c-or-n)) |
+  | `audd` / `udd`       | **a**fsluttet (completed) or igangværende/afbrudt (ongoing or interrupted) education | `audd` for `hfaudd` (see [why](#audd-vs-udd)) |
+  | `2015`, `2023`, ...  | which version of the format                             | the newest only; it covers older years too (see [Four things to check](#education-checks)) |
+  | `hoved`, `type`, `niveau`, `fag` | which of the four DISCED-15 dimensions you group by (see below) | `hoved` for short/medium/long, as SEPLINE does (see [The four dimensions](#disced-dimensions)) |
+  | `l1l5`               | from level 1 (the four-digit code) to level 5 (the coarsest grouping) | `l1l5` to go from `hfaudd` to the two-digit main area (see [The five levels](#disced-levels)) |
   | `_k` / `_t` / `_kt`  | what you get back: the code, the text, or both          | `_k` for analysis, `_t` for table labels (see [Which variant to pick](#which-variant)) |
 
 **Why there are several files for what looks like one lookup.** DST's guide
@@ -233,9 +233,25 @@ each as `_k`, `_t` and `_kt`, "where possible". Seeing five or six files with
 the same stem is therefore normal. They hold the same mapping and differ only in
 the type they expect and what they return.
 
+[**Character or numeric: how to tell.**]{#c-or-n} Ask R what type `hfaudd` is
+in your delivery. `head(0)` returns the column types with zero rows, so no
+data is printed:
+
+```r
+udda %>% head(0) %>% collect() %>% str()
+# hfaudd: chr        -> use a c_ file
+# hfaudd: num or int -> use an n_ file
+```
+
+The simpler rule that always works: convert `hfaudd` to text with
+`as.character()` and always use the `c_` file, as the code further down does.
+Text is also the safer type for education codes, because some DISCED-15 codes
+start with a zero (`0001` Ingen uddannelse), and stored as a number that code
+becomes `1` and no longer matches the lookup.
+
 ::: {.callout-warning}
-**`hfaudd` is a *completed* education, so you want an `audd` file, not a `udd`
-one.** DISCED-15 distinguishes between the code for an **ongoing or interrupted**
+[**`hfaudd` is a *completed* education, so you want an `audd` file, not a `udd`
+one.**]{#audd-vs-udd} DISCED-15 distinguishes between the code for an **ongoing or interrupted**
 education ([`UDD`](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-udd)) and for a **completed** one
 ([`AUDD`](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd)) - DST documents the two separately - and there are
 format files for both. The name gives it away: `hfaudd` is *højest fuldførte AUDD*, the
@@ -243,7 +259,7 @@ highest completed education. A `udd` lookup joined to `hfaudd` will match some
 rows, miss others, and never tell you.
 :::
 
-**The four dimensions.** [DISCED-15 for completed
+[**The four dimensions.**]{#disced-dimensions} [DISCED-15 for completed
 education](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd)
 groups the same four-digit codes in four different ways, and each has its own
 format. Pick the one that answers your question:
@@ -260,9 +276,32 @@ The same number means different things in different dimensions (`50` is MVU in
 together with the file it came from. Record the filename in your analysis
 script.
 
-In the Hovedområde hierarchy the four-digit education code sits under groupings
-of eight, six, four and two digits, ending in the two-digit main area. That is
-why the file from `hfaudd` to the main area is an **L1 → L5** file.
+[**The five levels.**]{#disced-levels} Within a dimension, DST groups every
+education in a tree with five levels. Level 1 is the four-digit code you have
+in `hfaudd`; each level above it is a broader group, and level 5 is the
+two-digit main area. The `l1l5` in a filename means "give me a level-1 code,
+and I return its level-5 group". A file named `l1l2` would instead return the
+level just above the code, which is still very detailed. For short, medium and
+long education you want the two-digit main areas, so an **L1 → L5** file.
+
+::: {.callout-tip collapse="true" title="Example: one education through all five levels"}
+Sygeplejerske, prof.bach. in the Hovedområde dimension, from DST's
+[DISCED-15 AUDD](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd)
+classification:
+
+  | Level  | Code       | What it is                                          |
+  | ------ | ---------- | --------------------------------------------------- |
+  | **L1** | `5166`     | Sygeplejerske, prof.bach. - the value in `hfaudd`   |
+  | L2     | `50893510` | Sygepleje og sundhedspleje, MVU (eight digits)      |
+  | L3     | `508935`   | Sygepleje og sundhedspleje, MVU (six digits)        |
+  | L4     | `5089`     | a broader group within MVU (four digits)            |
+  | **L5** | `50`       | Mellemlange videregående uddannelser, MVU           |
+
+An `l1l5` file turns `5166` into `50`; an `l1l2` file would turn it into
+`50893510`. Note that the level-4 group has four digits, like an education
+code, so a four-digit value is not by itself proof that you are looking at
+`hfaudd`.
+:::
 
 ```r
 library(haven) # read_sas()
@@ -291,7 +330,7 @@ udda_data %>% summarise(unmatched = sum(is.na(.data[[names(udda_level)[2]]])), t
 ```
 
 ::: {.callout-warning}
-**Four things to check before you trust the result.**
+[**Four things to check before you trust the result.**]{#education-checks}
 
 - **Use the newest version, and only that one.** The folders hold several
   versions side by side and it is tempting to think you need one per study
