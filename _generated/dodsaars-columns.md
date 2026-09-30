@@ -26,23 +26,33 @@
 | `c_liste_14` | character | code | Cause group, 14-item list |
 | `c_liste_49` | character | code | Cause group, 49-item list |
 | `c_liste_65` | character | code | Cause group, 65-item list |
-| `cprtjek` | character | code | CPR-tjek |
-| `cprtype` | character | code | CPR-type |
-| `c_aldertim` | numeric | value | Dødsalder i timer |
-| `c_atckode1` | character | code | C_ATCKODE1 |
-| `c_atckode2` | character | code | C_ATCKODE2 |
-| `c_atckode3` | character | code | C_ATCKODE3 |
-| `c_atckode4` | character | code | C_ATCKODE4 |
-| `c_civstd` | character | code | Civilstand |
-| `c_institut` | character | code | Institution for dødsfald |
-| `c_obduktio` | character | code | C_OBDUKTIO |
-| `c_operatio` | character | code | Operationstilkendegivelse |
-| `c_u28dg` | numeric | value | Angivelse af dødsalder under 28 dage |
-| `c_ulyktype` | character | code | C_ULYKTYPE |
-| `v_aldermdr` | numeric | value | Alder i måneder |
-| `v_bopamt` | numeric | value | V_BOPAMT |
-| `v_dodsamt` | numeric | value | Dødsstedsamt |
-| `v_klok` | numeric | value | Tiden for dødens indtræffelse |
+| `cprtjek` | character | code | CPR check |
+| `cprtype` | character | code | CPR type |
+| `c_aldertim` | numeric | value | Age at death in hours |
+| `c_atckode1` | character | code | Medicine code 1 (ATC) |
+| `c_atckode2` | character | code | Medicine code 2 (ATC) |
+| `c_atckode3` | character | code | Medicine code 3 (ATC) |
+| `c_atckode4` | character | code | Medicine code 4 (ATC) |
+| `c_civstd` | character | code | Marital status |
+| `c_institut` | character | code | Place of death for a natural death |
+| `c_obduktio` | character | code | Autopsy indication |
+| `c_operatio` | character | code | Surgery indication |
+| `c_u28dg` | numeric | value | Death under 28 days of age |
+| `c_ulyktype` | character | code | Type of accident |
+| `v_aldermdr` | numeric | value | Age in months |
+| `v_bopamt` | numeric | value | County of residence |
+| `v_dodsamt` | numeric | value | County of death |
+| `v_klok` | numeric | value | Time of death |
+
+- **`c_attart`:** Sundhedsdatastyrelsen gives it for 1971-1996 and 2000 only.
+- **`c_aldertim`:** Only 1980-1996 per Sundhedsdatastyrelsen. 1980 differs from the other years: besides the values 0-9 it holds values above 10.
+- **`c_atckode1`:** Only filled in 1999-2001.
+- **`c_atckode2`:** Only filled in 1999-2001.
+- **`c_atckode3`:** Only filled in 1999-2001.
+- **`c_atckode4`:** Only filled in 1999-2001.
+- **`c_obduktio`:** Sundhedsdatastyrelsen gives it for 1971-1996 and 1998-2001, so 1997 is missing.
+- **`c_u28dg`:** Only 1977-1996 per Sundhedsdatastyrelsen.
+- **`c_ulyktype`:** Only 1977-1993 per Sundhedsdatastyrelsen.
 
 </details>
 
