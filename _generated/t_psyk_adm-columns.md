@@ -22,30 +22,39 @@
 | `v_indtime` | integer | value | Admission hour |
 | `v_indminut` | integer | value | Admission minute |
 | `v_udtime` | integer | value | Discharge hour |
-| `cprtjek` | character | code | CPR-tjek |
-| `cprtype` | character | code | CPR-type |
-| `c_amt` | character | code | AMT |
-| `c_blok` | character | code | Inddeling af speciale i blokke |
-| `c_hafd` | character | code | Henvisende afdeling |
-| `c_henm` | character | code | Henvisningsmåde |
-| `c_hsgh` | character | code | Henvisende sygehus |
-| `c_kom` | character | code | Kommune |
-| `c_kontaars` | character | code | Kontaktårsag |
+| `cprtjek` | character | code | CPR check |
+| `cprtype` | character | code | CPR type |
+| `c_amt` | character | code | Patient's county of residence |
+| `c_blok` | character | code | Specialty block |
+| `c_hafd` | character | code | Referring department |
+| `c_henm` | character | code | Referral mode |
+| `c_hsgh` | character | code | Referring hospital |
+| `c_kom` | character | code | Patient's municipality of residence |
+| `c_kontaars` | character | code | Reason for contact |
 | `c_nyafd` | character | code |  |
-| `c_sex` | character | code | Køn |
-| `c_sghamt` | character | code | Sygehusamt |
-| `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) |
-| `d_fusdto` | date | date | Dato for forundersøgelse (Variabel udgået efter 31.12.2003) |
-| `d_hendto` | date | date | Henvisningsdato |
-| `d_opdatdto` | date | date | Intern dato for opdatering af kontakten |
-| `k_afd` | character | code | Afdelingskode |
+| `c_sex` | character | code | Sex |
+| `c_sghamt` | character | code | Hospital county |
+| `d_ebhdto` | date | date | Date of final treatment |
+| `d_fusdto` | date | date | Date of preliminary examination |
+| `d_hendto` | date | date | Referral date |
+| `d_opdatdto` | date | date | Internal date the contact was last updated |
+| `k_afd` | character | code | Department code |
 | `leverancedato` | date | date |  |
 | `version` | character | code | Version |
-| `v_alddg` | numeric | value | Alder i dage ved kontaktens start |
-| `v_alder` | numeric | value | Alder i år ved kontaktens start |
-| `v_aldmdr` | numeric | value | Alder i måneder ved kontaktens start |
-| `v_behdage` | numeric | value | Behandlingsdage (Variabel udgået efter 31.12.2001) |
-| `v_sengdage` | numeric | value | Sengedage |
+| `v_alddg` | numeric | value | Age in days at the start of the contact |
+| `v_alder` | numeric | value | Age in years at the start of the contact |
+| `v_aldmdr` | numeric | value | Age in months at the start of the contact |
+| `v_behdage` | numeric | value | Treatment days |
+| `v_sengdage` | numeric | value | Bed days |
+
+- **`c_amt`:** Called c_bopamt until 2005, when it was renamed c_amt; Sundhedsdatastyrelsen reports no break in the content.
+- **`c_henm`:** Codes change twice: in 1999 code 6 was replaced by B, C and D, and in 2004 codes 3, 5, B, C and D were replaced by F and G.
+- **`c_kom`:** Municipality codes changed substantially at the 2007 reform, and old codes can still appear on contacts that started after 2007.
+- **`c_sex`:** The coding changes in 2005, from 1/2 to M/K. Prefer koen from BEF for a study variable.
+- **`d_ebhdto`:** DST's label says it was discontinued after 31 December 2003, and Sundhedsdatastyrelsen gives it for 1999-2003 only.
+- **`d_fusdto`:** DST's label says it was discontinued after 31 December 2003; Sundhedsdatastyrelsen gives it for 1994-2003.
+- **`d_opdatdto`:** From 2005. Sundhedsdatastyrelsen keeps the update dates for 2000-2004 in a separate table (t_opdatdto).
+- **`v_behdage`:** DST's label says it was discontinued after 31 December 2001.
 
 </details>
 
@@ -96,4 +105,4 @@ Where these values come from:
 
 - **`pnr`:** DST's variable list calls this column PNR. Some deliveries rename it: some deliveries hand it over as `v_cpr`. The name is a product of the data processing, not of the register, so check your own columns and rename.
 - **`recnum`:** DST's variable list calls this column RECNUM, the same name the somatic lpr_adm uses. Some deliveries rename it, and not consistently: the contact table can arrive as `k_recnum` and the diagnosis table as `v_recnum`. Rename both to recnum before joining.
-- **`c_pattype`:** Present here even where the somatic lpr_adm extract leaves it out, so the psychiatric side of a study can be classified when the somatic side cannot. Do not assume symmetry between the two extracts.
+- **`c_pattype`:** Present here even where the somatic lpr_adm extract leaves it out, so the psychiatric side of a study can be classified when the somatic side cannot. Do not assume symmetry between the two extracts. Until 1993 only patient type 0 (inpatient) was recorded. Day patient (1) was discontinued in 2002, and hospitals then recorded those patients differently (some as outpatients, some as inpatients). Emergency room patient (3) was discontinued in 2014 and replaced by outpatient (2) with acute admission (c_indm = 1).

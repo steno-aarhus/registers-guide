@@ -28,46 +28,52 @@
 | `v_sengdage` | numeric | value | Bed days | 1994 to 2019 |
 | `v_behdage` | numeric | value | Treatment days | 1977 to 2019 |
 | `c_sex` | character | code | Sex | 1977 to 2019 |
-| `cprtjek` | character | code | CPR-tjek | 1977 to 2019 |
-| `cprtype` | character | code | CPR-type | 1977 to 2019 |
-| `c_andenbeh` | character | code |  | 1977 to 1986 |
-| `c_blok` | character | code | Inddeling af speciale i blokke | 1994 to 2019 |
-| `c_eakt` | character | code | Ulykkeskode, aktivitet | 1987 to 2003 |
-| `c_emek` | character | code |  | 1987 to 2003 |
-| `c_emodpart` | character | code | Ulykkeskode, modpart | 1994 to 2003 |
-| `c_epart` | character | code | Ulykkeskode, egenpart | 1994 to 2003 |
-| `c_ested` | character | code | Ulykkeskode, sted | 1987 to 2003 |
-| `c_etraf` | character | code | Ulykkeskode, trafikal | 1987 to 2003 |
-| `c_hafd` | character | code | Henvisende afdeling | 2004 to 2019 |
-| `c_hsgh` | character | code | Henvisende sygehus | 2004 to 2019 |
-| `c_indform` | character | code |  | 1977 to 1986 |
-| `c_indfra` | character | code |  | 1977 to 1986 |
-| `c_kom` | character | code | Kommune | 1977 to 2019 |
+| `cprtjek` | character | code | CPR check | 1977 to 2019 |
+| `cprtype` | character | code | CPR type | 1977 to 2019 |
+| `c_andenbeh` | character | code | Planned other treatment | 1977 to 1986 |
+| `c_blok` | character | code | Specialty block | 1994 to 2019 |
+| `c_eakt` | character | code | Activity at the time of the accident | 1987 to 2003 |
+| `c_emek` | character | code | Accident mechanism | 1987 to 2003 |
+| `c_emodpart` | character | code | Mode of transport of the counterpart in a traffic accident | 1994 to 2003 |
+| `c_epart` | character | code | Injured person's mode of transport in a traffic accident | 1994 to 2003 |
+| `c_ested` | character | code | Place of accident | 1987 to 2003 |
+| `c_etraf` | character | code | Traffic accident or not | 1987 to 2003 |
+| `c_hafd` | character | code | Referring department | 2004 to 2019 |
+| `c_hsgh` | character | code | Referring hospital | 2004 to 2019 |
+| `c_indform` | character | code | Form of admission | 1977 to 1986 |
+| `c_indfra` | character | code | Where the patient was admitted from | 1977 to 1986 |
+| `c_kom` | character | code | Patient's municipality of residence | 1977 to 2019 |
 | `c_nyafd` | character | code |  | 2005 to 2019 |
-| `c_senstat` | character | code |  | 1977 to 1986 |
-| `c_sghamt` | character | code | Sygehusamt | 1977 to 2019 |
-| `c_udtil` | character | code |  | 1977 to 1986 |
-| `c_ulykke` | character | code |  | 1977 to 1986 |
-| `d_ebhdto` | date | date | Data for endelig behandling (Variabel udgået efter 31.12.2003) | 1996 to 2019 |
-| `d_fusdto` | date | date | Dato for forundersøgelse (Variabel udgået efter 31.12.2003) | 1996 to 2019 |
-| `d_hendto` | date | date | Henvisningsdato | 1977 to 2019 |
-| `d_opdatdto` | date | date | Intern dato for opdatering af kontakten | 2005 to 2019 |
-| `k_afd` | character | code | Afdelingskode | 2005 to 2019 |
+| `c_senstat` | character | code | Planned later inpatient treatment | 1977 to 1986 |
+| `c_sghamt` | character | code | Hospital county | 1977 to 2019 |
+| `c_udtil` | character | code | Where the patient was discharged to | 1977 to 1986 |
+| `c_ulykke` | character | code | Accident code (1977-1986) | 1977 to 1986 |
+| `d_ebhdto` | date | date | Date of final treatment | 1996 to 2019 |
+| `d_fusdto` | date | date | Date of preliminary examination | 1996 to 2019 |
+| `d_hendto` | date | date | Referral date | 1977 to 2019 |
+| `d_opdatdto` | date | date | Internal date the contact was last updated | 2005 to 2019 |
+| `k_afd` | character | code | Department code | 2005 to 2019 |
 | `leverancedato` | date | date |  | 1977 to 2019 |
 | `version` | character | code | Version | 1977 to 2019 |
-| `v_alddg` | numeric | value | Alder i dage ved kontaktens start | 2001 to 2019 |
-| `v_aldmdr` | numeric | value | Alder i måneder ved kontaktens start | 2001 to 2019 |
-| `v_indminut` | numeric | value | Indlæggelsminut | 1994 to 2019 |
-| `v_indtime` | numeric | date | Indlæggelsestidspunkt | 1977 to 2019 |
-| `v_udtime` | numeric | value | Udskrivningstime | 1994 to 2019 |
+| `v_alddg` | numeric | value | Age in days at the start of the contact | 2001 to 2019 |
+| `v_aldmdr` | numeric | value | Age in months at the start of the contact | 2001 to 2019 |
+| `v_indminut` | numeric | value | Minute the contact started | 1994 to 2019 |
+| `v_indtime` | numeric | date | Hour the contact started | 1977 to 2019 |
+| `v_udtime` | numeric | value | Hour the contact ended | 1994 to 2019 |
 
 - **`c_udm`:** Starts in 1987, ten years after the register itself.
+- **`c_henm`:** Codes change twice: in 1999 code 6 was replaced by B, C and D, and in 2004 codes 3, 5, B, C and D were replaced by F and G.
 - **`c_bopamt`:** Ends with the counties themselves: the 2007 local government reform is already visible here in 2004/2005, where c_bopamt stops and c_amt starts. Neither covers the whole register, so a geographic analysis spanning that point needs both.
 - **`v_sengdage`:** Starts in 1994. Before that, compute the stay from d_inddto and d_uddto instead.
 - **`v_behdage`:** Ends in 2001.
 - **`c_sex`:** The coding changes in 2005, from 1/2 to M/K. Prefer koen from BEF for a study variable.
-- **`c_kom`:** A finer subdivision briefly existed below municipality level: LPR2 had its own table, LPR_DISTKOD, giving a social district (socialdistrikt) for residents of large municipalities only, 1995-2003. Not modelled as a separate register here (per Sundhedsdatastyrelsen's own LPR documentation, esundhed.dk table t_distkod) - only relevant to a study needing sub-municipality geography for that narrow window and population.
-- **`d_opdatdto`:** Before 2005, the same fact (a contact's last-update date) lived in its own table, LPR_OPDTDTO, covering 2000-2004 - not modelled as a separate register here since Sundhedsdatastyrelsen's own LPR documentation (esundhed.dk, table t_opdatdto) confirms the fact simply moved onto lpr_adm from 2005 onward. A study needing this fact before 2005 has no column to read it from; DST's order list shows no earlier source.
+- **`c_eakt`:** Until 1994 it only records whether the accident was a work accident (1 or 2); the code set was widened to other activities from 1995.
+- **`c_emodpart`:** Sundhedsdatastyrelsen gives this from 1995, a year later than DST's variable list.
+- **`c_epart`:** Sundhedsdatastyrelsen gives this from 1995, a year later than DST's variable list.
+- **`c_kom`:** A finer subdivision briefly existed below municipality level: LPR2 had its own table, LPR_DISTKOD, giving a social district (socialdistrikt) for residents of large municipalities only, 1995-2003. Not modelled as a separate register here (per Sundhedsdatastyrelsen's own LPR documentation, esundhed.dk table t_distkod) - only relevant to a study needing sub-municipality geography for that narrow window and population. Municipality codes changed substantially at the 2007 reform, and old codes can still appear on contacts that started after 2007.
+- **`d_ebhdto`:** DST's label says it was discontinued after 31 December 2003, and Sundhedsdatastyrelsen gives it for 1999-2003 only.
+- **`d_fusdto`:** DST's label says it was discontinued after 31 December 2003; Sundhedsdatastyrelsen gives it for 1994-2003.
+- **`d_opdatdto`:** Before 2005, the same fact (a contact's last-update date) lived in its own table, LPR_OPDTDTO, covering 2000-2004 - not modelled as a separate register here since Sundhedsdatastyrelsen's own LPR documentation (esundhed.dk, table t_opdatdto) confirms the fact simply moved onto lpr_adm from 2005 onward. A study needing this fact before 2005 has no column to read it from; DST's order list shows no earlier source. From 2005. Sundhedsdatastyrelsen keeps the update dates for 2000-2004 in a separate table (t_opdatdto).
 
 </details>
 
@@ -157,6 +163,7 @@ Where these values come from:
 
 - **`recnum`:** The key every other LPR2 dataset joins on. It identifies a contact, not a person.
 - **`d_inddto`:** Use this as the contact date. It is the admission date, so for an outpatient course it is the date the course started, not the date of a particular visit.
+- **`c_pattype`:** Until 1993 only patient type 0 (inpatient) was recorded. Day patient (1) was discontinued in 2002, and hospitals then recorded those patients differently (some as outpatients, some as inpatients). Emergency room patient (3) was discontinued in 2014 and replaced by outpatient (2) with acute admission (c_indm = 1).
 - **`c_spec`:** DST publishes what each specialty code means in its department and specialty overview: https://www.dst.dk/da/Statistik/dokumentation/Times/moduldata-for-sociale-forhold--sundhedsvaesen--retsvaesen/spec (in Danish). The codes are not self-explanatory, so look them up rather than grouping on the digits.
 - **`c_adiag`:** A copy of the contact's action diagnosis. Use lpr_diag instead: it holds every diagnosis on the contact, not only the action one.
 - **`c_indm`:** Used together with c_pattype to separate emergency-room contacts from ordinary outpatient ones after about 2014, see the LPR extraction chapter. Available for the register's whole span, so a missing c_indm is an extract boundary rather than a coverage gap.
