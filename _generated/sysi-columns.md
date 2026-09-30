@@ -31,6 +31,8 @@
 | `sikreamt` | character | code | Sikredes amt |  |
 | `vagtomr` | character | code | VAGTOMRÅDE | 1997 to 2005 |
 
+- **`bruhon`:** In ØRE for 1990-2004 and whole kroner from 2005, so divide the pre-2005 values by 100 before combining them with SSSY. It is the fee the provider received, broadly the public subsidy; the patient's own co-payment is not included. DST reports that the average fee rose about 10 percent from 2004 to 2005 because general practitioners' basic and practice fees were spread onto users from 2005, and that this break cannot be removed by cleaning the pre-2005 data.
+- **`honuge`:** The week the provider invoiced the county (from 2007, the region) for the service. It is a billing week, not the date of the contact.
 - **`barnmak`:** Until 1 January 1996, services provided to a child under 16 were reported under the PARENT's CPR-number, not the child's own (Sahl Andersen et al. 2011, Scand J Public Health 39(Suppl 7):34-37, citing Pedersen PA et al., Individual registration of children in the Danish National Health Service Register, Ugeskr Laeger 1999;161:6351-4). This column's window (1990-2005) straddles that boundary. DST's own variable list does not explain what barnmak is for, so this is informed context for the practice it likely exists to flag, not a confirmed mechanism: do not assume every child-relevant record before 1996 carries the child's own CPR-number in this register.
 
 </details>
@@ -61,7 +63,7 @@ Where these values come from:
 **Worth knowing:**
 
 - **`ydernr`:** A provider number, not a person. DST's variable list does not say what unit it identifies or whether it is stable when a practice changes hands, so do not use it to follow an individual clinician over time without checking that first.
-- **`speciale`:** The 6-digit specialty code is what distinguishes a GP contact from a specialist one. There is no separate contact-type column: the specialty is the classification.
+- **`speciale`:** Two codes in one. The first two digits are the provider's specialty (general practice, dentist and so on); the last four are the type of service. DST publishes no value set for the full code: the service codes come from the collective agreements, and DST points to the historical fee schedules on okportalen.dk. Because the agreements change often, the same service can change code over time, so check a code's history before comparing years.
 - **`ydlant`:** One row can cover several services, so counting rows undercounts activity. Sum this column instead.
 - **`afrper`:** DST labels this "Afregningsperiode", a settlement period rather than a treatment date. Nothing in the variable list says how far settlement can lag the contact, so check the distribution against honuge before using it as a date.
 - **`sikgrup`:** Group 1 patients need a referral from their GP to see a specialist, physiotherapist, chiropodist or psychologist, and pay nothing. Group 2 patients may go directly to any GP or specialist, but pay the difference between the fee and the regional subsidy themselves. The two groups therefore leave different traces for the same clinical need, so group membership is a confounder in any analysis of specialist use. Source: borger.dk, "Sygesikring og sikringsgrupper".
