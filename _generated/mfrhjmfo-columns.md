@@ -32,7 +32,7 @@
 | `TEGN_PAA_ASPHXI` | character | code |  |  |
 | `FOSTERPRAESENTATION` | character | code |  |  |
 | `MISDANNELSER` | character | code |  |  |
-| `AMNITOMI_UNDER_FOEDSEL_HSP` | character | code |  |  |
+| `AMNITOMI_UNDER_FOEDSEL_HSP` | character | code | AMNITOMI_UNDER_FOEDSEL_HSP |  |
 | `EPISIOTOMI` | character | code |  |  |
 | `FOEDSELSKODER` | character | code |  |  |
 | `BESOEGHOSJORDEMODER` | character | value |  |  |
