@@ -18,43 +18,43 @@
 | `disco08_alle_indk_13` | character | code | Occupation code, DISCO-08 | 2010 to 2024 |
 | `nace_db07_13` | character | code | Industry, DB07 | 2007 to 2024 |
 | `alder_ult_ink` | integer | value | Age at 31 December | 1991 to 2024 |
-| `ant_ansat_arbsted` | numeric | value | Antal ansatte for væsentligste arbejdssted ( optælling af ansatte sker for hver arbejdessted under SENR (AKM) | 2006 to 2013 |
-| `ant_ansat_arbsted_13` | numeric | value | Antal ansatte for væsentligste arbejdssted ( optælling af ansatte sker for hver arbejdessted under SENR (AKM) | 2010 to 2024 |
-| `ant_ansat_senr` | numeric | value | Antal ansatte for væsentligste beskæftigelse (AKM) | 1976 to 2005 |
-| `atpsum2` | numeric | value | Beskæftigelsesmål baseret på ATP- indbetalinger (AKM) | 1976 to 2010 |
-| `beskst` | numeric | code | Beskæftigelsesstatus 1980 til 2001 (Indkomst/AKM) | 1976 to 2001 |
-| `beskst02` | numeric | code | Beskæftigelsesstatus fra 2002 (Indkomst/AKM) | 2002 to 2013 |
-| `branche_77` | character | code | Dansk branchekode 1977 til 1993 (AKM) | 1980 to 1999 |
-| `brchi` | character | code | Branchekode for indehaver | 1976 to 2002 |
-| `brchl` | character | code | Branchekode for lønmodtager | 1976 to 1999 |
-| `cprtjek` | character | code | CPR-tjek | 1991 to 2024 |
-| `cprtype` | character | code | CPR-type | 1991 to 2024 |
-| `disco08_alle_indk` | character | code | Fagklassifikation for beskæftigelsesforhold, fra 2010 (AKM) | 2010 to 2013 |
-| `disco08_loen_indk` | character | code | Fagkode for væsentligste lønmodtagerbeskæftigelse i året. (AKM) | 2010 to 2024 |
-| `disco08_sel_indk` | character | code | Fagkode for arbejde i selvstændig virksomhed (AKM) | 2010 to 2024 |
-| `discoalle_indk` | character | code | Fagklassifikation for beskæftigelsesforhold, fra 1991 TIL 2009 (AKM) | 1993 to 2009 |
-| `discoloen_indk` | character | code | Fagkode for væsentligste lønmodtagerbeskæftigelse i året. (AKM) | 1991 to 2009 |
-| `discosel_indk` | character | code | Fagkode for arbejde i selvstændig virksomhed (AKM) | 1991 to 2009 |
-| `discotyp` | character | code | Kilde til lønmodtager DISCO-koden (AKM) | 1991 to 2024 |
-| `disco_alle_indk_13` | character | code | Fagklassifikation for beskæftigelsesforhold, fra 1991 TIL 2009 (AKM) | 1991 to 2009 |
-| `funk_timeant` | numeric | value | Personens samlede antal arbejdstimer i året. | 2008 to 2024 |
-| `nace` | character | code | Branche for væsentligste beskæftigelse, fra 1992 til 2007 (AKM) | 1992 to 2007 |
-| `nacea` | character | code | Branchegruppering for arbejdssted (1993 til 2007) (AKM) | 1992 to 2007 |
-| `nacea_db07` | character | code | Branchegruppering for arbejdssted ( fra 2007) (AKM) | 2007 to 2024 |
-| `nacei` | character | code | Branchekode for selvstændige og medarbejdende ægtefællers virksomhed(1993 til 2007) (AKM) | 1993 to 2007 |
-| `nacei_db07` | character | code | Branchegruppering for indehaver (Selvstændig eller medhjælpende ægtefælle) (fra 2007) (AKM) | 2007 to 2024 |
-| `nace_13` | character | code | Branche for væsentligste beskæftigelse, fra 1993 til 2007 (AKM) | 1993 to 2007 |
-| `nace_db07` | character | code | Branche for væsentligste beskæftigelse, fra 2008-2013 (AKM) | 2007 to 2013 |
-| `nystgr` | character | code | Stillingsgruppering 1980 til 1995 (AKM) | 1980 to 1999 |
-| `omfang` | character | code | Omfang af skattepligt | 1991 to 2024 |
-| `senr` | character | code | SE-nummer | 1985 to 2002 |
-| `senri` | character | code | SE-nummer for den virksomhed som personen ejer | 1985 to 2002 |
-| `senrl` | character | code | SE-nummer for lønmodtager | 1985 to 1998 |
-| `typ` | character | code | Stillingstype | 1980 to 1999 |
-| `version` | character | code | Moduldata version | 1991 to 2024 |
-| `virkf` | numeric | value | Virksomhedskode angiver hvilken form for ejerskab der er på den arbejdsplads personen får størst erhrvsindkomst fra (AKM) | 2001 to 2013 |
-| `virkfa` | numeric | value | Virksomhedskode angiver hvilken form for ejerskab der er på den arbejdsplads personen får størstklønindkomst/arbejdstimer (AKM) | 2001 to 2024 |
-| `virkf_13` | numeric | value | Virksomhedskode angiver hvilken form for ejerskab der er på den arbejdsplads personen får størst erhrvsindkomst fra (AKM) | 2001 to 2024 |
+| `ant_ansat_arbsted` | numeric | value | Number of employees at the main workplace | 2006 to 2013 |
+| `ant_ansat_arbsted_13` | numeric | value | Number of employees at the main workplace, 2013 definition | 2010 to 2024 |
+| `ant_ansat_senr` | numeric | value | Number of employees in the main employment (by SE number) | 1976 to 2005 |
+| `atpsum2` | numeric | value | Employment measure based on ATP contributions | 1976 to 2010 |
+| `beskst` | numeric | code | Employment status, 1980-2001 | 1976 to 2001 |
+| `beskst02` | numeric | code | Employment status, from 2002 | 2002 to 2013 |
+| `branche_77` | character | code | Danish industry code 1977, 1977-1993 | 1980 to 1999 |
+| `brchi` | character | code | Industry code for owner | 1976 to 2002 |
+| `brchl` | character | code | Industry code for employee | 1976 to 1999 |
+| `cprtjek` | character | code | CPR check | 1991 to 2024 |
+| `cprtype` | character | code | CPR type | 1991 to 2024 |
+| `disco08_alle_indk` | character | code | Occupation code (DISCO-08), from 2010 | 2010 to 2013 |
+| `disco08_loen_indk` | character | code | Occupation code (DISCO-08) for main employee job in the year | 2010 to 2024 |
+| `disco08_sel_indk` | character | code | Occupation code (DISCO-08) for self-employment | 2010 to 2024 |
+| `discoalle_indk` | character | code | Occupation code (DISCO), 1991-2009 | 1993 to 2009 |
+| `discoloen_indk` | character | code | Occupation code (DISCO) for main employee job in the year | 1991 to 2009 |
+| `discosel_indk` | character | code | Occupation code (DISCO) for self-employment | 1991 to 2009 |
+| `discotyp` | character | code | Source of the employee's DISCO code | 1991 to 2024 |
+| `disco_alle_indk_13` | character | code | Occupation code (DISCO), 1991-2009, 2013 definition | 1991 to 2009 |
+| `funk_timeant` | numeric | value | Total hours worked in the year | 2008 to 2024 |
+| `nace` | character | code | Industry of main employment, 1992-2007 | 1992 to 2007 |
+| `nacea` | character | code | Industry grouping of the workplace, 1993-2007 | 1992 to 2007 |
+| `nacea_db07` | character | code | Industry grouping of the workplace (DB07), from 2007 | 2007 to 2024 |
+| `nacei` | character | code | Industry code of the business of the self-employed or assisting spouse, 1993-2007 | 1993 to 2007 |
+| `nacei_db07` | character | code | Industry grouping for owner (self-employed or assisting spouse, DB07), from 2007 | 2007 to 2024 |
+| `nace_13` | character | code | Industry of main employment, 1993-2007, 2013 definition | 1993 to 2007 |
+| `nace_db07` | character | code | Industry of main employment (DB07), 2008-2013 | 2007 to 2013 |
+| `nystgr` | character | code | Occupational grouping, 1980-1995 | 1980 to 1999 |
+| `omfang` | character | code | Extent of tax liability | 1991 to 2024 |
+| `senr` | character | code | SE number (business identifier) | 1985 to 2002 |
+| `senri` | character | code | SE number of the business the person owns | 1985 to 2002 |
+| `senrl` | character | code | SE number of the employer | 1985 to 1998 |
+| `typ` | character | code | Job type | 1980 to 1999 |
+| `version` | character | code | Module data version | 1991 to 2024 |
+| `virkf` | numeric | value | Ownership type of the workplace with the highest earnings | 2001 to 2013 |
+| `virkfa` | numeric | value | Ownership type of the workplace with the highest wage income or hours | 2001 to 2024 |
+| `virkf_13` | numeric | value | Ownership type of the workplace with the highest earnings, 2013 definition | 2001 to 2024 |
 
 - **`beskst13`:** A different question from socio13: where the money came from, rather than what the person's labour market position was. A source does now exist (https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/ dokumentation-af-data/hoejkvalitetsvariable/ Personers-tilknytning-til-arbejdsmarkedet-set-over-hele-aaret--AKM-/BESKST13, checked 2026-09-09), a large classification with its own PDF supplement for edge cases, linked rather than transcribed. beskst13 differs from beskst02 in named ways (net rather than gross income for the self-employed, price-adjusted thresholds), which DST calls a difference rather than a break: see `beskst02`'s reader_note for the sharper break, between beskst02 and the older `beskst`.
 - **`disco08_alle_indk_13`:** Occupation, not socioeconomic position. DISCO-08 only starts in 2010; 1991-2009 uses the older disco_alle_indk_13 with a different code set, so an occupation series across 2010 is not continuous.
@@ -62,6 +62,15 @@
 - **`alder_ult_ink`:** Age at the end of the year, not at your index date. Recompute from a birth date if the exact age matters.
 - **`beskst`:** Not comparable with beskst02, in DST's own words, not just a difference of degree. Source: https://www.dst.dk/da/TilSalg/data-til-forskning/ generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/ Personers-tilknytning-til-arbejdsmarkedet-set-over-hele-aaret--AKM-/BESKST02 (checked 2026-09-09). People with an unemployment share over 50 percent, and people on efterløn (early retirement pay), get their own codes under beskst02 that beskst does not have, and the rules for who counts as self-employed also changed. A study spanning 2001-2002 should not treat this as a relabelled continuation of the same variable.
 - **`beskst02`:** Not comparable with beskst (see beskst's own reader_note): DST states this directly, not just a difference of degree. Comparable with beskst13 with named exceptions (net vs gross self-employment income, price adjustment); see beskst13's reader_note.
+- **`branche_77`:** DST flags a data break both within this variable and across variables. The five-digit 1977 industry classification was replaced by the six-digit NACE code in 1993; for 1994-1996 DST derives this code from NACE, so those years are a translation rather than an original coding. Use nace from 1992.
+- **`discoalle_indk`:** DST flags a data break both within this variable and across variables. For employees the code comes from the workplace with the highest pay in 1991-2008, but from the workplace with the most hours from 2009. The code has four digits in 1991-2002 and six from 2003, where the last two digits subdivide the four-digit code. Replaced by disco08_alle_indk in 2010.
+- **`discotyp`:** Where the occupation code came from, including whether it was imputed. DST flags a data break within this variable: job titles stopped being used for imputation in 2000, merged unemployment funds could no longer be used from 2003, and corrected company identification in 2014 moved many people to a different source. Worth checking before treating an occupation as observed.
+- **`disco_alle_indk_13`:** DST flags a data break within this variable. The workplace it is taken from changes in 2009 (highest pay before, most hours from then), and the code has 1-4 significant digits in 1991-2002 and six digits from 2003. DST advises care when comparing over time on more than the first one or two digits. From 2010 the series continues as disco08_alle_indk_13, on a different code set.
+- **`nace`:** DST flags a data break both within this variable and across variables. It uses Danish industry code 1993 for 1992-2002 and code 2003 for 2003-2007, and is replaced by nace_db07 from 2008. Blank, 0, 000000 and 999999 mean no employment in the year or no code found, and before 2003 the code is set only for people whose main income is from work, so DST says a comparison across 2003 can only be made for those people.
+- **`nace_13`:** DST flags a data break both within this variable and across variables. It uses Danish industry code 1993 for 1993-2002 and code 2003 for 2003-2007. Before 2003 it is set only for people whose main income is from work (socio13 below 140); from 2003 also for people with a job whose main income is a pension or a transfer. Continued by nace_db07_13.
+- **`nace_db07`:** DST flags a data break across variables: this replaces nace on a new classification (DB07), so codes do not carry across the 2007/2008 boundary. For 2007 DST imputed the values.
+- **`nystgr`:** DST flags a data break both within this variable and across variables, and says its quality falls after 1990, because the job title in CPR was only updated when a person moved and reported a change. For employees the code was set from different sources before 1993 and in 1993-1995.
+- **`omfang`:** DST flags a data break within this variable: before 2010 the set of values depends on who was in the tax authority's final assessment register that year. Code 1 is the population DST publishes on (at least 15 at year end, fully taxable all year, resident in Denmark at the start and end of the year). Code 5 (dead and not assessed) exists only from 2002; before that those people have code 2.
 
 </details>
 
