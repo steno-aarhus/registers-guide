@@ -85,10 +85,13 @@ Disced/                  ← education, SAS format catalog (see note)
 ```
 
 ::: {.callout-note}
-**Education sits in two places, and the naming is confusing.** The files you
-read from R are in **`SAS_datasaet/Uddannelser/`**. DST's own SAS *format
-catalog* for the same thing is called **DISCED**, which is why the word turns up
-in the documentation and in a separate folder. From R you want `Uddannelser/`.
+**Education sits in two places, and the naming is confusing.** DST's guide
+says the formats for the current classification, **DISCED-15** (used from
+2015), are in the format catalog called **`DISCED`**, while the catalog called
+**`Uddannelser`** holds the older classifications it replaced (Forspalte,
+ISCED1997 and DUN). Look in both `SAS_datasaet/Disced/` and
+`SAS_datasaet/Uddannelser/` before you pick a file; see [Education
+level](#education-level) for how to tell them apart by name.
 :::
 
 ::: {.callout-warning}
@@ -152,7 +155,7 @@ bef_with_mun <- bef_data %>%
   left_join(mun_table, by = c("kom" = "START")) # attach municipality name via the kom code
 ```
 
-### Employment status (socio13)
+### Employment status (socio13) {#socio13-labels}
 
 To get the raw code labels from DST's format table:
 
@@ -201,17 +204,34 @@ like the municipality example above. Nothing about your cohort changes; you are
 only adding a column that says what a code stands for.
 :::
 
-**The filenames are systematic.** DST's own guide sets it out as
-`$AUDD2011_L1L2_KT`, read left to right:
+::: {.callout-warning}
+**What on this page has not been checked on the server.** The naming rules
+below come from DST's own guide (*Brugen af SAS formater i Danmarks Statistik*)
+and DST's published DISCED-15 classification. The **exact filenames** in the
+education folders have not been listed and checked for this section, so treat
+every filename here as a pattern to look for, not a path to copy. Run
+`list.files()` on the folder first, as in the code below.
+:::
 
-  | Part            | Means                                                        |
-  | --------------- | ------------------------------------------------------------- |
-  | `c_` / `n_`     | **c**haracter or **n**umeric - match your column's type        |
-  | `audd` / `udd`  | **a**fsluttet (completed) or igangværende/afbrudt (ongoing or interrupted) education |
-  | `2008` `2011` `2015` | which version of the classification                      |
-  | `l1`            | the level you are coming **from**                             |
-  | `l5`            | the level you are going **to**                                |
-  | `_k` `_t` `_kt` | output: code only, text only, or code + text                  |
+**How to read the name.** DST's guide gives the name for turning `hfaudd` into
+the main area as `AUDD_HOVED_L1L5_KT` (`$AUDD_HOVED_L1L5_KT` in SAS, where `$`
+marks the character version). The files you read from R carry the same parts,
+in lower case, with `c_` or `n_` in front and usually a version year:
+
+  | Part                 | Means                                                   | What to pick |
+  | -------------------- | ------------------------------------------------------- | ------------ |
+  | `c_` / `n_`          | the **c**haracter or **n**umeric version                | the one matching `class(hfaudd)` in your data; the wrong one matches nothing and gives `NA` without an error |
+  | `audd` / `udd`       | **a**fsluttet (completed) or igangværende/afbrudt (ongoing or interrupted) education | `audd` for `hfaudd` |
+  | `2015`, `2023`, ...  | which version of the format                             | the newest only; it covers older years too |
+  | `hoved`, `type`, `niveau`, `fag` | which of the four DISCED-15 dimensions you group by (see below) | `hoved` for short/medium/long, as SEPLINE does |
+  | `l1l5`               | from level 1 (the four-digit code) to level 5 (the coarsest grouping) | `l1l5` to go from `hfaudd` to the two-digit main area |
+  | `_k` / `_t` / `_kt`  | what you get back: the code, the text, or both          | `_k` for analysis, `_t` for table labels (see [Which variant to pick](#which-variant)) |
+
+**Why there are several files for what looks like one lookup.** DST's guide
+says it makes **up to six variants** of every format: character or numeric,
+each as `_k`, `_t` and `_kt`, "where possible". Seeing five or six files with
+the same stem is therefore normal. They hold the same mapping and differ only in
+the type they expect and what they return.
 
 ::: {.callout-warning}
 **`hfaudd` is a *completed* education, so you want an `audd` file, not a `udd`
@@ -223,34 +243,42 @@ highest completed education. A `udd` lookup joined to `hfaudd` will match some
 rows, miss others, and never tell you.
 :::
 
-And the levels themselves. The Danish names are what you will see on the server;
-the English is what they mean:
+**The four dimensions.** [DISCED-15 for completed
+education](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd)
+groups the same four-digit codes in four different ways, and each has its own
+format. Pick the one that answers your question:
 
-  | Level | Danish (as DST names it) | In English                                    |
-  | ----- | ------------------------- | ---------------------------------------------- |
-  | **1** | Den 4-cifrede AUDD        | the four-digit code for the specific education - this is `hfaudd` |
-  | 2     | Elementærniveau           | elementary level - the finest grouping above the code itself |
-  | 3     | Undergruppe               | subgroup                                       |
-  | 4     | Mellemgruppe              | intermediate group                             |
-  | **5** | **Hovedgruppe**           | **main group - the short/medium/long level almost every analysis wants** |
+  | Dimension (Danish)  | Groups education by                   | Top level, for example                          | Use it for |
+  | ------------------- | ------------------------------------- | ------------------------------------------------ | ---------- |
+  | **Hovedområde** (`hoved`) | the Danish main areas of education | `10` Grundskole, `20` Gymnasiale uddannelser, `30` Erhvervsfaglige uddannelser, `40` KVU, `50` MVU, `60` Bachelor, `70` LVU, `80` Ph.d., `90` Uoplyst | short/medium/long education; what SEPLINE uses |
+  | Uddannelsesniveau (`niveau`) | level, lined up with the international ISCED | `10` Grundskole til og med 6. klasse, `30` Gymnasiale og erhvervsfaglige, `50` KVU, `60` MVU / Bachelorer, `70` LVU | comparing with ISCED-based studies |
+  | Fagområde (`fag`)   | subject, regardless of level          | `25` Humanistisk, `35` Samfundsvidenskab, `45` Naturvidenskab | what field someone is trained in |
+  | Uddannelsestype (`type`) | type of programme                | `50` Bacheloruddannelser, `55` Professionsbachelor, `85` Voksenuddannelser og kurser | ordinary vs adult education |
 
-So the file that turns `hfaudd` into short/medium/long is an **L1 → L5** file.
-Level 5 is the grouping that comes out as `10 Grundskole`, `20 Gymnasiale
-uddannelser`, `30 Erhvervsfaglige uddannelser`, `35 Adgangsgivende
-uddannelsesforløb`, `40 KVU`, `50 MVU`, `60 Bachelor`, `70 LVU`, `80 Ph.d.`
+The same number means different things in different dimensions (`50` is MVU in
+`hoved` and bachelor programmes in `type`), so a code is only meaningful
+together with the file it came from. Record the filename in your analysis
+script.
+
+In the Hovedområde hierarchy the four-digit education code sits under groupings
+of eight, six, four and two digits, ending in the two-digit main area. That is
+why the file from `hfaudd` to the main area is an **L1 → L5** file.
 
 ```r
 library(haven) # read_sas()
 library(dplyr)
 
-# Look first - the version in the filename varies, so do not copy this blindly
-list.files("E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Uddannelser/")
+# Look first - the version and the exact names vary, so do not copy a filename
+# from this page. Check both folders (see the note under "Where are the format
+# tables?").
+fmt_root <- "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/"
+list.files(paste0(fmt_root, "Disced/"), pattern = "audd", ignore.case = TRUE)
+list.files(paste0(fmt_root, "Uddannelser/"), pattern = "audd", ignore.case = TRUE)
 
-# An L1 -> L5 file: from the 4-digit code to Hovedgruppe, code + text.
-# c_ = character, so use n_audd2015_l1l5_kt.sas7bdat if hfaudd is numeric.
-udda_level <- read_sas(
-  "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Uddannelser/c_audd2015_l1l5_kt.sas7bdat"
-)
+# Then read the newest completed-education, main-area, level 1 -> 5 file in
+# the type that matches hfaudd (c_ for character, n_ for numeric), code only.
+# The filename below is the pattern to look for, not a confirmed name.
+udda_level <- read_sas(paste0(fmt_root, "Disced/c_audd2023_hoved_l1l5_k.sas7bdat"))
 names(udda_level) # find the START column and the label column
 head(udda_level)
 
@@ -263,22 +291,24 @@ udda_data %>% summarise(unmatched = sum(is.na(.data[[names(udda_level)[2]]])), t
 ```
 
 ::: {.callout-warning}
-**Three things to check before you trust the result.**
+**Four things to check before you trust the result.**
 
-- **Use the newest version, and only that one.** The folder holds several
-  versions side by side - `2008`, `2011`, `2015` and possibly newer - and it is
-  tempting to think you need one per study year. You do not. DST's own guide
-  says the education statistics are updated every year with the newest codes
-  **backwards in time as well**, so the latest version already covers the older
-  codes. One file, for the whole study period. (From 2015 the classification is
-  **DISCED-15**, which replaced the older `Forspalte`, `ISCED1997` and `DUN`.)
-- **Character or numeric.** `c_` (`$` in SAS) expects a **character** variable,
-  `n_` a **numeric** one. Both exist for the same mapping. Pick the one matching
-  your column, or convert - a type mismatch produces a join that matches nothing
-  and fills the column with `NA` without any error.
-- **`_k` vs `_t` vs `_kt`.** `_k` gives you only the code, `_t` only the text,
-  `_kt` both. For a categorical covariate you usually want `_kt` so you can see
-  what the codes mean while you work.
+- **Use the newest version, and only that one.** The folders hold several
+  versions side by side and it is tempting to think you need one per study
+  year. You do not. DST's guide says the education statistics are updated every
+  year with the newest codes **backwards in time as well**, so the latest
+  version already covers the older codes. One file, for the whole study period.
+- **DISCED-15 or an older classification.** From 2015 DST uses DISCED-15, which
+  replaced Forspalte, ISCED1997 and DUN. A file with no dimension in its name
+  (for example `c_audd2015_l1l5_kt`) may belong to one of the older
+  classifications, whose levels and codes are not the ones in the table above.
+  Check the top-level codes with `head()` against the table before you use it.
+- **Character or numeric.** `c_` expects a **character** variable, `n_` a
+  **numeric** one. Pick the one matching your column, or convert - a type
+  mismatch produces a join that matches nothing and fills the column with `NA`
+  without any error.
+- **The unmatched count.** A high number means a type mismatch or the wrong
+  file (`udd` instead of `audd`, or an old classification).
 :::
 
 ::: {.callout-note}
@@ -299,14 +329,42 @@ extraction, from opening UDDA to a categorised variable, is in [Socioeconomic
 variables](socioeconomic-variables.qmd#education), which also covers the
 `heaven` shortcut.
 
+## Which variant to pick: `_k`, `_t` or `_kt` {#which-variant}
+
+Every format comes in up to three output variants. DST's guide illustrates
+them with a municipality code turned into a region, using Copenhagen
+municipality (`101`):
+
+  | Suffix | Returns                 | Copenhagen (`101`) becomes |
+  | ------ | ----------------------- | -------------------------- |
+  | `_k`   | the code only           | `84`                       |
+  | `_t`   | the text only           | `Hovedstaden`              |
+  | `_kt`  | code and text together  | `84 Hovedstaden`           |
+
+**Use `_k` for the analysis variable.** The code is short, it sorts correctly,
+and it does not change if DST rewords a label in a later version. You can
+filter and group on it directly (`%in% c("40", "50")`), and a model or a
+`case_when()` written against codes keeps working.
+
+**Use `_t` for the labels in a finished table.** Join it on at the end, when
+you build Table 1 or a figure, so the text never becomes something your code
+depends on.
+
+**Use `_kt` for looking, not for analysing.** It is the most readable while you
+explore, because you see what each code means and the values still sort by
+code. But `"40 Korte videregående uddannelser, KVU"` is code and text glued
+into one value: filtering on it means matching the whole string, and it breaks
+if the wording changes.
+
+**Whichever you pick, the key is the same.** All three join on `START`, the
+code in your own data. Only the returned column differs.
+
 ## Tips for finding the right table
 
 1. Open the Star on the desktop or navigate to `E:/Formater/...` in File
    Explorer
-2. Look at the suffix:
-   - `_T` = text label only
-   - `_K` = code only
-   - `_KT` = both code and text
+2. Use `list.files()` on the subfolder, and expect several files per format
+   (`c_`/`n_` times `_k`/`_t`/`_kt`)
 3. Load the table and look at the columns with `names()` and `head()`
 
 ```r
