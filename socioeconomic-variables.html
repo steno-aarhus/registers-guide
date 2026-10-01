@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-30">
+<meta name="dcterms.date" content="2026-10-01">
 
 <title>Socioeconomic variables – Register-based research at Statistics Denmark</title>
 <style>
@@ -594,13 +594,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#what-sepline-is-and-what-this-page-covers" id="toc-what-sepline-is-and-what-this-page-covers" class="nav-link active" data-scroll-target="#what-sepline-is-and-what-this-page-covers">What SEPLINE is, and what this page covers</a></li>
-  <li><a href="#the-three-dimensions-on-this-page" id="toc-the-three-dimensions-on-this-page" class="nav-link" data-scroll-target="#the-three-dimensions-on-this-page">The three dimensions on this page</a></li>
-  <li><a href="#before-you-extract-anything-give-the-cohort-a-stable-row-id" id="toc-before-you-extract-anything-give-the-cohort-a-stable-row-id" class="nav-link" data-scroll-target="#before-you-extract-anything-give-the-cohort-a-stable-row-id">Before you extract anything: give the cohort a stable row id</a></li>
-  <li><a href="#employment---akm-socio13" id="toc-employment---akm-socio13" class="nav-link" data-scroll-target="#employment---akm-socio13">Employment - AKM (<code>socio13</code>)</a></li>
+  <li><a href="#sepline-in-brief" id="toc-sepline-in-brief" class="nav-link active" data-scroll-target="#sepline-in-brief">SEPLINE in brief</a></li>
+  <li><a href="#timing" id="toc-timing" class="nav-link" data-scroll-target="#timing">When each dimension is measured</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup (run once)</a>
+  <ul class="collapse">
+  <li><a href="#row-id" id="toc-row-id" class="nav-link" data-scroll-target="#row-id">The cohort: a row id and a baseline year</a></li>
+  <li><a href="#open-registers" id="toc-open-registers" class="nav-link" data-scroll-target="#open-registers">Open the registers</a></li>
+  <li><a href="#missing" id="toc-missing" class="nav-link" data-scroll-target="#missing">Missing is a category, not a dropped row</a></li>
+  </ul></li>
   <li><a href="#education" id="toc-education" class="nav-link" data-scroll-target="#education">Education - UDDA (<code>hfaudd</code>)</a></li>
+  <li><a href="#employment" id="toc-employment" class="nav-link" data-scroll-target="#employment">Employment - AKM (<code>socio13</code>)</a></li>
   <li><a href="#faik-income" id="toc-faik-income" class="nav-link" data-scroll-target="#faik-income">Income - FAIK via BEF (<code>famaekvivadisp_13</code>)</a></li>
-  <li><a href="#assemble-all-ses-variables-onto-the-cohort" id="toc-assemble-all-ses-variables-onto-the-cohort" class="nav-link" data-scroll-target="#assemble-all-ses-variables-onto-the-cohort">Assemble all SES variables onto the cohort</a></li>
+  <li><a href="#assemble" id="toc-assemble" class="nav-link" data-scroll-target="#assemble">Assemble all SES variables onto the cohort</a></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
   <li><a href="#next-steps" id="toc-next-steps" class="nav-link" data-scroll-target="#next-steps">Next steps</a></li>
   </ul>
@@ -612,7 +617,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./extract-variables.html">Variables and dataset · 11-12</a></li><li class="breadcrumb-item"><a href="./extract-variables.html">11 - Extract variables</a></li><li class="breadcrumb-item"><a href="./socioeconomic-variables.html">Socioeconomic variables</a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title">Socioeconomic variables</h1>
-<p class="subtitle lead">Education, income and employment following the SEPLINE approach</p>
+<p class="subtitle lead">Education, employment and income following the SEPLINE guideline</p>
 </div>
 
 
@@ -623,7 +628,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 30, 2026</p>
+      <p class="date">October 1, 2026</p>
     </div>
   </div>
   
@@ -635,669 +640,605 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>You now know the pattern: <code>read_register/open_dataset → filter → collect → left_join</code>. That is exactly what you use here. Two things are <strong>new</strong> in this phase:</p>
-<ol type="1">
-<li><strong>“Fetch for the year before index date”:</strong> SES registers are annual snapshots. You cannot just filter on <code>pnr</code>; you must also match on <em>which year</em> is relevant per person (<code>year(index_date) - 1</code>). This is done by calculating the baseline year per person and using it as a join key.</li>
-<li><strong>FAIK via <code>familie_id</code>:</strong> Income is linked to the <em>household</em>, not the person directly. You need BEF as a bridge: fetch <code>familie_id</code> from BEF for the baseline year, then join to FAIK on <code>familie_id</code>.</li>
-</ol>
-<p>The rest is categorisation per SEPLINE guidelines.</p>
-<section id="what-sepline-is-and-what-this-page-covers" class="level2">
-<h2 class="anchored" data-anchor-id="what-sepline-is-and-what-this-page-covers">What SEPLINE is, and what this page covers</h2>
-<p>Socioeconomic position (SEP) is a <strong>latent construct</strong> - it cannot be measured directly, only approximated through proxies. Many variables can serve as that proxy (education, income, occupation, wealth, housing, area-level deprivation, and more), and studies have historically picked different ones, measured them at different times relative to their exposure, and categorised them differently - which makes results hard to compare across studies. <strong>SEPLINE</strong> is a 2025 Danish national guideline written to fix exactly that: a consensus document, developed through two workshops with researchers, universities and data holders across Denmark, recommending <em>which</em> register variables to use for SEP, <em>when</em> in a study to measure them, and <em>how</em> to categorise them, so that studies using Danish registers report comparable things when they say “adjusted for socioeconomic position.”</p>
-<p><strong>SEPLINE article:</strong> Hjorth et al.&nbsp;<em>Clinical Epidemiology</em> 2025 - <a href="https://doi.org/10.2147/CLEP.S520772">doi:10.2147/CLEP.S520772</a>, with a <a href="https://doi.org/10.2147/CLEP.S612503">corrigendum</a> (Hjorth et al.&nbsp;2026) correcting two of its tables. See the article for full justification, recommended reference groups and categorisations.</p>
-<p><strong>SEPLINE covers four SEP dimensions, not three - this page implements three of them.</strong> Directly from the article: <em>“This guideline encompasses educational level, labor market affiliation or occupation, income, and wealth, alongside closely related sociodemographic factors such as marital or cohabitation status, ethnicity, and area-level characteristics.”</em> <strong>Wealth</strong> is a co-equal fourth SEP dimension in SEPLINE’s own definition, not covered on this page yet (Table 7’s <code>FGNF_2020</code>/<code>FAMFORMREST_NY05</code> are not built out here - <a href="./contribute.html">get in touch</a> if you have working code for it). <strong>Marital or cohabitation status is explicitly not SEP</strong> in SEPLINE’s own framing - it is a <em>related</em> sociodemographic factor, recommended alongside SEP for a fuller picture, not as part of it. Its own note: cohabiting or married people tend to have better health outcomes and lower mortality, but “though not a traditional indicator of socio-economic position,” including it helps identify vulnerable groups that SEP alone misses. SEPLINE’s own default for Denmark is <strong>cohabitation</strong> status, not marital status - many Danish couples live together unmarried, so marital status alone misses them; marital status is suggested only as a supplementary analysis, mainly for international comparability. Neither is implemented on this page.</p>
-<p><strong>SEPLINE gives you separate indicators, not one combined score.</strong> Unlike, say, <a href="./nmi.html">NMI</a>, which deliberately produces one weighted number, SEPLINE stops at the individual-indicator level and says so directly: <em>“For some settings, it may be meaningful to combine these individual indicators into a composite measure or socioeconomic index to reflect the multidimensional nature of socioeconomic position, however, such approaches are not addressed in this guideline.”</em> Expect <code>education_cat</code>, <code>occupation_cat</code> and <code>income_cat</code> as three separate covariates at the end of this page, not one SEP score - a composite index is a decision and a method you (or your analysis plan) would need to justify independently; SEPLINE does not hand you one.</p>
-<div class="callout callout-style-simple callout-important callout-titled" title="Structural guidance, not verified code">
+<p>This page gives you three <strong>stand-alone recipes</strong>, one per socioeconomic dimension. Each one takes your cohort, reads one or two registers, and ends with a single table holding one category per cohort row: <code>education_cat</code>, <code>occupation_cat</code> or <code>income_cat</code>. Run the <a href="#setup">setup</a> once, then any recipe on its own, in any order.</p>
+<p>Every recipe follows the same five steps: <strong>open the register → fetch → attach to the cohort → categorise → check</strong>.</p>
+<section id="sepline-in-brief" class="level2">
+<h2 class="anchored" data-anchor-id="sepline-in-brief">SEPLINE in brief</h2>
+<p><strong>SEPLINE</strong> is a 2025 Danish national guideline for measuring socioeconomic position (SEP) in register-based research: <em>which</em> register variables to use, <em>when</em> to measure them, and <em>how</em> to categorise them, so that studies saying “adjusted for socioeconomic position” mean comparable things. Hjorth et al. <em>Clinical Epidemiology</em> 2025, <a href="https://doi.org/10.2147/CLEP.S520772">doi:10.2147/CLEP.S520772</a>, with a <a href="https://doi.org/10.2147/CLEP.S612503">corrigendum</a> (Hjorth et al.&nbsp;2026). The table numbers on this page refer to that article.</p>
+<div class="callout callout-style-simple callout-important callout-titled" title="Structural guidance, not validated code">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Important</span>Structural guidance, not verified code
+<span class="screen-reader-only">Important</span>Structural guidance, not validated code
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The categorisations below are <strong>not validated</strong>. They show how to code the variables, not an approved implementation, so review them against your own analysis plan before you use them. Have working code, or input on the categorisations? <a href="./contribute.html">Get in touch</a>.</p>
+<p>The recipes show how to implement SEPLINE’s recommendations. They are <strong>not validated</strong>, and where SEPLINE leaves a choice open, the page says which choice it made. Review them against your own analysis plan before you use them. Have working code, or input on the categorisations? <a href="./contribute.html">Get in touch</a>.</p>
 </div>
 </div>
-<p>The examples read registers by name with <code>read_register()</code>, which assumes <a href="./parquet-and-fastreg.html#fastreg-paths">fastreg is pointed at your registers</a>. Without fastreg, use <code>open_dataset("path/to/akm/")</code> instead. Column names differ between deliveries, so check yours with <code>names(your_data)</code>.</p>
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Fetch the variable for the year BEFORE index by default - but SEPLINE does not use one timing rule for all three dimensions.</strong> All three registers are <strong>annual</strong>: each person has one value per calendar year. If you take the value from the <em>index year</em> itself, you risk measuring status that falls <strong>after</strong> your exposure. Example: index = surgery date 15 June 2015. The 2015 value may reflect status after the surgery and be affected by the exposure itself (e.g. job loss after illness) - that gives reverse causation, whereas you want a <strong>baseline</strong> value from before the exposure.</p>
-<p><code>year(index_date) - 1</code> is a safe default, and this page uses it throughout for consistency. But SEPLINE’s own tables set the timing per dimension, not once for all three:</p>
+<details>
+<summary>
+What SEPLINE covers, and what this page leaves out
+</summary>
 <ul>
-<li><strong>Income</strong> (Table 8): strictly the <strong>three years preceding</strong> the index year, never the index year itself - no ambiguity here, see the income section below.</li>
-<li><strong>Employment</strong> (Table 5): “the latest available status at index date,” in practice the year before index for AKM’s annual snapshot. SEPLINE’s own caveat: go earlier still if your specific outcome carries a strong reverse-causation risk, or use DREAM instead of AKM if you need closer-to-index granularity (DREAM updates weekly, not annually).</li>
-<li><strong>Education</strong> (Table 2): “the latest available educational level at index date” - not the year before. A completed degree cannot be undone by illness, so education does not carry the same reverse-causation risk as employment or income. See the <a href="#education">education section’s own callout</a> for how to follow this looser rule instead of the page’s default.</li>
+<li><strong>Four SEP dimensions, three here.</strong> SEPLINE covers educational level, labour market affiliation, income and <strong>wealth</strong>. Wealth (Table 7: <code>FAMFORMREST_NY05</code>, <code>FGNF_2020</code>) is not built out on this page yet.</li>
+<li><strong>Related factors are not SEP.</strong> SEPLINE also covers cohabitation or marital status, ethnicity and area-level characteristics, as sociodemographic factors that sit <em>alongside</em> SEP. For Denmark it recommends <strong>cohabitation</strong> over marital status, because many couples live together unmarried. None of these are implemented here.</li>
+<li><strong>Separate indicators, not one score.</strong> SEPLINE stops at the individual indicators and says that composite indices “are not addressed in this guideline”. Expect three separate covariates at the end of this page, not one SEP score.</li>
+<li><strong>The indicators are not interchangeable.</strong> SEPLINE stresses that education, labour market affiliation and income capture different things, so the choice should follow the research question.</li>
 </ul>
-<p>So <code>year(index_date) - 1</code> is this page’s uniform <em>default</em>, not SEPLINE’s uniform <em>rule</em> - know the difference before you defend the choice in a methods section.</p>
-</div>
-</div>
-</div>
+</details>
 </section>
-<section id="the-three-dimensions-on-this-page" class="level2">
-<h2 class="anchored" data-anchor-id="the-three-dimensions-on-this-page">The three dimensions on this page</h2>
+<section id="timing" class="level2">
+<h2 class="anchored" data-anchor-id="timing">When each dimension is measured</h2>
+<p>All three registers are <strong>annual</strong>. Taking the value from the index year itself risks measuring status <em>after</em> your exposure (a job lost because of the illness you study), which is reverse causation. SEPLINE sets the timing per dimension:</p>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 16%">
-<col style="width: 9%">
-<col style="width: 73%">
+<col style="width: 8%">
+<col style="width: 54%">
+<col style="width: 36%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Dimension</th>
-<th>Register</th>
-<th>Variable</th>
+<th>SEPLINE’s rule</th>
+<th>This page</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td><strong>Education</strong></td>
-<td>UDDA</td>
-<td><code>hfaudd</code> - highest completed education (DISCED-15 code)</td>
+<td>“The latest available educational level at index date”; if a year is missing, take it from other years (Table 2)</td>
+<td>the most recent record in or before the year before index</td>
 </tr>
 <tr class="even">
-<td><strong>Income</strong></td>
-<td>FAIK</td>
-<td><code>famaekvivadisp_13</code> - household-equivalised disposable income</td>
+<td><strong>Employment</strong></td>
+<td>“The latest available status at index date”; with annual AKM, the year prior to index (Table 5 and text)</td>
+<td>the year before index</td>
 </tr>
 <tr class="odd">
-<td><strong>Employment</strong></td>
-<td>AKM</td>
-<td><code>socio13</code> - labour market classification</td>
+<td><strong>Income</strong></td>
+<td>The mean of “the three calendar years preceding the year of index” (Table 8)</td>
+<td>the year before index and the two years before that</td>
 </tr>
 </tbody>
 </table>
-<p>Wealth is SEPLINE’s fourth SEP dimension and is not in this table - see <a href="#what-sepline-is-and-what-this-page-covers">above</a> for why. SEPLINE specifies both <strong>how</strong> each of the three variables here is categorised and <strong>when</strong> in the follow-up it is measured.</p>
+<p>For education the year before index is not a stricter choice than SEPLINE’s: UDDA holds the status on <strong>1 October</strong> each year (Table 1), so for an index date before 1 October the index year’s value does not yet exist at index. If your index dates fall on or after 1 October, you may include the index year (see the <a href="#education">education recipe</a>).</p>
 </section>
-<section id="before-you-extract-anything-give-the-cohort-a-stable-row-id" class="level2">
-<h2 class="anchored" data-anchor-id="before-you-extract-anything-give-the-cohort-a-stable-row-id">Before you extract anything: give the cohort a stable row id</h2>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>This page joins on <code>row_id</code>, not <code>pnr</code>, throughout.</strong> If your cohort has exactly one row per person, that makes no difference to you - skip ahead. If it does not (e.g.&nbsp;a comparison group matched <strong>with replacement</strong>, see <a href="./comparison-cohort.html#step-4---assemble-validate-and-save">comparison cohort’s note on it</a>), <code>row_id</code> is what keeps a repeated <code>pnr</code>’s different <code>index_date</code>s from getting mixed up in the joins below - with no error and no <code>NA</code> to flag it if it went wrong.</p>
-</div>
-</div>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># mutate, left_join, group_by, summarise, bind_rows</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lubridate) <span class="co"># year() to extract year from a date</span></span>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup (run once)</h2>
+<section id="row-id" class="level3">
+<h3 class="anchored" data-anchor-id="row-id">The cohort: a row id and a baseline year</h3>
+<p>Every recipe starts from <code>cohort</code>, one row per person and index date, with <code>pnr</code> and <code>index_date</code>. Two columns are added once and used everywhere:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># mutate, left_join, group_by, summarise</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lubridate) <span class="co"># year()</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">row_id =</span> <span class="fu">row_number</span>(), <span class="co"># one id per cohort row - stays unique even if pnr repeats</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">year_baseline =</span> lubridate<span class="sc">::</span><span class="fu">year</span>(index_date) <span class="sc">-</span> <span class="dv">1</span> <span class="co"># baseline year, computed once and reused below</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">row_id =</span> <span class="fu">row_number</span>(), <span class="co"># one id per cohort row - stays unique even if a pnr repeats</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">year_baseline =</span> <span class="fu">year</span>(index_date) <span class="sc">-</span> <span class="dv">1</span> <span class="co"># the year before index, see the timing table above</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Every join from here on uses <code>row_id</code> (to attach a finished variable back onto <code>cohort</code>) or <code>pnr</code> + <code>year_baseline</code> together (to pull a value out of a register) - never <code>pnr</code> by itself.</p>
-<div class="callout callout-style-simple callout-important">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>A <code>collect()</code>ed register extract only contains rows that matched your filter.</strong> Someone with zero qualifying records - no UDDA row before their baseline year, no AKM row for their exact baseline year, no household match in BEF - is simply <strong>absent</strong> from that table, not present with an <code>NA</code>. Left-join such a table onto your cohort and those people get <code>NA</code> for the derived variable.</p>
-<p>That matters more than it looks. Most R modelling functions, including <code>survival::coxph()</code>, drop any row with an <code>NA</code> covariate by default (<code>na.action = na.omit</code>) - <strong>silently, with no warning</strong>. A person with unknown education does not become an “Unknown” category in your model, they vanish from the analysis entirely, and your model’s N no longer matches your cohort’s N.</p>
-<p>The fix used throughout this page: <strong>join onto the full cohort (via <code>row_id</code>) before you categorise, not after.</strong> Then <code>case_when(... TRUE ~ "Unknown")</code> catches the <code>NA</code> and turns it into an explicit category, the same way it already catches any other unmatched code. The <code>stopifnot(nrow(...) == nrow(cohort))</code> checks in the code below exist to confirm this: as long as row counts hold at every step, nobody has been silently dropped. Before you trust a downstream model, also check its N against your cohort’s N directly - this exact pattern (register extract → collect → categorise → model) is not specific to SES variables, so the same check is worth applying anywhere else in your pipeline that joins a register onto a cohort and feeds the result into a regression.</p>
-</div>
-</div>
-</div>
+<p>Every join uses <code>row_id</code> (to attach a finished category back to the cohort) or <code>pnr</code> + a year (to pull a value out of a register), never <code>pnr</code> alone. If your cohort has one row per person, this changes nothing. If a <code>pnr</code> can appear more than once (for example controls matched <strong>with replacement</strong>, see <a href="./comparison-cohort.html#step-4---assemble-validate-and-save">Comparison cohort</a>), <code>row_id</code> keeps each row’s own index date apart.</p>
 </section>
-<section id="employment---akm-socio13" class="level2">
-<h2 class="anchored" data-anchor-id="employment---akm-socio13">Employment - AKM (<code>socio13</code>)</h2>
-<p><code>socio13</code> is DST’s socioeconomic classification. The full code list, with what each value means, is in DST’s classification documentation: <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio">SOCIO →</a>. To attach those labels to your data in R, use DST’s format table on the server (<a href="./formatting-tables.html#socio13-labels">Format tables</a>).</p>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>DST’s words are narrower than the everyday ones.</strong> “Beskæftiget” is a statistical definition with thresholds attached, not simply “has a job”, and the same goes for “husstand” and “disponibel indkomst” further down this page. If you are about to write in a methods section what a category means, look the word up first: <a href="https://www.dst.dk/da/Statistik/dokumentation/hvadbetyder">Hvad betyder →</a>. Getting this wrong does not produce an error, it produces a sentence in your paper that does not match your data.</p>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>One code is easy to get wrong.</strong> <code>420</code> is <strong>children under 15</strong>, a real category rather than a missing value, so seeing it in an adult cohort means the index date is wrong, not that the data is incomplete.</p>
-<p><strong><code>410</code> (“Andre” in DST’s own SOCIO nomenclature) is grouped with Unemployed here, per SEPLINE’s corrected Table 6 - this was genuinely ambiguous until a 2026 corrigendum fixed it.</strong> The original article’s Table 6 listed <code>410</code> in two rows at once: under “B1: Unemployed (210, 410)” <em>and</em> under “Missing/other”. The <a href="https://doi.org/10.2147/CLEP.S612503">corrigendum</a> (Hjorth et al.&nbsp;2026) corrects Table 6 and removes <code>410</code> from “Missing/other,” leaving it only under B1 Unemployed - so the code above follows the corrected table, not the ambiguous original. DST’s own code list still calls <code>410</code> “Andre” as its own nomenclature category; SEPLINE’s corrected categorization for <em>analysis</em> groups it with Unemployed regardless.</p>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>AKM has a documented gap in 2014.</strong> SEPLINE’s Table 4 (Data Sources for Labor Market Affiliation) states, without further detail: <em>“Data gap in 2014.”</em> Nothing elsewhere in the article says what the gap actually is - a missing year entirely, partial coverage, or specific codes affected - so check your own extract before trusting any 2014 <code>socio13</code> value:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>akm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2014</span>) <span class="sc">%&gt;%</span> <span class="fu">count</span>(socio13) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Compare the total row count and code distribution against a neighbouring year. If your cohort has baseline years in 2014, resolve this before you trust that year’s employment status.</p>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Two things about <code>year</code> before you join on it.</strong> It is not a DST variable - it comes from the parquet partitioning, so confirm the name in your own files (<a href="./file-formats.html#year-column">Phase 4</a>). And do not assign to it: <code>mutate(year = ...)</code> overwrites the partition column rather than adding one, which silently breaks every join in this chapter, since they all join on person plus year. Give a derived year its own name, e.g.&nbsp;<code>index_year</code>.</p>
-</div>
-</div>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register() - reads registers by name</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(arrow) <span class="co"># open_dataset() - fallback without fastreg</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open AKM via fastreg (read_register gets the path from your project config)</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>akm <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"akm"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="co"># standardise column names</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/") %&gt;% rename_with(tolower)</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fetch employment status for every baseline year the cohort needs.</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># unique() here is only an efficiency filter: cohort$year_baseline has one</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co"># value PER ROW (with repeats - many people share a baseline year), and</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># unique() collapses that to the distinct set of years so the query below</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># does not re-read a year twice. It does NOT pair a year back to a person -</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co"># that pairing happens in step 3, via the join, using pnr + year_baseline</span></span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co"># together.</span></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>index_year <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>year_baseline)</span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co"># copy = TRUE: akm is a remote/database connection (fastreg may route through</span></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co"># DuckDB), tibble(pnr = ...) is a local R object. dplyr will not silently join</span></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co"># across two different sources - copy = TRUE is your explicit permission to</span></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co"># copy the small local pnr list into the database so the join can run there.</span></span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Without it the join errors outright (it does not affect correctness, only</span></span>
-<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="co"># whether the code runs at all) - needed on every semi_join in this pattern,</span></span>
-<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="co"># not just this one, e.g. also for LPR extracts.</span></span>
-<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>akm_data <span class="ot">&lt;-</span> akm <span class="sc">%&gt;%</span></span>
-<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort's pnr's</span></span>
-<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>index_year) <span class="sc">%&gt;%</span> <span class="co"># only years the cohort actually needs</span></span>
-<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, socio13) <span class="sc">%&gt;%</span> <span class="co"># only the columns we use</span></span>
-<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># fetch into R</span></span>
-<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Attach to cohort - one row per cohort row, matched to THAT row's own</span></span>
-<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="co"># baseline year (year_baseline already exists on cohort, see "Before you</span></span>
-<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a><span class="co"># extract anything" above)</span></span>
-<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>cohort_akm <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(akm_data, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"year"</span>)) <span class="co"># pnr + year together, not pnr alone</span></span>
-<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a><span class="co"># Sanity check: a correct join never changes the row count</span></span>
-<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_akm) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span>
-<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Categorise per SEPLINE</span></span>
-<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>cohort_akm <span class="ot">&lt;-</span> cohort_akm <span class="sc">%&gt;%</span></span>
-<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>    <span class="at">occupation_cat =</span> <span class="fu">case_when</span>(</span>
-<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span></span>
-<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>        <span class="fu">c</span>(</span>
-<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>          <span class="dv">110</span>,</span>
-<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>          <span class="dv">111</span>,</span>
-<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>          <span class="dv">112</span>,</span>
-<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a>          <span class="dv">113</span>,</span>
-<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>          <span class="dv">114</span>,</span>
-<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>          <span class="dv">120</span>,</span>
-<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>          <span class="dv">131</span>,</span>
-<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a>          <span class="dv">132</span>,</span>
-<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a>          <span class="dv">133</span>,</span>
-<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a>          <span class="dv">134</span>,</span>
-<span id="cb3-56"><a href="#cb3-56" aria-hidden="true" tabindex="-1"></a>          <span class="dv">135</span>,</span>
-<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a>          <span class="dv">139</span></span>
-<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a>        ) <span class="sc">~</span> <span class="st">"Employed"</span>,</span>
-<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">310</span> <span class="sc">~</span> <span class="st">"Student"</span>, <span class="co"># under uddannelse</span></span>
-<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>      <span class="co"># 210 arbejdsløse mindst halvdelen af året, 410 "Andre" - SEPLINE Table 6</span></span>
-<span id="cb3-61"><a href="#cb3-61" aria-hidden="true" tabindex="-1"></a>      <span class="co"># groups both under B1 Unemployed (corrigendum-corrected version, see below)</span></span>
-<span id="cb3-62"><a href="#cb3-62" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">210</span>, <span class="dv">410</span>) <span class="sc">~</span> <span class="st">"Unemployed"</span>,</span>
-<span id="cb3-63"><a href="#cb3-63" aria-hidden="true" tabindex="-1"></a>      <span class="co"># 220 sygedagpenge/orlov, 321 førtidspension, 330 kontanthjælp</span></span>
-<span id="cb3-64"><a href="#cb3-64" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">220</span>, <span class="dv">321</span>, <span class="dv">330</span>) <span class="sc">~</span> <span class="st">"Outside labour market"</span>,</span>
-<span id="cb3-65"><a href="#cb3-65" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">322</span>, <span class="dv">323</span>) <span class="sc">~</span> <span class="st">"Retired"</span>, <span class="co"># folkepension, efterløn</span></span>
-<span id="cb3-66"><a href="#cb3-66" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">420</span> <span class="sc">~</span> <span class="st">"Child under 15"</span>, <span class="co"># should not occur in an adult cohort</span></span>
-<span id="cb3-67"><a href="#cb3-67" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Unknown"</span> <span class="co"># missing</span></span>
-<span id="cb3-68"><a href="#cb3-68" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb3-69"><a href="#cb3-69" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-simple callout-warning callout-titled" title="Check your AKM before you trust this join">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
+<section id="open-registers" class="level3">
+<h3 class="anchored" data-anchor-id="open-registers">Open the registers</h3>
+<p>The recipes read the registers through <strong>one DuckDB connection</strong> instead of <code>read_register()</code>.</p>
+<div class="callout callout-style-simple callout-note callout-titled" title="Why one DuckDB connection, and which recipe needs it">
+<div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Warning</span>Check your AKM before you trust this join
+<span class="screen-reader-only">Note</span>Why one DuckDB connection, and which recipe needs it
 </div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
 </div>
-<div id="callout-2" class="callout-2-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<p>The recipe above assumes <strong>one row per <code>pnr</code> per year</strong> in <code>akm_data</code> - that is why the join on <code>pnr</code> + <code>year_baseline</code> does not need a dedup step. SEPLINE’s own description of <code>socio13</code> backs this up: “employed individuals are registered based on their main occupation during a given year, based on the activity that generated the largest amount of income” (Hjorth et al. 2025, <a href="https://doi.org/10.2147/CLEP.S520772">doi:10.2147/CLEP.S520772</a>, Table 6, Labor Market Affiliation). DST resolves multiple jobs to one code <em>before</em> the register is delivered, so a standard AKM delivery should not have duplicates.</p>
-<p>SEPLINE later published a <a href="https://doi.org/10.2147/CLEP.S612503">corrigendum</a> (Hjorth et al.&nbsp;2026) to that same Table 6: it adds DREAM codes for people awaiting a flex job (740, 743–748) that the original table missed, merges the old Senior Pension code into C3 Disability Pension (noting that Statistics Denmark confirmed both schemes fall under <code>socio13</code> code <code>321</code>), and - relevant to step 4 above - removes <code>410</code> from “Missing/other,” leaving it only under B1 Unemployed (see the callout further up this section). It does <strong>not</strong> touch the main-occupation rule quoted above, and says nothing about handling multiple jobs or codes within a year - so do not lean on the corrigendum for that question, it fixes a different part of the table.</p>
-<p><strong>Whether your delivery matches this depends on your data, so check rather than assume:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>akm_data <span class="sc">%&gt;%</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(pnr, year) <span class="sc">%&gt;%</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>If this is empty:</strong> <code>socio13</code> is already the dominant occupation, nothing further needed.</p>
-<p><strong>If it is not empty:</strong> first drop exact duplicates - same <code>pnr</code>, <code>year</code> and <code>socio13</code> repeated:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>akm_data <span class="ot">&lt;-</span> akm_data <span class="sc">%&gt;%</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(pnr, year, socio13) <span class="co"># one row per person per year</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Re-run the count above. Rows that still differ in <code>socio13</code> for the same person-year are not something SEPLINE or DST resolves for you: the corrigendum patches a different part of Table 6, not this. If you still need one row per person-year, pick a <strong>tie-break priority order</strong> and document it, rather than choosing silently - e.g.&nbsp;ranked by attachment to the labour market, using the <code>occupation_cat</code> grouping from step 4 above (not raw <code>socio13</code>, which is a code list, not a scale):</p>
-<p><code>Employed &gt; Student &gt; Unemployed &gt; Outside labour market &gt; Retired &gt; Unknown</code></p>
-<p>This ordering is <strong>our own convention, not SEPLINE’s</strong> - review it against your own analysis plan before using it.</p>
+<p><strong>Only the income recipe requires it.</strong> Education and employment filter to your cohort before <code>collect()</code>, so only a cohort-sized extract reaches R, and they would work just as well with <code>read_register()</code>, as on the guide’s other pages. They use the same connection here so that all three recipes are opened the same way.</p>
+<p><strong>Income needs it</strong> because its cutpoints come from the whole Danish population: step 7 joins BEF and FAIK for everyone and computes the quantiles before anything can be reduced. With both registers on one DuckDB connection that all happens inside the database, the quantiles are exact, and DuckDB can spill to disk instead of running out of memory. Computing the same thing in R needs one row per person per reference year (about six million), which did not fit in memory on DST. How the pattern works: <a href="./parquet-and-fastreg.html#duckdb-views">Several registers on one DuckDB connection</a>.</p>
+<p><strong>If you cannot use the connection</strong>, the fallback is to compute the cutpoints in R on a random, representative sample of the population. Sample <strong>people, not rows</strong>: draw a random set of <code>pnr</code> first and keep all of their years, because sampling rows leaves most people with only part of their 3-year window and silently weakens the mean. Keep the sample large (for example 10% of the population), since every sex x age band only gets its share and the oldest bands are small. Cutpoints from a sample are noisier and are a deviation from SEPLINE’s “general population”, so report it.</p>
+</div>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DBI) <span class="co"># dbConnect, dbExecute</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(duckdb) <span class="co"># the database engine every query below runs in</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">duckdb</span>())</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional, and worth it for the income recipe: cap DuckDB's RAM (its default</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co"># is 80% of the machine) and give it a folder to spill to instead of running</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># out of memory. Remove the # and set a folder in your own project.</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># dbExecute(con, "SET memory_limit = '8GB'")</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># dbExecute(con, "SET temp_directory = 'E:/workdata/[projectnumber]/duckdb_tmp'")</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># The folder that holds one subfolder per register - edit to your project</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>parquet_dir <span class="ot">&lt;-</span> <span class="st">"E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="co"># open_register("akm") makes a view of that register's parquet files and</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co"># returns it as a lazy table: nothing is read until a query needs it.</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   **                = the register's folder and every subfolder</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   hive_partitioning = true reads the year from folder names like year=2015/</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>open_register <span class="ot">&lt;-</span> <span class="cf">function</span>(name) {</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">dbExecute</span>(con, <span class="fu">paste0</span>(</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="st">"CREATE OR REPLACE VIEW "</span>, name, <span class="st">" AS SELECT * FROM read_parquet('"</span>,</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    parquet_dir, name, <span class="st">"/**/*.parquet', hive_partitioning = true)"</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl</span>(con, name) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="co"># lower-case column names</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>When you are done with all recipes, close the connection with <code>dbDisconnect(con, shutdown = TRUE)</code>.</p>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong><code>year</code> is the folder a row came from.</strong> It comes from the parquet folder names, not from DST, so check the name in your own files (<a href="./file-formats.html#year-column">Phase 4</a>). Never assign to it (<code>mutate(year = ...)</code>): every recipe joins on person plus year, and overwriting it breaks those joins without an error.</p>
 </div>
 </div>
 </div>
+</section>
+<section id="missing" class="level3">
+<h3 class="anchored" data-anchor-id="missing">Missing is a category, not a dropped row</h3>
+<p>A register extract only holds people who have a record. Someone with no record is <strong>absent</strong> from it, and after a left join onto the cohort they have <code>NA</code>. Most model functions, including <code>survival::coxph()</code>, then drop that person <strong>silently</strong>, and your model’s N no longer matches your cohort’s.</p>
+<p>Each recipe therefore joins onto the full cohort by <code>row_id</code> before it categorises, turns <code>NA</code> into an explicit <strong>“Missing”</strong> category, and checks with <code>stopifnot(nrow(...) == nrow(cohort))</code> that nobody has been lost. SEPLINE recommends exactly this: people with missing values “may constitute a vulnerable group”, so keep them as a category and look at them separately in relation to the outcome.</p>
+</section>
 </section>
 <section id="education" class="level2">
 <h2 class="anchored" data-anchor-id="education">Education - UDDA (<code>hfaudd</code>)</h2>
-<p><code>hfaudd</code> is short for <strong>h</strong>øjest <strong>f</strong>uldførte <strong>AUDD</strong> - the highest completed education, coded with an <strong>AUDD</strong> code. It is a four-digit DISCED-15 code for the <strong>specific education</strong> a person completed: <code>4112</code> is “electrician”. It is an identifier, not a scale, so the level (short / medium / long) has to be <strong>looked up</strong>, not read off the digits. UDDA itself does not carry the level.</p>
-<p>The <code>AUDD</code> in the name matters when you go looking for a lookup table: DISCED-15 codes come in two flavours, <strong>AUDD</strong> for a <em>completed</em> education and <strong>UDD</strong> for one that is ongoing or was interrupted. DST documents them as two separate classifications, <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd">DISCED-15 AUDD</a> and <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-udd">DISCED-15 UDD</a>. <code>hfaudd</code> is completed, so it is an <code>audd</code> lookup you want. How to read the lookup filenames on the server, and which of the several variants of each file to pick, is in <a href="./formatting-tables.html#education-level">Format tables</a>.</p>
+<p><code>hfaudd</code> is the <strong>h</strong>øjest <strong>f</strong>uldførte <strong>AUDD</strong>: a four-digit DISCED-15 code for the <em>specific</em> education a person completed (<code>4272</code> is an electrician, installation technology). It is an identifier, not a scale, so the level has to be <strong>looked up</strong>. SEPLINE names DST’s own format for it (Table 3), always the newest version: <code>AUDD..._HOVED_L1L5</code> for the main groups, which turns the four-digit code into a two-digit <strong>main area</strong> (<code>10</code> Grundskole, <code>20</code> Gymnasiale uddannelser, … <code>80</code> Ph.d.), or <code>AUDD..._HOVED_L1L2</code> for a more detailed grouping. This recipe uses the main groups. How to read those file names on the server is in <a href="./formatting-tables.html#education-level">Format tables</a>.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Do not derive the level from <code>substr(hfaudd, 1, 2)</code>.</strong> The level codes (10, 15, 20, 30, 40, 70, 90) look just like the first two digits of an education code, so it is the obvious thing to try - and it is wrong roughly 4 times in 10, silently. You need the lookup. Why it fails is set out in <a href="./register-reference.html#udda---education-register">Overview of registers</a>.</p>
+<p><strong>Do not take the level from the first two digits</strong> (<code>substr(hfaudd, 1, 2)</code>). They look like the main-area codes but are wrong for roughly 4 codes in 10, without any error. Why is in <a href="./register-reference.html#udda---education-register">Overview of registers</a>.</p>
 </div>
 </div>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open UDDA via fastreg (read_register gets the path from your project config)</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>udda <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"udda"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="co"># standardise column names</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/udda/") %&gt;% rename_with(tolower)</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fetch every education record up to the latest baseline year anyone in the</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co"># cohort needs (broader than AKM/FAIK's exact-year filter on purpose - step 3</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="co"># below needs each row's history, not just its one exact baseline year).</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>udda_data <span class="ot">&lt;-</span> udda <span class="sc">%&gt;%</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort's pnr's, copy = TRUE: see AKM step 2</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">&lt;=</span> <span class="fu">max</span>(cohort<span class="sc">$</span>year_baseline)) <span class="sc">%&gt;%</span> <span class="co"># every year any row could fall back to</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, hfaudd) <span class="sc">%&gt;%</span> <span class="co"># only the columns we use</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># fetch into R</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(udda_data) <span class="sc">&gt;</span> <span class="dv">0</span>)</span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. For each cohort row, keep its OWN most recent record at or before ITS</span></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a><span class="co"># baseline year - not a global "newest year fetched" (the earlier version of</span></span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="co"># this page did that with group_by(pnr) %&gt;% slice(1), which silently hands a</span></span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="co"># later row's education to an earlier row once the same pnr repeats with two</span></span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="co"># different baseline years - see "Before you extract anything" above). This</span></span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="co"># also means a gap in the exact baseline year no longer becomes a missing</span></span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="co"># value: the most recent earlier record carries forward, since a completed</span></span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a><span class="co"># education does not regress. left_join (not inner_join) keeps rows for</span></span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a><span class="co"># people with zero UDDA records too, as NA - see the NA-vs-Unknown callout</span></span>
-<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a><span class="co"># above for why that matters.</span></span>
-<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(row_id, pnr, year_baseline) <span class="sc">%&gt;%</span></span>
-<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(udda_data, <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">relationship =</span> <span class="st">"many-to-many"</span>) <span class="sc">%&gt;%</span> <span class="co"># every row x every record for that pnr, on purpose</span></span>
-<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is.na</span>(year) <span class="sc">|</span> year <span class="sc">&lt;=</span> year_baseline) <span class="sc">%&gt;%</span> <span class="co"># only records at or before this row's own baseline</span></span>
-<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(row_id) <span class="sc">%&gt;%</span></span>
-<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_max</span>(year, <span class="at">n =</span> <span class="dv">1</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span> <span class="co"># this row's own most recent record</span></span>
-<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
-<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_udda) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span>
-<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Look the level up - one row per education code, joined on hfaudd</span></span>
-<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(heaven) <span class="co"># edu_code: 4,621 DISCED-15 codes with their level</span></span>
-<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(edu_code)</span>
-<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="ot">&lt;-</span> cohort_udda <span class="sc">%&gt;%</span></span>
-<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd)) <span class="sc">%&gt;%</span> <span class="co"># match the type in edu_code</span></span>
-<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>    edu_code <span class="sc">%&gt;%</span></span>
-<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as_tibble</span>() <span class="sc">%&gt;%</span> <span class="co"># edu_code is a data.table</span></span>
-<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd)) <span class="sc">%&gt;%</span></span>
-<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(hfaudd, <span class="at">level_code =</span> number), <span class="co"># number = the two-digit level</span></span>
-<span id="cb6-48"><a href="#cb6-48" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"hfaudd"</span></span>
-<span id="cb6-49"><a href="#cb6-49" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb6-50"><a href="#cb6-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-51"><a href="#cb6-51" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Group the level into the SEPLINE categories</span></span>
-<span id="cb6-52"><a href="#cb6-52" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="ot">&lt;-</span> cohort_udda <span class="sc">%&gt;%</span></span>
-<span id="cb6-53"><a href="#cb6-53" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb6-54"><a href="#cb6-54" aria-hidden="true" tabindex="-1"></a>    <span class="at">level_code =</span> <span class="fu">as.numeric</span>(level_code),</span>
-<span id="cb6-55"><a href="#cb6-55" aria-hidden="true" tabindex="-1"></a>    <span class="at">education_cat =</span> <span class="fu">case_when</span>(</span>
-<span id="cb6-56"><a href="#cb6-56" aria-hidden="true" tabindex="-1"></a>      level_code <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">15</span>) <span class="sc">~</span> <span class="st">"Short"</span>, <span class="co"># pre-school, primary, preparatory</span></span>
-<span id="cb6-57"><a href="#cb6-57" aria-hidden="true" tabindex="-1"></a>      level_code <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">20</span>, <span class="dv">25</span>, <span class="dv">29</span>, <span class="dv">30</span>, <span class="dv">35</span>, <span class="dv">39</span>) <span class="sc">~</span> <span class="st">"Medium"</span>, <span class="co"># upper secondary and vocational</span></span>
-<span id="cb6-58"><a href="#cb6-58" aria-hidden="true" tabindex="-1"></a>      level_code <span class="sc">&gt;=</span> <span class="dv">40</span> <span class="sc">&amp;</span> level_code <span class="sc">&lt;</span> <span class="dv">90</span> <span class="sc">~</span> <span class="st">"Long"</span>, <span class="co"># short cycle higher and above</span></span>
-<span id="cb6-59"><a href="#cb6-59" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Unknown"</span> <span class="co"># 90 "not stated", no UDDA record at all, or no match in edu_code</span></span>
-<span id="cb6-60"><a href="#cb6-60" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb6-61"><a href="#cb6-61" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb6-62"><a href="#cb6-62" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-63"><a href="#cb6-63" aria-hidden="true" tabindex="-1"></a><span class="co"># ALWAYS check how many did not match - a high number means a type mismatch</span></span>
-<span id="cb6-64"><a href="#cb6-64" aria-hidden="true" tabindex="-1"></a><span class="co"># on hfaudd, or codes that are not in the lookup.</span></span>
-<span id="cb6-65"><a href="#cb6-65" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="sc">%&gt;%</span></span>
-<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">unmatched =</span> <span class="fu">sum</span>(<span class="fu">is.na</span>(level_code)), <span class="at">total =</span> <span class="fu">n</span>())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
+<p><strong>The categories (SEPLINE Table 3):</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 19%">
+<col style="width: 80%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Category</th>
+<th>Main areas</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Short</strong></td>
+<td><code>10</code> primary and lower secondary, <code>15</code> preparatory education</td>
+</tr>
+<tr class="even">
+<td><strong>Medium</strong></td>
+<td><code>20</code> general upper secondary, <code>30</code> vocational, <code>35</code> access programmes</td>
+</tr>
+<tr class="odd">
+<td><strong>Long</strong></td>
+<td><code>40</code> academy profession, <code>50</code> professional bachelor, <code>60</code> bachelor, <code>70</code> master, <code>80</code> PhD</td>
+</tr>
+<tr class="even">
+<td><strong>Missing</strong></td>
+<td><code>90</code> unknown, no record, any main area not listed above, and imputed records</td>
+</tr>
+</tbody>
+</table>
+<p>SEPLINE counts <code>40</code> as long education on purpose, to match the international classification (ISCED 5, short-cycle tertiary).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open the register</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>udda <span class="ot">&lt;-</span> <span class="fu">open_register</span>(<span class="st">"udda"</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fetch every education record up to the latest baseline year in the</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">#    cohort. All years, not just the baseline year: step 3 needs each row's</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">#    history to fall back on when its baseline year has no record.</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>udda_data <span class="ot">&lt;-</span> udda <span class="sc">%&gt;%</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr)), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort; copy = TRUE sends the pnr list into DuckDB</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">&lt;=</span> <span class="sc">!!</span><span class="fu">max</span>(cohort<span class="sc">$</span>year_baseline)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, hfaudd, hf_kilde) <span class="sc">%&gt;%</span> <span class="co"># hf_kilde: where the record came from (step 5)</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Attach: for each cohort row, its own most recent record in or before its</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co">#    baseline year. A completed education does not go away, so an older</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co">#    record is the right fallback when the baseline year is missing (Table 2).</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(row_id, pnr, year_baseline) <span class="sc">%&gt;%</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(udda_data, <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">relationship =</span> <span class="st">"many-to-many"</span>) <span class="sc">%&gt;%</span> <span class="co"># every row x every record of that pnr, on purpose</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is.na</span>(year) <span class="sc">|</span> year <span class="sc">&lt;=</span> year_baseline) <span class="sc">%&gt;%</span> <span class="co"># keep only records up to this row's baseline</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(row_id) <span class="sc">%&gt;%</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_max</span>(year, <span class="at">n =</span> <span class="dv">1</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span> <span class="co"># this row's most recent record</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_udda) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Step 4: the lookup.</strong> Use DST’s format on the server, which is what SEPLINE names. The <code>heaven</code> tab gives the same kind of table outside DST, for testing the code. Both make <code>edu_lookup</code> with the columns <code>hfaudd</code> and <code>main_area</code>.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">DST’s format (SEPLINE’s source)</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href=""><code>heaven</code> (outside DST)</a></li></ul>
+<div class="tab-content">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(haven) <span class="co"># read_sas()</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># The file names below have not been checked on the server: list the folder</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># and pick the newest completed-education (audd), main-area (hoved), level</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 1 -&gt; 5 (l1l5), character (c_), code-only (_k) file.</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>fmt_dir <span class="ot">&lt;-</span> <span class="st">"E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Disced/"</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">list.files</span>(fmt_dir, <span class="at">pattern =</span> <span class="st">"hoved"</span>, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>edu_format <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(<span class="fu">paste0</span>(fmt_dir, <span class="st">"c_audd2023_hoved_l1l5_k.sas7bdat"</span>)) <span class="co"># (example) EDIT to the newest file</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(edu_format) <span class="co"># expect START (the four-digit code) and one label column</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>edu_lookup <span class="ot">&lt;-</span> edu_format <span class="sc">%&gt;%</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="at">hfaudd =</span> <span class="dv">1</span>, <span class="at">main_area =</span> <span class="dv">2</span>) <span class="sc">%&gt;%</span> <span class="co"># 1st column: the code; 2nd: its main area</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd), <span class="at">main_area =</span> <span class="fu">as.numeric</span>(main_area))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div class="callout-body-container">
-<p><strong>SEPLINE actually allows a looser cutoff than this code uses.</strong> Table 2 of the article times education at “the latest available educational level at index date” - not the year before, unlike employment and income. The reasoning is specific to education: a completed degree cannot be undone by your exposure, so there is no reverse-causation risk to guard against by stepping back a year. This code still uses <code>year_baseline</code> (before index) to stay consistent with the rest of the page and err conservative. If you want to follow SEPLINE’s literal rule, replace <code>year_baseline</code> with <code>lubridate::year(index_date)</code> in step 3’s filter (and fetch one more year in step 2) to allow records from the index year itself.</p>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Getting <code>heaven</code> outside DST.</strong> On DST it is already installed, which matters because the server has no internet - you could not install it there yourself. Elsewhere it is not on CRAN, so <code>install.packages("heaven")</code> will not find it, but it installs from GitHub in one line:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages("pak")</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>pak<span class="sc">::</span><span class="fu">pak</span>(<span class="st">"tagteam/heaven"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>If you would rather not add the dependency, DST has the same lookup on the server.</strong> The file you want maps completed education (<code>audd</code>) in the <strong>Hovedområde</strong> dimension (<code>hoved</code>) from level 1, the four-digit <code>hfaudd</code>, to level 5, the two-digit main area (<code>10</code> Grundskole, <code>20</code> Gymnasiale uddannelser, … <code>80</code> Ph.d.). <a href="./formatting-tables.html#education-level">Format tables</a> has the naming systematics, the other three DISCED-15 dimensions, the <code>_k</code>/<code>_t</code>/<code>_kt</code> choice and the four things to check first. The exact filenames there have not been checked on the server, so list the folder before you read a file.</p>
-<p><strong>This DST format-table route, not <code>heaven::edu_code</code>, is what SEPLINE’s own Table 3 actually names</strong> (corrected in the corrigendum, Hjorth et al.&nbsp;2026, <a href="https://doi.org/10.2147/CLEP.S612503">doi:10.2147/CLEP.S612503</a>). This page still uses <code>heaven::edu_code</code> as the worked example - it needs no DST session to test against, which matters for a guide read outside DST - but if you want to cite that your categorization follows SEPLINE’s own specified source rather than a third-party package, this is the route to use.</p>
-<p>Whichever source you use, the shape of the solution is the same: a table of education codes joined to your data on <code>hfaudd</code>. What you must not do is skip the lookup.</p>
-<div class="callout callout-style-simple callout-important">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Use one lookup for the whole study, and write down which one.</strong> DST’s folder holds several versions of the classification side by side. You do not need one per study year: DST updates the newest version with older codes as well, so the latest file covers your whole period. Take the newest.</p>
-<p>The two routes should give you the <em>same set of categories</em> when they come from the same version of DISCED-15: the two-digit codes step 5 groups on (<code>5</code>, <code>10</code>, <code>15</code>, … <code>90</code>) are the main areas at the top of DST’s Hovedområde hierarchy. They can still differ in detail, because <code>heaven::edu_code</code> is a snapshot of one version while DST’s newest file includes codes added since. Compare them on your own data before you commit, and report which one you used.</p>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(heaven) <span class="co"># pre-installed on DST; elsewhere pak::pak("tagteam/heaven")</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(edu_code) <span class="co"># one row per education code</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>edu_lookup <span class="ot">&lt;-</span> edu_code <span class="sc">%&gt;%</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as_tibble</span>() <span class="sc">%&gt;%</span> <span class="co"># edu_code is a data.table</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd), <span class="at">main_area =</span> <span class="fu">as.numeric</span>(number)) <span class="co"># number = the two-digit main area</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>edu_code</code> is a copy of the classification made at one point in time. SEPLINE asks for the <strong>latest</strong> format because education levels change: nurses, for example, moved from <code>40</code> to <code>50</code>. Use it to test the code, and DST’s format for the analysis.</p>
 </div>
 </div>
 </div>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-important">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>The grouping in step 5 is our reading of SEPLINE, not a validated implementation.</strong> <code>edu_code</code> gives you the level reliably; how those levels are collapsed into “short / medium / long” is a study-design choice. Check the <a href="https://doi.org/10.2147/CLEP.S520772">SEPLINE article</a> for the categorisation your analysis should use, and note that <code>edu_code</code> also carries a ready-made 5-level grouping (<code>code5txt</code>) and ISCED codes (<code>isced_code</code>) if either fits better.</p>
-</div>
-</div>
-</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Categorise per SEPLINE Table 3</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="ot">&lt;-</span> cohort_udda <span class="sc">%&gt;%</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">hfaudd =</span> <span class="fu">as.character</span>(hfaudd)) <span class="sc">%&gt;%</span> <span class="co"># the lookup is character</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(edu_lookup, <span class="at">by =</span> <span class="st">"hfaudd"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Imputed by DST from sparse data (mostly immigrants). SEPLINE groups</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># these as missing for individual-level analyses (Table 2 and 3); delete</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># this condition below if you want to keep them.</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">imputed =</span> <span class="fu">as.numeric</span>(hf_kilde) <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">9</span>, <span class="dv">10</span>, <span class="dv">18</span>),</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">education_cat =</span> <span class="fu">case_when</span>(</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>      imputed <span class="sc">~</span> <span class="st">"Missing"</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>      main_area <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">15</span>) <span class="sc">~</span> <span class="st">"Short"</span>,</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>      main_area <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">20</span>, <span class="dv">30</span>, <span class="dv">35</span>) <span class="sc">~</span> <span class="st">"Medium"</span>,</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>      main_area <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">40</span>, <span class="dv">50</span>, <span class="dv">60</span>, <span class="dv">70</span>, <span class="dv">80</span>) <span class="sc">~</span> <span class="st">"Long"</span>,</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Missing"</span> <span class="co"># 90, no record, no match in the lookup, or a main area SEPLINE does not list</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Check: how many had a code that the lookup did not know? A high number</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="co">#    means a type mismatch on hfaudd or the wrong lookup file.</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>cohort_udda <span class="sc">%&gt;%</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">no_match =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(hfaudd) <span class="sc">&amp;</span> <span class="fu">is.na</span>(main_area)), <span class="at">total =</span> <span class="fu">n</span>())</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>education_ses <span class="ot">&lt;-</span> cohort_udda <span class="sc">%&gt;%</span> <span class="fu">select</span>(row_id, education_cat)</span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(education_ses) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<details>
+<summary>
+Choices SEPLINE leaves open for education
+</summary>
+<ul>
+<li><strong>Realskole (middle school).</strong> People whose highest education is realskole fall in main area <code>10</code> and are therefore Short. SEPLINE suggests considering them Medium, depending on your population (Table 3, note c). Their codes are <code>1021</code>, <code>1022</code>, <code>1023</code>, <code>1121</code>, <code>1122</code>, <code>1123</code>, <code>1423</code>, <code>1522</code>, <code>1523</code>, <code>1721</code>, <code>1722</code> and <code>1723</code>; add <code>hfaudd %in% realskole_codes ~ "Medium",</code> before the Short line if you do.</li>
+<li><strong>Born 1920 or earlier.</strong> Education is missing or poorly recorded for most of them, and SEPLINE groups them as missing if they are not excluded.</li>
+<li><strong>Under 30.</strong> Many have not finished their education. SEPLINE suggests ongoing education from KOTRE, or the parents’ education, for them (Table 2).</li>
+<li><strong>Index date on or after 1 October.</strong> Then the index year’s UDDA status already exists at index, and you may use <code>year(index_date)</code> instead of <code>year_baseline</code> in step 3 (and fetch one more year in step 2).</li>
+<li><strong>Categories.</strong> SEPLINE’s three levels plus Missing are its recommendation, and it notes that the meaning of a given length of education differs between birth cohorts.</li>
+</ul>
+</details>
 </section>
-<section id="faik-income" class="level2">
-<h2 class="anchored" data-anchor-id="faik-income">Income - FAIK via BEF (<code>famaekvivadisp_13</code>)</h2>
-<p>Income is linked to the household, not the person - and that is a deliberate choice, not just a fact about how FAIK is structured. SEPLINE’s Table 7 recommends <strong>equivalized disposable household income</strong> (<code>famaekvivadisp_13</code>/<code>aekvivadisp_13</code>) <strong>as the default</strong>, “unless disposable personal income better accommodates the research question” - individual income (<code>perindkialt_13</code>) is a documented, valid alternative for some study designs (e.g.&nbsp;questionnaire-based research benchmarking against a survey population’s own pre-tax income), not simply the wrong choice. This page only implements the household route. You need <code>familie_id</code> from BEF as a bridge. SEPLINE’s actual rule (Table 8, “Data Management of Income and Wealth”): average the <strong>three calendar years preceding the year of index</strong> (not the index year itself, to avoid reverse causation), then classify into quintiles <strong>stratified by sex × 5-year age group × calendar year</strong>, computed against the <strong>general population</strong> - not your own cohort’s distribution. The suggested output is 3 categories, not 5 (Table 9): quintile 1 = Low, quintiles 2-4 = Medium, quintile 5 = High.</p>
-<p><code>famaekvivadisp_13</code> has a sister column, <code>famaekvivadisp</code>, with no suffix. The <code>_13</code> one is not simply the newer of the two: DST gives the old column the years 1990-2012 and the <code>_13</code> column 1987-2024, so the newer definition was applied backwards as well as forwards. Use <code>_13</code> for the whole period. Splicing the two at 2013 mixes two definitions inside one series.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open BEF + FAIK via fastreg (read_register gets the path from your project config)</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"bef"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>faik <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"faik"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="co"># check whether FAIK is one row per family in YOUR data - see the callout below</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %&gt;% rename_with(tolower)  (same for faik)</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fetch familie_id from BEF for every baseline year the cohort needs (see AKM step 2 for what unique() does)</span></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>bef_family <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort's pnr's, copy = TRUE: see AKM step 2</span></span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>index_year) <span class="sc">%&gt;%</span> <span class="co"># only years the cohort actually needs</span></span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, familie_id) <span class="sc">%&gt;%</span> <span class="co"># familie_id is the bridge to FAIK</span></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># fetch into R</span></span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Fetch income from FAIK for the same years</span></span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>faik_data <span class="ot">&lt;-</span> faik <span class="sc">%&gt;%</span></span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>index_year) <span class="sc">%&gt;%</span> <span class="co"># only years the cohort actually needs</span></span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(familie_id, year, famaekvivadisp_13) <span class="sc">%&gt;%</span> <span class="co"># only the columns we use</span></span>
-<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># fetch into R</span></span>
-<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Attach to cohort - one row per cohort row, matched to THAT row's own baseline year</span></span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>cohort_income <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(bef_family, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"year"</span>)) <span class="sc">%&gt;%</span> <span class="co"># this row's own household, for its own baseline year</span></span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(faik_data, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"familie_id"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"year"</span>)) <span class="co"># then that household's income, same year</span></span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_income) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This single-year version is here to show the join shape. SEPLINE’s actual income measure is the 3-year mean below - <code>cohort_income</code> is not what carries through to the final assembly.</p>
-<div class="callout callout-style-simple callout-warning callout-titled" title="Check your FAIK before you trust this join">
-<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-3-contents" aria-controls="callout-3" aria-expanded="false" aria-label="Toggle callout">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Warning</span>Check your FAIK before you trust this join
-</div>
-<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
-</div>
-<div id="callout-3" class="callout-3-contents callout-collapse collapse">
-<div class="callout-body-container callout-body">
-<p>The recipe above assumes FAIK holds <strong>one row per family per year</strong> - that is why the bridge goes through <code>familie_id</code>, and it is how DST documents the register: DST’s variable list for FAIK has no <code>pnr</code> at all. <strong>In at least one delivery (DARTER) that is not what arrived:</strong> from <strong>2022 onward</strong> its FAIK also carries <code>pnr</code>, and each family’s row is repeated once per family member. <strong>Whether this applies to your project depends on your data delivery, so check rather than assume either way.</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(faik) <span class="co"># is pnr among the columns?</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># More than one row per family and year means the duplication applies to you</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>faik <span class="sc">%&gt;%</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(familie_id, year) <span class="sc">%&gt;%</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>What it does to the code above.</strong> The join on <code>familie_id</code> + <code>year</code> returns one row per family <em>member</em> instead of one per person, so your dataset grows without any error. And the 3-year average further down is then computed over a set weighted by household size: a five-person family counts five times as much as a single person in the same year. The numbers stay plausible throughout, which is what makes it dangerous.</p>
-<p><strong>If it applies to you, one line before the join fixes it.</strong> Collapse the duplicates back to one row per family-year, and the rest of the recipe works unchanged for every year:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>faik <span class="ot">&lt;-</span> faik <span class="sc">%&gt;%</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(familie_id, year, famaekvivadisp_13) <span class="co"># one row per household per year</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>If your FAIK carries <code>pnr</code> for <strong>all</strong> years, you can join income to <code>pnr</code> directly and skip the BEF bridge entirely.</p>
-</div>
-</div>
-</div>
-<div class="callout callout-style-simple callout-tip">
+<section id="employment" class="level2">
+<h2 class="anchored" data-anchor-id="employment">Employment - AKM (<code>socio13</code>)</h2>
+<p><code>socio13</code> is DST’s code for a person’s main labour market status in the year, based on the activity that brought in the most income. The full code list is at <a href="https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio">SOCIO →</a>; to attach DST’s labels in R, see <a href="./formatting-tables.html#socio13-labels">Format tables</a>. DST’s words are narrower than everyday ones (“beskæftiget” has thresholds attached), so look a category up at <a href="https://www.dst.dk/da/Statistik/dokumentation/hvadbetyder">Hvad betyder →</a> before you describe it in a methods section.</p>
+<p><strong>The categories (SEPLINE Table 6, with the corrigendum):</strong></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 18%">
+<col style="width: 28%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Main group</th>
+<th><code>socio13</code> codes</th>
+<th>Subgroups</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>A: Working</strong></td>
+<td><code>110</code>-<code>114</code>, <code>120</code>, <code>131</code>-<code>135</code>, <code>139</code>, <code>310</code></td>
+<td>self-employed (<code>110</code>-<code>114</code>, <code>120</code>), managers (<code>131</code>, <code>132</code>), employees (<code>133</code>-<code>135</code>, <code>139</code>), students (<code>310</code>)</td>
+</tr>
+<tr class="even">
+<td><strong>B: Unemployed</strong></td>
+<td><code>210</code>, <code>410</code></td>
+<td>at least half the year unemployed (<code>210</code>), other (<code>410</code>)</td>
+</tr>
+<tr class="odd">
+<td><strong>C: Outside workforce</strong></td>
+<td><code>220</code>, <code>321</code>, <code>330</code></td>
+<td>sick or other leave (<code>220</code>), disability pension (<code>321</code>), social security incl.&nbsp;flex job (<code>330</code>)</td>
+</tr>
+<tr class="even">
+<td><strong>D: Retired</strong></td>
+<td><code>322</code>, <code>323</code></td>
+<td>age retirement pension (<code>322</code>), post-employment pension, efterløn (<code>323</code>)</td>
+</tr>
+<tr class="odd">
+<td><strong>Missing/other</strong></td>
+<td><code>0</code>, <code>420</code>, no record, any other code</td>
+<td><code>420</code> is children under 15</td>
+</tr>
+</tbody>
+</table>
+<p>Students belong to <strong>A: Working</strong> in SEPLINE, not to a group of their own. The original article also listed <code>410</code> under Missing/other; the corrigendum leaves it only under B.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open the register</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>akm <span class="ot">&lt;-</span> <span class="fu">open_register</span>(<span class="st">"akm"</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Fetch the status for the baseline years the cohort needs. unique() only</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co">#    avoids asking for the same year twice; step 3 pairs each row with its</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co">#    own year.</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>baseline_years <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>year_baseline)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>akm_data <span class="ot">&lt;-</span> akm <span class="sc">%&gt;%</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr)), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>baseline_years) <span class="sc">%&gt;%</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, socio13) <span class="sc">%&gt;%</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Attach: each cohort row gets the status for its own baseline year</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>cohort_akm <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(row_id, pnr, year_baseline) <span class="sc">%&gt;%</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(akm_data, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"year"</span>))</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_akm) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Categorise per SEPLINE Table 6: the main group, and the subgroup for</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="co">#    analyses that need it (SEPLINE notes the subgroups are not validated)</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>cohort_akm <span class="ot">&lt;-</span> cohort_akm <span class="sc">%&gt;%</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">occupation_cat =</span> <span class="fu">case_when</span>(</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">110</span><span class="sc">:</span><span class="dv">114</span>, <span class="dv">120</span>, <span class="dv">131</span><span class="sc">:</span><span class="dv">135</span>, <span class="dv">139</span>, <span class="dv">310</span>) <span class="sc">~</span> <span class="st">"A: Working"</span>,</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">210</span>, <span class="dv">410</span>) <span class="sc">~</span> <span class="st">"B: Unemployed"</span>,</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">220</span>, <span class="dv">321</span>, <span class="dv">330</span>) <span class="sc">~</span> <span class="st">"C: Outside workforce"</span>,</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">322</span>, <span class="dv">323</span>) <span class="sc">~</span> <span class="st">"D: Retired"</span>,</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Missing/other"</span> <span class="co"># 0, 420 (children under 15), no record, any other code</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">occupation_sub =</span> <span class="fu">case_when</span>(</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">110</span><span class="sc">:</span><span class="dv">114</span>, <span class="dv">120</span>) <span class="sc">~</span> <span class="st">"A1.1 Self-employed"</span>,</span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">131</span>, <span class="dv">132</span>) <span class="sc">~</span> <span class="st">"A1.2 Manager or high-level employee"</span>,</span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">133</span><span class="sc">:</span><span class="dv">135</span>, <span class="dv">139</span>) <span class="sc">~</span> <span class="st">"A1.3 Employee"</span>,</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">310</span> <span class="sc">~</span> <span class="st">"A2 Student"</span>,</span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">210</span>, <span class="dv">410</span>) <span class="sc">~</span> <span class="st">"B1 Unemployed"</span>,</span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">330</span> <span class="sc">~</span> <span class="st">"C1 Social security"</span>,</span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">220</span> <span class="sc">~</span> <span class="st">"C2 Sick leave or other leave"</span>,</span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">321</span> <span class="sc">~</span> <span class="st">"C3 Disability pension"</span>,</span>
+<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">323</span> <span class="sc">~</span> <span class="st">"D1.1 Post-employment pension"</span>,</span>
+<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>      socio13 <span class="sc">==</span> <span class="dv">322</span> <span class="sc">~</span> <span class="st">"D1.2 Age retirement pension"</span>,</span>
+<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Missing/other"</span></span>
+<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-48"><a href="#cb7-48" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Check: 420 means a child under 15. In an adult cohort that points to a</span></span>
+<span id="cb7-49"><a href="#cb7-49" aria-hidden="true" tabindex="-1"></a><span class="co">#    wrong index date or baseline year, not to incomplete data.</span></span>
+<span id="cb7-50"><a href="#cb7-50" aria-hidden="true" tabindex="-1"></a>cohort_akm <span class="sc">%&gt;%</span> <span class="fu">count</span>(occupation_cat)</span>
+<span id="cb7-51"><a href="#cb7-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-52"><a href="#cb7-52" aria-hidden="true" tabindex="-1"></a>employment_ses <span class="ot">&lt;-</span> cohort_akm <span class="sc">%&gt;%</span> <span class="fu">select</span>(row_id, occupation_cat, occupation_sub)</span>
+<span id="cb7-53"><a href="#cb7-53" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(employment_ses) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>A ready-made alternative: <a href="./packages-overview.html#heaven---danish-register-data-toolkit"><code>heaven::averageIncome()</code></a></strong> does the multi-year average in one call, uses only the years strictly before the index year, and keeps one row per person-year - so repeated rows for the same person and year collapse on their own. That happens to cover the FAIK duplication above, though the function was written for a different reason (quarterly duplicates), so do not treat it as a guarantee.</p>
-<p>It does <strong>not</strong> replace the BEF bridge: the income table you hand it must already be linked to <code>pnr</code>. <code>heaven</code> is pre-installed on DST and installs from GitHub elsewhere (<code>pak::pak("tagteam/heaven")</code>), so the choice is about whether you want the dependency - the code below is the version with no packages beyond the ones you already use.</p>
+<p><strong>AKM has a data gap in 2014</strong> (SEPLINE Table 4, which refers to DST’s documentation for the details). If any baseline year is 2014, compare that year’s counts with a neighbouring year before you trust it: <code>akm %&gt;% filter(year %in% c(2013, 2014)) %&gt;% count(year, socio13) %&gt;% collect()</code>.</p>
 </div>
 </div>
 </div>
 <details>
 <summary>
-3-year average and quintiles (SEPLINE recommendation)
+Choices SEPLINE leaves open for employment
 </summary>
-<p>This is a worked implementation of Table 8’s rule, not a simplified stand-in - see the callouts below for its cost and the choices it still leaves to you.</p>
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>This works with BEF and FAIK for the whole Danish population, not just your cohort.</strong> Steps 5-6 below deliberately drop the <code>pnr</code> filter, because SEPLINE stratifies income quintiles against the <strong>general population</strong> (Table 8, “Standardization”), not against your own cohort’s distribution - <code>ntile(mean_income, 5)</code> on the cohort alone answers a different question (how your participants rank against <em>each other</em>, not against the population).</p>
-<p><strong>RAM: the filtering and averaging stay inside the database, not in R - but this is not yet tested at real scale, and may still be a problem.</strong> Steps 5-6 hold off on <code>collect()</code> until after <code>group_by()</code>/<code>summarise(mean(...))</code> has already run, so what actually reaches R is one row per (person, sex, age-group) - not the raw population x 3-years join, which would be tens of millions of rows. This was checked against a small <strong>local, synthetic</strong> DuckDB connection (<code>year()</code>, <code>floor()</code>, <code>mean()</code> and the join all confirmed to translate to SQL and run there), not against a real DST session and not at the full Danish population’s actual scale (5.9 million people across several years). Whether it holds up depends on your fastreg setup’s specific backend, and has not been verified either way - <strong>treat this as unconfirmed, not as a solved RAM problem</strong>, and watch for <code>collect()</code> in step 6 doing more work than expected the first time you run it.</p>
-<p><strong>If RAM turns out to be a real problem in practice</strong>, one option short of a full comparator-arm deviation (below) is to take a <strong>random, representative sample</strong> of the background population instead of all of it - still much closer to SEPLINE’s “general population” cutpoints than a narrow comparator arm, at a fraction of the rows:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>bef_population <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, familie_id, koen, foed_dag) <span class="sc">%&gt;%</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="co"># a 500,000-person sample is still plenty for stable quintile cutpoints -</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># only do this if the full population turns out to be too much RAM</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">500000</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This is still a deviation from “the full general population” and should be reported as one, the same as a comparator arm - just a smaller one, and one that stays closer to what SEPLINE actually specifies.</p>
-<p><strong>Using a different reference population is a legitimate choice, but document it as a deviation.</strong> If you use a comparator arm from your own study instead of the full population (e.g.&nbsp;because eligibility criteria like “no prior surgery” or “≥5 years residency” make it a more relevant comparison for your specific outcome), say so explicitly - the mechanics below are identical, but the result is no longer SEPLINE’s “general population” cutpoints.</p>
-</div>
-</div>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, select, left_join, group_by, summarise, mutate, bind_rows</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lubridate) <span class="co"># year() to extract year from a date</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. The three calendar years SEPLINE asks for: the year before index, and</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="co"># the two years before that (Table 8, "Time of measurement") - never the</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co"># index year itself, to avoid reverse causation</span></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>income_years <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">c</span>(cohort<span class="sc">$</span>year_baseline, cohort<span class="sc">$</span>year_baseline <span class="sc">-</span> <span class="dv">1</span>, cohort<span class="sc">$</span>year_baseline <span class="sc">-</span> <span class="dv">2</span>))</span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Each cohort row needs its OWN 3-year window - not one window shared by</span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the whole cohort (see "Before you extract anything" above: the same pnr can</span></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co"># carry more than one baseline year). Build one row per (cohort row x year</span></span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="co"># needed) first, so the years stay tied to the row they belong to:</span></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>cohort_income_years <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>  cohort <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(row_id, pnr, <span class="at">year =</span> year_baseline), <span class="co"># baseline year</span></span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>  cohort <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(row_id, pnr, <span class="at">year =</span> year_baseline <span class="sc">-</span> <span class="dv">1</span>), <span class="co"># 1 year before</span></span>
-<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>  cohort <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(row_id, pnr, <span class="at">year =</span> year_baseline <span class="sc">-</span> <span class="dv">2</span>) <span class="co"># 2 years before</span></span>
-<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>bef_3yr <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
-<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort<span class="sc">$</span>pnr), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort's pnr's, copy = TRUE: see AKM step 2</span></span>
-<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span> <span class="co"># only years the cohort actually needs</span></span>
-<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, familie_id, koen, foed_dag) <span class="sc">%&gt;%</span> <span class="co"># koen + foed_dag needed for the sex x age strata in step 8</span></span>
-<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># fetch into R</span></span>
-<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>faik_3yr <span class="ot">&lt;-</span> faik <span class="sc">%&gt;%</span></span>
-<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span> <span class="co"># only years the cohort actually needs</span></span>
-<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(familie_id, year, famaekvivadisp_13) <span class="sc">%&gt;%</span> <span class="co"># only the columns we use</span></span>
-<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># fetch into R</span></span>
-<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Attach each row's own 3 years of income, then average PER COHORT ROW -</span></span>
-<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a><span class="co"># not per pnr, so a repeated pnr with two different baseline years gets two</span></span>
-<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a><span class="co"># separate, correctly-windowed averages instead of one mixed-together number.</span></span>
-<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a><span class="co"># Missing-year rule (Table 8, "Missing values"): 1 missing year -&gt; mean of</span></span>
-<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a><span class="co"># the other 2; 2 missing -&gt; the 1 that exists; 0 available -&gt; no value.</span></span>
-<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a><span class="co"># na.rm = TRUE already does that arithmetic; n_years just records how many</span></span>
-<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a><span class="co"># years it used, so you can see how much averaging happened per row.</span></span>
-<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>income_mean <span class="ot">&lt;-</span> cohort_income_years <span class="sc">%&gt;%</span></span>
-<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(bef_3yr, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year"</span>)) <span class="sc">%&gt;%</span> <span class="co"># this row's household, for this specific year</span></span>
-<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(faik_3yr, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"familie_id"</span>, <span class="st">"year"</span>)) <span class="sc">%&gt;%</span> <span class="co"># then that household's income, same year</span></span>
-<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(row_id) <span class="sc">%&gt;%</span></span>
-<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_years =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(famaekvivadisp_13)), <span class="co"># how many of the 3 years had a value</span></span>
-<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_income =</span> <span class="fu">mean</span>(famaekvivadisp_13, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="co"># mean disposable income over the years that exist</span></span>
-<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
-<span id="cb12-45"><a href="#cb12-45" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb12-46"><a href="#cb12-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">mean_income =</span> <span class="fu">if_else</span>(n_years <span class="sc">==</span> <span class="dv">0</span>L, <span class="cn">NA_real_</span>, mean_income)) <span class="co"># mean() of zero values is NaN, not NA - fix it</span></span>
-<span id="cb12-47"><a href="#cb12-47" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-48"><a href="#cb12-48" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Negative income (Table 8, "Negative values"): possible, mostly for the</span></span>
-<span id="cb12-49"><a href="#cb12-49" aria-hidden="true" tabindex="-1"></a><span class="co"># self-employed. SEPLINE offers two options, not one fixed rule: exclude</span></span>
-<span id="cb12-50"><a href="#cb12-50" aria-hidden="true" tabindex="-1"></a><span class="co"># these individuals, or run the analysis twice - once counting them as low</span></span>
-<span id="cb12-51"><a href="#cb12-51" aria-hidden="true" tabindex="-1"></a><span class="co"># income, once as high income - as a sensitivity check. Decide which fits</span></span>
-<span id="cb12-52"><a href="#cb12-52" aria-hidden="true" tabindex="-1"></a><span class="co"># your study; do not silently drop or silently keep them.</span></span>
-<span id="cb12-53"><a href="#cb12-53" aria-hidden="true" tabindex="-1"></a>income_mean <span class="sc">%&gt;%</span></span>
-<span id="cb12-54"><a href="#cb12-54" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n_negative =</span> <span class="fu">sum</span>(mean_income <span class="sc">&lt;</span> <span class="dv">0</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">total =</span> <span class="fu">n</span>())</span>
-<span id="cb12-55"><a href="#cb12-55" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-56"><a href="#cb12-56" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Reference population for the cutpoints: same years, no pnr filter. This</span></span>
-<span id="cb12-57"><a href="#cb12-57" aria-hidden="true" tabindex="-1"></a><span class="co"># stays LAZY - no collect() here. income_years already spans every year any</span></span>
-<span id="cb12-58"><a href="#cb12-58" aria-hidden="true" tabindex="-1"></a><span class="co"># baseline year's 3-year window needs (step 1), so this is not a wider PULL</span></span>
-<span id="cb12-59"><a href="#cb12-59" aria-hidden="true" tabindex="-1"></a><span class="co"># than the cohort fetch above - but the population itself is all of Denmark,</span></span>
-<span id="cb12-60"><a href="#cb12-60" aria-hidden="true" tabindex="-1"></a><span class="co"># not just your cohort, so the filter/join/mean below are deliberately kept</span></span>
-<span id="cb12-61"><a href="#cb12-61" aria-hidden="true" tabindex="-1"></a><span class="co"># inside the database instead of materialised in R. filter(), left_join(),</span></span>
-<span id="cb12-62"><a href="#cb12-62" aria-hidden="true" tabindex="-1"></a><span class="co"># year(), floor() and mean() all translate to SQL and run there (verified</span></span>
-<span id="cb12-63"><a href="#cb12-63" aria-hidden="true" tabindex="-1"></a><span class="co"># against DuckDB); only the small per-stratum result in step 6 is collected.</span></span>
-<span id="cb12-64"><a href="#cb12-64" aria-hidden="true" tabindex="-1"></a><span class="co"># If bef and faik turn out to be on different underlying connections in your</span></span>
-<span id="cb12-65"><a href="#cb12-65" aria-hidden="true" tabindex="-1"></a><span class="co"># fastreg setup, this join will error asking for copy = TRUE - collect()</span></span>
-<span id="cb12-66"><a href="#cb12-66" aria-hidden="true" tabindex="-1"></a><span class="co"># each side first as a fallback, same as the single-year demo above.</span></span>
-<span id="cb12-67"><a href="#cb12-67" aria-hidden="true" tabindex="-1"></a>bef_population <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
-<span id="cb12-68"><a href="#cb12-68" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span> <span class="co"># same years, no pnr filter this time</span></span>
-<span id="cb12-69"><a href="#cb12-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, familie_id, koen, foed_dag) <span class="co"># koen + foed_dag for the sex x age strata</span></span>
-<span id="cb12-70"><a href="#cb12-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-71"><a href="#cb12-71" aria-hidden="true" tabindex="-1"></a>faik_population <span class="ot">&lt;-</span> faik <span class="sc">%&gt;%</span></span>
-<span id="cb12-72"><a href="#cb12-72" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span></span>
-<span id="cb12-73"><a href="#cb12-73" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(familie_id, year, famaekvivadisp_13)</span>
-<span id="cb12-74"><a href="#cb12-74" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-75"><a href="#cb12-75" aria-hidden="true" tabindex="-1"></a>population_with_income <span class="ot">&lt;-</span> bef_population <span class="sc">%&gt;%</span></span>
-<span id="cb12-76"><a href="#cb12-76" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(faik_population, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"familie_id"</span>, <span class="st">"year"</span>))</span>
-<span id="cb12-77"><a href="#cb12-77" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-78"><a href="#cb12-78" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Each population member's OWN 3-year average - the same rolling window</span></span>
-<span id="cb12-79"><a href="#cb12-79" aria-hidden="true" tabindex="-1"></a><span class="co"># as step 3, computed once per distinct baseline year the cohort actually</span></span>
-<span id="cb12-80"><a href="#cb12-80" aria-hidden="true" tabindex="-1"></a><span class="co"># uses (baseline_years), not per calendar year. A single-year population</span></span>
-<span id="cb12-81"><a href="#cb12-81" aria-hidden="true" tabindex="-1"></a><span class="co"># income would understate how stable most people's income is year to year,</span></span>
-<span id="cb12-82"><a href="#cb12-82" aria-hidden="true" tabindex="-1"></a><span class="co"># and would not be comparable to the cohort's own 3-year-averaged value - so</span></span>
-<span id="cb12-83"><a href="#cb12-83" aria-hidden="true" tabindex="-1"></a><span class="co"># this repeats step 3's exact logic for the population side instead of</span></span>
-<span id="cb12-84"><a href="#cb12-84" aria-hidden="true" tabindex="-1"></a><span class="co"># simplifying it away. The loop is over baseline_years (typically a handful</span></span>
-<span id="cb12-85"><a href="#cb12-85" aria-hidden="true" tabindex="-1"></a><span class="co"># of distinct years), not over every person - each pass filters</span></span>
-<span id="cb12-86"><a href="#cb12-86" aria-hidden="true" tabindex="-1"></a><span class="co"># population_with_income to that ref_year's 3 years and fixes age AT that</span></span>
-<span id="cb12-87"><a href="#cb12-87" aria-hidden="true" tabindex="-1"></a><span class="co"># ref_year (not year-by-year), so nobody's window splits across two</span></span>
-<span id="cb12-88"><a href="#cb12-88" aria-hidden="true" tabindex="-1"></a><span class="co"># age_group bands due to a birthday landing mid-window. collect() happens</span></span>
-<span id="cb12-89"><a href="#cb12-89" aria-hidden="true" tabindex="-1"></a><span class="co"># LAST in each pass, after the group_by/summarise(mean(...)) has already run</span></span>
-<span id="cb12-90"><a href="#cb12-90" aria-hidden="true" tabindex="-1"></a><span class="co"># inside the database - what reaches R per pass is one row per (person,</span></span>
-<span id="cb12-91"><a href="#cb12-91" aria-hidden="true" tabindex="-1"></a><span class="co"># stratum), not the raw multi-year population join.</span></span>
-<span id="cb12-92"><a href="#cb12-92" aria-hidden="true" tabindex="-1"></a>baseline_years <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>year_baseline)</span>
-<span id="cb12-93"><a href="#cb12-93" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-94"><a href="#cb12-94" aria-hidden="true" tabindex="-1"></a>population_income <span class="ot">&lt;-</span> <span class="fu">lapply</span>(baseline_years, <span class="cf">function</span>(by) {</span>
-<span id="cb12-95"><a href="#cb12-95" aria-hidden="true" tabindex="-1"></a>  population_with_income <span class="sc">%&gt;%</span></span>
-<span id="cb12-96"><a href="#cb12-96" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span><span class="fu">c</span>(by, by <span class="sc">-</span> <span class="dv">1</span>, by <span class="sc">-</span> <span class="dv">2</span>)) <span class="sc">%&gt;%</span> <span class="co"># !! evaluates by LOCALLY first - see AKM step 2's index_year for why</span></span>
-<span id="cb12-97"><a href="#cb12-97" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
-<span id="cb12-98"><a href="#cb12-98" aria-hidden="true" tabindex="-1"></a>      <span class="at">age =</span> by <span class="sc">-</span> <span class="fu">year</span>(foed_dag), <span class="co"># age AT ref_year, fixed across the whole window</span></span>
-<span id="cb12-99"><a href="#cb12-99" aria-hidden="true" tabindex="-1"></a>      <span class="at">age_group =</span> <span class="fu">floor</span>(age <span class="sc">/</span> <span class="dv">5</span>) <span class="sc">*</span> <span class="dv">5</span> <span class="co"># 5-year bands: 0, 5, 10, ...</span></span>
-<span id="cb12-100"><a href="#cb12-100" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb12-101"><a href="#cb12-101" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(pnr, koen, age_group) <span class="sc">%&gt;%</span></span>
-<span id="cb12-102"><a href="#cb12-102" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">mean_income =</span> <span class="fu">mean</span>(famaekvivadisp_13, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-103"><a href="#cb12-103" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>() <span class="sc">%&gt;%</span> <span class="co"># only the per-person summary leaves the database, not the raw rows</span></span>
-<span id="cb12-104"><a href="#cb12-104" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">ref_year =</span> by)</span>
-<span id="cb12-105"><a href="#cb12-105" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span></span>
-<span id="cb12-106"><a href="#cb12-106" aria-hidden="true" tabindex="-1"></a>  <span class="fu">bind_rows</span>()</span>
-<span id="cb12-107"><a href="#cb12-107" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-108"><a href="#cb12-108" aria-hidden="true" tabindex="-1"></a><span class="co"># 7. Cutpoints: Q20/Q40/Q60/Q80 per sex x age group x year, from the</span></span>
-<span id="cb12-109"><a href="#cb12-109" aria-hidden="true" tabindex="-1"></a><span class="co"># reference population - these define what "low/medium/high income" means,</span></span>
-<span id="cb12-110"><a href="#cb12-110" aria-hidden="true" tabindex="-1"></a><span class="co"># independent of your own cohort's distribution</span></span>
-<span id="cb12-111"><a href="#cb12-111" aria-hidden="true" tabindex="-1"></a>cutpoints <span class="ot">&lt;-</span> population_income <span class="sc">%&gt;%</span></span>
-<span id="cb12-112"><a href="#cb12-112" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(koen, age_group, ref_year) <span class="sc">%&gt;%</span></span>
-<span id="cb12-113"><a href="#cb12-113" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb12-114"><a href="#cb12-114" aria-hidden="true" tabindex="-1"></a>    <span class="at">q20 =</span> <span class="fu">quantile</span>(mean_income, <span class="fl">0.2</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb12-115"><a href="#cb12-115" aria-hidden="true" tabindex="-1"></a>    <span class="at">q40 =</span> <span class="fu">quantile</span>(mean_income, <span class="fl">0.4</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb12-116"><a href="#cb12-116" aria-hidden="true" tabindex="-1"></a>    <span class="at">q60 =</span> <span class="fu">quantile</span>(mean_income, <span class="fl">0.6</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb12-117"><a href="#cb12-117" aria-hidden="true" tabindex="-1"></a>    <span class="at">q80 =</span> <span class="fu">quantile</span>(mean_income, <span class="fl">0.8</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb12-118"><a href="#cb12-118" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
-<span id="cb12-119"><a href="#cb12-119" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb12-120"><a href="#cb12-120" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-121"><a href="#cb12-121" aria-hidden="true" tabindex="-1"></a><span class="co"># 8. Classify the STUDY cohort against those cutpoints - not against its own</span></span>
-<span id="cb12-122"><a href="#cb12-122" aria-hidden="true" tabindex="-1"></a><span class="co"># ntile(), which would only compare people to each other. koen and foed_dag</span></span>
-<span id="cb12-123"><a href="#cb12-123" aria-hidden="true" tabindex="-1"></a><span class="co"># come from the same bef_3yr fetch as familie_id (step 2), taken at each</span></span>
-<span id="cb12-124"><a href="#cb12-124" aria-hidden="true" tabindex="-1"></a><span class="co"># row's own baseline year.</span></span>
-<span id="cb12-125"><a href="#cb12-125" aria-hidden="true" tabindex="-1"></a>income_quintile <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb12-126"><a href="#cb12-126" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(row_id, pnr, year_baseline) <span class="sc">%&gt;%</span></span>
-<span id="cb12-127"><a href="#cb12-127" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
-<span id="cb12-128"><a href="#cb12-128" aria-hidden="true" tabindex="-1"></a>    bef_3yr <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, year, koen, foed_dag),</span>
-<span id="cb12-129"><a href="#cb12-129" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"year"</span>)</span>
-<span id="cb12-130"><a href="#cb12-130" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb12-131"><a href="#cb12-131" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb12-132"><a href="#cb12-132" aria-hidden="true" tabindex="-1"></a>    <span class="at">age =</span> year_baseline <span class="sc">-</span> lubridate<span class="sc">::</span><span class="fu">year</span>(foed_dag), <span class="co"># age reached in the baseline year</span></span>
-<span id="cb12-133"><a href="#cb12-133" aria-hidden="true" tabindex="-1"></a>    <span class="at">age_group =</span> <span class="fu">floor</span>(age <span class="sc">/</span> <span class="dv">5</span>) <span class="sc">*</span> <span class="dv">5</span> <span class="co"># 5-year bands, matching step 6</span></span>
-<span id="cb12-134"><a href="#cb12-134" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb12-135"><a href="#cb12-135" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(income_mean, <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb12-136"><a href="#cb12-136" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(cutpoints, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"koen"</span>, <span class="st">"age_group"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"ref_year"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb12-137"><a href="#cb12-137" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb12-138"><a href="#cb12-138" aria-hidden="true" tabindex="-1"></a>    <span class="at">income_cat =</span> <span class="fu">case_when</span>(</span>
-<span id="cb12-139"><a href="#cb12-139" aria-hidden="true" tabindex="-1"></a>      <span class="fu">is.na</span>(mean_income) <span class="sc">~</span> <span class="st">"Unknown"</span>, <span class="co"># no income years available at all - see the NA-vs-Unknown callout above</span></span>
-<span id="cb12-140"><a href="#cb12-140" aria-hidden="true" tabindex="-1"></a>      mean_income <span class="sc">&lt;=</span> q20 <span class="sc">~</span> <span class="st">"Low"</span>, <span class="co"># quintile 1</span></span>
-<span id="cb12-141"><a href="#cb12-141" aria-hidden="true" tabindex="-1"></a>      mean_income <span class="sc">&gt;</span> q80 <span class="sc">~</span> <span class="st">"High"</span>, <span class="co"># quintile 5</span></span>
-<span id="cb12-142"><a href="#cb12-142" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Medium"</span> <span class="co"># quintiles 2-4 (Table 9's suggested 3-category grouping)</span></span>
-<span id="cb12-143"><a href="#cb12-143" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb12-144"><a href="#cb12-144" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb12-145"><a href="#cb12-145" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(row_id, mean_income, income_cat)</span>
-<span id="cb12-146"><a href="#cb12-146" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-147"><a href="#cb12-147" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(income_quintile) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Two more things SEPLINE flags that this code does not handle for you.</strong> Inflation: income values should be adjusted to a common year before averaging across calendar years, using a consumer price index or GDP deflator (Table 8, Birth Cohort/Life Course Aspects) - not implemented here, since the right index depends on your study period. Continuous modelling: if you want income as a continuous variable instead of categories, SEPLINE warns that a linear term is biased (misclassification is worse at the low end, and the income-health relationship is not linear) and recommends splines or fractional polynomials instead.</p>
-</div>
-</div>
-</div>
+<ul>
+<li><strong>Timing.</strong> SEPLINE suggests going further back than the year before index when reverse causation is a strong concern for your outcome, or measuring before retirement. DREAM gives weekly status if you need to measure closer to index, with its own caveats (Table 5).</li>
+<li><strong>Coarser groups.</strong> Among people of working age, the main groups can be merged into able-bodied (A + B) versus not (C), with some misclassification because the reasons for leaving the labour market are unknown.</li>
+<li><strong>Flex jobs</strong> are inside <code>330</code> (C1) in <code>socio13</code>. IDA and DREAM classify them separately, if you need them as “working under special conditions”.</li>
+<li><strong>Students before 2012.</strong> In the older classification (socio02), students earning more than 60,000 DKK were counted as employees; <code>socio13</code> counts them as students, so the share of students rises from 2012 (Table 4).</li>
+</ul>
+</details>
+<details>
+<summary>
+Check your AKM: one row per person per year
+</summary>
+<p>The recipe assumes one row per <code>pnr</code> per year. DST resolves several jobs into one main status before delivery, so that should hold. Check it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>akm_data <span class="sc">%&gt;%</span> <span class="fu">count</span>(pnr, year) <span class="sc">%&gt;%</span> <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>If rows repeat with the <strong>same</strong> <code>socio13</code>, remove the copies with <code>distinct(pnr, year, socio13)</code> and run the check again. If the same person-year has <strong>different</strong> codes, neither SEPLINE nor DST says which to keep. Pick a documented priority (for example A &gt; B &gt; C &gt; D, by attachment to the labour market) and report it as your own choice.</p>
 </details>
 </section>
-<section id="assemble-all-ses-variables-onto-the-cohort" class="level2">
-<h2 class="anchored" data-anchor-id="assemble-all-ses-variables-onto-the-cohort">Assemble all SES variables onto the cohort</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>cohort_ses <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(cohort_akm <span class="sc">%&gt;%</span> <span class="fu">select</span>(row_id, occupation_cat), <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="sc">%&gt;%</span> <span class="co"># attach employment</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(cohort_udda <span class="sc">%&gt;%</span> <span class="fu">select</span>(row_id, education_cat), <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="sc">%&gt;%</span> <span class="co"># attach education</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(income_quintile <span class="sc">%&gt;%</span> <span class="fu">select</span>(row_id, income_cat), <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="co"># attach income quintile</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Sanity check: a correct join never changes the row count</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_ses) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Joined on <code>row_id</code>, not <code>pnr</code> - see <a href="#before-you-extract-anything-give-the-cohort-a-stable-row-id">Before you extract anything</a> above for why.</p>
+<section id="faik-income" class="level2">
+<h2 class="anchored" data-anchor-id="faik-income">Income - FAIK via BEF (<code>famaekvivadisp_13</code>)</h2>
+<p><strong>What SEPLINE recommends (Tables 7-9):</strong></p>
+<ul>
+<li><strong>Measure:</strong> equivalised disposable <strong>household</strong> income, <code>famaekvivadisp_13</code>, as the default. Personal income (<code>perindkialt_13</code>) is an alternative when the research question needs it; this recipe implements the household measure.</li>
+<li><strong>Time:</strong> the mean of the <strong>three calendar years before the index year</strong>. If one year is missing, the mean of the other two; if two, the one that exists; if all three, missing.</li>
+<li><strong>Standardisation:</strong> quintiles of the <strong>general population</strong> with the same <strong>sex and 5-year age group</strong>, not of your own cohort. The cutpoints are also computed <strong>per calendar year</strong>: SEPLINE’s text describes income “calculated in income quintiles by calendar year”, and incomes rise every year.</li>
+<li><strong>Categories:</strong> quintile 1 = <strong>Low</strong>, quintiles 2-4 = <strong>Medium</strong>, quintile 5 = <strong>High</strong> (Table 9).</li>
+</ul>
+<p><strong>How the data fits together.</strong> FAIK holds income per family (<code>familie_id</code>) and year. A person’s family comes from BEF, so the recipe goes <strong>person → BEF → family → FAIK</strong>. Use the <code>_13</code> version of the variable for the whole period: the older <code>famaekvivadisp</code> has a different definition and stops in 2012, while <code>famaekvivadisp_13</code> covers 1987 onward on one definition.</p>
+<p><strong>It works on the whole population, inside the database.</strong> Step 7 joins BEF and FAIK for everyone in Denmark and computes the cutpoints in DuckDB; only one row per sex x age group x year comes back to R. This has been run on DST for two reference years, where it took seconds. (That it gives the same cutpoints as computing them in R has been checked on synthetic data only.)</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open the registers. FAIK is reduced to one row per family per year:</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co">#    that changes nothing when FAIK already is that, and removes repeated</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co">#    copies when it is not (see "Check your FAIK" below).</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">open_register</span>(<span class="st">"bef"</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>faik <span class="ot">&lt;-</span> <span class="fu">open_register</span>(<span class="st">"faik"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(familie_id, year, famaekvivadisp_13)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. The years needed: each baseline year and the two years before it</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>income_years <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">c</span>(cohort<span class="sc">$</span>year_baseline, cohort<span class="sc">$</span>year_baseline <span class="sc">-</span> <span class="dv">1</span>, cohort<span class="sc">$</span>year_baseline <span class="sc">-</span> <span class="dv">2</span>))</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. One row per cohort row and year in its window, so each row keeps its</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="co">#    own three years even when a pnr repeats with different index dates</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>cohort_income_years <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  cohort <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(row_id, pnr, <span class="at">year =</span> year_baseline),</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  cohort <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(row_id, pnr, <span class="at">year =</span> year_baseline <span class="sc">-</span> <span class="dv">1</span>),</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  cohort <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(row_id, pnr, <span class="at">year =</span> year_baseline <span class="sc">-</span> <span class="dv">2</span>)</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Fetch the cohort's families and their income for those years</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>bef_cohort <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr)), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the cohort</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, familie_id, koen, foed_dag) <span class="sc">%&gt;%</span> <span class="co"># koen + foed_dag for the sex x age strata in step 8</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>faik_cohort <span class="ot">&lt;-</span> faik <span class="sc">%&gt;%</span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Each cohort row's 3-year mean. na.rm = TRUE gives exactly SEPLINE's</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a><span class="co">#    missing-year rule; n_years records how many years were used. A missing</span></span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a><span class="co">#    year is usually migration: FAIK only has income for families with a</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a><span class="co">#    member living in Denmark the whole calendar year (Table 7).</span></span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>income_mean <span class="ot">&lt;-</span> cohort_income_years <span class="sc">%&gt;%</span></span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(bef_cohort, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year"</span>)) <span class="sc">%&gt;%</span> <span class="co"># this row's family in that year</span></span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(faik_cohort, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"familie_id"</span>, <span class="st">"year"</span>)) <span class="sc">%&gt;%</span> <span class="co"># that family's income</span></span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(row_id) <span class="sc">%&gt;%</span></span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_years =</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(famaekvivadisp_13)),</span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_income =</span> <span class="fu">mean</span>(famaekvivadisp_13, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">mean_income =</span> <span class="fu">if_else</span>(n_years <span class="sc">==</span> <span class="dv">0</span>L, <span class="cn">NA_real_</span>, mean_income)) <span class="co"># mean() of nothing is NaN, not NA</span></span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a><span class="co"># At most 3 years per row. More means a join repeated rows: one of the</span></span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a><span class="co"># registers is not one row per person or family per year in your delivery.</span></span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">max</span>(income_mean<span class="sc">$</span>n_years) <span class="sc">&lt;=</span> <span class="dv">3</span>)</span>
+<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Negative means (Table 8): mostly the self-employed, and often wealthy.</span></span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a><span class="co">#    SEPLINE suggests excluding them, or two sensitivity analyses with them</span></span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a><span class="co">#    counted as Low and as High. Count them, then decide - do not ignore them.</span></span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>income_mean <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="at">n_negative =</span> <span class="fu">sum</span>(mean_income <span class="sc">&lt;</span> <span class="dv">0</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">total =</span> <span class="fu">n</span>())</span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a><span class="co"># 7. Cutpoints from the whole population, computed inside DuckDB.</span></span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a><span class="co">#    A reference year is a cohort baseline year; its window is that year and</span></span>
+<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a><span class="co">#    the two before it, as in step 5. Each income row is stacked three times,</span></span>
+<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a><span class="co">#    labelled with the three reference years it belongs to (the 2014 row</span></span>
+<span id="cb9-58"><a href="#cb9-58" aria-hidden="true" tabindex="-1"></a><span class="co">#    counts for 2014, 2015 and 2016), so one grouped mean gives every</span></span>
+<span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a><span class="co">#    person's 3-year mean for every reference year at once.</span></span>
+<span id="cb9-60"><a href="#cb9-60" aria-hidden="true" tabindex="-1"></a><span class="co">#    Reduce(union_all, list(...)) does the stacking. Do not write</span></span>
+<span id="cb9-61"><a href="#cb9-61" aria-hidden="true" tabindex="-1"></a><span class="co">#    union_all(a, b, c): union_all() takes two tables and silently ignores</span></span>
+<span id="cb9-62"><a href="#cb9-62" aria-hidden="true" tabindex="-1"></a><span class="co">#    a third, which gave cutpoints up to 13% wrong in testing.</span></span>
+<span id="cb9-63"><a href="#cb9-63" aria-hidden="true" tabindex="-1"></a><span class="co">#    Age is fixed at the reference year (the age reached that year), so a</span></span>
+<span id="cb9-64"><a href="#cb9-64" aria-hidden="true" tabindex="-1"></a><span class="co">#    birthday inside the window cannot split one person across two age bands.</span></span>
+<span id="cb9-65"><a href="#cb9-65" aria-hidden="true" tabindex="-1"></a><span class="co">#    SEPLINE does not say when age is measured; step 8 must use the same rule.</span></span>
+<span id="cb9-66"><a href="#cb9-66" aria-hidden="true" tabindex="-1"></a>population <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
+<span id="cb9-67"><a href="#cb9-67" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years) <span class="sc">%&gt;%</span> <span class="co"># everyone, not just the cohort</span></span>
+<span id="cb9-68"><a href="#cb9-68" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, year, familie_id, koen, foed_dag) <span class="sc">%&gt;%</span></span>
+<span id="cb9-69"><a href="#cb9-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(faik <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>income_years), <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"familie_id"</span>, <span class="st">"year"</span>))</span>
+<span id="cb9-70"><a href="#cb9-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-71"><a href="#cb9-71" aria-hidden="true" tabindex="-1"></a>ref_years <span class="ot">&lt;-</span> <span class="fu">tibble</span>(<span class="at">ref_year =</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>year_baseline))</span>
+<span id="cb9-72"><a href="#cb9-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-73"><a href="#cb9-73" aria-hidden="true" tabindex="-1"></a>cutpoints <span class="ot">&lt;-</span> <span class="fu">Reduce</span>(union_all, <span class="fu">list</span>(</span>
+<span id="cb9-74"><a href="#cb9-74" aria-hidden="true" tabindex="-1"></a>  population <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">ref_year =</span> year),</span>
+<span id="cb9-75"><a href="#cb9-75" aria-hidden="true" tabindex="-1"></a>  population <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">ref_year =</span> year <span class="sc">+</span> <span class="dv">1</span>L),</span>
+<span id="cb9-76"><a href="#cb9-76" aria-hidden="true" tabindex="-1"></a>  population <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">ref_year =</span> year <span class="sc">+</span> <span class="dv">2</span>L)</span>
+<span id="cb9-77"><a href="#cb9-77" aria-hidden="true" tabindex="-1"></a>)) <span class="sc">%&gt;%</span></span>
+<span id="cb9-78"><a href="#cb9-78" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(ref_years, <span class="at">by =</span> <span class="st">"ref_year"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only the reference years the cohort uses</span></span>
+<span id="cb9-79"><a href="#cb9-79" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(ref_year, pnr, koen, foed_dag) <span class="sc">%&gt;%</span></span>
+<span id="cb9-80"><a href="#cb9-80" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_income =</span> <span class="fu">mean</span>(famaekvivadisp_13, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span> <span class="co"># each person's 3-year mean</span></span>
+<span id="cb9-81"><a href="#cb9-81" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">floor</span>((ref_year <span class="sc">-</span> <span class="fu">year</span>(foed_dag)) <span class="sc">/</span> <span class="dv">5</span>) <span class="sc">*</span> <span class="dv">5</span>) <span class="sc">%&gt;%</span> <span class="co"># 5-year bands: 0, 5, 10, ...</span></span>
+<span id="cb9-82"><a href="#cb9-82" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(koen, age_group, ref_year) <span class="sc">%&gt;%</span></span>
+<span id="cb9-83"><a href="#cb9-83" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb9-84"><a href="#cb9-84" aria-hidden="true" tabindex="-1"></a>    <span class="at">q20 =</span> <span class="fu">quantile</span>(mean_income, <span class="fl">0.2</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb9-85"><a href="#cb9-85" aria-hidden="true" tabindex="-1"></a>    <span class="at">q80 =</span> <span class="fu">quantile</span>(mean_income, <span class="fl">0.8</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb9-86"><a href="#cb9-86" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb9-87"><a href="#cb9-87" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb9-88"><a href="#cb9-88" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># only the cutpoints reach R</span></span>
+<span id="cb9-89"><a href="#cb9-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-90"><a href="#cb9-90" aria-hidden="true" tabindex="-1"></a><span class="co"># 8. Classify each cohort row against the cutpoints for its own sex, age band</span></span>
+<span id="cb9-91"><a href="#cb9-91" aria-hidden="true" tabindex="-1"></a><span class="co">#    and baseline year - not against the cohort's own distribution</span></span>
+<span id="cb9-92"><a href="#cb9-92" aria-hidden="true" tabindex="-1"></a>cohort_income <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb9-93"><a href="#cb9-93" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(row_id, pnr, year_baseline) <span class="sc">%&gt;%</span></span>
+<span id="cb9-94"><a href="#cb9-94" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(bef_cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, year, koen, foed_dag), <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"year"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb9-95"><a href="#cb9-95" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_group =</span> <span class="fu">floor</span>((year_baseline <span class="sc">-</span> <span class="fu">year</span>(foed_dag)) <span class="sc">/</span> <span class="dv">5</span>) <span class="sc">*</span> <span class="dv">5</span>) <span class="sc">%&gt;%</span> <span class="co"># same rule as step 7</span></span>
+<span id="cb9-96"><a href="#cb9-96" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(income_mean, <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-97"><a href="#cb9-97" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(cutpoints, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"koen"</span>, <span class="st">"age_group"</span>, <span class="st">"year_baseline"</span> <span class="ot">=</span> <span class="st">"ref_year"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb9-98"><a href="#cb9-98" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb9-99"><a href="#cb9-99" aria-hidden="true" tabindex="-1"></a>    <span class="at">income_cat =</span> <span class="fu">case_when</span>(</span>
+<span id="cb9-100"><a href="#cb9-100" aria-hidden="true" tabindex="-1"></a>      <span class="fu">is.na</span>(mean_income) <span class="sc">~</span> <span class="st">"Missing"</span>, <span class="co"># no income in any of the three years</span></span>
+<span id="cb9-101"><a href="#cb9-101" aria-hidden="true" tabindex="-1"></a>      mean_income <span class="sc">&lt;=</span> q20 <span class="sc">~</span> <span class="st">"Low"</span>, <span class="co"># quintile 1</span></span>
+<span id="cb9-102"><a href="#cb9-102" aria-hidden="true" tabindex="-1"></a>      mean_income <span class="sc">&gt;</span> q80 <span class="sc">~</span> <span class="st">"High"</span>, <span class="co"># quintile 5</span></span>
+<span id="cb9-103"><a href="#cb9-103" aria-hidden="true" tabindex="-1"></a>      <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Medium"</span> <span class="co"># quintiles 2-4</span></span>
+<span id="cb9-104"><a href="#cb9-104" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-105"><a href="#cb9-105" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb9-106"><a href="#cb9-106" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-107"><a href="#cb9-107" aria-hidden="true" tabindex="-1"></a>income_ses <span class="ot">&lt;-</span> cohort_income <span class="sc">%&gt;%</span> <span class="fu">select</span>(row_id, mean_income, income_cat)</span>
+<span id="cb9-108"><a href="#cb9-108" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(income_ses) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Only Q20 and Q80 are needed for Low/Medium/High. If you want all five quintiles, add <code>q40</code> and <code>q60</code> in step 7 the same way.</p>
+<details>
+<summary>
+Check your FAIK: one row per family per year
+</summary>
+<p>DST documents FAIK as <strong>one row per family per year</strong>, with no <code>pnr</code>. In at least one delivery (DARTER) FAIK from <strong>2022 onward</strong> also carries <code>pnr</code> and repeats each family’s row once per family member. The <code>distinct()</code> in step 1 removes those copies, but it is only safe if every copy carries the same income. Check both, and expect 0 from each:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>faik_raw <span class="ot">&lt;-</span> <span class="fu">open_register</span>(<span class="st">"faik"</span>) <span class="co"># before distinct()</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Every copy of a family-year carries the same income</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>faik_raw <span class="sc">%&gt;%</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(familie_id, year) <span class="sc">%&gt;%</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n_values =</span> <span class="fu">n_distinct</span>(famaekvivadisp_13), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n_values <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. After distinct(), one row per family-year is left</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>faik_raw <span class="sc">%&gt;%</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(familie_id, year, famaekvivadisp_13) <span class="sc">%&gt;%</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(familie_id, year) <span class="sc">%&gt;%</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Without the <code>distinct()</code>, each person would still be averaged on their own, but a duplicated year would count once per family member: <code>n_years</code> could exceed 3, and years with more copies would weigh more than the others.</p>
+</details>
+<details>
+<summary>
+Choices and caveats for income
+</summary>
+<ul>
+<li><strong>Match the population’s ages to your cohort’s.</strong> An age limit only changes the youngest bands, and the rule is to use the same ages on both sides. Band <code>15</code> covers 15-19: if your cohort starts at 18, add <code>filter(ref_year - year(foed_dag) &gt;= 18)</code> in step 7 before the age band is computed, and the same limit in step 8.</li>
+<li><strong>Young adults often carry their parents’ income.</strong> DST counts children under 25 living at home as part of the family.</li>
+<li><strong>Inflation.</strong> SEPLINE says income should account for inflation, and names quintiles by calendar year as one way. That is what the recipe does: the cohort and the population are compared within the same year and window, so a price index would change nothing. It matters only if you use income as a continuous value across years.</li>
+<li><strong>Continuous income.</strong> SEPLINE warns that a linear term is biased and recommends splines or fractional polynomials.</li>
+<li><strong>A different reference population</strong> (for example a comparator arm with your own eligibility criteria) is a legitimate choice but a deviation from SEPLINE’s general population: report it. A random sample of the population is a fallback only if you cannot use the DuckDB connection; see <a href="#open-registers">Open the registers</a> for how to draw it.</li>
+<li><strong>Why not DST’s published deciles?</strong> StatBank’s decile tables (<a href="https://www.statbank.dk/IFOR25">IFOR25</a> and IFOR20-22) are not split by sex and age, and they are for one year’s income, while SEPLINE classifies a 3-year mean. Averaging pulls incomes together, so annual bounds would put fewer than 20% in Low and in High.</li>
+<li><strong>2014-2016 have a small known error.</strong> DST’s documentation of <a href="https://www.dst.dk/da/Statistik/dokumentation/Times/familieindkomst/famaekvivadisp-13"><code>FAMAEKVIVADISP_13</code></a> says tax-free cash benefits were missing or wrong in some municipalities in those years, corrected only on DST’s datasets for income distribution and the SDG indicators (about 0.04 Gini points, or about 4,000 people in the low-income groups).</li>
+<li><strong>A ready-made function.</strong> <a href="./packages-overview.html#heaven---danish-register-data-toolkit"><code>heaven::averageIncome()</code></a> computes the multi-year mean if you have already linked income to <code>pnr</code>. It does not compute population cutpoints.</li>
+</ul>
+</details>
+</section>
+<section id="assemble" class="level2">
+<h2 class="anchored" data-anchor-id="assemble">Assemble all SES variables onto the cohort</h2>
+<p>Each recipe ended with one table keyed on <code>row_id</code>. Join the ones you ran:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>cohort_ses <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(education_ses, <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="sc">%&gt;%</span> <span class="co"># from the education recipe</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(employment_ses, <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="sc">%&gt;%</span> <span class="co"># from the employment recipe</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(income_ses, <span class="at">by =</span> <span class="st">"row_id"</span>) <span class="co"># from the income recipe</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">nrow</span>(cohort_ses) <span class="sc">==</span> <span class="fu">nrow</span>(cohort))</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="co"># The Missing categories are people, not errors. Look at how many there are</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="co"># in each, and whether they differ on your outcome (SEPLINE recommends it).</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>cohort_ses <span class="sc">%&gt;%</span> <span class="fu">count</span>(education_cat)</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>cohort_ses <span class="sc">%&gt;%</span> <span class="fu">count</span>(occupation_cat)</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>cohort_ses <span class="sc">%&gt;%</span> <span class="fu">count</span>(income_cat)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
 <ul>
-<li><a href="https://doi.org/10.2147/CLEP.S520772">SEPLINE article (Hjorth et al.&nbsp;2025)</a>: full methodology and recommended reference groups</li>
-<li><a href="./formatting-tables.html">Format tables</a>: DST’s SAS files for label translation</li>
-<li><a href="./register-reference.html">Overview of registers</a>: confirmed column names for AKM, FAIK and UDDA</li>
+<li><a href="https://doi.org/10.2147/CLEP.S520772">SEPLINE article (Hjorth et al.&nbsp;2025)</a>: the full reasoning behind every rule on this page</li>
+<li><a href="./parquet-and-fastreg.html#duckdb-views">Several registers on one DuckDB connection</a>: why the recipes do not use <code>read_register()</code></li>
+<li><a href="./formatting-tables.html#education-level">Format tables</a>: the education lookup files and how to read their names</li>
+<li><a href="./register-reference.html">Overview of registers</a>: column names for AKM, FAIK, UDDA and BEF</li>
 </ul>
 </section>
 <section id="next-steps" class="level2">
 <h2 class="anchored" data-anchor-id="next-steps">Next steps</h2>
 <p>You now have SES covariates. Next steps depend on what you still need:</p>
 <ul>
-<li><strong>Specialist packages</strong> (OSDC for diabetes classification, NMI for comorbidity score, analysis tools)? → <a href="./packages-overview.html">Algorithms &amp; special packages</a></li>
+<li><strong>Specialist packages</strong> (OSDC for diabetes classification, NMI as a mortality risk score, analysis tools)? → <a href="./packages-overview.html">Algorithms &amp; special packages</a></li>
 <li><strong>Ready to export results?</strong> → <a href="./export.html">Phase 14 - Export and repatriation</a></li>
 </ul>
 

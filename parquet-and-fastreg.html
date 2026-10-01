@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-09-30">
+<meta name="dcterms.date" content="2026-10-01">
 
 <title>Parquet and fastreg – Register-based research at Statistics Denmark</title>
 <style>
@@ -601,6 +601,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#recommended-convert-with-fastreg" id="toc-recommended-convert-with-fastreg" class="nav-link" data-scroll-target="#recommended-convert-with-fastreg">Recommended: convert with <code>fastreg</code></a></li>
   </ul></li>
   <li><a href="#when-read-register-fails" id="toc-when-read-register-fails" class="nav-link" data-scroll-target="#when-read-register-fails">When <code>read_register()</code> cannot find the register</a></li>
+  <li><a href="#duckdb-views" id="toc-duckdb-views" class="nav-link" data-scroll-target="#duckdb-views">Several registers on one DuckDB connection</a></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/parquet-and-fastreg.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/parquet-and-fastreg.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -622,7 +623,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">September 30, 2026</p>
+      <p class="date">October 1, 2026</p>
     </div>
   </div>
   
@@ -639,6 +640,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><a href="#fastreg-paths">Point fastreg at your registers</a></strong> - one <code>options()</code> call at the top of each script. Every <code>read_register()</code> example in this guide assumes you have done this. If a colleague already converted the registers, this is the only section you need.</li>
 <li><strong><a href="#convert-sas-to-parquet">Convert SAS files to Parquet</a></strong> - when your project received <code>.sas7bdat</code> and nothing has been converted yet. Done once per register, usually by one person for the whole project.</li>
 <li><strong><a href="#when-read-register-fails">When <code>read_register()</code> cannot find the register</a></strong> - reading parquet that is not in fastreg’s layout.</li>
+<li><strong><a href="#duckdb-views">Several registers on one DuckDB connection</a></strong> - for heavy work across the whole population, where everything has to stay in the database until the result is small.</li>
 </ol>
 <p>Which file types you meet on the server, and what opens each one, is <a href="./file-formats.html">Phase 4 - File types and loading</a>.</p>
 <section id="what-is-parquet" class="level2">
@@ -859,6 +861,53 @@ If fastreg is not available on your project: convert manually with haven + arrow
 </div>
 </div>
 </div>
+</section>
+<section id="duckdb-views" class="level2">
+<h2 class="anchored" data-anchor-id="duckdb-views">Several registers on one DuckDB connection</h2>
+<p><code>read_register()</code> is the right tool for most extractions in this guide: a cohort-sized filter, a few columns, <code>collect()</code>. Some steps are different. They work on <strong>the whole Danish population</strong> and join two large registers before anything can be reduced, for example the income cutpoints in <a href="./socioeconomic-variables.html#faik-income">Socioeconomic variables</a>. For those, open the registers yourself as <strong>views on one plain DuckDB connection</strong>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(DBI) <span class="co"># dbConnect, dbExecute</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(duckdb) <span class="co"># the DuckDB database engine</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Open an empty DuckDB database in memory</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">duckdb</span>())</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Optional: cap how much RAM DuckDB may use (its default is 80% of the</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co">#    machine) and give it a folder to spill to when it needs more. Without</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="co">#    these, a big query can fill the machine's memory; with them it slows</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="co">#    down instead. Use a folder in your own project.</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"SET memory_limit = '8GB'"</span>)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"SET temp_directory = 'E:/workdata/[projectnumber]/duckdb_tmp'"</span>)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. One view per register. A view stores no data - it is a saved query that</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="co">#    reads the parquet files when you use it.</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="co">#    **         = this folder and every subfolder</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="co">#    *.parquet  = every file ending in .parquet</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="co">#    hive_partitioning = true reads the year from folder names like year=2015/</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"CREATE VIEW bef AS SELECT * FROM read_parquet(</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/**/*.parquet',</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="st">  hive_partitioning = true)"</span>)</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"CREATE VIEW faik AS SELECT * FROM read_parquet(</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/faik/**/*.parquet',</span></span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a><span class="st">  hive_partitioning = true)"</span>)</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Lazy dplyr tables - nothing is loaded into R yet</span></span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">tbl</span>(con, <span class="st">"bef"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower)</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>faik <span class="ot">&lt;-</span> <span class="fu">tbl</span>(con, <span class="st">"faik"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower)</span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a><span class="co"># ... filter(), left_join(), summarise() as usual, collect() at the end ...</span></span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. When finished</span></span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a><span class="fu">dbDisconnect</span>(con, <span class="at">shutdown =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Edit the paths to your own project. If a register sits in one flat folder with no year subfolders, use <code>'.../faik/*.parquet'</code> and leave out <code>hive_partitioning</code>.</p>
+<p><strong>Why this, and not <code>read_register()</code>, for these steps:</strong></p>
+<ul>
+<li><strong>Nothing is computed in R behind your back.</strong> <code>read_register()</code> hands you a <code>duckplyr</code> table. duckplyr uses the same DuckDB engine, but when it cannot translate a step it quietly computes that step in R’s memory instead, with no warning. For a whole-population step that means the data you meant to keep in the database ends up in RAM. A <code>tbl()</code> on a plain DBI connection uses <code>dbplyr</code>, which only ever sends SQL to DuckDB, and <code>show_query()</code> shows you exactly what it sent.</li>
+<li><strong>Both registers on one connection.</strong> A join runs inside the database only when both sides live on the same connection. Two tables opened separately either fail with an error asking for <code>copy = TRUE</code>, or have to be collected into R first, which is exactly what a whole-population step cannot afford.</li>
+<li><strong>Exact quantiles.</strong> DuckDB computes <code>quantile()</code> exactly, interpolating the same way as R’s default. Arrow datasets queried directly give <em>approximate</em> quantiles (up to about 1% off in testing, with a warning), which is not good enough for cutpoints.</li>
+<li><strong>It can spill to disk.</strong> With <code>memory_limit</code> and <code>temp_directory</code> set, DuckDB writes intermediate results to disk instead of running out of RAM.</li>
+</ul>
+<p>This pattern has been run on DST for the income cutpoints in <a href="./socioeconomic-variables.html#faik-income">Socioeconomic variables</a> and for extractions from LMDB.</p>
 </section>
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
