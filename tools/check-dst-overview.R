@@ -32,9 +32,10 @@ TIMING <- c("Statusperiode" = "status_period",  # must be tried before "Status"
             "Forl.b"        = "course",
             "H.ndelse"      = "event")
 
-# The schema names two registers after the tables a delivery contains; DST lists
-# them under their own names. Anything else is looked up as its own id.
-ALIAS <- c(t_psyk_adm = "PSYK_ADM", t_psyk_diag = "PSYK_DIAG")
+# The schema names the psychiatric LPR2 tables after the tables a delivery
+# contains (t_psyk_adm, t_psyk_diag, ...); DST lists them as PSYK_ADM,
+# PSYK_DIAG, ... Anything else is looked up as its own id.
+dst_name <- function(rid) toupper(sub("^t_psyk_", "psyk_", rid))
 
 # Fetch -----------------------------------------------------------------------
 
@@ -99,7 +100,21 @@ if (!length(dst)) {
 
 schema <- load_schema()
 problems <- character()
-note <- function(...) problems <<- c(problems, paste0(...))
+accepted <- character()
+
+# A register can deviate from the overview on purpose, when another DST source
+# says otherwise. The schema then records why, per field, in
+# dst_overview_deviation (e.g. coverage.from: "<the reason>"). Such a field is
+# listed as accepted instead of failing the check; any other field still fails.
+note <- function(field, ...) {
+  msg <- paste0(rid, ": ", ...)
+  why <- r$dst_overview_deviation[[field]]
+  if (is.null(why)) {
+    problems <<- c(problems, msg)
+  } else {
+    accepted <<- c(accepted, paste0(msg, "\n      kept because: ", why))
+  }
+}
 
 checked <- 0
 skipped <- character()
@@ -114,10 +129,10 @@ for (rid in names(schema$registers)) {
     next
   }
 
-  key <- if (rid %in% names(ALIAS)) ALIAS[[rid]] else toupper(rid)
+  key <- dst_name(rid)
   d <- dst[[key]]
   if (is.null(d)) {
-    note(rid, ": not found on DST's overview as '", key, "'. ",
+    note("name", "not found on DST's overview as '", key, "'. ",
          "Either the name changed or the register is no longer delivered.")
     next
   }
@@ -127,20 +142,20 @@ for (rid in names(schema$registers)) {
   # quarter (BEF is 1985-12), which is finer than the overview and not drift.
   yr <- function(x) if (is.null(x)) NA_character_ else sub("-.*$", "", as.character(x))
   if (!identical(yr(r$coverage$from), d$from)) {
-    note(rid, ": coverage.from is ", yr(r$coverage$from), ", DST says ", d$from)
+    note("coverage.from", "coverage.from is ", yr(r$coverage$from), ", DST says ", d$from)
   }
   if (!identical(yr(r$coverage$to), d$to)) {
-    note(rid, ": coverage.to is ", yr(r$coverage$to), ", DST says ", d$to)
+    note("coverage.to", "coverage.to is ", yr(r$coverage$to), ", DST says ", d$to)
   }
 
   if (!is.na(d$timing) && !identical(r$reference_timing, d$timing)) {
-    note(rid, ": reference_timing is ", r$reference_timing %||% "missing",
+    note("reference_timing", "reference_timing is ", r$reference_timing %||% "missing",
          ", DST says ", d$timing)
   }
 
   # DST marks a register that is no longer delivered as "Luk".
   if (!identical(isTRUE(r$deprecated), d$closed)) {
-    note(rid, ": deprecated is ", isTRUE(r$deprecated),
+    note("deprecated", "deprecated is ", isTRUE(r$deprecated),
          ", DST marks it ", if (d$closed) "Luk (closed)" else "open")
   }
 }
@@ -151,6 +166,11 @@ cat("Checked ", checked, " DST registers against the overview.\n", sep = "")
 if (length(skipped)) {
   cat("Not on this page (scope is not dst): ", paste(skipped, collapse = ", "),
       "\n", sep = "")
+}
+
+if (length(accepted)) {
+  cat("\nDeviations recorded in the schema (not failures):\n")
+  cat(paste0("  - ", accepted, collapse = "\n"), "\n")
 }
 
 if (!length(problems)) {

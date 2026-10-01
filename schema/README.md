@@ -97,6 +97,26 @@ are documented separately by Sundhedsdatastyrelsen on
 [esundhed.dk](https://www.esundhed.dk/Dokumentation), which is the only source
 found so far that publishes **data types**.
 
+## When the schema deviates from DST's register overview on purpose
+
+`just check-dst-overview` compares coverage, reference type and open/closed
+with [DST's register
+overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html),
+and DST wins. Occasionally two DST sources disagree, and the schema follows the
+other one. Record that per field, with the reason, so the check lists it as
+accepted instead of failing on it every week:
+
+```yaml
+dst_overview_deviation:
+  coverage.from: >-
+    DST's register overview gives 1999, but DST's order list gives 2003 for
+    every variable in this register (checked 2026-10-01).
+```
+
+The field names are `coverage.from`, `coverage.to`, `reference_timing`,
+`deprecated` and `name`. Use it only when another DST source backs the value;
+a value nobody can source is not a deviation, it is an error.
+
 ## Notes are for readers, not for maintainers
 
 There is one note field, `reader_note`, and it renders onto the guide page. It is
