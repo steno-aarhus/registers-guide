@@ -37,7 +37,7 @@ query **both systems** and combine them.
   | **pnr column**         | `pnr`                           | `pnr`³                   | `pnr`                                |
   | **Diagnosis code**     | `c_diag`                        | `c_diag`                 | `diag_kode`                          |
   | **Diagnosis type**     | `c_diagtype`                    | `c_diagtype`             | `diag_kode_type`                     |
-  | **Contact type**       | `c_pattype` (`"0"` = inpatient) | `c_pattype`              | `kont_type` (`"ALCA00"` = inpatient) |
+  | **Contact type**       | `c_pattype` (`"0"` = inpatient) | `c_pattype`              | `kont_type` (`"ALCA00"` = physical attendance) |
 
 ¹ ³ These are DST's names. Check whether your variables have been changed during
 delivery or data preprocessing: in DARTER the join key arrives as `k_recnum` in
@@ -257,15 +257,20 @@ lpr2_type <- lpr_adm %>% # your lpr_adm extract
 ```
 
 **LPR3 (March 2019 and onwards).** There is no `c_pattype` at all. The
-`kont_type` code `ALCA00` means **physical attendance** (not admission), and the
-`prioritet` code `ATA1` means **acute**. A common research approach derives
+`kont_type` code `ALCA00` means **physical attendance** (not admission): the
+patient came in, whether for an outpatient visit or an admission. The other
+contact types are `ALCA01` home or outreach visit, `ALCA03` virtual contact,
+`ALCA10` death and `ALCA20` a pseudo-contact for reporting diagnoses only
+(Sundhedsdatastyrelsen, [LPR reporting guide, Bilag
+1](https://sundhedsdatastyrelsen.dk/Media/638955095266548367/Bilag1_model_og_regler_v.5.1.pdf)).
+The `prioritet` code `ATA1` means **acute**. A common research approach derives
 patient type from the contact's **duration** plus an ER/acute marker:
 
 ```r
 library(dplyr) # filter, mutate, case_when
 
 lpr3_type <- lpr3_k %>% # your lpr_a_kontakt extract
-  filter(kont_type == "ALCA00") %>% # keep physical attendances; drop phone/video
+  filter(kont_type == "ALCA00") %>% # physical attendances only; drops home visits, virtual, death and diagnosis-only contacts
   mutate(
     duration_hours = as.numeric(
       difftime(kont_sluttidspunkt, kont_starttidspunkt, units = "hours") # verify the end-time column name
