@@ -7,14 +7,14 @@
 <details>
 <summary>All other columns (3)</summary>
 
-| Column | Type | Role | Label |
-| --- | --- | --- | --- |
-| `KODETYPE` | character | code |  |
-| `SKSKODE` | character | code |  |
-| `BLODMAENGDE` | numeric | value |  |
+| Column | Type | Role | Label | Years |
+| --- | --- | --- | --- | --- |
+| `KODETYPE` | character | code |  |  |
+| `SKSKODE` | character | code |  |  |
+| `BLODMAENGDE` | numeric | value |  | 2009 to 2018 |
 
 - **`SKSKODE`:** No `code_system` attached: an open SKS code space restricted to postpartum-bleeding-related codes by this register's own scope, not documented as a specific list anywhere DST publishes.
-- **`BLODMAENGDE`:** The measured blood-loss quantity, by the variable name ("blodmængde" = blood amount). Unit (ml presumably) is not documented by DST anywhere this schema found.
+- **`BLODMAENGDE`:** Only from 2009, while the rest of the register runs from 1997. The measured blood-loss quantity, by the variable name ("blodmængde" = blood amount). Unit (ml presumably) is not documented by DST anywhere this schema found.
 
 </details>
 
