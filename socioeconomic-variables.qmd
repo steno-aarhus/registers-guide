@@ -1,909 +1,716 @@
 ---
 title: "Socioeconomic variables"
-subtitle: "Education, income and employment following the SEPLINE approach"
+subtitle: "Education, employment and income following the SEPLINE guideline"
 date: last-modified
 ---
 
-You now know the pattern:
-`read_register/open_dataset → filter → collect → left_join`. That is exactly
-what you use here. Two things are **new** in this phase:
+This page gives you three **stand-alone recipes**, one per socioeconomic
+dimension. Each one takes your cohort, reads one or two registers, and ends
+with a single table holding one category per cohort row: `education_cat`,
+`occupation_cat` or `income_cat`. Run the [setup](#setup) once, then any recipe
+on its own, in any order.
 
-1. **"Fetch for the year before index date":** SES registers are annual
-   snapshots. You cannot just filter on `pnr`; you must also match on *which
-   year* is relevant per person (`year(index_date) - 1`). This is done by
-   calculating the baseline year per person and using it as a join key.
-2. **FAIK via `familie_id`:** Income is linked to the *household*, not the
-   person directly. You need BEF as a bridge: fetch `familie_id` from BEF for
-   the baseline year, then join to FAIK on `familie_id`.
+Every recipe follows the same five steps: **open the register → fetch → attach
+to the cohort → categorise → check**.
 
-The rest is categorisation per SEPLINE guidelines.
+## SEPLINE in brief
 
-## What SEPLINE is, and what this page covers
-
-Socioeconomic position (SEP) is a **latent construct** - it cannot be
-measured directly, only approximated through proxies. Many variables can
-serve as that proxy (education, income, occupation, wealth, housing,
-area-level deprivation, and more), and studies have historically picked
-different ones, measured them at different times relative to their exposure,
-and categorised them differently - which makes results hard to compare
-across studies. **SEPLINE** is a 2025 Danish national guideline written to
-fix exactly that: a consensus document, developed through two workshops with
-researchers, universities and data holders across Denmark, recommending
-*which* register variables to use for SEP, *when* in a study to measure
-them, and *how* to categorise them, so that studies using Danish registers
-report comparable things when they say "adjusted for socioeconomic
-position."
-
-**SEPLINE article:** Hjorth et al. *Clinical Epidemiology* 2025 -
+**SEPLINE** is a 2025 Danish national guideline for measuring socioeconomic
+position (SEP) in register-based research: *which* register variables to use,
+*when* to measure them, and *how* to categorise them, so that studies saying
+"adjusted for socioeconomic position" mean comparable things. Hjorth et al.
+*Clinical Epidemiology* 2025,
 [doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772), with a
-[corrigendum](https://doi.org/10.2147/CLEP.S612503) (Hjorth et al. 2026)
-correcting two of its tables. See the article for full justification,
-recommended reference groups and categorisations.
+[corrigendum](https://doi.org/10.2147/CLEP.S612503) (Hjorth et al. 2026). The
+table numbers on this page refer to that article.
 
-**SEPLINE covers four SEP dimensions, not three - this page implements
-three of them.** Directly from the article: *"This guideline encompasses
-educational level, labor market affiliation or occupation, income, and
-wealth, alongside closely related sociodemographic factors such as marital
-or cohabitation status, ethnicity, and area-level characteristics."*
-**Wealth** is a co-equal fourth SEP dimension in SEPLINE's own definition,
-not covered on this page yet (Table 7's `FGNF_2020`/`FAMFORMREST_NY05` are
-not built out here - [get in touch](contribute.qmd) if you have working
-code for it). **Marital or cohabitation status is explicitly not SEP** in
-SEPLINE's own framing - it is a *related* sociodemographic factor,
-recommended alongside SEP for a fuller picture, not as part of it. Its own
-note: cohabiting or married people tend to have better health outcomes and
-lower mortality, but "though not a traditional indicator of socio-economic
-position," including it helps identify vulnerable groups that SEP alone
-misses. SEPLINE's own default for Denmark is **cohabitation** status, not
-marital status - many Danish couples live together unmarried, so marital
-status alone misses them; marital status is suggested only as a
-supplementary analysis, mainly for international comparability. Neither is
-implemented on this page.
-
-**SEPLINE gives you separate indicators, not one combined score.** Unlike,
-say, [NMI](nmi.qmd), which deliberately produces one weighted number,
-SEPLINE stops at the individual-indicator level and says so directly:
-*"For some settings, it may be meaningful to combine these individual
-indicators into a composite measure or socioeconomic index to reflect the
-multidimensional nature of socioeconomic position, however, such approaches
-are not addressed in this guideline."* Expect `education_cat`,
-`occupation_cat` and `income_cat` as three separate covariates at the end of
-this page, not one SEP score - a composite index is a decision and a method
-you (or your analysis plan) would need to justify independently; SEPLINE
-does not hand you one.
-
-::: {.callout-important title="Structural guidance, not verified code"}
-The categorisations below are **not validated**. They show how to code the
-variables, not an approved implementation, so review them against your own
-analysis plan before you use them. Have working code, or input on the
-categorisations? [Get in touch](contribute.qmd).
+::: {.callout-important title="Structural guidance, not validated code"}
+The recipes show how to implement SEPLINE's recommendations. They are **not
+validated**, and where SEPLINE leaves a choice open, the page says which choice
+it made. Review them against your own analysis plan before you use them. Have
+working code, or input on the categorisations? [Get in touch](contribute.qmd).
 :::
 
-The examples read registers by name with `read_register()`, which assumes
-[fastreg is pointed at your registers](parquet-and-fastreg.qmd#fastreg-paths).
-Without fastreg, use `open_dataset("path/to/akm/")` instead. Column names differ
-between deliveries, so check yours with `names(your_data)`.
+<details>
+<summary>What SEPLINE covers, and what this page leaves out</summary>
 
+- **Four SEP dimensions, three here.** SEPLINE covers educational level, labour
+  market affiliation, income and **wealth**. Wealth (Table 7:
+  `FAMFORMREST_NY05`, `FGNF_2020`) is not built out on this page yet.
+- **Related factors are not SEP.** SEPLINE also covers cohabitation or marital
+  status, ethnicity and area-level characteristics, as sociodemographic
+  factors that sit *alongside* SEP. For Denmark it recommends **cohabitation**
+  over marital status, because many couples live together unmarried. None of
+  these are implemented here.
+- **Separate indicators, not one score.** SEPLINE stops at the individual
+  indicators and says that composite indices "are not addressed in this
+  guideline". Expect three separate covariates at the end of this page, not
+  one SEP score.
+- **The indicators are not interchangeable.** SEPLINE stresses that education,
+  labour market affiliation and income capture different things, so the
+  choice should follow the research question.
 
-::: {.callout-warning}
-**Fetch the variable for the year BEFORE index by default - but SEPLINE does
-not use one timing rule for all three dimensions.** All three registers are
-**annual**: each person has one value per calendar year. If you take the value
-from the *index year* itself, you risk measuring status that falls **after**
-your exposure. Example: index = surgery date 15 June 2015. The 2015 value may
-reflect status after the surgery and be affected by the exposure itself (e.g.
-job loss after illness) - that gives reverse causation, whereas you want a
-**baseline** value from before the exposure.
+</details>
 
-`year(index_date) - 1` is a safe default, and this page uses it throughout for
-consistency. But SEPLINE's own tables set the timing per dimension, not once
-for all three:
+## When each dimension is measured {#timing}
 
-- **Income** (Table 8): strictly the **three years preceding** the index
-  year, never the index year itself - no ambiguity here, see the income
-  section below.
-- **Employment** (Table 5): "the latest available status at index date," in
-  practice the year before index for AKM's annual snapshot. SEPLINE's own
-  caveat: go earlier still if your specific outcome carries a strong
-  reverse-causation risk, or use DREAM instead of AKM if you need
-  closer-to-index granularity (DREAM updates weekly, not annually).
-- **Education** (Table 2): "the latest available educational level at index
-  date" - not the year before. A completed degree cannot be undone by
-  illness, so education does not carry the same reverse-causation risk as
-  employment or income. See the [education section's own
-  callout](#education) for how to follow this looser rule instead of the
-  page's default.
+All three registers are **annual**. Taking the value from the index year
+itself risks measuring status *after* your exposure (a job lost because of the
+illness you study), which is reverse causation. SEPLINE sets the timing per
+dimension:
 
-So `year(index_date) - 1` is this page's uniform *default*, not SEPLINE's
-uniform *rule* - know the difference before you defend the choice in a methods
-section.
-:::
+  | Dimension      | SEPLINE's rule                                                                                  | This page                                                        |
+  | -------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+  | **Education**  | "The latest available educational level at index date"; if a year is missing, take it from other years (Table 2) | the most recent record in or before the year before index |
+  | **Employment** | "The latest available status at index date"; with annual AKM, the year prior to index (Table 5 and text) | the year before index                                    |
+  | **Income**     | The mean of "the three calendar years preceding the year of index" (Table 8)                    | the year before index and the two years before that              |
 
-## The three dimensions on this page
+For education the year before index is not a stricter choice than SEPLINE's:
+UDDA holds the status on **1 October** each year (Table 1), so for an index
+date before 1 October the index year's value does not yet exist at index. If
+your index dates fall on or after 1 October, you may include the index year
+(see the [education recipe](#education)).
 
-  | Dimension      | Register | Variable                                                      |
-  | -------------- | -------- | ------------------------------------------------------------- |
-  | **Education**  | UDDA     | `hfaudd` - highest completed education (DISCED-15 code)      |
-  | **Income**     | FAIK     | `famaekvivadisp_13` - household-equivalised disposable income |
-  | **Employment** | AKM      | `socio13` - labour market classification                      |
+## Setup (run once) {#setup}
 
-Wealth is SEPLINE's fourth SEP dimension and is not in this table - see
-[above](#what-sepline-is-and-what-this-page-covers) for why. SEPLINE
-specifies both **how** each of the three variables here is categorised and
-**when** in the follow-up it is measured.
+### The cohort: a row id and a baseline year {#row-id}
 
-## Before you extract anything: give the cohort a stable row id
-
-::: {.callout-note}
-**This page joins on `row_id`, not `pnr`, throughout.** If your cohort has
-exactly one row per person, that makes no difference to you - skip ahead. If
-it does not (e.g. a comparison group matched **with replacement**, see
-[comparison cohort's note on
-it](comparison-cohort.qmd#step-4---assemble-validate-and-save)), `row_id` is
-what keeps a repeated `pnr`'s different `index_date`s from getting mixed up
-in the joins below - with no error and no `NA` to flag it if it went wrong.
-:::
+Every recipe starts from `cohort`, one row per person and index date, with
+`pnr` and `index_date`. Two columns are added once and used everywhere:
 
 ```r
-library(dplyr) # mutate, left_join, group_by, summarise, bind_rows
-library(lubridate) # year() to extract year from a date
+library(dplyr) # mutate, left_join, group_by, summarise
+library(lubridate) # year()
 
 cohort <- cohort %>%
   mutate(
-    row_id = row_number(), # one id per cohort row - stays unique even if pnr repeats
-    year_baseline = lubridate::year(index_date) - 1 # baseline year, computed once and reused below
+    row_id = row_number(), # one id per cohort row - stays unique even if a pnr repeats
+    year_baseline = year(index_date) - 1 # the year before index, see the timing table above
   )
 ```
 
-Every join from here on uses `row_id` (to attach a finished variable back onto
-`cohort`) or `pnr` + `year_baseline` together (to pull a value out of a
-register) - never `pnr` by itself.
+Every join uses `row_id` (to attach a finished category back to the cohort) or
+`pnr` + a year (to pull a value out of a register), never `pnr` alone. If your
+cohort has one row per person, this changes nothing. If a `pnr` can appear
+more than once (for example controls matched **with replacement**, see
+[Comparison cohort](comparison-cohort.qmd#step-4---assemble-validate-and-save)),
+`row_id` keeps each row's own index date apart.
 
-::: {.callout-important}
-**A `collect()`ed register extract only contains rows that matched your
-filter.** Someone with zero qualifying records - no UDDA row before their
-baseline year, no AKM row for their exact baseline year, no household match in
-BEF - is simply **absent** from that table, not present with an `NA`. Left-join
-such a table onto your cohort and those people get `NA` for the derived
-variable.
+### Open the registers {#open-registers}
 
-That matters more than it looks. Most R modelling functions, including
-`survival::coxph()`, drop any row with an `NA` covariate by default
-(`na.action = na.omit`) - **silently, with no warning**. A person with unknown
-education does not become an "Unknown" category in your model, they vanish
-from the analysis entirely, and your model's N no longer matches your
-cohort's N.
+The recipes read the registers through **one DuckDB connection** instead of
+`read_register()`.
 
-The fix used throughout this page: **join onto the full cohort (via `row_id`)
-before you categorise, not after.** Then `case_when(... TRUE ~ "Unknown")`
-catches the `NA` and turns it into an explicit category, the same way it
-already catches any other unmatched code. The `stopifnot(nrow(...) ==
-nrow(cohort))` checks in the code below exist to confirm this: as long as row
-counts hold at every step, nobody has been silently dropped. Before you trust
-a downstream model, also check its N against your cohort's N directly -
-this exact pattern (register extract → collect → categorise → model) is not
-specific to SES variables, so the same check is worth applying anywhere else
-in your pipeline that joins a register onto a cohort and feeds the result
-into a regression.
+::: {.callout-note title="Why one DuckDB connection, and which recipe needs it"}
+**Only the income recipe requires it.** Education and employment filter to
+your cohort before `collect()`, so only a cohort-sized extract reaches R, and
+they would work just as well with `read_register()`, as on the guide's other
+pages. They use the same connection here so that all three recipes are opened
+the same way.
+
+**Income needs it** because its cutpoints come from the whole Danish
+population: step 7 joins BEF and FAIK for everyone and computes the quantiles
+before anything can be reduced. With both registers on one DuckDB connection
+that all happens inside the database, the quantiles are exact, and DuckDB can
+spill to disk instead of running out of memory. Computing the same thing in R
+needs one row per person per reference year (about six million), which did
+not fit in memory on DST. How the pattern works: [Several registers on one
+DuckDB connection](parquet-and-fastreg.qmd#duckdb-views).
+
+**If you cannot use the connection**, the fallback is to compute the
+cutpoints in R on a random, representative sample of the population. Sample
+**people, not rows**: draw a random set of `pnr` first and keep all of their
+years, because sampling rows leaves most people with only part of their
+3-year window and silently weakens the mean. Keep the sample large (for
+example 10% of the population), since every sex x age band only gets its
+share and the oldest bands are small. Cutpoints from a sample are noisier and
+are a deviation from SEPLINE's "general population", so report it.
 :::
 
-## Employment - AKM (`socio13`)
+```r
+library(DBI) # dbConnect, dbExecute
+library(duckdb) # the database engine every query below runs in
 
-`socio13` is DST's socioeconomic classification. The full code list, with what
-each value means, is in DST's classification documentation:
-[SOCIO →](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio).
-To attach those labels to your data in R, use DST's format table on the server
-([Format tables](formatting-tables.qmd#socio13-labels)).
+con <- dbConnect(duckdb())
 
-::: {.callout-note}
-**DST's words are narrower than the everyday ones.** "Beskæftiget" is a
-statistical definition with thresholds attached, not simply "has a job", and the
-same goes for "husstand" and "disponibel indkomst" further down this page. If
-you are about to write in a methods section what a category means, look the word
-up first: [Hvad betyder
-→](https://www.dst.dk/da/Statistik/dokumentation/hvadbetyder). Getting this
-wrong does not produce an error, it produces a sentence in your paper that does
-not match your data.
-:::
+# Optional, and worth it for the income recipe: cap DuckDB's RAM (its default
+# is 80% of the machine) and give it a folder to spill to instead of running
+# out of memory. Remove the # and set a folder in your own project.
+# dbExecute(con, "SET memory_limit = '8GB'")
+# dbExecute(con, "SET temp_directory = 'E:/workdata/[projectnumber]/duckdb_tmp'")
+
+# The folder that holds one subfolder per register - edit to your project
+parquet_dir <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/"
+
+# open_register("akm") makes a view of that register's parquet files and
+# returns it as a lazy table: nothing is read until a query needs it.
+#   **                = the register's folder and every subfolder
+#   hive_partitioning = true reads the year from folder names like year=2015/
+open_register <- function(name) {
+  dbExecute(con, paste0(
+    "CREATE OR REPLACE VIEW ", name, " AS SELECT * FROM read_parquet('",
+    parquet_dir, name, "/**/*.parquet', hive_partitioning = true)"
+  ))
+  tbl(con, name) %>% rename_with(tolower) # lower-case column names
+}
+```
+
+When you are done with all recipes, close the connection with
+`dbDisconnect(con, shutdown = TRUE)`.
 
 ::: {.callout-warning}
-**One code is easy to get wrong.** `420` is **children under 15**, a real
-category rather than a missing value, so seeing it in an adult cohort means
-the index date is wrong, not that the data is incomplete.
-
-**`410` ("Andre" in DST's own SOCIO nomenclature) is grouped with Unemployed
-here, per SEPLINE's corrected Table 6 - this was genuinely ambiguous until a
-2026 corrigendum fixed it.** The original article's Table 6 listed `410` in
-two rows at once: under "B1: Unemployed (210, 410)" *and* under
-"Missing/other". The
-[corrigendum](https://doi.org/10.2147/CLEP.S612503) (Hjorth et al. 2026) corrects Table 6 and removes `410` from
-"Missing/other," leaving it only under B1 Unemployed - so the code above
-follows the corrected table, not the ambiguous original. DST's own code list
-still calls `410` "Andre" as its own nomenclature category; SEPLINE's
-corrected categorization for *analysis* groups it with Unemployed regardless.
+**`year` is the folder a row came from.** It comes from the parquet folder
+names, not from DST, so check the name in your own files ([Phase
+4](file-formats.qmd#year-column)). Never assign to it (`mutate(year = ...)`):
+every recipe joins on person plus year, and overwriting it breaks those joins
+without an error.
 :::
 
-::: {.callout-note}
-**AKM has a documented gap in 2014.** SEPLINE's Table 4 (Data Sources for
-Labor Market Affiliation) states, without further detail: *"Data gap in
-2014."* Nothing elsewhere in the article says what the gap actually is - a
-missing year entirely, partial coverage, or specific codes affected - so
-check your own extract before trusting any 2014 `socio13` value:
+### Missing is a category, not a dropped row {#missing}
 
-```r
-akm %>% filter(year == 2014) %>% count(socio13) %>% collect()
-```
+A register extract only holds people who have a record. Someone with no record
+is **absent** from it, and after a left join onto the cohort they have `NA`.
+Most model functions, including `survival::coxph()`, then drop that person
+**silently**, and your model's N no longer matches your cohort's.
 
-Compare the total row count and code distribution against a neighbouring
-year. If your cohort has baseline years in 2014, resolve this before you
-trust that year's employment status.
-:::
-
-::: {.callout-warning}
-**Two things about `year` before you join on it.** It is not a DST variable - it
-comes from the parquet partitioning, so confirm the name in your own files
-([Phase 4](file-formats.qmd#year-column)). And do not assign to it: `mutate(year
-= ...)` overwrites the partition column rather than adding one, which silently
-breaks every join in this chapter, since they all join on person plus year. Give
-a derived year its own name, e.g. `index_year`.
-:::
-
-
-```r
-library(fastreg) # read_register() - reads registers by name
-library(arrow) # open_dataset() - fallback without fastreg
-
-# 1. Open AKM via fastreg (read_register gets the path from your project config)
-akm <- read_register("akm") %>%
-  rename_with(tolower) # standardise column names
-# Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/akm/") %>% rename_with(tolower)
-
-# 2. Fetch employment status for every baseline year the cohort needs.
-# unique() here is only an efficiency filter: cohort$year_baseline has one
-# value PER ROW (with repeats - many people share a baseline year), and
-# unique() collapses that to the distinct set of years so the query below
-# does not re-read a year twice. It does NOT pair a year back to a person -
-# that pairing happens in step 3, via the join, using pnr + year_baseline
-# together.
-index_year <- unique(cohort$year_baseline)
-
-# copy = TRUE: akm is a remote/database connection (fastreg may route through
-# DuckDB), tibble(pnr = ...) is a local R object. dplyr will not silently join
-# across two different sources - copy = TRUE is your explicit permission to
-# copy the small local pnr list into the database so the join can run there.
-# Without it the join errors outright (it does not affect correctness, only
-# whether the code runs at all) - needed on every semi_join in this pattern,
-# not just this one, e.g. also for LPR extracts.
-akm_data <- akm %>%
-  semi_join(tibble(pnr = cohort$pnr), by = "pnr", copy = TRUE) %>% # only the cohort's pnr's
-  filter(year %in% !!index_year) %>% # only years the cohort actually needs
-  select(pnr, year, socio13) %>% # only the columns we use
-  collect() # fetch into R
-
-# 3. Attach to cohort - one row per cohort row, matched to THAT row's own
-# baseline year (year_baseline already exists on cohort, see "Before you
-# extract anything" above)
-cohort_akm <- cohort %>%
-  left_join(akm_data, by = c("pnr", "year_baseline" = "year")) # pnr + year together, not pnr alone
-
-# Sanity check: a correct join never changes the row count
-stopifnot(nrow(cohort_akm) == nrow(cohort))
-
-# 4. Categorise per SEPLINE
-cohort_akm <- cohort_akm %>%
-  mutate(
-    occupation_cat = case_when(
-      socio13 %in%
-        c(
-          110,
-          111,
-          112,
-          113,
-          114,
-          120,
-          131,
-          132,
-          133,
-          134,
-          135,
-          139
-        ) ~ "Employed",
-      socio13 == 310 ~ "Student", # under uddannelse
-      # 210 arbejdsløse mindst halvdelen af året, 410 "Andre" - SEPLINE Table 6
-      # groups both under B1 Unemployed (corrigendum-corrected version, see below)
-      socio13 %in% c(210, 410) ~ "Unemployed",
-      # 220 sygedagpenge/orlov, 321 førtidspension, 330 kontanthjælp
-      socio13 %in% c(220, 321, 330) ~ "Outside labour market",
-      socio13 %in% c(322, 323) ~ "Retired", # folkepension, efterløn
-      socio13 == 420 ~ "Child under 15", # should not occur in an adult cohort
-      TRUE ~ "Unknown" # missing
-    )
-  )
-```
-
-::: {.callout-warning collapse="true" title="Check your AKM before you trust this join"}
-The recipe above assumes **one row per `pnr` per year** in `akm_data` - that
-is why the join on `pnr` + `year_baseline` does not need a dedup step.
-SEPLINE's own description of `socio13` backs this up: "employed individuals
-are registered based on their main occupation during a given year, based on
-the activity that generated the largest amount of income" (Hjorth et al.
-2025, [doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772), Table
-6, Labor Market Affiliation). DST resolves multiple jobs to one code *before*
-the register is delivered, so a standard AKM delivery should not have
-duplicates.
-
-SEPLINE later published a
-[corrigendum](https://doi.org/10.2147/CLEP.S612503) (Hjorth et al. 2026) to
-that same Table 6: it adds DREAM codes for people awaiting a flex job (740,
-743--748) that the original table missed, merges the old Senior Pension code
-into C3 Disability Pension (noting that Statistics Denmark confirmed both
-schemes fall under `socio13` code `321`), and - relevant to step 4 above -
-removes `410` from "Missing/other," leaving it only under B1 Unemployed (see
-the callout further up this section). It does **not** touch the
-main-occupation rule quoted above, and says nothing about handling multiple
-jobs or codes within a year - so do not lean on the corrigendum for that
-question, it fixes a different part of the table.
-
-**Whether your delivery matches this depends on your data, so check rather
-than assume:**
-
-```r
-akm_data %>%
-  count(pnr, year) %>%
-  filter(n > 1)
-```
-
-**If this is empty:** `socio13` is already the dominant occupation, nothing
-further needed.
-
-**If it is not empty:** first drop exact duplicates - same `pnr`, `year` and
-`socio13` repeated:
-
-```r
-akm_data <- akm_data %>%
-  distinct(pnr, year, socio13) # one row per person per year
-```
-
-Re-run the count above. Rows that still differ in `socio13` for the same
-person-year are not something SEPLINE or DST resolves for you: the
-corrigendum patches a different part of Table 6, not this. If you still need
-one row per person-year, pick a **tie-break priority order** and document it,
-rather than choosing silently - e.g. ranked by attachment to the labour
-market, using the `occupation_cat` grouping from step 4 above (not raw
-`socio13`, which is a code list, not a scale):
-
-`Employed > Student > Unemployed > Outside labour market > Retired > Unknown`
-
-This ordering is **our own convention, not SEPLINE's** - review it against
-your own analysis plan before using it.
-:::
+Each recipe therefore joins onto the full cohort by `row_id` before it
+categorises, turns `NA` into an explicit **"Missing"** category, and checks
+with `stopifnot(nrow(...) == nrow(cohort))` that nobody has been lost. SEPLINE
+recommends exactly this: people with missing values "may constitute a
+vulnerable group", so keep them as a category and look at them separately in
+relation to the outcome.
 
 ## Education - UDDA (`hfaudd`) {#education}
 
-`hfaudd` is short for **h**øjest **f**uldførte **AUDD** - the highest completed
-education, coded with an **AUDD** code. It is a four-digit DISCED-15 code for
-the **specific education** a person completed: `4112` is "electrician". It is an
-identifier, not a scale, so the level (short / medium / long) has to be **looked
-up**, not read off the digits. UDDA itself does not carry the level.
-
-The `AUDD` in the name matters when you go looking for a lookup table: DISCED-15
-codes come in two flavours, **AUDD** for a *completed* education and **UDD** for
-one that is ongoing or was interrupted. DST documents them as two separate
-classifications, [DISCED-15 AUDD](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-audd) and [DISCED-15
-UDD](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/disced15-udd). `hfaudd` is completed, so it is an `audd` lookup you want.
-How to read the lookup filenames on the server, and which of the several
-variants of each file to pick, is in [Format
+`hfaudd` is the **h**øjest **f**uldførte **AUDD**: a four-digit DISCED-15 code
+for the *specific* education a person completed (`4272` is an electrician,
+installation technology). It is an identifier, not a scale, so the level has
+to be **looked up**. SEPLINE names DST's own format for it (Table 3), always
+the newest version: `AUDD..._HOVED_L1L5` for the main groups, which turns the
+four-digit code into a two-digit **main area** (`10` Grundskole, `20`
+Gymnasiale uddannelser, ... `80` Ph.d.), or `AUDD..._HOVED_L1L2` for a more
+detailed grouping. This recipe uses the main groups. How to read those file
+names on the server is in [Format
 tables](formatting-tables.qmd#education-level).
 
 ::: {.callout-warning}
-**Do not derive the level from `substr(hfaudd, 1, 2)`.** The level codes (10, 15,
-20, 30, 40, 70, 90) look just like the first two digits of an education code, so
-it is the obvious thing to try - and it is wrong roughly 4 times in 10, silently.
-You need the lookup. Why it fails is set out in [Overview of
+**Do not take the level from the first two digits** (`substr(hfaudd, 1, 2)`).
+They look like the main-area codes but are wrong for roughly 4 codes in 10,
+without any error. Why is in [Overview of
 registers](register-reference.qmd#udda---education-register).
 :::
 
+**The categories (SEPLINE Table 3):**
+
+  | Category        | Main areas                                                    |
+  | --------------- | ------------------------------------------------------------- |
+  | **Short**       | `10` primary and lower secondary, `15` preparatory education   |
+  | **Medium**      | `20` general upper secondary, `30` vocational, `35` access programmes |
+  | **Long**        | `40` academy profession, `50` professional bachelor, `60` bachelor, `70` master, `80` PhD |
+  | **Missing**     | `90` unknown, no record, any main area not listed above, and imputed records |
+
+SEPLINE counts `40` as long education on purpose, to match the international
+classification (ISCED 5, short-cycle tertiary).
+
 ```r
-# 1. Open UDDA via fastreg (read_register gets the path from your project config)
-udda <- read_register("udda") %>%
-  rename_with(tolower) # standardise column names
-# Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/udda/") %>% rename_with(tolower)
+# 1. Open the register
+udda <- open_register("udda")
 
-# 2. Fetch every education record up to the latest baseline year anyone in the
-# cohort needs (broader than AKM/FAIK's exact-year filter on purpose - step 3
-# below needs each row's history, not just its one exact baseline year).
+# 2. Fetch every education record up to the latest baseline year in the
+#    cohort. All years, not just the baseline year: step 3 needs each row's
+#    history to fall back on when its baseline year has no record.
 udda_data <- udda %>%
-  semi_join(tibble(pnr = cohort$pnr), by = "pnr", copy = TRUE) %>% # only the cohort's pnr's, copy = TRUE: see AKM step 2
-  filter(year <= max(cohort$year_baseline)) %>% # every year any row could fall back to
-  select(pnr, year, hfaudd) %>% # only the columns we use
-  collect() # fetch into R
+  semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>% # only the cohort; copy = TRUE sends the pnr list into DuckDB
+  filter(year <= !!max(cohort$year_baseline)) %>%
+  select(pnr, year, hfaudd, hf_kilde) %>% # hf_kilde: where the record came from (step 5)
+  collect()
 
-stopifnot(nrow(udda_data) > 0)
-
-# 3. For each cohort row, keep its OWN most recent record at or before ITS
-# baseline year - not a global "newest year fetched" (the earlier version of
-# this page did that with group_by(pnr) %>% slice(1), which silently hands a
-# later row's education to an earlier row once the same pnr repeats with two
-# different baseline years - see "Before you extract anything" above). This
-# also means a gap in the exact baseline year no longer becomes a missing
-# value: the most recent earlier record carries forward, since a completed
-# education does not regress. left_join (not inner_join) keeps rows for
-# people with zero UDDA records too, as NA - see the NA-vs-Unknown callout
-# above for why that matters.
+# 3. Attach: for each cohort row, its own most recent record in or before its
+#    baseline year. A completed education does not go away, so an older
+#    record is the right fallback when the baseline year is missing (Table 2).
 cohort_udda <- cohort %>%
   select(row_id, pnr, year_baseline) %>%
-  left_join(udda_data, by = "pnr", relationship = "many-to-many") %>% # every row x every record for that pnr, on purpose
-  filter(is.na(year) | year <= year_baseline) %>% # only records at or before this row's own baseline
+  left_join(udda_data, by = "pnr", relationship = "many-to-many") %>% # every row x every record of that pnr, on purpose
+  filter(is.na(year) | year <= year_baseline) %>% # keep only records up to this row's baseline
   group_by(row_id) %>%
-  slice_max(year, n = 1, with_ties = FALSE) %>% # this row's own most recent record
+  slice_max(year, n = 1, with_ties = FALSE) %>% # this row's most recent record
   ungroup()
 
 stopifnot(nrow(cohort_udda) == nrow(cohort))
+```
 
-# 4. Look the level up - one row per education code, joined on hfaudd
-library(heaven) # edu_code: 4,621 DISCED-15 codes with their level
-data(edu_code)
+**Step 4: the lookup.** Use DST's format on the server, which is what SEPLINE
+names. The `heaven` tab gives the same kind of table outside DST, for testing
+the code. Both make `edu_lookup` with the columns `hfaudd` and `main_area`.
 
+::: {.panel-tabset}
+
+### DST's format (SEPLINE's source)
+
+```r
+library(haven) # read_sas()
+
+# The file names below have not been checked on the server: list the folder
+# and pick the newest completed-education (audd), main-area (hoved), level
+# 1 -> 5 (l1l5), character (c_), code-only (_k) file.
+fmt_dir <- "E:/Formater/SAS formater i Danmarks Statistik/SAS_datasaet/Disced/"
+list.files(fmt_dir, pattern = "hoved", ignore.case = TRUE)
+
+edu_format <- read_sas(paste0(fmt_dir, "c_audd2023_hoved_l1l5_k.sas7bdat")) # (example) EDIT to the newest file
+names(edu_format) # expect START (the four-digit code) and one label column
+
+edu_lookup <- edu_format %>%
+  select(hfaudd = 1, main_area = 2) %>% # 1st column: the code; 2nd: its main area
+  mutate(hfaudd = as.character(hfaudd), main_area = as.numeric(main_area))
+```
+
+### `heaven` (outside DST)
+
+```r
+library(heaven) # pre-installed on DST; elsewhere pak::pak("tagteam/heaven")
+data(edu_code) # one row per education code
+
+edu_lookup <- edu_code %>%
+  as_tibble() %>% # edu_code is a data.table
+  transmute(hfaudd = as.character(hfaudd), main_area = as.numeric(number)) # number = the two-digit main area
+```
+
+`edu_code` is a copy of the classification made at one point in time. SEPLINE
+asks for the **latest** format because education levels change: nurses, for
+example, moved from `40` to `50`. Use it to test the code, and DST's format for
+the analysis.
+
+:::
+
+```r
+# 5. Categorise per SEPLINE Table 3
 cohort_udda <- cohort_udda %>%
-  mutate(hfaudd = as.character(hfaudd)) %>% # match the type in edu_code
-  left_join(
-    edu_code %>%
-      as_tibble() %>% # edu_code is a data.table
-      mutate(hfaudd = as.character(hfaudd)) %>%
-      select(hfaudd, level_code = number), # number = the two-digit level
-    by = "hfaudd"
-  )
-
-# 5. Group the level into the SEPLINE categories
-cohort_udda <- cohort_udda %>%
+  mutate(hfaudd = as.character(hfaudd)) %>% # the lookup is character
+  left_join(edu_lookup, by = "hfaudd") %>%
   mutate(
-    level_code = as.numeric(level_code),
+    # Imputed by DST from sparse data (mostly immigrants). SEPLINE groups
+    # these as missing for individual-level analyses (Table 2 and 3); delete
+    # this condition below if you want to keep them.
+    imputed = as.numeric(hf_kilde) %in% c(9, 10, 18),
     education_cat = case_when(
-      level_code %in% c(5, 10, 15) ~ "Short", # pre-school, primary, preparatory
-      level_code %in% c(20, 25, 29, 30, 35, 39) ~ "Medium", # upper secondary and vocational
-      level_code >= 40 & level_code < 90 ~ "Long", # short cycle higher and above
-      TRUE ~ "Unknown" # 90 "not stated", no UDDA record at all, or no match in edu_code
+      imputed ~ "Missing",
+      main_area %in% c(10, 15) ~ "Short",
+      main_area %in% c(20, 30, 35) ~ "Medium",
+      main_area %in% c(40, 50, 60, 70, 80) ~ "Long",
+      TRUE ~ "Missing" # 90, no record, no match in the lookup, or a main area SEPLINE does not list
     )
   )
 
-# ALWAYS check how many did not match - a high number means a type mismatch
-# on hfaudd, or codes that are not in the lookup.
+# 6. Check: how many had a code that the lookup did not know? A high number
+#    means a type mismatch on hfaudd or the wrong lookup file.
 cohort_udda %>%
-  summarise(unmatched = sum(is.na(level_code)), total = n())
+  summarise(no_match = sum(!is.na(hfaudd) & is.na(main_area)), total = n())
+
+education_ses <- cohort_udda %>% select(row_id, education_cat)
+stopifnot(nrow(education_ses) == nrow(cohort))
 ```
 
-::: {.callout-note}
-**SEPLINE actually allows a looser cutoff than this code uses.** Table 2 of
-the article times education at "the latest available educational level at
-index date" - not the year before, unlike employment and income. The
-reasoning is specific to education: a completed degree cannot be undone by
-your exposure, so there is no reverse-causation risk to guard against by
-stepping back a year. This code still uses `year_baseline` (before index) to
-stay consistent with the rest of the page and err conservative. If you want
-to follow SEPLINE's literal rule, replace `year_baseline` with
-`lubridate::year(index_date)` in step 3's filter (and fetch one more year in
-step 2) to allow records from the index year itself.
-:::
+<details>
+<summary>Choices SEPLINE leaves open for education</summary>
 
-::: {.callout-note}
-**Getting `heaven` outside DST.** On DST it is already installed, which matters
-because the server has no internet - you could not install it there yourself.
-Elsewhere it is not on CRAN, so `install.packages("heaven")` will not find it,
-but it installs from GitHub in one line:
+- **Realskole (middle school).** People whose highest education is realskole
+  fall in main area `10` and are therefore Short. SEPLINE suggests
+  considering them Medium, depending on your population (Table 3, note c).
+  Their codes are `1021`, `1022`, `1023`, `1121`, `1122`, `1123`, `1423`,
+  `1522`, `1523`, `1721`, `1722` and `1723`; add
+  `hfaudd %in% realskole_codes ~ "Medium",` before the Short line if you do.
+- **Born 1920 or earlier.** Education is missing or poorly recorded for most
+  of them, and SEPLINE groups them as missing if they are not excluded.
+- **Under 30.** Many have not finished their education. SEPLINE suggests
+  ongoing education from KOTRE, or the parents' education, for them (Table 2).
+- **Index date on or after 1 October.** Then the index year's UDDA status
+  already exists at index, and you may use `year(index_date)` instead of
+  `year_baseline` in step 3 (and fetch one more year in step 2).
+- **Categories.** SEPLINE's three levels plus Missing are its recommendation,
+  and it notes that the meaning of a given length of education differs
+  between birth cohorts.
+
+</details>
+
+## Employment - AKM (`socio13`) {#employment}
+
+`socio13` is DST's code for a person's main labour market status in the year,
+based on the activity that brought in the most income. The full code list is
+at [SOCIO →](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/socio);
+to attach DST's labels in R, see [Format
+tables](formatting-tables.qmd#socio13-labels). DST's words are narrower than
+everyday ones ("beskæftiget" has thresholds attached), so look a category up at
+[Hvad betyder →](https://www.dst.dk/da/Statistik/dokumentation/hvadbetyder)
+before you describe it in a methods section.
+
+**The categories (SEPLINE Table 6, with the corrigendum):**
+
+  | Main group                | `socio13` codes                         | Subgroups                                                                 |
+  | ------------------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
+  | **A: Working**            | `110`-`114`, `120`, `131`-`135`, `139`, `310` | self-employed (`110`-`114`, `120`), managers (`131`, `132`), employees (`133`-`135`, `139`), students (`310`) |
+  | **B: Unemployed**         | `210`, `410`                              | at least half the year unemployed (`210`), other (`410`)                |
+  | **C: Outside workforce**  | `220`, `321`, `330`                       | sick or other leave (`220`), disability pension (`321`), social security incl. flex job (`330`) |
+  | **D: Retired**            | `322`, `323`                              | age retirement pension (`322`), post-employment pension, efterløn (`323`) |
+  | **Missing/other**         | `0`, `420`, no record, any other code     | `420` is children under 15                                               |
+
+Students belong to **A: Working** in SEPLINE, not to a group of their own. The
+original article also listed `410` under Missing/other; the corrigendum leaves
+it only under B.
 
 ```r
-# install.packages("pak")
-pak::pak("tagteam/heaven")
+# 1. Open the register
+akm <- open_register("akm")
+
+# 2. Fetch the status for the baseline years the cohort needs. unique() only
+#    avoids asking for the same year twice; step 3 pairs each row with its
+#    own year.
+baseline_years <- unique(cohort$year_baseline)
+
+akm_data <- akm %>%
+  semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>% # only the cohort
+  filter(year %in% !!baseline_years) %>%
+  select(pnr, year, socio13) %>%
+  collect()
+
+# 3. Attach: each cohort row gets the status for its own baseline year
+cohort_akm <- cohort %>%
+  select(row_id, pnr, year_baseline) %>%
+  left_join(akm_data, by = c("pnr", "year_baseline" = "year"))
+
+stopifnot(nrow(cohort_akm) == nrow(cohort))
+
+# 4. Categorise per SEPLINE Table 6: the main group, and the subgroup for
+#    analyses that need it (SEPLINE notes the subgroups are not validated)
+cohort_akm <- cohort_akm %>%
+  mutate(
+    occupation_cat = case_when(
+      socio13 %in% c(110:114, 120, 131:135, 139, 310) ~ "A: Working",
+      socio13 %in% c(210, 410) ~ "B: Unemployed",
+      socio13 %in% c(220, 321, 330) ~ "C: Outside workforce",
+      socio13 %in% c(322, 323) ~ "D: Retired",
+      TRUE ~ "Missing/other" # 0, 420 (children under 15), no record, any other code
+    ),
+    occupation_sub = case_when(
+      socio13 %in% c(110:114, 120) ~ "A1.1 Self-employed",
+      socio13 %in% c(131, 132) ~ "A1.2 Manager or high-level employee",
+      socio13 %in% c(133:135, 139) ~ "A1.3 Employee",
+      socio13 == 310 ~ "A2 Student",
+      socio13 %in% c(210, 410) ~ "B1 Unemployed",
+      socio13 == 330 ~ "C1 Social security",
+      socio13 == 220 ~ "C2 Sick leave or other leave",
+      socio13 == 321 ~ "C3 Disability pension",
+      socio13 == 323 ~ "D1.1 Post-employment pension",
+      socio13 == 322 ~ "D1.2 Age retirement pension",
+      TRUE ~ "Missing/other"
+    )
+  )
+
+# 5. Check: 420 means a child under 15. In an adult cohort that points to a
+#    wrong index date or baseline year, not to incomplete data.
+cohort_akm %>% count(occupation_cat)
+
+employment_ses <- cohort_akm %>% select(row_id, occupation_cat, occupation_sub)
+stopifnot(nrow(employment_ses) == nrow(cohort))
 ```
 
-**If you would rather not add the dependency, DST has the same lookup on the
-server.** The file you want maps completed education (`audd`) in the
-**Hovedområde** dimension (`hoved`) from level 1, the four-digit `hfaudd`, to
-level 5, the two-digit main area (`10` Grundskole, `20` Gymnasiale uddannelser,
-... `80` Ph.d.). [Format tables](formatting-tables.qmd#education-level) has the
-naming systematics, the other three DISCED-15 dimensions, the `_k`/`_t`/`_kt`
-choice and the four things to check first. The exact filenames there have not
-been checked on the server, so list the folder before you read a file.
-
-**This DST format-table route, not `heaven::edu_code`, is what SEPLINE's own
-Table 3 actually names** (corrected in the corrigendum, Hjorth et al. 2026,
-[doi:10.2147/CLEP.S612503](https://doi.org/10.2147/CLEP.S612503)). This page
-still uses `heaven::edu_code` as the worked example - it needs no DST session
-to test against, which matters for a guide read outside DST - but if you want
-to cite that your categorization follows SEPLINE's own specified source
-rather than a third-party package, this is the route to use.
-
-Whichever source you use, the shape of the solution is the same: a table of
-education codes joined to your data on `hfaudd`. What you must not do is skip
-the lookup.
-
-::: {.callout-important}
-**Use one lookup for the whole study, and write down which one.** DST's folder
-holds several versions of the classification side by side. You do not need one
-per study year: DST updates the newest version with older codes as well, so the
-latest file covers your whole period. Take the newest.
-
-The two routes should give you the *same set of categories* when they come
-from the same version of DISCED-15: the two-digit codes step 5 groups on (`5`,
-`10`, `15`, ... `90`) are the main areas at the top of DST's Hovedområde
-hierarchy. They can still differ in detail, because `heaven::edu_code` is a
-snapshot of one version while DST's newest file includes codes added since.
-Compare them on your own data before you commit, and report which one you
-used.
-:::
+::: {.callout-note}
+**AKM has a data gap in 2014** (SEPLINE Table 4, which refers to DST's
+documentation for the details). If any baseline year is 2014, compare that
+year's counts with a neighbouring year before you trust it:
+`akm %>% filter(year %in% c(2013, 2014)) %>% count(year, socio13) %>% collect()`.
 :::
 
-::: {.callout-important}
-**The grouping in step 5 is our reading of SEPLINE, not a validated
-implementation.** `edu_code` gives you the level reliably; how those levels are
-collapsed into "short / medium / long" is a study-design choice. Check the
-[SEPLINE article](https://doi.org/10.2147/CLEP.S520772) for the categorisation
-your analysis should use, and note that `edu_code` also carries a ready-made
-5-level grouping (`code5txt`) and ISCED codes (`isced_code`) if either fits
-better.
-:::
+<details>
+<summary>Choices SEPLINE leaves open for employment</summary>
+
+- **Timing.** SEPLINE suggests going further back than the year before index
+  when reverse causation is a strong concern for your outcome, or measuring
+  before retirement. DREAM gives weekly status if you need to measure closer
+  to index, with its own caveats (Table 5).
+- **Coarser groups.** Among people of working age, the main groups can be
+  merged into able-bodied (A + B) versus not (C), with some misclassification
+  because the reasons for leaving the labour market are unknown.
+- **Flex jobs** are inside `330` (C1) in `socio13`. IDA and DREAM classify them
+  separately, if you need them as "working under special conditions".
+- **Students before 2012.** In the older classification (socio02), students
+  earning more than 60,000 DKK were counted as employees; `socio13` counts
+  them as students, so the share of students rises from 2012 (Table 4).
+
+</details>
+
+<details>
+<summary>Check your AKM: one row per person per year</summary>
+
+The recipe assumes one row per `pnr` per year. DST resolves several jobs into
+one main status before delivery, so that should hold. Check it:
+
+```r
+akm_data %>% count(pnr, year) %>% filter(n > 1)
+```
+
+If rows repeat with the **same** `socio13`, remove the copies with
+`distinct(pnr, year, socio13)` and run the check again. If the same
+person-year has **different** codes, neither SEPLINE nor DST says which to
+keep. Pick a documented priority (for example A > B > C > D, by attachment to
+the labour market) and report it as your own choice.
+
+</details>
 
 ## Income - FAIK via BEF (`famaekvivadisp_13`) {#faik-income}
 
-Income is linked to the household, not the person - and that is a deliberate
-choice, not just a fact about how FAIK is structured. SEPLINE's Table 7
-recommends **equivalized disposable household income**
-(`famaekvivadisp_13`/`aekvivadisp_13`) **as the default**, "unless disposable
-personal income better accommodates the research question" - individual
-income (`perindkialt_13`) is a documented, valid alternative for some study
-designs (e.g. questionnaire-based research benchmarking against a survey
-population's own pre-tax income), not simply the wrong choice. This page only
-implements the household route. You need `familie_id` from BEF as a bridge.
-SEPLINE's actual rule (Table 8, "Data Management of Income
-and Wealth"): average the **three calendar years preceding the year of
-index** (not the index year itself, to avoid reverse causation), then classify
-into quintiles **stratified by sex × 5-year age group × calendar year**,
-computed against the **general population** - not your own cohort's
-distribution. The suggested output is 3 categories, not 5 (Table 9): quintile
-1 = Low, quintiles 2-4 = Medium, quintile 5 = High.
+**What SEPLINE recommends (Tables 7-9):**
 
-`famaekvivadisp_13` has a sister column, `famaekvivadisp`, with no suffix. The
-`_13` one is not simply the newer of the two: DST gives the old column the years
-1990-2012 and the `_13` column 1987-2024, so the newer definition was applied
-backwards as well as forwards. Use `_13` for the whole period. Splicing the two
-at 2013 mixes two definitions inside one series.
+- **Measure:** equivalised disposable **household** income,
+  `famaekvivadisp_13`, as the default. Personal income (`perindkialt_13`) is
+  an alternative when the research question needs it; this recipe implements
+  the household measure.
+- **Time:** the mean of the **three calendar years before the index year**. If
+  one year is missing, the mean of the other two; if two, the one that exists;
+  if all three, missing.
+- **Standardisation:** quintiles of the **general population** with the same
+  **sex and 5-year age group**, not of your own cohort. The cutpoints are also
+  computed **per calendar year**: SEPLINE's text describes income "calculated
+  in income quintiles by calendar year", and incomes rise every year.
+- **Categories:** quintile 1 = **Low**, quintiles 2-4 = **Medium**, quintile 5
+  = **High** (Table 9).
+
+**How the data fits together.** FAIK holds income per family (`familie_id`)
+and year. A person's family comes from BEF, so the recipe goes **person →
+BEF → family → FAIK**. Use the `_13` version of the variable for the whole
+period: the older `famaekvivadisp` has a different definition and stops in
+2012, while `famaekvivadisp_13` covers 1987 onward on one definition.
+
+**It works on the whole population, inside the database.** Step 7 joins BEF
+and FAIK for everyone in Denmark and computes the cutpoints in DuckDB; only
+one row per sex x age group x year comes back to R. This has been run on DST
+for two reference years, where it took seconds. (That it gives the same
+cutpoints as computing them in R has been checked on synthetic data only.)
 
 ```r
-# 1. Open BEF + FAIK via fastreg (read_register gets the path from your project config)
-bef <- read_register("bef") %>%
-  rename_with(tolower)
-faik <- read_register("faik") %>%
-  rename_with(tolower) # check whether FAIK is one row per family in YOUR data - see the callout below
-# Without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/") %>% rename_with(tolower)  (same for faik)
+# 1. Open the registers. FAIK is reduced to one row per family per year:
+#    that changes nothing when FAIK already is that, and removes repeated
+#    copies when it is not (see "Check your FAIK" below).
+bef <- open_register("bef")
+faik <- open_register("faik") %>%
+  distinct(familie_id, year, famaekvivadisp_13)
 
-# 2. Fetch familie_id from BEF for every baseline year the cohort needs (see AKM step 2 for what unique() does)
-bef_family <- bef %>%
-  semi_join(tibble(pnr = cohort$pnr), by = "pnr", copy = TRUE) %>% # only the cohort's pnr's, copy = TRUE: see AKM step 2
-  filter(year %in% !!index_year) %>% # only years the cohort actually needs
-  select(pnr, year, familie_id) %>% # familie_id is the bridge to FAIK
-  collect() # fetch into R
+# 2. The years needed: each baseline year and the two years before it
+income_years <- unique(c(cohort$year_baseline, cohort$year_baseline - 1, cohort$year_baseline - 2))
 
-# 3. Fetch income from FAIK for the same years
-faik_data <- faik %>%
-  filter(year %in% !!index_year) %>% # only years the cohort actually needs
-  select(familie_id, year, famaekvivadisp_13) %>% # only the columns we use
-  collect() # fetch into R
+# 3. One row per cohort row and year in its window, so each row keeps its
+#    own three years even when a pnr repeats with different index dates
+cohort_income_years <- bind_rows(
+  cohort %>% transmute(row_id, pnr, year = year_baseline),
+  cohort %>% transmute(row_id, pnr, year = year_baseline - 1),
+  cohort %>% transmute(row_id, pnr, year = year_baseline - 2)
+)
 
-# 4. Attach to cohort - one row per cohort row, matched to THAT row's own baseline year
+# 4. Fetch the cohort's families and their income for those years
+bef_cohort <- bef %>%
+  semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>% # only the cohort
+  filter(year %in% !!income_years) %>%
+  select(pnr, year, familie_id, koen, foed_dag) %>% # koen + foed_dag for the sex x age strata in step 8
+  collect()
+
+faik_cohort <- faik %>%
+  filter(year %in% !!income_years) %>%
+  collect()
+
+# 5. Each cohort row's 3-year mean. na.rm = TRUE gives exactly SEPLINE's
+#    missing-year rule; n_years records how many years were used. A missing
+#    year is usually migration: FAIK only has income for families with a
+#    member living in Denmark the whole calendar year (Table 7).
+income_mean <- cohort_income_years %>%
+  left_join(bef_cohort, by = c("pnr", "year")) %>% # this row's family in that year
+  left_join(faik_cohort, by = c("familie_id", "year")) %>% # that family's income
+  group_by(row_id) %>%
+  summarise(
+    n_years = sum(!is.na(famaekvivadisp_13)),
+    mean_income = mean(famaekvivadisp_13, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(mean_income = if_else(n_years == 0L, NA_real_, mean_income)) # mean() of nothing is NaN, not NA
+
+# At most 3 years per row. More means a join repeated rows: one of the
+# registers is not one row per person or family per year in your delivery.
+stopifnot(max(income_mean$n_years) <= 3)
+
+# 6. Negative means (Table 8): mostly the self-employed, and often wealthy.
+#    SEPLINE suggests excluding them, or two sensitivity analyses with them
+#    counted as Low and as High. Count them, then decide - do not ignore them.
+income_mean %>% summarise(n_negative = sum(mean_income < 0, na.rm = TRUE), total = n())
+
+# 7. Cutpoints from the whole population, computed inside DuckDB.
+#    A reference year is a cohort baseline year; its window is that year and
+#    the two before it, as in step 5. Each income row is stacked three times,
+#    labelled with the three reference years it belongs to (the 2014 row
+#    counts for 2014, 2015 and 2016), so one grouped mean gives every
+#    person's 3-year mean for every reference year at once.
+#    Reduce(union_all, list(...)) does the stacking. Do not write
+#    union_all(a, b, c): union_all() takes two tables and silently ignores
+#    a third, which gave cutpoints up to 13% wrong in testing.
+#    Age is fixed at the reference year (the age reached that year), so a
+#    birthday inside the window cannot split one person across two age bands.
+#    SEPLINE does not say when age is measured; step 8 must use the same rule.
+population <- bef %>%
+  filter(year %in% !!income_years) %>% # everyone, not just the cohort
+  select(pnr, year, familie_id, koen, foed_dag) %>%
+  left_join(faik %>% filter(year %in% !!income_years), by = c("familie_id", "year"))
+
+ref_years <- tibble(ref_year = unique(cohort$year_baseline))
+
+cutpoints <- Reduce(union_all, list(
+  population %>% mutate(ref_year = year),
+  population %>% mutate(ref_year = year + 1L),
+  population %>% mutate(ref_year = year + 2L)
+)) %>%
+  semi_join(ref_years, by = "ref_year", copy = TRUE) %>% # only the reference years the cohort uses
+  group_by(ref_year, pnr, koen, foed_dag) %>%
+  summarise(mean_income = mean(famaekvivadisp_13, na.rm = TRUE), .groups = "drop") %>% # each person's 3-year mean
+  mutate(age_group = floor((ref_year - year(foed_dag)) / 5) * 5) %>% # 5-year bands: 0, 5, 10, ...
+  group_by(koen, age_group, ref_year) %>%
+  summarise(
+    q20 = quantile(mean_income, 0.2, na.rm = TRUE),
+    q80 = quantile(mean_income, 0.8, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  collect() # only the cutpoints reach R
+
+# 8. Classify each cohort row against the cutpoints for its own sex, age band
+#    and baseline year - not against the cohort's own distribution
 cohort_income <- cohort %>%
-  left_join(bef_family, by = c("pnr", "year_baseline" = "year")) %>% # this row's own household, for its own baseline year
-  left_join(faik_data, by = c("familie_id", "year_baseline" = "year")) # then that household's income, same year
+  select(row_id, pnr, year_baseline) %>%
+  left_join(bef_cohort %>% select(pnr, year, koen, foed_dag), by = c("pnr", "year_baseline" = "year")) %>%
+  mutate(age_group = floor((year_baseline - year(foed_dag)) / 5) * 5) %>% # same rule as step 7
+  left_join(income_mean, by = "row_id") %>%
+  left_join(cutpoints, by = c("koen", "age_group", "year_baseline" = "ref_year")) %>%
+  mutate(
+    income_cat = case_when(
+      is.na(mean_income) ~ "Missing", # no income in any of the three years
+      mean_income <= q20 ~ "Low", # quintile 1
+      mean_income > q80 ~ "High", # quintile 5
+      TRUE ~ "Medium" # quintiles 2-4
+    )
+  )
 
-stopifnot(nrow(cohort_income) == nrow(cohort))
+income_ses <- cohort_income %>% select(row_id, mean_income, income_cat)
+stopifnot(nrow(income_ses) == nrow(cohort))
 ```
 
-This single-year version is here to show the join shape. SEPLINE's actual
-income measure is the 3-year mean below - `cohort_income` is not what carries
-through to the final assembly.
+Only Q20 and Q80 are needed for Low/Medium/High. If you want all five
+quintiles, add `q40` and `q60` in step 7 the same way.
 
-::: {.callout-warning collapse="true" title="Check your FAIK before you trust this join"}
-The recipe above assumes FAIK holds **one row per family per year** - that is
-why the bridge goes through `familie_id`, and it is how DST documents the
-register: DST's variable list for FAIK has no `pnr` at all. **In at least one
-delivery (DARTER) that is not what arrived:** from **2022 onward** its FAIK also
-carries `pnr`, and each family's row is repeated once per family member.
-**Whether this applies to your project depends on your data delivery, so check
-rather than assume either way.**
+<details>
+<summary>Check your FAIK: one row per family per year</summary>
+
+DST documents FAIK as **one row per family per year**, with no `pnr`. In at
+least one delivery (DARTER) FAIK from **2022 onward** also carries `pnr` and
+repeats each family's row once per family member. The `distinct()` in step 1
+removes those copies, but it is only safe if every copy carries the same
+income. Check both, and expect 0 from each:
 
 ```r
-names(faik) # is pnr among the columns?
+faik_raw <- open_register("faik") # before distinct()
 
-# More than one row per family and year means the duplication applies to you
-faik %>%
+# 1. Every copy of a family-year carries the same income
+faik_raw %>%
+  group_by(familie_id, year) %>%
+  summarise(n_values = n_distinct(famaekvivadisp_13), .groups = "drop") %>%
+  filter(n_values > 1) %>%
+  count() %>%
+  collect()
+
+# 2. After distinct(), one row per family-year is left
+faik_raw %>%
+  distinct(familie_id, year, famaekvivadisp_13) %>%
   count(familie_id, year) %>%
   filter(n > 1) %>%
   count() %>%
   collect()
 ```
 
-**What it does to the code above.** The join on `familie_id` + `year` returns one
-row per family *member* instead of one per person, so your dataset grows without
-any error. And the 3-year average further down is then computed over a set
-weighted by household size: a five-person family counts five times as much as a
-single person in the same year. The numbers stay plausible throughout, which is
-what makes it dangerous.
-
-**If it applies to you, one line before the join fixes it.** Collapse the
-duplicates back to one row per family-year, and the rest of the recipe works
-unchanged for every year:
-
-```r
-faik <- faik %>%
-  distinct(familie_id, year, famaekvivadisp_13) # one row per household per year
-```
-
-If your FAIK carries `pnr` for **all** years, you can join income to `pnr`
-directly and skip the BEF bridge entirely.
-:::
-
-::: {.callout-tip}
-**A ready-made alternative:
-[`heaven::averageIncome()`](packages-overview.qmd#heaven---danish-register-data-toolkit)**
-does the multi-year average in one call, uses only the years strictly before the
-index year, and keeps one row per person-year - so repeated rows for the same
-person and year collapse on their own. That happens to cover the FAIK
-duplication above, though the function was written for a different reason
-(quarterly duplicates), so do not treat it as a guarantee.
-
-It does **not** replace the BEF bridge: the income table you hand it must
-already be linked to `pnr`. `heaven` is pre-installed on DST and installs from
-GitHub elsewhere (`pak::pak("tagteam/heaven")`), so the choice is about whether
-you want the dependency - the code below is the version with no packages beyond
-the ones you already use.
-:::
-
-<details>
-<summary>3-year average and quintiles (SEPLINE recommendation)</summary>
-
-This is a worked implementation of Table 8's rule, not a simplified stand-in -
-see the callouts below for its cost and the choices it still leaves to you.
-
-::: {.callout-warning}
-**This works with BEF and FAIK for the whole Danish population, not just
-your cohort.** Steps 5-6 below deliberately drop the `pnr` filter, because
-SEPLINE stratifies income quintiles against the **general population**
-(Table 8, "Standardization"), not against your own cohort's distribution -
-`ntile(mean_income, 5)` on the cohort alone answers a different question (how
-your participants rank against *each other*, not against the population).
-
-**RAM: the filtering and averaging stay inside the database, not in R - but
-this is not yet tested at real scale, and may still be a problem.** Steps 5-6
-hold off on `collect()` until after `group_by()`/`summarise(mean(...))` has
-already run, so what actually reaches R is one row per (person, sex,
-age-group) - not the raw population x 3-years join, which would be tens of
-millions of rows. This was checked against a small **local, synthetic**
-DuckDB connection (`year()`, `floor()`, `mean()` and the join all confirmed
-to translate to SQL and run there), not against a real DST session and not
-at the full Danish population's actual scale (5.9 million people across
-several years). Whether it holds up depends on your fastreg setup's specific
-backend, and has not been verified either way - **treat this as unconfirmed,
-not as a solved RAM problem**, and watch for `collect()` in step 6 doing more
-work than expected the first time you run it.
-
-**If RAM turns out to be a real problem in practice**, one option short of a
-full comparator-arm deviation (below) is to take a **random, representative
-sample** of the background population instead of all of it - still much
-closer to SEPLINE's "general population" cutpoints than a narrow comparator
-arm, at a fraction of the rows:
-
-```r
-bef_population <- bef %>%
-  filter(year %in% !!income_years) %>%
-  select(pnr, year, familie_id, koen, foed_dag) %>%
-  # a 500,000-person sample is still plenty for stable quintile cutpoints -
-  # only do this if the full population turns out to be too much RAM
-  slice_sample(n = 500000)
-```
-
-This is still a deviation from "the full general population" and should be
-reported as one, the same as a comparator arm - just a smaller one, and one
-that stays closer to what SEPLINE actually specifies.
-
-**Using a different reference population is a legitimate choice, but document
-it as a deviation.** If you use a comparator arm from your own study instead
-of the full population (e.g. because eligibility criteria like "no prior
-surgery" or "≥5 years residency" make it a more relevant comparison for your
-specific outcome), say so explicitly - the mechanics below are identical, but
-the result is no longer SEPLINE's "general population" cutpoints.
-:::
-
-```r
-library(dplyr) # filter, select, left_join, group_by, summarise, mutate, bind_rows
-library(lubridate) # year() to extract year from a date
-
-# 1. The three calendar years SEPLINE asks for: the year before index, and
-# the two years before that (Table 8, "Time of measurement") - never the
-# index year itself, to avoid reverse causation
-income_years <- unique(c(cohort$year_baseline, cohort$year_baseline - 1, cohort$year_baseline - 2))
-
-# 2. Each cohort row needs its OWN 3-year window - not one window shared by
-# the whole cohort (see "Before you extract anything" above: the same pnr can
-# carry more than one baseline year). Build one row per (cohort row x year
-# needed) first, so the years stay tied to the row they belong to:
-cohort_income_years <- bind_rows(
-  cohort %>% transmute(row_id, pnr, year = year_baseline), # baseline year
-  cohort %>% transmute(row_id, pnr, year = year_baseline - 1), # 1 year before
-  cohort %>% transmute(row_id, pnr, year = year_baseline - 2) # 2 years before
-)
-
-bef_3yr <- bef %>%
-  semi_join(tibble(pnr = cohort$pnr), by = "pnr", copy = TRUE) %>% # only the cohort's pnr's, copy = TRUE: see AKM step 2
-  filter(year %in% !!income_years) %>% # only years the cohort actually needs
-  select(pnr, year, familie_id, koen, foed_dag) %>% # koen + foed_dag needed for the sex x age strata in step 8
-  collect() # fetch into R
-
-faik_3yr <- faik %>%
-  filter(year %in% !!income_years) %>% # only years the cohort actually needs
-  select(familie_id, year, famaekvivadisp_13) %>% # only the columns we use
-  collect() # fetch into R
-
-# 3. Attach each row's own 3 years of income, then average PER COHORT ROW -
-# not per pnr, so a repeated pnr with two different baseline years gets two
-# separate, correctly-windowed averages instead of one mixed-together number.
-# Missing-year rule (Table 8, "Missing values"): 1 missing year -> mean of
-# the other 2; 2 missing -> the 1 that exists; 0 available -> no value.
-# na.rm = TRUE already does that arithmetic; n_years just records how many
-# years it used, so you can see how much averaging happened per row.
-income_mean <- cohort_income_years %>%
-  left_join(bef_3yr, by = c("pnr", "year")) %>% # this row's household, for this specific year
-  left_join(faik_3yr, by = c("familie_id", "year")) %>% # then that household's income, same year
-  group_by(row_id) %>%
-  summarise(
-    n_years = sum(!is.na(famaekvivadisp_13)), # how many of the 3 years had a value
-    mean_income = mean(famaekvivadisp_13, na.rm = TRUE), # mean disposable income over the years that exist
-    .groups = "drop"
-  ) %>%
-  mutate(mean_income = if_else(n_years == 0L, NA_real_, mean_income)) # mean() of zero values is NaN, not NA - fix it
-
-# 4. Negative income (Table 8, "Negative values"): possible, mostly for the
-# self-employed. SEPLINE offers two options, not one fixed rule: exclude
-# these individuals, or run the analysis twice - once counting them as low
-# income, once as high income - as a sensitivity check. Decide which fits
-# your study; do not silently drop or silently keep them.
-income_mean %>%
-  summarise(n_negative = sum(mean_income < 0, na.rm = TRUE), total = n())
-
-# 5. Reference population for the cutpoints: same years, no pnr filter. This
-# stays LAZY - no collect() here. income_years already spans every year any
-# baseline year's 3-year window needs (step 1), so this is not a wider PULL
-# than the cohort fetch above - but the population itself is all of Denmark,
-# not just your cohort, so the filter/join/mean below are deliberately kept
-# inside the database instead of materialised in R. filter(), left_join(),
-# year(), floor() and mean() all translate to SQL and run there (verified
-# against DuckDB); only the small per-stratum result in step 6 is collected.
-# If bef and faik turn out to be on different underlying connections in your
-# fastreg setup, this join will error asking for copy = TRUE - collect()
-# each side first as a fallback, same as the single-year demo above.
-bef_population <- bef %>%
-  filter(year %in% !!income_years) %>% # same years, no pnr filter this time
-  select(pnr, year, familie_id, koen, foed_dag) # koen + foed_dag for the sex x age strata
-
-faik_population <- faik %>%
-  filter(year %in% !!income_years) %>%
-  select(familie_id, year, famaekvivadisp_13)
-
-population_with_income <- bef_population %>%
-  left_join(faik_population, by = c("familie_id", "year"))
-
-# 6. Each population member's OWN 3-year average - the same rolling window
-# as step 3, computed once per distinct baseline year the cohort actually
-# uses (baseline_years), not per calendar year. A single-year population
-# income would understate how stable most people's income is year to year,
-# and would not be comparable to the cohort's own 3-year-averaged value - so
-# this repeats step 3's exact logic for the population side instead of
-# simplifying it away. The loop is over baseline_years (typically a handful
-# of distinct years), not over every person - each pass filters
-# population_with_income to that ref_year's 3 years and fixes age AT that
-# ref_year (not year-by-year), so nobody's window splits across two
-# age_group bands due to a birthday landing mid-window. collect() happens
-# LAST in each pass, after the group_by/summarise(mean(...)) has already run
-# inside the database - what reaches R per pass is one row per (person,
-# stratum), not the raw multi-year population join.
-baseline_years <- unique(cohort$year_baseline)
-
-population_income <- lapply(baseline_years, function(by) {
-  population_with_income %>%
-    filter(year %in% !!c(by, by - 1, by - 2)) %>% # !! evaluates by LOCALLY first - see AKM step 2's index_year for why
-    mutate(
-      age = by - year(foed_dag), # age AT ref_year, fixed across the whole window
-      age_group = floor(age / 5) * 5 # 5-year bands: 0, 5, 10, ...
-    ) %>%
-    group_by(pnr, koen, age_group) %>%
-    summarise(mean_income = mean(famaekvivadisp_13, na.rm = TRUE), .groups = "drop") %>%
-    collect() %>% # only the per-person summary leaves the database, not the raw rows
-    mutate(ref_year = by)
-}) %>%
-  bind_rows()
-
-# 7. Cutpoints: Q20/Q40/Q60/Q80 per sex x age group x year, from the
-# reference population - these define what "low/medium/high income" means,
-# independent of your own cohort's distribution
-cutpoints <- population_income %>%
-  group_by(koen, age_group, ref_year) %>%
-  summarise(
-    q20 = quantile(mean_income, 0.2, na.rm = TRUE),
-    q40 = quantile(mean_income, 0.4, na.rm = TRUE),
-    q60 = quantile(mean_income, 0.6, na.rm = TRUE),
-    q80 = quantile(mean_income, 0.8, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-# 8. Classify the STUDY cohort against those cutpoints - not against its own
-# ntile(), which would only compare people to each other. koen and foed_dag
-# come from the same bef_3yr fetch as familie_id (step 2), taken at each
-# row's own baseline year.
-income_quintile <- cohort %>%
-  select(row_id, pnr, year_baseline) %>%
-  left_join(
-    bef_3yr %>% select(pnr, year, koen, foed_dag),
-    by = c("pnr", "year_baseline" = "year")
-  ) %>%
-  mutate(
-    age = year_baseline - lubridate::year(foed_dag), # age reached in the baseline year
-    age_group = floor(age / 5) * 5 # 5-year bands, matching step 6
-  ) %>%
-  left_join(income_mean, by = "row_id") %>%
-  left_join(cutpoints, by = c("koen", "age_group", "year_baseline" = "ref_year")) %>%
-  mutate(
-    income_cat = case_when(
-      is.na(mean_income) ~ "Unknown", # no income years available at all - see the NA-vs-Unknown callout above
-      mean_income <= q20 ~ "Low", # quintile 1
-      mean_income > q80 ~ "High", # quintile 5
-      TRUE ~ "Medium" # quintiles 2-4 (Table 9's suggested 3-category grouping)
-    )
-  ) %>%
-  select(row_id, mean_income, income_cat)
-
-stopifnot(nrow(income_quintile) == nrow(cohort))
-```
-
-::: {.callout-note}
-**Two more things SEPLINE flags that this code does not handle for you.**
-Inflation: income values should be adjusted to a common year before averaging
-across calendar years, using a consumer price index or GDP deflator (Table 8,
-Birth Cohort/Life Course Aspects) - not implemented here, since the right
-index depends on your study period. Continuous modelling: if you want income
-as a continuous variable instead of categories, SEPLINE warns that a linear
-term is biased (misclassification is worse at the low end, and the
-income-health relationship is not linear) and recommends splines or
-fractional polynomials instead.
-:::
+Without the `distinct()`, each person would still be averaged on their own,
+but a duplicated year would count once per family member: `n_years` could
+exceed 3, and years with more copies would weigh more than the others.
 
 </details>
 
-## Assemble all SES variables onto the cohort
+<details>
+<summary>Choices and caveats for income</summary>
+
+- **Match the population's ages to your cohort's.** An age limit only changes
+  the youngest bands, and the rule is to use the same ages on both sides. Band
+  `15` covers 15-19: if your cohort starts at 18, add
+  `filter(ref_year - year(foed_dag) >= 18)` in step 7 before the age band is
+  computed, and the same limit in step 8.
+- **Young adults often carry their parents' income.** DST counts children
+  under 25 living at home as part of the family.
+- **Inflation.** SEPLINE says income should account for inflation, and names
+  quintiles by calendar year as one way. That is what the recipe does: the
+  cohort and the population are compared within the same year and window, so
+  a price index would change nothing. It matters only if you use income as a
+  continuous value across years.
+- **Continuous income.** SEPLINE warns that a linear term is biased and
+  recommends splines or fractional polynomials.
+- **A different reference population** (for example a comparator arm with
+  your own eligibility criteria) is a legitimate choice but a deviation from
+  SEPLINE's general population: report it. A random sample of the population
+  is a fallback only if you cannot use the DuckDB connection; see [Open the
+  registers](#open-registers) for how to draw it.
+- **Why not DST's published deciles?** StatBank's decile tables
+  ([IFOR25](https://www.statbank.dk/IFOR25) and IFOR20-22) are not split by sex
+  and age, and they are for one year's income, while SEPLINE classifies a
+  3-year mean. Averaging pulls incomes together, so annual bounds would put
+  fewer than 20% in Low and in High.
+- **2014-2016 have a small known error.** DST's documentation of
+  [`FAMAEKVIVADISP_13`](https://www.dst.dk/da/Statistik/dokumentation/Times/familieindkomst/famaekvivadisp-13)
+  says tax-free cash benefits were missing or wrong in some municipalities in
+  those years, corrected only on DST's datasets for income distribution and
+  the SDG indicators (about 0.04 Gini points, or about 4,000 people in the
+  low-income groups).
+- **A ready-made function.** [`heaven::averageIncome()`](packages-overview.qmd#heaven---danish-register-data-toolkit)
+  computes the multi-year mean if you have already linked income to `pnr`. It
+  does not compute population cutpoints.
+
+</details>
+
+## Assemble all SES variables onto the cohort {#assemble}
+
+Each recipe ended with one table keyed on `row_id`. Join the ones you ran:
 
 ```r
 cohort_ses <- cohort %>%
-  left_join(cohort_akm %>% select(row_id, occupation_cat), by = "row_id") %>% # attach employment
-  left_join(cohort_udda %>% select(row_id, education_cat), by = "row_id") %>% # attach education
-  left_join(income_quintile %>% select(row_id, income_cat), by = "row_id") # attach income quintile
+  left_join(education_ses, by = "row_id") %>% # from the education recipe
+  left_join(employment_ses, by = "row_id") %>% # from the employment recipe
+  left_join(income_ses, by = "row_id") # from the income recipe
 
-# Sanity check: a correct join never changes the row count
 stopifnot(nrow(cohort_ses) == nrow(cohort))
-```
 
-Joined on `row_id`, not `pnr` - see [Before you extract anything](#before-you-extract-anything-give-the-cohort-a-stable-row-id) above for why.
+# The Missing categories are people, not errors. Look at how many there are
+# in each, and whether they differ on your outcome (SEPLINE recommends it).
+cohort_ses %>% count(education_cat)
+cohort_ses %>% count(occupation_cat)
+cohort_ses %>% count(income_cat)
+```
 
 ## See also
 
 - [SEPLINE article (Hjorth et al. 2025)](https://doi.org/10.2147/CLEP.S520772):
-  full methodology and recommended reference groups
-- [Format tables](formatting-tables.qmd): DST's SAS files for label translation
-- [Overview of registers](register-reference.qmd): confirmed column names for
-  AKM, FAIK and UDDA
+  the full reasoning behind every rule on this page
+- [Several registers on one DuckDB
+  connection](parquet-and-fastreg.qmd#duckdb-views): why the recipes do not use
+  `read_register()`
+- [Format tables](formatting-tables.qmd#education-level): the education lookup
+  files and how to read their names
+- [Overview of registers](register-reference.qmd): column names for AKM, FAIK,
+  UDDA and BEF
 
 ## Next steps
 
 You now have SES covariates. Next steps depend on what you still need:
 
-- **Specialist packages** (OSDC for diabetes classification, NMI for comorbidity
-  score, analysis tools)? → [Algorithms & special
+- **Specialist packages** (OSDC for diabetes classification, NMI as a
+  mortality risk score, analysis tools)? → [Algorithms & special
   packages](packages-overview.qmd)
 - **Ready to export results?** → [Phase 14 - Export and
   repatriation](export.qmd)
