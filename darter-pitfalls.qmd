@@ -228,15 +228,26 @@ variable list for FAIK nor DST's order list (checked 2026-09-30) contains a
 `pnr`, for any year. Whether it comes from how the data was ordered or from how
 it was converted is not known, so another project may or may not see it.
 
-If you join on `familie_id` alone across those years, you get one row per family
-member instead of one per person. Nothing errors, the dataset just grows, and
-any average computed afterwards is weighted by household size.
+If you join on `familie_id` without removing the copies, each person gets one
+row per family member for those years. Nothing errors. A single-year join just
+grows, and in the 3-year income mean each person is still averaged on their
+own, but a year from 2022 onward counts once per family member: `n_years` can
+exceed 3, and a window such as 2020-2022 gives 2022 more weight than the two
+years before it.
 
 ```r
 # Check before you join - more than one row per family and year means it applies
 faik %>%
   count(familie_id, year) %>%
   filter(n > 1) %>%
+  count() %>%
+  collect()
+
+# distinct() is only a safe fix if every copy carries the same income - expect 0
+faik %>%
+  group_by(familie_id, year) %>%
+  summarise(n_values = n_distinct(famaekvivadisp_13), .groups = "drop") %>%
+  filter(n_values > 1) %>%
   count() %>%
   collect()
 
