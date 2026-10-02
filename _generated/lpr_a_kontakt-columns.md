@@ -110,8 +110,8 @@ Where these values come from:
 
 **Worth knowing:**
 
-- **`dw_ek_kontakt`:** The key the diagnosis and procedure tables join on.
-- **`dw_ek_forloeb`:** One level above the contact: a course of treatment can span several contacts, so joining on this is not the same as joining on the contact.
+- **`dw_ek_kontakt`:** The key the diagnosis and procedure tables join on. Sundhedsdatastyrelsen's guide to its own LPR3 research model (Vejledning til LPR3_F, 2023, https://sundhedsdatastyrelsen.dk/media/1 6364/Vejledning%20til%20LPR3_F.pdf) says the dw_ek keys are made by Sundhedsdatastyrelsen and stay the same when a report is updated. They only change if the whole LPR3 base model is reloaded. That is the opposite of LPR2's recnum. DST does not document whether LPR_A carries the same keys, so treat this as likely, not confirmed.
+- **`dw_ek_forloeb`:** One level above the contact: a course of treatment can span several contacts, so joining on this is not the same as joining on the contact. Procedures and results registered on the course rather than on a contact hang on dw_ek_forloeb, and this column is the way to reach them when the course table is not delivered (Vejledning til LPR3_F, sections 3.4 and 3.7).
 - **`kont_starttidspunkt`:** A datetime, not a date. as.Date() it before comparing with an index date.
 - **`lprindberetningssystem`:** Filter to "LPR3". The table reaches back to 2017, and the outpatient contacts from before March 2019 are also in LPR2, so combining the two without this filter counts the same contact twice. This is a different thing from LPR_F vs LPR_A: those are two file formats, a choice made before you even open a file, not a value this column can hold. See the lprindberetningssystem code system for the full value set and its confidence levels.
 - **`adiag`:** The contact's action diagnosis, repeated here so simple analyses need not join lpr_a_diagnose. Secondary diagnoses are only in the diagnosis table, so filtering on this column alone misses them.

@@ -56,6 +56,8 @@ Where these values come from:
 
 **Worth knowing:**
 
+- **`dw_ek_kontakt`:** Diagnoses have no key of their own: each row hangs on the contact it was registered on (Vejledning til LPR3_F, section 3.3).
+- **`diag_kode_type`:** Add-on codes have their own row in this table. diag_parent_kode and diag_parent_kode_type show which diagnosis an add-on belongs to. Filter on the type before counting diagnoses, or add-on rows are counted as diagnoses (Vejledning til LPR3_F, section 3.3).
 - **`senere_afkraeftet`:** A diagnosis that was subsequently withdrawn. Keeping these counts conditions the patient turned out not to have.
 - **`diag_kode_tekst`:** The code spelled out. Convenient for reading, but do not group on it: the text can change between years while the code stays the same.
 - **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.

@@ -29,6 +29,7 @@
 | `prod_enh` | character | code | Performing unit |
 | `prod_inst` | character | code | Performing institution |
 
+- **`dw_ek_procedureregistrering`:** Only filled for course procedures and for contact procedures with their own payer (different from the contact's payer). It is the key to the payment table (lpr_a_betalingsoplysninger), not a general procedure id (Vejledning til LPR3_F, sections 3.4-3.6).
 - **`proc_indb_tidspunkt`:** When the procedure was reported, not when it happened. Recent months look incomplete because reporting lags.
 
 </details>
@@ -63,9 +64,9 @@ Where these values come from:
 
 **Worth knowing:**
 
-- **`dw_ek_kontakt`:** The key to lpr_a_kontakt, which is where pnr lives. This table carries no person identifier of its own.
+- **`dw_ek_kontakt`:** The key to lpr_a_kontakt, which is where pnr lives. This table carries no person identifier of its own. Empty by design for course procedures, which are done without the patient present (conferences, statements, analyses, assessments). Those carry dw_ek_forloeb instead. Sundhedsdatastyrelsen expects relatively few of them among the surgical procedures (Vejledning til LPR3_F, section 3.4).
 - **`proc_starttidspunkt`:** A datetime, not a date. as.Date() it before comparing with an index date.
-- **`proc_kode_type`:** "P" marks a procedure, "+" an add-on code. An add-on code modifies the procedure above it and is not a procedure in its own right, so counting all rows overcounts.
+- **`proc_kode_type`:** "P" marks a procedure, "+" an add-on code. An add-on code modifies the procedure above it and is not a procedure in its own right, so counting all rows overcounts. LPR3 also has a third type, "I" for indication: the overall aim of the treatment or the specific indication for a procedure. Reporting it is voluntary, it is not a procedure, and the data do not say which of the other procedures on the contact or course it refers to. In Sundhedsdatastyrelsen's LPR3_F model the "I" rows sit only with the non-surgical procedures. Check whether your LPR_A table has them before counting (Vejledning til LPR3_F, sections 3.4-3.5).
 - **`proc_parent_kode`:** LPR3 nests procedures the same way it nests diagnoses: an add-on code points at the procedure it belongs to.
 - **`dw_ek_forloeb`:** One level above the contact. Where dw_ek_kontakt is empty, this is the only route back to a person, and it reaches a whole course of treatment rather than a single contact.
 - **`flag_proc_uden_kont`:** Flags a procedure with no contact attached. Those rows cannot be joined to lpr_a_kontakt at all, so a plain inner join drops them silently.
