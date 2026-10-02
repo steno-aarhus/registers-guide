@@ -210,7 +210,7 @@ registers](register-reference.qmd#udda---education-register).
   | **Short**       | `10` primary and lower secondary, `15` preparatory education   |
   | **Medium**      | `20` general upper secondary, `30` vocational, `35` access programmes |
   | **Long**        | `40` academy profession, `50` professional bachelor, `60` bachelor, `70` master, `80` PhD |
-  | **Missing**     | `90` unknown, no record, any main area not listed above, and imputed records |
+  | **Missing**     | `90` unknown, no record, any main area not listed above, and imputed records ([if you can see them](#imputed-education)) |
 
 SEPLINE counts `40` as long education on purpose, to match the international
 classification (ISCED 5, short-cycle tertiary).
@@ -225,7 +225,7 @@ udda <- open_register("udda")
 udda_data <- udda %>%
   semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>% # only the cohort; copy = TRUE sends the pnr list into DuckDB
   filter(year <= !!max(cohort$year_baseline)) %>%
-  select(pnr, year, hfaudd, hf_kilde) %>% # hf_kilde: where the record came from (step 5)
+  select(pnr, year, hfaudd) %>%
   collect()
 
 # 3. Attach: for each cohort row, its own most recent record in or before its
@@ -291,12 +291,7 @@ cohort_udda <- cohort_udda %>%
   mutate(hfaudd = as.character(hfaudd)) %>% # the lookup is character
   left_join(edu_lookup, by = "hfaudd") %>%
   mutate(
-    # Immigrants' education, imputed by DST from sparse data. SEPLINE groups
-    # these as missing for individual-level analyses (Table 2 and 3); delete
-    # this condition below if you want to keep them.
-    imputed = as.numeric(hf_kilde) %in% c(9, 10, 18),
     education_cat = case_when(
-      imputed ~ "Missing",
       main_area %in% c(10, 15) ~ "Short",
       main_area %in% c(20, 30, 35) ~ "Medium",
       main_area %in% c(40, 50, 60, 70, 80) ~ "Long",
@@ -312,6 +307,97 @@ cohort_udda %>%
 education_ses <- cohort_udda %>% select(row_id, education_cat)
 stopifnot(nrow(education_ses) == nrow(cohort))
 ```
+
+### Imputed education and `hf_kilde` {#imputed-education}
+
+For immigrants it has no information about, DST imputes an education: a
+model based on other registers guesses the most likely one. The guess is
+written into `hfaudd` as an ordinary code, so an imputed record looks exactly
+like an observed one, and **every delivery with `hfaudd` contains them**. The
+only marker is `hf_kilde`, the source of the record: `9`, `10` and `18` are
+immigrants' education imputed by DST.
+
+SEPLINE recommends grouping these as Missing in individual-level analyses
+(Table 2 and 3): imputed values are reliable for groups, where the errors even
+out, but not for single people. Not every delivery has `hf_kilde`, so check
+yours:
+
+```r
+"hf_kilde" %in% colnames(udda) # TRUE: use the first tab. FALSE: the second
+```
+
+::: {.panel-tabset}
+
+### You have `hf_kilde`
+
+```r
+# 7. Fetch the source of every record, the same way as in step 2
+udda_source <- udda %>%
+  semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>%
+  filter(year <= !!max(cohort$year_baseline)) %>%
+  select(pnr, year, hf_kilde) %>%
+  collect()
+
+# 8. Set imputed records to Missing. Joining on pnr + year gives the source
+#    of exactly the record that step 3 picked for each row.
+education_ses <- cohort_udda %>%
+  left_join(udda_source, by = c("pnr", "year")) %>%
+  mutate(
+    # 9, 10, 18: immigrants' education imputed by DST (SEPLINE Table 2 and 3)
+    imputed = as.numeric(hf_kilde) %in% c(9, 10, 18),
+    education_cat = if_else(imputed, "Missing", education_cat)
+  ) %>%
+  select(row_id, education_cat) # replaces education_ses from step 6
+
+stopifnot(nrow(education_ses) == nrow(cohort))
+```
+
+### You do not have `hf_kilde`
+
+Then the imputed records are in your education variable and cannot be told
+apart from observed ones. That is not an error, but it is a limitation, so
+say so in the methods section.
+
+Before you settle for that, check the raw UDDA files: your parquet files may
+have been made from only some of the columns.
+
+```r
+library(haven) # read_sas()
+
+# n_max = 0 reads the column names only, so the size of the file does not matter
+names(read_sas("<path to a raw UDDA file>.sas7bdat", n_max = 0))
+```
+
+If `hf_kilde` is there, ask whoever built your parquet files to include it,
+and use the first tab.
+
+If it is not, you can still test how much the imputed records matter. They
+all belong to immigrants, so a sensitivity analysis can set every immigrant's
+education to Missing and compare the result with your main analysis. This is
+deliberately too broad: it also removes immigrants' own answers about their
+education and Danish education taken after immigrating. Use it e.g., as a sensitivity analyses to see whether
+the result moves, not as the main analysis.
+
+```r
+# 7. Everyone in the cohort who is registered as an immigrant in BEF
+bef <- open_register("bef")
+
+immigrants <- bef %>%
+  semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>%
+  filter(as.numeric(ie_type) == 2) %>% # 2 = immigrant (DST's ie_type)
+  distinct(pnr) %>% # registered as an immigrant in any year: broad on purpose
+  collect()
+
+# 8. Sensitivity version: immigrants' education set to Missing. Keep
+#    education_ses from step 6 for the main analysis.
+education_ses_sensitivity <- cohort_udda %>%
+  mutate(education_cat = if_else(pnr %in% immigrants$pnr, "Missing", education_cat)) %>%
+  select(row_id, education_cat)
+
+stopifnot(nrow(education_ses_sensitivity) == nrow(cohort))
+```
+
+:::
 
 <details>
 <summary>Choices SEPLINE leaves open for education</summary>
