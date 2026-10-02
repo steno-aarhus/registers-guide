@@ -161,7 +161,7 @@ Where these values come from:
 
 **Worth knowing:**
 
-- **`recnum`:** The key every other LPR2 dataset joins on. It identifies a contact, not a person.
+- **`recnum`:** The key every other LPR2 dataset joins on. It identifies a contact, not a person. Sundhedsdatastyrelsen states that recnum is unique only within one update of the register. A contact can get a new recnum when the register is updated, and a recnum can be reused for a different contact. Join tables only within the same delivery, and never store recnum as a lasting id for a contact.
 - **`d_inddto`:** Use this as the contact date. It is the admission date, so for an outpatient course it is the date the course started, not the date of a particular visit.
 - **`c_pattype`:** Until 1993 only patient type 0 (inpatient) was recorded. Day patient (1) was discontinued in 2002, and hospitals then recorded those patients differently (some as outpatients, some as inpatients). Emergency room patient (3) was discontinued in 2014 and replaced by outpatient (2) with acute admission (c_indm = 1).
 - **`c_spec`:** DST publishes what each specialty code means in its department and specialty overview: https://www.dst.dk/da/Statistik/dokumentation/Times/moduldata-for-sociale-forhold--sundhedsvaesen--retsvaesen/spec (in Danish). The codes are not self-explanatory, so look them up rather than grouping on the digits.

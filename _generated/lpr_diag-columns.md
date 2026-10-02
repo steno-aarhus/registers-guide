@@ -14,8 +14,10 @@
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
 | `c_diagmod` | character | code | Diagnosis modification | 1977 to 1994 |
-| `leverancedato` | date | date |  | 1977 to 2019 |
+| `leverancedato` | date | date | Delivery date | 1977 to 2019 |
 | `version` | character | code | Version | 1977 to 2019 |
+
+- **`c_diagmod`:** Modifier for the ICD-8 era, for example 'obs. pro.' or 'ej befundet' (not found). A diagnosis with such a modifier was suspected and not confirmed, so check this column before counting pre-1994 diagnoses as cases.
 
 </details>
 
@@ -53,4 +55,8 @@ Where these values come from:
 
 **Worth knowing:**
 
+- **`recnum`:** Sundhedsdatastyrelsen states that recnum is unique only within one update of the register. A contact can get a new recnum when the register is updated, and a recnum can be reused for a different contact. Join tables only within the same delivery, and never store recnum as a lasting id for a contact.
+- **`c_diag`:** To get the text for a code, use the version of the classification valid on the contact's discharge date, because codes can change meaning over time. ICD-10 codes in SKS form start with D; ICD-8 codes are digits only. Sundhedsdatastyrelsen's own text is inconsistent about the changeover year: the t_adm section says every contact ended after 31 December 1994 is coded in ICD-10, while the t_diag section says the switch was in 1994 and ICD-8 was used before 1994. Telling the two apart by the shape of the code (starts with D or not) is safer than by year. Referral diagnoses use ICD-10 when the referral date is after 31 December 1994.
+- **`c_diagtype`:** Which types exist depends on the year (see the code system), and Sundhedsdatastyrelsen adds when they were required. Referral diagnoses (H) were voluntary 1995-1998 and only required for some referral routes after that. Underlying disease (G) was voluntary 1995-2001, recorded only for psychiatric patients in 2002-2003, and then dropped. Complication (C) and temporary diagnosis (M) were dropped at the end of 2013. A count of H or G codes over time therefore tracks the reporting rules as much as the patients.
+- **`c_tildiag`:** An add-on code to the diagnosis in c_diag on the same row, from 1995. Almost any SKS code can be used as an add-on, so it is not necessarily a diagnosis.
 - **`year`:** Not a DST variable. It is the partition the yearly deliveries were written into, so filtering on it stops the other years being read at all. Use it to limit how much is read, not to decide when something happened: for that, use the register's own date column.
