@@ -10,8 +10,10 @@ with a single table holding one category per cohort row: `education_cat`,
 `occupation_cat` or `income_cat`. Run the [setup](#setup) once, then any recipe
 on its own, in any order.
 
-Every recipe follows the same five steps: **open the register → fetch → attach
-to the cohort → categorise → check**.
+Every recipe follows the same pattern: **open the register → fetch → attach
+to the cohort → categorise → check**. The steps are numbered in the code
+comments (`# 1.`, `# 2.`, ...), and the text between code blocks refers to
+them by number.
 
 ## SEPLINE in brief
 
@@ -242,8 +244,8 @@ cohort_udda <- cohort %>%
 stopifnot(nrow(cohort_udda) == nrow(cohort))
 ```
 
-**Step 4: the lookup.** Use DST's format on the server, which is what SEPLINE
-names. The `heaven` tab gives the same kind of table outside DST, for testing
+Step 4 builds the lookup from code to main area. Use DST's format on the
+server, which is what SEPLINE names. The `heaven` tab gives the same kind of table outside DST, for testing
 the code. Both make `edu_lookup` with the columns `hfaudd` and `main_area`.
 
 ::: {.panel-tabset}
@@ -251,6 +253,7 @@ the code. Both make `edu_lookup` with the columns `hfaudd` and `main_area`.
 ### DST's format (SEPLINE's source)
 
 ```r
+# 4. The lookup, from DST's format
 library(haven) # read_sas()
 
 # The file names below have not been checked on the server: list the folder
@@ -270,6 +273,7 @@ edu_lookup <- edu_format %>%
 ### `heaven` (outside DST)
 
 ```r
+# 4. The lookup, from heaven (for testing outside DST)
 library(heaven) # pre-installed on DST; elsewhere pak::pak("tagteam/heaven")
 data(edu_code) # one row per education code
 
@@ -310,16 +314,23 @@ stopifnot(nrow(education_ses) == nrow(cohort))
 
 ### Imputed education and `hf_kilde` {#imputed-education}
 
-For immigrants it has no information about, DST imputes an education: a
-model based on other registers guesses the most likely one. The guess is
-written into `hfaudd` as an ordinary code, so an imputed record looks exactly
-like an observed one, and **every delivery with `hfaudd` contains them**. The
-only marker is `hf_kilde`, the source of the record: `9`, `10` and `18` are
-immigrants' education imputed by DST.
+DST collects immigrants' education from abroad through surveys. For those
+who do not answer, it imputes the education with a model (a random forest)
+built on earlier survey answers and background variables from other
+registers. SEPLINE describes this in its section on education and gives the
+details of the models in its supplementary Table S2.
+
+The imputed education is one of the sources DST builds `hfaudd` from ([DST's
+documentation of
+`HF_KILDE`](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/Hoejst-fuldfoerte-uddannelse/HF-KILDE)).
+It is written into `hfaudd` as an ordinary code, so an imputed record looks
+exactly like an observed one, and **every delivery with `hfaudd` contains
+them**. The only marker is `hf_kilde`, the source of the record: in DST's
+value set, `9`, `10` and `18` are immigrants' education imputed by DST.
 
 SEPLINE recommends grouping these as Missing in individual-level analyses
 (Table 2 and 3): imputed values are reliable for groups, where the errors even
-out, but not for single people. Not every delivery has `hf_kilde`, so check
+out, but less reliable for single people. Not every delivery has `hf_kilde`, so check
 yours:
 
 ```r
@@ -569,11 +580,11 @@ BEF → family → FAIK**. Use the `_13` version of the variable for the whole
 period: the older `famaekvivadisp` has a different definition and stops in
 2012, while `famaekvivadisp_13` covers 1987 onward on one definition.
 
-**It works on the whole population, inside the database.** Step 7 joins BEF
-and FAIK for everyone in Denmark and computes the cutpoints in DuckDB; only
-one row per sex x age group x year comes back to R. This has been run on DST
-for two reference years, where it took seconds. (That it gives the same
-cutpoints as computing them in R has been checked on synthetic data only.)
+**The cutpoints are computed inside the database.** Step 7 joins BEF and
+FAIK for everyone in Denmark and computes the cutpoints in DuckDB, so only
+one row per sex x age group x year comes back to R. Pulling the whole
+population into R instead would run out of memory (see [Open the
+registers](#open-registers)).
 
 ```r
 # 1. Open the registers. FAIK is reduced to one row per family per year:
@@ -582,6 +593,11 @@ cutpoints as computing them in R has been checked on synthetic data only.)
 bef <- open_register("bef")
 faik <- open_register("faik") %>%
   distinct(familie_id, year, famaekvivadisp_13)
+
+# BEF must hold one row per person per year here. If your year folders hold
+# several snapshots (BEF is quarterly from 2008), every join below repeats
+# rows. Expect 0; if not, see "Check your BEF" below the recipe.
+bef %>% count(pnr, year) %>% filter(n > 1) %>% count() %>% collect()
 
 # 2. The years needed: each baseline year and the two years before it
 income_years <- unique(c(cohort$year_baseline, cohort$year_baseline - 1, cohort$year_baseline - 2))
@@ -594,15 +610,13 @@ cohort_income_years <- bind_rows(
   cohort %>% transmute(row_id, pnr, year = year_baseline - 2)
 )
 
-# 4. Fetch the cohort's families and their income for those years
-bef_cohort <- bef %>%
+# 4. Fetch the cohort's families and their income for those years. The join
+#    runs inside DuckDB, so only the cohort's rows reach R, not all of FAIK.
+cohort_family_income <- bef %>%
   semi_join(tibble(pnr = unique(cohort$pnr)), by = "pnr", copy = TRUE) %>% # only the cohort
   filter(year %in% !!income_years) %>%
   select(pnr, year, familie_id, koen, foed_dag) %>% # koen + foed_dag for the sex x age strata in step 8
-  collect()
-
-faik_cohort <- faik %>%
-  filter(year %in% !!income_years) %>%
+  left_join(faik %>% filter(year %in% !!income_years), by = c("familie_id", "year")) %>% # that family's income
   collect()
 
 # 5. Each cohort row's 3-year mean. na.rm = TRUE gives exactly SEPLINE's
@@ -610,8 +624,7 @@ faik_cohort <- faik %>%
 #    year is usually migration: FAIK only has income for families with a
 #    member living in Denmark the whole calendar year (Table 7).
 income_mean <- cohort_income_years %>%
-  left_join(bef_cohort, by = c("pnr", "year")) %>% # this row's family in that year
-  left_join(faik_cohort, by = c("familie_id", "year")) %>% # that family's income
+  left_join(cohort_family_income, by = c("pnr", "year")) %>% # this row's family income in that year
   group_by(row_id) %>%
   summarise(
     n_years = sum(!is.na(famaekvivadisp_13)),
@@ -666,16 +679,25 @@ cutpoints <- Reduce(union_all, list(
   collect() # only the cutpoints reach R
 
 # 8. Classify each cohort row against the cutpoints for its own sex, age band
-#    and baseline year - not against the cohort's own distribution
+#    and baseline year - not against the cohort's own distribution.
+#    Sex and birth date are taken from any year in the window, not only the
+#    baseline year: someone who was abroad in the baseline year can still
+#    have income from the two years before it.
+person_info <- cohort_family_income %>%
+  filter(!is.na(foed_dag)) %>%
+  distinct(pnr, .keep_all = TRUE) %>% # one row per person
+  select(pnr, koen, foed_dag)
+
 cohort_income <- cohort %>%
   select(row_id, pnr, year_baseline) %>%
-  left_join(bef_cohort %>% select(pnr, year, koen, foed_dag), by = c("pnr", "year_baseline" = "year")) %>%
+  left_join(person_info, by = "pnr") %>%
   mutate(age_group = floor((year_baseline - year(foed_dag)) / 5) * 5) %>% # same rule as step 7
   left_join(income_mean, by = "row_id") %>%
   left_join(cutpoints, by = c("koen", "age_group", "year_baseline" = "ref_year")) %>%
   mutate(
     income_cat = case_when(
       is.na(mean_income) ~ "Missing", # no income in any of the three years
+      is.na(q20) ~ "Missing", # no cutpoints for this sex x age band x year; without this line the row would fall through to "Medium"
       mean_income <= q20 ~ "Low", # quintile 1
       mean_income > q80 ~ "High", # quintile 5
       TRUE ~ "Medium" # quintiles 2-4
@@ -701,7 +723,7 @@ income. Check both, and expect 0 from each:
 ```r
 faik_raw <- open_register("faik") # before distinct()
 
-# 1. Every copy of a family-year carries the same income
+# Check 1: every copy of a family-year carries the same income
 faik_raw %>%
   group_by(familie_id, year) %>%
   summarise(n_values = n_distinct(famaekvivadisp_13), .groups = "drop") %>%
@@ -709,7 +731,7 @@ faik_raw %>%
   count() %>%
   collect()
 
-# 2. After distinct(), one row per family-year is left
+# Check 2: after distinct(), one row per family-year is left
 faik_raw %>%
   distinct(familie_id, year, famaekvivadisp_13) %>%
   count(familie_id, year) %>%
@@ -721,6 +743,32 @@ faik_raw %>%
 Without the `distinct()`, each person would still be averaged on their own,
 but a duplicated year would count once per family member: `n_years` could
 exceed 3, and years with more copies would weigh more than the others.
+
+</details>
+
+<details>
+<summary>Check your BEF: one row per person per year</summary>
+
+BEF is a snapshot, delivered quarterly since 2008 ([Overview of
+registers](register-reference.qmd)). How the snapshots are laid out in your
+parquet files depends on the project: one per year, or four in each `year`
+folder. The recipe needs one per person per year, and the check in step 1
+shows which you have.
+
+If it is not 0, keep one snapshot per year before step 2. Use the December
+snapshot: DST assigns FAIK income to the family a person belongs to on 31
+December of the income year ([DST's documentation of
+`FAMAEKVIVADISP_13`](https://www.dst.dk/da/Statistik/dokumentation/Times/familieindkomst/famaekvivadisp-13)).
+BEF has a column for the reference time (`referencetid` in DST's variable
+list); check its name and type in your files with `colnames(bef)` and
+`head(bef)`, then filter on it, for example:
+
+```r
+bef <- bef %>% filter(month(referencetid) == 12) # the December snapshot only
+```
+
+Run the check in step 1 again afterwards and expect 0. Steps 5 and 8 stop
+with an error if this is not fixed; step 7 does not, so do not skip it.
 
 </details>
 
@@ -744,8 +792,8 @@ exceed 3, and years with more copies would weigh more than the others.
 - **A different reference population** (for example a comparator arm with
   your own eligibility criteria) is a legitimate choice but a deviation from
   SEPLINE's general population: report it. A random sample of the population
-  is a fallback only if you cannot use the DuckDB connection; see [Open the
-  registers](#open-registers) for how to draw it.
+  is a fallback only if you cannot use the DuckDB connection; [Open the
+  registers](#open-registers) explains how to sample (people, not rows).
 - **Why not DST's published deciles?** StatBank's decile tables
   ([IFOR25](https://www.statbank.dk/IFOR25) and IFOR20-22) are not split by sex
   and age, and they are for one year's income, while SEPLINE classifies a
