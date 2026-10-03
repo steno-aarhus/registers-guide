@@ -6497,7 +6497,7 @@ All other columns (13)
 <td><code>rygerstatus_moder</code></td>
 <td>character</td>
 <td>code</td>
-<td>Mother’s smoking status (DUT codes)</td>
+<td>Mother’s smoking status in pregnancy</td>
 <td></td>
 </tr>
 <tr class="odd">
@@ -7128,6 +7128,36 @@ All other columns (79)
 <ul>
 <li><code>pnr</code> joins to <strong>BEF</strong> (many-to-one).</li>
 </ul>
+<details>
+<summary>
+Value sets for the coded columns (1)
+</summary>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Code system</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>mfr_rygerstatus</code></td>
+<td><code>00</code> Moder ryger ikke, <code>10</code> Moder ophørt med rygning i 1. trimester, <code>11</code> Moder ophørt med rygning efter 1. trimester, <code>20</code> Moder ryger op til 5 cigaretter dagligt, <code>21</code> Moder ryger fra 6-10 cigaretter dagligt, <code>22</code> Moder ryger fra 11-20 cigaretter dagligt, <code>23</code> Moder ryger over 20 cigaretter dagligt, <code>29</code> Moder ryger, mængde ikke oplyst, <code>99</code> Moders rygestatus uoplyst</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><code>mfr_rygerstatus</code>:</strong> Two kinds of missing, and R only sees one of them. 99 means the status was reported as unknown. An empty string (““) means nothing was recorded at all. is.na(”“) is FALSE, so empty strings pass every filter(!is.na(…)) and end up as their own category: convert them first with na_if(rygerstatus_moder,”“). Whether 99 and”” should be one missing category or two is a choice for the analysis.</li>
+</ul>
+<p>Where these values come from:</p>
+<ul>
+<li><strong><code>mfr_rygerstatus</code>:</strong> <a href="https://static1.squarespace.com/static/5467abcce4b056d72594db79/t/5ebe7e6216f2563dd8fa85fb/1589542505453/DSOG-kodeliste+april_2020-1.pdf">DSOG (Danish Society of Obstetrics and Gynaecology): kodeliste, April 2020</a>.</li>
+</ul>
+</details>
 <p><strong>Worth knowing:</strong></p>
 <ul>
 <li><strong><code>bmi_moder</code>:</strong> Only from 2003, unlike most of the register, which starts in 1997.</li>
@@ -7135,6 +7165,7 @@ All other columns (79)
 <li><strong><code>cpr_moder</code>:</strong> The mother’s CPR number. There is a row per child, so a mother of three appears three times.</li>
 <li><strong><code>gestationsalder_dage</code>:</strong> Gestational age in days, not weeks. Divide by 7 for the usual clinical scale.</li>
 <li><strong><code>paritet</code>:</strong> Parity. Counts previous births, so it is not the same as the number of children currently alive.</li>
+<li><strong><code>rygerstatus_moder</code>:</strong> A two-digit code (00, 10, 11, 20-23, 29, 99) without the DUT or RGAB prefix the same categories carry elsewhere, plus empty strings for nothing recorded. Convert those with na_if(rygerstatus_moder, ““) before anything else: is.na(”“) is FALSE. This table starts in 1997, the year the nine categories were introduced. In 1991-1996 the Medical Birth Register recorded smoking only as smoker or non-smoker (Lindbo et al.&nbsp;2022, doi:10.2147/CLEP.S368826), and those years are not in this table.</li>
 <li><strong><code>vaegt_moder</code>:</strong> Sundhedsdatastyrelsen’s documentation of the birth register for 1997-2018 (Dokumentation_Foedselsregisteret_1997_2018.xlsx) gives the unit as grams, but for an adult’s weight that may be an error in the documentation; check the range in your data before converting.</li>
 </ul>
 </section>
@@ -7945,7 +7976,7 @@ All other columns (67)
 <li><strong><code>Paritet</code>:</strong> -1 means not stated. Also note the substitution rule above: this column is not always a direct report, it can be a computed fallback that only sees MFR’s own 2005+ history, undercounting a mother’s true parity if she had earlier children before 2005 or outside Denmark.</li>
 <li><strong><code>Vaegt_Mor</code>:</strong> -1 means not stated. Recode before analysis, the same trap as Apgarscore above.</li>
 <li><strong><code>Hoejde_Mor</code>:</strong> -1 means not stated. Recode before analysis, the same trap as Apgarscore above.</li>
-<li><strong><code>BMI_Mor</code>:</strong> -1.0 means not stated, and is computed from Vaegt_Mor/Hoejde_Mor: if either of those is itself -1 (not stated), this column will be too. Bliddal et al.&nbsp;2018 (mined for this guide) reports pre-pregnancy BMI as structurally, not randomly, missing before 2003 in the older MFR eras - the field did not exist yet, distinct from this -1 sentinel.</li>
+<li><strong><code>BMI_Mor</code>:</strong> -1.0 means not stated, and is computed from Vaegt_Mor/Hoejde_Mor: if either of those is itself -1 (not stated), this column will be too. In the older 1997-2018 table (mfr), the mother’s BMI, height and weight only exist from 2003: DST’s variable list for MFR has no BMI_MODER, HOEJDE_MODER or VAEGT_MODER for 1997-2002. So BMI before 2003 is missing because the field did not exist, which is a different kind of missing from this -1 sentinel.</li>
 <li><strong><code>AnsvarligRegion_Geo_Kode</code>:</strong> Not the same numbering as DST’s own <code>reg</code> code system (which uses 81-84): this is Sundhedsdatastyrelsen’s organisational region code, a different value space, despite both being called “region”. Do not join or compare against <code>reg</code> without confirming the mapping first. Missing for some home and clinic births.</li>
 <li><strong><code>AnsvarligInstitution_Kode</code>:</strong> The code TYPE flips at the LPR3 cutover (Feb/March 2019): a SHAK hospital-department code before it, a SOR health-institution code after. AnsvarligInstitution_KodeType says which one a given row holds - check it before comparing codes across the boundary, since a SHAK code and a SOR code for the same physical hospital do not look alike.</li>
 <li><strong><code>DoedFoersteAar_Barn</code>:</strong> NULL means no death within the first year, it is not a missing-data code.</li>
@@ -8022,7 +8053,7 @@ Value sets for the coded columns (10)
 <li><strong><code>mfr_foedested_faktisk</code>:</strong> Do not try to derive this yourself from FoedselsDiagnose_Barn alone: the mapping from birth-diagnosis code to actual birthplace changed at two different boundaries (2012, and the LPR3 cutover in Feb/March 2019), and Sundhedsdatastyrelsen has already resolved that history into this single column. Recomputing it from the diagnosis code with only the current (post-2019) mapping will misclassify pre-2012 home births as “outside hospital, birth clinic and home”.</li>
 <li><strong><code>icd10</code>:</strong> Do not strip a leading D from these codes. The habit comes from LPR, where the D is really there, and applying it here removes the first character of a real code: E119 becomes 119, which matches nothing and raises no error. The danger is worst where a code genuinely begins with D. ICD-10 chapter D covers in-situ and benign neoplasms, so D46 is myelodysplastic syndrome, a whole code. Strip its “prefix” and you get 46, which looks like a code and is not one.</li>
 <li><strong><code>mfr_fosterpraesentation</code>:</strong> Recorded on the child’s own fødselskontakt (or as an add-on to it before LPR3), not the mother’s, even though fetal presentation is clinically a fact about the pregnancy and delivery. Join through DW_EK_Nyfoedt if cross-referencing against Barn_* satellite tables, not DW_EK_Foedsel.</li>
-<li><strong><code>tobaksforbrug</code>:</strong> Bliddal et al.&nbsp;2018 (mined earlier for this guide) reports smoking status as 100% missing before late 1997 and notes the field is otherwise reliably recorded once it exists. That predates both DUT and RGAB: an analysis spanning multiple decades needs to know smoking status went through at least two encodings (pre-1997: absent; 1997 to the LPR3 cutover: DUT<em>; LPR3 cutover onwards: RGAB</em>), not one stable variable. When multiple smoking-status sources exist for the same birth, Sundhedsdatastyrelsen resolves them in a fixed order (result/add-on tied to the primary birth record over other records, “komplet” over “inkomplet” reporting status, then the heaviest smoking category over lighter ones) - see the MFR 2019+ documentation for the exact tie-break rules if you need to reproduce Tobaksforbrug from the underlying satellite tables yourself.</li>
+<li><strong><code>tobaksforbrug</code>:</strong> Smoking in pregnancy went through three encodings in the Medical Birth Register, not one stable variable. 1991-1996: smoker or non-smoker only, recorded by the midwife at the first antenatal visit (Lindbo et al.&nbsp;2022, Clin Epidemiol 14:901-910, doi:10.2147/CLEP.S368826). From 1997: the nine categories in this code system. In DST’s 1997-2018 table they arrive as bare two-digit codes (see mfr_rygerstatus); in the 2019+ data as DUT* before the LPR3 cutover and RGAB* after it. When multiple smoking-status sources exist for the same birth, Sundhedsdatastyrelsen resolves them in a fixed order (result/add-on tied to the primary birth record over other records, “komplet” over “inkomplet” reporting status, then the heaviest smoking category over lighter ones) - see the MFR 2019+ documentation for the exact tie-break rules if you need to reproduce Tobaksforbrug from the underlying satellite tables yourself.</li>
 <li><strong><code>mfr_er_cprnummer_gyldigt</code>:</strong> Only “Gyldig hos CPR” is guaranteed to resolve when joining to <code>bef</code> or any other CPR-keyed register: an “Udgået hos CPR” number identifies a real person but under a number CPR itself has since retired (e.g.&nbsp;after a birth-date correction), while “Erstatnings CPR” and “Fiktivt” numbers were never real CPR-numbers at all and will join to nothing. Check this column before joining CPRnummer_Barn, _Mor, or _Far onwards, rather than assuming every value in those columns is a working key.</li>
 <li><strong><code>mfr_koen</code>:</strong> For the child, this is derived from Dim.Borger.KoenID plus, for stillbirths reported on paper, the stillbirth form or the CPR-like number itself - not purely a CPR lookup, since a stillborn child may never receive one. For the mother and father, it is a straight lookup on their own CPR-derived sex, so Koen_Far being “Ukendt” or missing does not imply anything about the birth itself, only that paternal identity was not established.</li>
 <li><strong><code>mfr_kilde_barn</code>:</strong> This value gates which other columns are populated at all. <code>DW_EK_Kontakt_Barn</code> is only set when this is “1”; <code>DW_ID_Hjem_Barn</code> only when this is “2”; and <code>DW_ID_Doed_Barn</code> when this is “3” (or when a paper stillbirth form supplements an LPR3 birth record). A join to <code>Barn_Kontakter</code> or any other LPR-sourced satellite table will silently return nothing for rows where Kilde_Barn is “2” or “3”, since those children have no LPR contact at all.</li>
