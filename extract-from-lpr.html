@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-10-02">
+<meta name="dcterms.date" content="2026-10-03">
 
 <title>Extract from LPR – Register-based research at Statistics Denmark</title>
 <style>
@@ -622,7 +622,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 2, 2026</p>
+      <p class="date">October 3, 2026</p>
     </div>
   </div>
   
@@ -853,36 +853,45 @@ Try it yourself - runnable example with synthetic data
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p>This example requires <strong>RStudio installed locally on your computer</strong> - not the DST server. The synthetic dataset (<code>fakeregs</code>) is not available on DST. Download R: <a href="https://cran.r-project.org/">cran.r-project.org</a> · Download RStudio: <a href="https://posit.co/download/rstudio-desktop/">posit.co/download/rstudio-desktop</a> It uses <code>open_dataset()</code> on local <code>synth_data/</code> folders; fastreg’s <code>read_register()</code> is for a configured DST project, not ad-hoc local folders.</p>
+<p>This example requires <strong>RStudio installed locally on your computer</strong> - not the DST server. The synthetic data package (<code>fiktive</code>) is not available on DST. Download R: <a href="https://cran.r-project.org/">cran.r-project.org</a> · Download RStudio: <a href="https://posit.co/download/rstudio-desktop/">posit.co/download/rstudio-desktop</a> It uses <code>open_dataset()</code> on local <code>synth_data/</code> folders; fastreg’s <code>read_register()</code> is for a configured DST project, not ad-hoc local folders.</p>
 </div>
 </div>
 </div>
 <p>The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the complete pattern from the theory section above, but runnable locally with synthetic data. It follows the <a href="#one-outcome">one-outcome route</a>: specific codes are filtered out <em>before</em> <code>collect()</code>.</p>
-<p>The synthetic LPR data is generated with the <code>fakeregs</code> package, which you already know from <a href="./first-extraction.html#preparation-install-fakeregs-and-generate-synthetic-data">Phase 6 - First extraction</a>. If you have already generated and saved data there, <code>synth_data/lpr_adm/</code> is ready and you can skip the preparation block.</p>
-<p>Adapted from Anders Aasted Isaksen’s <a href="https://github.com/steno-aarhus/fakeregs/blob/main/dev/common_tasks_datatable.qmd"><code>dev/common_tasks_datatable.qmd</code></a> in <a href="https://github.com/steno-aarhus/fakeregs"><code>fakeregs</code></a> (MIT licence, Steno Diabetes Center Aarhus). Rewritten to dplyr + arrow and adapted to this guide’s pattern.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install fakeregs for the first time:</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages("pak"); pak::pak("steno-aarhus/fakeregs")</span></span>
+<p>The synthetic LPR data is generated with <a href="https://github.com/sara-schwartz/fiktive"><code>fiktive</code></a>, which you already know from <a href="./first-extraction.html#preparation-install-fiktive-and-generate-synthetic-data">Phase 6 - First extraction</a>. Phase 6 saves <code>bef</code> and <code>lpr_adm</code> only. Run the block below for the diagnosis tables. It uses the same <code>n</code>, window, and seed, so <code>lpr_adm</code> matches.</p>
+<p>Adapted from Anders Aasted Isaksen’s data.table practice notes (MIT licence, Steno Diabetes Center Aarhus). Rewritten to dplyr + arrow and adapted to this guide’s pattern.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install fiktive for the first time:</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages("remotes"); remotes::install_github("sara-schwartz/fiktive")</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fakeregs)   <span class="co"># synthetic DST register data</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fiktive)    <span class="co"># synthetic DST register data</span></span>
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)      <span class="co"># filter, select, mutate, inner_join, bind_rows</span></span>
 <span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(arrow)      <span class="co"># open_dataset, write_parquet</span></span>
 <span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Preparation: generate synthetic data (run only once) -------------------------</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>bp             <span class="ot">&lt;-</span> <span class="fu">generate_background_pop</span>()</span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>lpr_adm_synth  <span class="ot">&lt;-</span> <span class="fu">generate_lpr_adm</span>(<span class="at">background_df =</span> bp)</span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>lpr_diag_synth <span class="ot">&lt;-</span> <span class="fu">generate_lpr_diag</span>(<span class="at">lpr_adm_data =</span> lpr_adm_synth)</span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>lpr_a_k_synth  <span class="ot">&lt;-</span> <span class="fu">generate_lpr_a_kontakt</span>(<span class="at">background_df =</span> bp)</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>lpr_a_d_synth  <span class="ot">&lt;-</span> <span class="fu">generate_lpr_a_diagnose</span>(<span class="at">lpr_kontakt_data =</span> lpr_a_k_synth)</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_adm"</span>,        <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_diag"</span>,       <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_a_kontakt"</span>,  <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_a_diagnose"</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_adm_synth,  <span class="st">"synth_data/lpr_adm/lpr_adm.parquet"</span>)</span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_diag_synth, <span class="st">"synth_data/lpr_diag/lpr_diag.parquet"</span>)</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_a_k_synth,  <span class="st">"synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet"</span>)</span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(lpr_a_d_synth,  <span class="st">"synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>The path is relative to your working directory</strong> - check with <code>getwd()</code>. If you have already run the preparation block in <a href="./first-extraction.html">Phase 6</a>, <code>synth_data/lpr_adm/</code> is already saved.</p>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co"># One call, same n / window / seed as Phase 6. Child tables only join their</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co"># parent when they share that population. LPR2 somatic contacts stop around</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 2019-03 and lpr_a_diagnose starts in 2019, so the window covers both.</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>schema <span class="ot">&lt;-</span> <span class="fu">load_registers_schema</span>()</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>pop <span class="ot">&lt;-</span> <span class="fu">generate_background_population</span>(<span class="at">n =</span> <span class="dv">60</span>, <span class="at">seed =</span> <span class="dv">1</span>, <span class="at">schema =</span> schema)</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>tables <span class="ot">&lt;-</span> <span class="fu">generate_registers</span>(</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">registers =</span> <span class="fu">c</span>(<span class="st">"lpr_adm"</span>, <span class="st">"lpr_diag"</span>, <span class="st">"lpr_a_kontakt"</span>, <span class="st">"lpr_a_diagnose"</span>),</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">population =</span> pop,</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">schema =</span> schema,</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">from =</span> <span class="fu">as.Date</span>(<span class="st">"2015-01-01"</span>),</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">to =</span> <span class="fu">as.Date</span>(<span class="st">"2020-12-31"</span>),</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed =</span> <span class="dv">1</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_adm"</span>,        <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_diag"</span>,       <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_a_kontakt"</span>,  <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_a_diagnose"</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(tables<span class="sc">$</span>lpr_adm,        <span class="st">"synth_data/lpr_adm/lpr_adm.parquet"</span>)</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(tables<span class="sc">$</span>lpr_diag,       <span class="st">"synth_data/lpr_diag/lpr_diag.parquet"</span>)</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(tables<span class="sc">$</span>lpr_a_kontakt,  <span class="st">"synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet"</span>)</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(tables<span class="sc">$</span>lpr_a_diagnose, <span class="st">"synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>The path is relative to your working directory</strong> - check with <code>getwd()</code>. If you have already run the preparation block in <a href="./first-extraction.html">Phase 6</a>, <code>synth_data/bef/</code> and <code>synth_data/lpr_adm/</code> are already saved. This page still needs <code>lpr_diag</code>, <code>lpr_a_kontakt</code>, and <code>lpr_a_diagnose</code> from the block above.</p>
+<p>On this fixture <code>senere_afkraeftet</code> is never <code>"Ja"</code>, so the retracted-diagnosis filter below removes nothing. Keep it: that is the filter you use on real LPR3.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract CVD diagnoses (same four steps as above) -----------------------------</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># The ICD codes we are looking for - change these to your own outcome</span></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>CVD_CODES <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"I20"</span>, <span class="st">"I21"</span>, <span class="st">"I22"</span>, <span class="st">"I23"</span>, <span class="st">"I24"</span>, <span class="st">"I25"</span>)   <span class="co"># ischaemic heart disease</span></span>
@@ -912,7 +921,7 @@ Try it yourself - runnable example with synthetic data
 <span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(</span>
 <span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>    lpr3_d <span class="sc">%&gt;%</span></span>
 <span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>      <span class="fu">filter</span>(diag_kode_type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>),</span>
-<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>             <span class="fu">is.na</span>(senere_afkraeftet) <span class="sc">|</span> senere_afkraeftet <span class="sc">!=</span> <span class="st">"Ja"</span>,  <span class="co"># exclude retracted diagnoses</span></span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>             <span class="fu">is.na</span>(senere_afkraeftet) <span class="sc">|</span> senere_afkraeftet <span class="sc">!=</span> <span class="st">"Ja"</span>,  <span class="co"># exclude retracted diagnoses; on this fixture the synthetic flag is never "Ja", so the filter removes nothing</span></span>
 <span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>             <span class="fu">substr</span>(diag_kode, <span class="dv">2</span>, <span class="dv">4</span>) <span class="sc">%in%</span> <span class="sc">!!</span>CVD_CODES) <span class="sc">%&gt;%</span>   <span class="co"># !! sends the local R vector to DuckDB</span></span>
 <span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(dw_ek_kontakt, <span class="at">c_diag =</span> diag_kode),             <span class="co"># rename to c_diag for consistency with LPR2</span></span>
 <span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span>                                     <span class="co"># join key in LPR3</span></span>
