@@ -9,8 +9,8 @@ ready for analysis. You will see the pattern that recurs in almost every
 register extraction.
 
 ::: {.callout-important}
-**These examples cannot be run on the DST server.** The synthetic dataset
-(`fakeregs`) is not available there. You need **RStudio installed locally on
+**These examples cannot be run on the DST server.** The synthetic data
+package (`fiktive`) is not available there. You need **RStudio installed locally on
 your computer**:
 
 1. Download R: [cran.r-project.org](https://cran.r-project.org/)
@@ -24,42 +24,56 @@ but on the DST server and with your project's register data.
 :::
 
 The data is synthetic, from
-[`fakeregs`](https://github.com/steno-aarhus/fakeregs) (MIT licence, Anders
-Aasted Isaksen, Steno Diabetes Center Aarhus): fictitious persons with the
-structure and column names of DST registers. Its `generate_*()` functions write
-the data, you save it as parquet, and you practise `open_dataset()` on it.
-(These local examples use `open_dataset()`; fastreg's `read_register()` is for a
-configured DST project, not ad-hoc local folders.)
+[`fiktive`](https://github.com/sara-schwartz/fiktive) (MIT licence, Sara
+Schwartz): fictitious persons with the structure and column names of DST
+registers. `load_registers_schema()`, `generate_background_population()`, and
+`generate_registers()` return tibbles. You save those with `write_parquet()`,
+and you practise `open_dataset()` on the files. (These local examples use
+`open_dataset()`; fastreg's `read_register()` is for a configured DST project,
+not ad-hoc local folders.)
 
 The example extracts from `lpr_adm` - hospital *contacts*, dates only, with no
 diagnosis join. Pulling actual **diagnoses** brings in rules this page does not
 cover: the LPR2/LPR3 split, the D-prefix, and choosing diagnosis types. Those are
 in [Understand LPR](understand-lpr.qmd).
 
-## Preparation: install fakeregs and generate synthetic data
+## Preparation: install fiktive and generate synthetic data
 
-`fakeregs` is not on CRAN - install directly from GitHub:
+`fiktive` is not on CRAN - install directly from GitHub:
 
 ```r
-install.packages("pak") # only the first time
-pak::pak("steno-aarhus/fakeregs") # install fakeregs
+install.packages("remotes") # only the first time
+remotes::install_github("sara-schwartz/fiktive")
 ```
 
 ```r
-library(fakeregs) # synthetic DST register data
+library(fiktive) # synthetic DST register data
 library(dplyr) # filter, select, mutate, collect
 library(arrow) # open_dataset, write_parquet
 
-# Generate synthetic data and save as parquet (done only once)
-bp <- generate_background_pop() # synthetic background population
-bef_synth <- generate_bef(background_df = bp) # synthetic BEF register
-lpr_synth <- generate_lpr_adm(background_df = bp) # synthetic LPR contact register
+# Generate synthetic data and save as parquet (done only once).
+# One generate_registers() call: every table shares this population, window, and seed.
+# The window includes 2015 (the BEF exercise) and both LPR eras used later
+# (LPR2 somatic contacts stop around 2019-03; LPR3 diagnoses start in 2019).
+schema <- load_registers_schema()
+pop <- generate_background_population(n = 60, seed = 1, schema = schema)
+tables <- generate_registers(
+  registers = c("bef", "lpr_adm"),
+  population = pop,
+  schema = schema,
+  from = as.Date("2015-01-01"),
+  to = as.Date("2020-12-31"),
+  seed = 1
+)
 
 dir.create("synth_data/bef", recursive = TRUE, showWarnings = FALSE) # create folders
 dir.create("synth_data/lpr_adm", recursive = TRUE, showWarnings = FALSE)
-write_parquet(bef_synth, "synth_data/bef/bef.parquet") # save as parquet
-write_parquet(lpr_synth, "synth_data/lpr_adm/lpr_adm.parquet")
+write_parquet(tables$bef, "synth_data/bef/bef.parquet") # save as parquet
+write_parquet(tables$lpr_adm, "synth_data/lpr_adm/lpr_adm.parquet")
 ```
+
+BEF is quarterly from 2008, and `year` is an integer, so 2015 holds several rows
+per person. With `n = 60` that year has 240 rows, enough for the sample below.
 
 ::: {.callout-tip}
 **The path is relative to your working directory.** `"synth_data/bef/"` is
@@ -80,7 +94,8 @@ cohort directly from the BEF register.
 bef_data <- open_dataset("synth_data/bef/") %>%
   rename_with(tolower)
 
-# Fetch 200 random pnr's as your cohort
+# 200 rows from one snapshot year, not 200 people:
+# quarterly BEF has several rows per person in 2015
 cohort_pnrs <- bef_data %>%
   filter(year == 2015) %>% # take one snapshot year
   select(pnr) %>%
@@ -88,8 +103,11 @@ cohort_pnrs <- bef_data %>%
   slice_sample(n = 200) %>%
   pull(pnr)
 
-length(cohort_pnrs) # check: should return 200
+length(cohort_pnrs) # 200 rows; distinct pnr's can be fewer
 ```
+
+`slice_sample(n = 200)` draws rows. Because BEF is quarterly, the same `pnr` can
+appear more than once, so this is not a list of 200 people.
 
 In a real project, `cohort_pnrs` is a vector you built in a previous script and
 reload with `readRDS("path/to/full_cohort.rds") %>% pull(pnr)`.
@@ -109,13 +127,13 @@ This recoding translates them into analysis-ready variables:
 
 bef_clean <- bef_data %>%
   filter(year == 2015, alder >= 18) %>%
-  select(pnr, year, foed_dag, koen, civst, reg, opr_land) %>%
+  select(pnr, year, foed_dag, koen, civst, reg) %>%
   collect() %>%                          # fetch into R before mutate
   mutate(
     foed_dato    = as.Date(foed_dag),    # date format
 
-    # koen: 1 = male, 2 = female
-    koen_text    = if_else(koen == "1", "Male", "Female"),
+    # koen is numeric: 1 = male, 2 = female
+    koen_text    = if_else(koen == 1, "Male", "Female"),
 
     # civst: marital status
     civil_status = case_when(
@@ -125,7 +143,7 @@ bef_clean <- bef_data %>%
       TRUE                    ~ NA_character_
     ),
 
-    # reg: region codes
+    # reg may be character "81"-"85"; == 81 still matches
     region       = case_when(
       reg == 81 ~ "Region Nordjylland",
       reg == 82 ~ "Region Midtjylland",
@@ -135,17 +153,19 @@ bef_clean <- bef_data %>%
       TRUE      ~ NA_character_
     ),
 
-    # opr_land: 5100 = Denmark
-    immigrant    = opr_land != 5100
+    # partnered from civst; opr_land is all missing in this synthetic BEF
+    partnered    = civst %in% c("G", "P")
   )
 
 head(bef_clean)
 ```
 
 The code lists above are an excerpt, adapted from Anders Aasted Isaksen's
-[`common_tasks_dplyr.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/vignettes/common_tasks_dplyr.qmd)
-vignette (`fakeregs`, MIT licence). The full vignette covers more variables and
-patterns.
+dplyr practice vignette (MIT licence, Steno Diabetes Center Aarhus). The full
+vignette covers more variables and patterns.
+
+`opr_land` is entirely missing in this synthetic BEF, so the country-of-origin
+flag is replaced with `partnered` from `civst`.
 
 </details>
 
@@ -271,7 +291,6 @@ explore data thoroughly:
 ## Source and adaptation
 
 Step 1 (cohort construction from BEF) is adapted from Anders Aasted Isaksen's
-vignette
-[`common_tasks_dplyr.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/vignettes/common_tasks_dplyr.qmd)
-in the `fakeregs` package (MIT licence, Steno Diabetes Center Aarhus). Steps
-2--4 and the checklist are written for this guide.
+dplyr practice vignette (MIT licence, Steno Diabetes Center Aarhus). The
+synthetic tables come from `fiktive`. Steps 2--4 and the checklist are written
+for this guide.

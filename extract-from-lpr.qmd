@@ -368,47 +368,55 @@ format first.
 
 ::: {.callout-important}
 This example requires **RStudio installed locally on your computer** - not the DST server.
-The synthetic dataset (`fakeregs`) is not available on DST.
+The synthetic data package (`fiktive`) is not available on DST.
 Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudio: [posit.co/download/rstudio-desktop](https://posit.co/download/rstudio-desktop/)
 It uses `open_dataset()` on local `synth_data/` folders; fastreg's `read_register()` is for a configured DST project, not ad-hoc local folders.
 :::
 
 The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the complete pattern from the theory section above, but runnable locally with synthetic data. It follows the [one-outcome route](#one-outcome): specific codes are filtered out *before* `collect()`.
 
-The synthetic LPR data is generated with the `fakeregs` package, which you already know from [Phase 6 - First extraction](first-extraction.qmd#preparation-install-fakeregs-and-generate-synthetic-data). If you have already generated and saved data there, `synth_data/lpr_adm/` is ready and you can skip the preparation block.
+The synthetic LPR data is generated with [`fiktive`](https://github.com/sara-schwartz/fiktive), which you already know from [Phase 6 - First extraction](first-extraction.qmd#preparation-install-fiktive-and-generate-synthetic-data). Phase 6 saves `bef` and `lpr_adm` only. Run the block below for the diagnosis tables. It uses the same `n`, window, and seed, so `lpr_adm` matches.
 
-Adapted from Anders Aasted Isaksen's
-[`dev/common_tasks_datatable.qmd`](https://github.com/steno-aarhus/fakeregs/blob/main/dev/common_tasks_datatable.qmd)
-in [`fakeregs`](https://github.com/steno-aarhus/fakeregs) (MIT licence, Steno Diabetes Center Aarhus).
+Adapted from Anders Aasted Isaksen's data.table practice notes (MIT licence, Steno Diabetes Center Aarhus).
 Rewritten to dplyr + arrow and adapted to this guide's pattern.
 
 ```r
-# Install fakeregs for the first time:
-# install.packages("pak"); pak::pak("steno-aarhus/fakeregs")
+# Install fiktive for the first time:
+# install.packages("remotes"); remotes::install_github("sara-schwartz/fiktive")
 
-library(fakeregs)   # synthetic DST register data
+library(fiktive)    # synthetic DST register data
 library(dplyr)      # filter, select, mutate, inner_join, bind_rows
 library(arrow)      # open_dataset, write_parquet
 
 # Preparation: generate synthetic data (run only once) -------------------------
-bp             <- generate_background_pop()
-lpr_adm_synth  <- generate_lpr_adm(background_df = bp)
-lpr_diag_synth <- generate_lpr_diag(lpr_adm_data = lpr_adm_synth)
-lpr_a_k_synth  <- generate_lpr_a_kontakt(background_df = bp)
-lpr_a_d_synth  <- generate_lpr_a_diagnose(lpr_kontakt_data = lpr_a_k_synth)
+# One call, same n / window / seed as Phase 6. Child tables only join their
+# parent when they share that population. LPR2 somatic contacts stop around
+# 2019-03 and lpr_a_diagnose starts in 2019, so the window covers both.
+schema <- load_registers_schema()
+pop <- generate_background_population(n = 60, seed = 1, schema = schema)
+tables <- generate_registers(
+  registers = c("lpr_adm", "lpr_diag", "lpr_a_kontakt", "lpr_a_diagnose"),
+  population = pop,
+  schema = schema,
+  from = as.Date("2015-01-01"),
+  to = as.Date("2020-12-31"),
+  seed = 1
+)
 
 dir.create("synth_data/lpr_adm",        recursive = TRUE, showWarnings = FALSE)
 dir.create("synth_data/lpr_diag",       recursive = TRUE, showWarnings = FALSE)
 dir.create("synth_data/lpr_a_kontakt",  recursive = TRUE, showWarnings = FALSE)
 dir.create("synth_data/lpr_a_diagnose", recursive = TRUE, showWarnings = FALSE)
-write_parquet(lpr_adm_synth,  "synth_data/lpr_adm/lpr_adm.parquet")
-write_parquet(lpr_diag_synth, "synth_data/lpr_diag/lpr_diag.parquet")
-write_parquet(lpr_a_k_synth,  "synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet")
-write_parquet(lpr_a_d_synth,  "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet")
+write_parquet(tables$lpr_adm,        "synth_data/lpr_adm/lpr_adm.parquet")
+write_parquet(tables$lpr_diag,       "synth_data/lpr_diag/lpr_diag.parquet")
+write_parquet(tables$lpr_a_kontakt,  "synth_data/lpr_a_kontakt/lpr_a_kontakt.parquet")
+write_parquet(tables$lpr_a_diagnose, "synth_data/lpr_a_diagnose/lpr_a_diagnose.parquet")
 ```
 
 **The path is relative to your working directory** - check with `getwd()`.
-If you have already run the preparation block in [Phase 6](first-extraction.qmd), `synth_data/lpr_adm/` is already saved.
+If you have already run the preparation block in [Phase 6](first-extraction.qmd), `synth_data/bef/` and `synth_data/lpr_adm/` are already saved. This page still needs `lpr_diag`, `lpr_a_kontakt`, and `lpr_a_diagnose` from the block above.
+
+On this fixture `senere_afkraeftet` is never `"Ja"`, so the retracted-diagnosis filter below removes nothing. Keep it: that is the filter you use on real LPR3.
 
 ```r
 # Extract CVD diagnoses (same four steps as above) -----------------------------
@@ -440,7 +448,7 @@ lpr3_cvd <- lpr3_k %>%
   inner_join(
     lpr3_d %>%
       filter(diag_kode_type %in% c("A", "B"),
-             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # exclude retracted diagnoses
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja",  # exclude retracted diagnoses; on this fixture the synthetic flag is never "Ja", so the filter removes nothing
              substr(diag_kode, 2, 4) %in% !!CVD_CODES) %>%   # !! sends the local R vector to DuckDB
       select(dw_ek_kontakt, c_diag = diag_kode),             # rename to c_diag for consistency with LPR2
     by = "dw_ek_kontakt"                                     # join key in LPR3

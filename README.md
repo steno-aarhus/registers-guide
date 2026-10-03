@@ -22,10 +22,10 @@ has not yet been a stable, usable release suitable for the
 public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 <!-- [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active) -->
 
-This contains information (in Danish and English) on how to work on the
-Danish registers at Statistics Denmark (DST) for research purposes. The
-guide covers many aspects of working with the registers, drawing from
-the experience of working within the Steno Diabetes Center Aarhus.
+This contains information on how to work on the Danish registers at
+Statistics Denmark (DST) for research purposes. The guide covers many
+aspects of working with the registers, drawing from the experience of
+working within the Steno Diabetes Center Aarhus.
 
 Check out the [website](https://steno-aarhus.github.io/registers-guide/)
 for the guide!
