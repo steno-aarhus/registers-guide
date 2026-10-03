@@ -1,0 +1,128 @@
+name: Monthly maintenance checks
+
+# Two checks that only ever rot silently otherwise: whether the schema still
+# agrees with DST's own register overview (tools/check-dst-overview.R), and
+# whether the guide's external links still resolve. Neither runs anywhere
+# today - they are `just` recipes a person has to remember to run by hand.
+#
+# Each check opens (or comments on, if one is already open) its own GitHub
+# issue on failure, so a month with nothing wrong produces no noise at all.
+# Nothing here ever commits to the schema itself - a disagreement is a signal
+# for a person to look at, exactly like running the `just` recipe locally.
+
+on:
+  schedule:
+    # 06:00 UTC on the 1st of every month.
+    - cron: "0 6 1 * *"
+  workflow_dispatch: {}
+
+permissions: read-all
+
+jobs:
+  check-dst-overview:
+    name: Schema vs DST's register overview
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@465b7d8e732ca3921382b1674c59bada9cbf3399 # v2.13.0
+
+      # Only dependency: schema/R/load_schema.R calls yaml::read_yaml().
+      - name: Install the yaml package
+        run: Rscript -e 'install.packages("yaml", repos = "https://cloud.r-project.org")'
+
+      - name: Run tools/check-dst-overview.R
+        id: run_check
+        run: |
+          set +e
+          Rscript tools/check-dst-overview.R > /tmp/dst-overview-output.txt 2>&1
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat /tmp/dst-overview-output.txt
+
+      - name: Open or update an issue if the schema disagrees with DST
+        if: steps.run_check.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Schema check: disagreement with DST's register overview"
+          {
+            echo "\`tools/check-dst-overview.R\` found a disagreement between the schema and [DST's published register overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html), or could not reach it."
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            echo '```'
+            cat /tmp/dst-overview-output.txt
+            echo '```'
+          } > /tmp/issue-body.md
+
+          existing=$(gh issue list --repo "${{ github.repository }}" --state open \
+            --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body-file /tmp/issue-body.md
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$title" \
+              --body-file /tmp/issue-body.md
+          fi
+
+  check-urls:
+    name: Check external links
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Same args as `just check-urls`, so a failure here reproduces locally.
+      - name: Check links with lychee
+        id: lychee
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            . --config .config/lychee.toml --verbose
+            --extensions md,qmd
+            --exclude "github\.com"
+            --exclude-path "_badges.qmd"
+            --exclude-path "README.md"
+          fail: false
+          output: /tmp/lychee-report.md
+          jobSummary: false
+
+      - name: Open or update an issue if links are broken
+        if: steps.lychee.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Schema check: broken external links"
+          {
+            echo "lychee found links it could not resolve (run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            echo
+            cat /tmp/lychee-report.md
+          } > /tmp/issue-body.md
+
+          existing=$(gh issue list --repo "${{ github.repository }}" --state open \
+            --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "${{ github.repository }}" --body-file /tmp/issue-body.md
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$title" \
+              --body-file /tmp/issue-body.md
+          fi
