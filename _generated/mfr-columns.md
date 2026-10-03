@@ -11,7 +11,7 @@
 | `hoejde_moder` | numeric | value | Mother's height (cm) | 2003 to 2018 |
 | `laengde_barn` | character | code | Child's length (cm) |  |
 | `paritet` | numeric | value | Parity: completed pregnancies including stillbirths, counting this birth |  |
-| `rygerstatus_moder` | character | code | Mother's smoking status (DUT codes) |  |
+| `rygerstatus_moder` | character | code | Mother's smoking status in pregnancy |  |
 | `vaegt_barn` | numeric | value | Child's weight (grams) |  |
 | `vaegt_moder` | numeric | value | Mother's weight | 2003 to 2018 |
 
@@ -137,6 +137,21 @@
 
 - `pnr` joins to **BEF** (many-to-one).
 
+<details>
+<summary>Value sets for the coded columns (1)</summary>
+
+| Code system | Values |
+| --- | --- |
+| `mfr_rygerstatus` | `00` Moder ryger ikke, `10` Moder ophørt med rygning i 1. trimester, `11` Moder ophørt med rygning efter 1. trimester, `20` Moder ryger op til 5 cigaretter dagligt, `21` Moder ryger fra 6-10 cigaretter dagligt, `22` Moder ryger fra 11-20 cigaretter dagligt, `23` Moder ryger over 20 cigaretter dagligt, `29` Moder ryger, mængde ikke oplyst, `99` Moders rygestatus uoplyst |
+
+- **`mfr_rygerstatus`:** Two kinds of missing, and R only sees one of them. 99 means the status was reported as unknown. An empty string ("") means nothing was recorded at all. is.na("") is FALSE, so empty strings pass every filter(!is.na(...)) and end up as their own category: convert them first with na_if(rygerstatus_moder, ""). Whether 99 and "" should be one missing category or two is a choice for the analysis.
+
+Where these values come from:
+
+- **`mfr_rygerstatus`:** [DSOG (Danish Society of Obstetrics and Gynaecology): kodeliste, April 2020](https://static1.squarespace.com/static/5467abcce4b056d72594db79/t/5ebe7e6216f2563dd8fa85fb/1589542505453/DSOG-kodeliste+april_2020-1.pdf).
+
+</details>
+
 **Worth knowing:**
 
 - **`bmi_moder`:** Only from 2003, unlike most of the register, which starts in 1997.
@@ -144,4 +159,5 @@
 - **`cpr_moder`:** The mother's CPR number. There is a row per child, so a mother of three appears three times.
 - **`gestationsalder_dage`:** Gestational age in days, not weeks. Divide by 7 for the usual clinical scale.
 - **`paritet`:** Parity. Counts previous births, so it is not the same as the number of children currently alive.
+- **`rygerstatus_moder`:** A two-digit code (00, 10, 11, 20-23, 29, 99) without the DUT or RGAB prefix the same categories carry elsewhere, plus empty strings for nothing recorded. Convert those with na_if(rygerstatus_moder, "") before anything else: is.na("") is FALSE. This table starts in 1997, the year the nine categories were introduced. In 1991-1996 the Medical Birth Register recorded smoking only as smoker or non-smoker (Lindbo et al. 2022, doi:10.2147/CLEP.S368826), and those years are not in this table.
 - **`vaegt_moder`:** Sundhedsdatastyrelsen's documentation of the birth register for 1997-2018 (Dokumentation_Foedselsregisteret_1997_2018.xlsx) gives the unit as grams, but for an adult's weight that may be an error in the documentation; check the range in your data before converting.
