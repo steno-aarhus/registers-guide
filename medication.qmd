@@ -146,6 +146,75 @@ If the rows are not sorted by person and date, `gap_days` is computed against an
 arbitrary earlier row and the result is quietly wrong rather than an error.
 :::
 
+<details>
+<summary>If you need many ATC conditions at once (one LMDB pass)</summary>
+
+The recipe above is the one to keep for one drug, or a few. It opens LMDB with
+`read_register()`, filters, collects, and calls `flag_users()`. Use this
+fold-out only when you need many ATC conditions, each with its own "N
+dispensings within a window" rule. Doing that with the recipe above scans LMDB
+once per condition.
+
+`mb_extract_medication_batch()` in
+[`regmorbidity`](https://github.com/sara-schwartz/regmorbidity) puts every
+condition that shares the same `(min_prescriptions, window_days)` into one
+query, and only the onset rows come back to R. In the bundled code list, pain
+is 4 dispensings within 365 days. The other ATC conditions are 2 within 365
+days, so those are one query and pain is a second. Onset is the dispensing
+that meets the rule. This is not a score, and it is not a comorbidity index.
+
+On 26 September 2026 the 15 ATC conditions then in the bundled list (14 on the
+2-within-365 rule, plus pain) matched `mb_flag_users()` on the real LMDB at
+DST. The bundled list today has 16 conditions on the 2-within-365 rule, plus
+pain. The DST check covers those 15, not automatically a condition added
+later.
+
+Do not use `mb_extract_diagnosis_batch()` from this page. It has not been run
+on DST.
+
+```r
+# remotes::install_github("sara-schwartz/regmorbidity")
+library(regmorbidity) # mb_extract_medication_batch(), mb_codelist()
+library(DBI)          # dbConnect, dbExecute
+library(duckdb)
+library(dplyr)        # tbl, rename_with
+
+# A dbplyr lazy table on one plain DuckDB connection, as in
+# "Several registers on one DuckDB connection". Not read_register(),
+# and not duckplyr::read_parquet_duckdb(): those are duckplyr tables,
+# and this function's window step is written for dbplyr.
+con <- dbConnect(duckdb())
+dbExecute(con, "CREATE VIEW lmdb AS SELECT * FROM read_parquet(
+  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lmdb/**/*.parquet',
+  hive_partitioning = true)")
+lmdb <- tbl(con, "lmdb") %>% rename_with(tolower)
+
+# from is required. Omitting it is an error, not "start at the beginning".
+# 1997-01-01 is the package's floor for the years when a child's
+# prescription was often filed under the mother's CPR. The warning higher
+# up on this page, citing Pottegård et al. 2017, is about before 1996.
+# Pass a later date if your own study starts later.
+rx <- mb_extract_medication_batch(
+  lmdb,
+  codes = mb_codelist(),          # or conditions = c("diabetes", "pain")
+  ids = cohort$pnr,               # the same cohort as the recipe above
+  code_col = "atc",               # the full code, not atc2 or atc4
+  date_col = "eksd",
+  from = as.Date("1997-01-01"),
+  outdir = "path/to/medication-conditions"
+)
+```
+
+`code_col` has to be `atc`. The shorter columns (`atc1` to `atc4`) do not
+hold the full code the list is matched against.
+
+The result is one `.rds` per condition in `outdir`. Resume skips a
+rule-batch only when every condition in that batch already has a file. If
+one file in the batch is missing, the whole batch runs again and overwrites
+the files that were already there.
+
+</details>
+
 ## Which ATC column? {#atc-columns}
 
 LMDB does not hold the ATC code once. It holds it **five times**, at five levels,

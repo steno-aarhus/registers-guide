@@ -1,0 +1,180 @@
+---
+title: "Laboratory results"
+subtitle: "Extract one row per result - filtered to your cohort"
+date: last-modified
+---
+
+This page extracts laboratory results for the people in your cohort: one row
+per result, filtered to the cohort before `collect()`. The column dictionary
+is [Laboratoriedatabasens Forskertabel](register-reference.qmd#lab-forsker).
+
+## Not a DST register, and not LPR
+
+**LAB_F** (Laboratoriedatabasens Forskertabel) is delivered by
+Sundhedsdatastyrelsen (SDS) through Forskerservice. In the clinical
+epidemiology literature it is usually called **RLRR** (Register of Laboratory
+Results for Research). It is not on DST's register list.
+
+It is not LPR. LPR is hospital contacts. This table is one row per laboratory
+result. It is very large (well over a billion rows), so `semi_join()` and
+`filter()` have to run **before** `collect()`.
+
+## One delivery, several names
+
+`lab_dm_forsker`, `lab_forsker` and `laboratorieproevesvar` are cuts of the
+same delivery, not separate registers. Using more than one double-counts.
+Column names are not the same in every cut.
+
+The [dictionary section](register-reference.qmd#lab-forsker) names the columns
+this extract uses on `lab_dm_forsker`: `patient_cpr`, `analysiscode`,
+`samplingdate`, `value`, `unit`. The Version 4 dictionary has more columns
+than that. A delivery may not include every column in the dictionary, so do
+not treat a full dictionary listing as the column list of the file you were
+sent.
+
+- **`lab_dm_forsker`:** person column `patient_cpr`, result column `value`.
+- **`lab_forsker`:** a narrower cut of the same delivery (fewer columns).
+- **`laboratorieproevesvar`:** the narrow cut used on DARTER. The person
+  column is `cprnummer` and the result column is `samplevalue`, not
+  `patient_cpr` and `value`. The schema describes this cut as four columns and
+  names those two renames. It does not name the other two, so this page does
+  not guess them. The DARTER example also keeps `analysiscode` and
+  `samplingdate` ([pitfall 7](darter-pitfalls.qmd)).
+
+## The October 2025 delivery is unresolved
+
+::: {.callout-warning}
+**Sundhedsdatastyrelsen updated the laboratory delivery on 3 October 2025**
+([announcement
+→](https://sundhedsdatastyrelsen.dk/data-og-registre/forskerservice/om-forskerservice/nyheder-fra-forskerservice/2025/data_laboratoriedatabasen_031025)):
+"Det nye LAB erstatter den tidligere version af LAB." The announcement names
+four tables, `laboratorieproevesvar`, `Dimlaboratoriekoder`, `DimNPU` and
+`Proevesvar_optaelling`, but never mentions `lab_dm_forsker` by name, and does
+not say what happens to projects already using it. The official data
+dictionary this page and the schema are built from
+([PDF](https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf))
+is Version 4, dated 1 December 2023, nearly two years *before* that
+announcement, and it documents `lab_dm_forsker` only. So `lab_dm_forsker` is
+not a new common data model superseding the older tables. Whether
+`lab_dm_forsker` is being retired, and what `laboratorieproevesvar`'s columns
+are after the October 2025 change, is not resolved here. Check the order
+sheet ("bestillingsark") on Sundhedsdatastyrelsen's site, or your own
+delivery, before relying on either name.
+:::
+
+## The pattern
+
+`read_register()` requires fastreg set up with the path to your registers - see
+[Phase 4](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not
+convert them from SAS yourself. The register name below is the
+`lab_dm_forsker` cut. If your file is `laboratorieproevesvar`, rename
+`cprnummer` to `pnr` and keep `samplevalue` instead of `value`.
+
+```r
+library(fastreg) # read_register()
+library(arrow) # open_dataset() - fallback without fastreg
+library(dplyr)
+
+cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr) # your cohort from Phase 10
+
+# You choose the codes. This page does not ship a list.
+# NPU and DNK codes both sit in analysiscode. There is no column called npu.
+npu_codes <- c("REPLACE_WITH_YOUR_CODE")
+
+lab <- read_register("lab_dm_forsker") %>% # without fastreg: open_dataset("path/to/lab_dm_forsker/")
+  rename_with(tolower) %>%
+  rename(pnr = patient_cpr) %>% # laboratorieproevesvar: rename(pnr = cprnummer)
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # ONLY your cohort
+  filter(analysiscode %in% npu_codes) %>% # filter BEFORE collect
+  select(pnr, analysiscode, samplingdate, value, unit) %>% # samplevalue, not value, on laboratorieproevesvar
+  collect() # only HERE is data pulled into RAM
+
+saveRDS(lab, "path/to/extract_laboratory.rds")
+```
+
+The table stays one row per result. Collapse to one row per person only when
+your definition needs that, the same way as in [Long and wide
+format](long-wide.qmd).
+
+### Synthetic data, on your own computer
+
+[`fiktive`](https://github.com/sara-schwartz/fiktive) can build a
+`lab_dm_forsker` table for local practice. It is not on DST. This synthetic
+table has not been run against a DST delivery, so do not treat it as a check
+that the pipeline works on the server.
+
+Install once with `remotes::install_github("sara-schwartz/fiktive")`, as in
+[Phase 6](first-extraction.qmd#preparation-install-fiktive-and-generate-synthetic-data).
+To use real IFCC/NPU terms, set `options(fiktive.labterm_fetch_ifcc = TRUE)`
+before generating. That option downloads and caches a public IFCC code list.
+`FIKTIVE_LABTERM` (or `options(fiktive.labterm)`) is the other route: a
+LabTerm or IFCC file you already have, not a download. Without one of those,
+`fiktive` does not invent NPU codes. Do not take column names from `fiktive`'s
+`labka` generator. That is a different database, and this page does not
+document its columns.
+
+```r
+# remotes::install_github("sara-schwartz/fiktive")
+options(fiktive.labterm_fetch_ifcc = TRUE) # or set FIKTIVE_LABTERM to a file you have
+
+library(fiktive) # synthetic register data, local only
+library(dplyr)
+
+schema <- load_registers_schema()
+pop <- generate_background_population(n = 60, seed = 1, schema = schema)
+tables <- generate_registers(
+  registers = c("lab_dm_forsker"),
+  population = pop,
+  schema = schema,
+  from = as.Date("2015-01-01"),
+  to = as.Date("2020-12-31"),
+  seed = 1
+)
+
+# Then the same rename, semi_join, filter, and select as above,
+# on tables$lab_dm_forsker instead of read_register().
+```
+
+## What reaches the table
+
+NPU is not its own column. It sits inside `analysiscode`, together with Danish
+DNK codes. Only those coded results reach the table, about 95 per cent. A
+laboratory's own local codes never arrive. There is nothing to filter them in
+with.
+
+Patients who declined consent are absent from the table. That absence is not a
+coded value, so there is no code to filter on.
+
+## Coverage
+
+Coverage starts in 2008, not the 1990s. Complete coverage arrives per
+laboratory between 2010 and 2016. See [Laboratoriedatabasen
+→](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen).
+
+For years before 2008, projects used the separate regional database LABKA, and
+neither [Arendt et al. 2020](https://doi.org/10.2147/CLEP.S245060) nor [Grann
+et al. 2011](https://doi.org/10.2147/CLEP.S17901) gives literal column names,
+so this page lists none.
+
+## `value` is text
+
+**`value` is text, not a number.** Alongside numeric results the reference
+section lists `POSITIV`, `NEGATIV`, `IKKE PÅVIST`, `INGEN VÆKST` and the
+blood-type codes. `as.numeric()` turns every one of them into `NA` without
+warning, which drops exactly the samples where something was found. On
+`laboratorieproevesvar` the same column is called `samplevalue`.
+
+::: {.callout-warning}
+**Do not compare a numeric result across laboratories, or across time, without
+`unit`.** The same `analysiscode` can mean a different scale when the
+equipment or the sample material differs, including inside one laboratory over
+time. Keep `unit` in the extract.
+:::
+
+## See also
+
+- [Register reference: Laboratoriedatabasens
+  Forskertabel](register-reference.qmd#lab-forsker): the column dictionary
+- [Phase 10 - Build your study population](build-study-population.qmd): the
+  cohort you filter to
+- [DARTER pitfall 7](darter-pitfalls.qmd): the `cprnummer` / `samplevalue` extract
