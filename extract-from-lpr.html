@@ -665,7 +665,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">read_register</span>(<span class="st">"lpr_adm"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">max_date =</span> <span class="fu">max</span>(d_inddto, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>If that date reaches DST’s own cutover (31 March 2019 for LPR2/LPR3), the simple filter is safe as written. If it does not, do not just drop the <code>lprindberetningssystem</code> filter to get the gap back - that reintroduces the duplicates it exists to remove. See <a href="./darter-pitfalls.html#lpr3-lprindberetningssystem">DARTER pitfalls, 5</a> for one worked fix (a date cutover instead of a blanket filter).</p>
+<p>If that date reaches DST’s own cutover (early 2019 for LPR2/LPR3: February-March 2019, depending on region), the simple filter is safe as written. If it does not, do not just drop the <code>lprindberetningssystem</code> filter to get the gap back - that reintroduces the duplicates it exists to remove. See <a href="./darter-pitfalls.html#lpr3-lprindberetningssystem">DARTER pitfalls, 5</a> for one worked fix (a date cutover instead of a blanket filter).</p>
 </div>
 </div>
 </div>
@@ -820,26 +820,27 @@ Alternative: compact extraction (single-table approach)
 <span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># 3. Keep only contacts AFTER index. This is what makes it an outcome rather</span></span>
-<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  <span class="co">#    than pre-existing disease. Use &lt; instead for a baseline covariate.</span></span>
-<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span></span>
-<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>  <span class="co"># 4. Reduce to the FIRST event per person:</span></span>
-<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span>              <span class="co">#    handle each person separately</span></span>
-<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(date_contact) <span class="sc">%&gt;%</span>      <span class="co">#    oldest contact first</span></span>
-<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span>                   <span class="co">#    keep row 1 of each person = earliest contact</span></span>
-<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span>                  <span class="co">#    remove the grouping again (see note below)</span></span>
-<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>  <span class="co"># 5. Rename the surviving date to something that says what it is</span></span>
-<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">event_date =</span> date_contact)</span>
-<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Back onto the full cohort. left_join keeps EVERYONE, so people with no</span></span>
-<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a><span class="co"># diagnosis get NA in event_date - that is the correct value for "no event",</span></span>
-<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a><span class="co"># and they are censored at end of follow-up rather than dropped.</span></span>
-<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(outcome, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
-<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(result, <span class="st">"path/to/extract_dementia.rds"</span>)   <span class="co"># change filename for each new outcome</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>  <span class="co">#    than pre-existing disease. Use &lt;= instead for a baseline covariate</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>  <span class="co">#    (convention: on or before index = prevalent, after index = outcome).</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>  <span class="co"># 4. Reduce to the FIRST event per person:</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span>              <span class="co">#    handle each person separately</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(date_contact) <span class="sc">%&gt;%</span>      <span class="co">#    oldest contact first</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span>                   <span class="co">#    keep row 1 of each person = earliest contact</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span>                  <span class="co">#    remove the grouping again (see note below)</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>  <span class="co"># 5. Rename the surviving date to something that says what it is</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">event_date =</span> date_contact)</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a><span class="co"># Back onto the full cohort. left_join keeps EVERYONE, so people with no</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a><span class="co"># diagnosis get NA in event_date - that is the correct value for "no event",</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a><span class="co"># and they are censored at end of follow-up rather than dropped.</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>result <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(outcome, <span class="at">by =</span> <span class="st">"pnr"</span>)</span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(result, <span class="st">"path/to/extract_dementia.rds"</span>)   <span class="co"># change filename for each new outcome</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Why <code>slice(1)</code> and not <code>min()</code>.</strong> <code>slice(n)</code> picks rows by <strong>position</strong>, not by value: <code>slice(1)</code> keeps the first row of each group. It only means “earliest” because <code>arrange(date_contact)</code> put the oldest first - swap that for <code>arrange(desc(date_contact))</code> and the same <code>slice(1)</code> gives you the <em>latest</em> contact instead. See <a href="./function-guide.html#slicen"><code>slice()</code></a>.</p>
 <p>Two things that catch people out:</p>
 <ul>
@@ -1088,22 +1089,23 @@ See the full <code>get_lpr_diagnoses()</code> function and usage
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Build your flags (one expression per variable)</span></span>
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>diagnosis_flags <span class="ot">&lt;-</span> all_dx <span class="sc">%&gt;%</span></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&lt;=</span> index_date) <span class="sc">%&gt;%</span> <span class="co"># before index only (baseline covariate)</span></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_diabetes =</span> icd3 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"E10"</span>, <span class="st">"E11"</span>),</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_copd =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DJ4[1-4]"</span>),</span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_heart_failure =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI50"</span>)</span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Collapse to one row per person: any() = does the person have at least one?</span></span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>diagnosis_flags_collapsed <span class="ot">&lt;-</span> diagnosis_flags <span class="sc">%&gt;%</span></span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="sc">~</span> <span class="fu">as.integer</span>(<span class="fu">any</span>(.))), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Merge onto the cohort; people with no diagnosis get NA -&gt; set to 0</span></span>
-<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>cohort_diagnoses <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(diagnosis_flags_collapsed, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="sc">~</span> <span class="fu">replace_na</span>(., <span class="dv">0</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span> <span class="co"># attach index_date</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(date_contact <span class="sc">&lt;=</span> index_date) <span class="sc">%&gt;%</span> <span class="co"># on or before index only (baseline covariate)</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_diabetes =</span> icd3 <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"E10"</span>, <span class="st">"E11"</span>),</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_copd =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DJ4[1-4]"</span>),</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">dx_heart_failure =</span> <span class="fu">str_detect</span>(c_diag, <span class="st">"^DI50"</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Collapse to one row per person: any() = does the person have at least one?</span></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>diagnosis_flags_collapsed <span class="ot">&lt;-</span> diagnosis_flags <span class="sc">%&gt;%</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="sc">~</span> <span class="fu">as.integer</span>(<span class="fu">any</span>(.))), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Merge onto the cohort; people with no diagnosis get NA -&gt; set to 0</span></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>cohort_diagnoses <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(diagnosis_flags_collapsed, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="sc">~</span> <span class="fu">replace_na</span>(., <span class="dv">0</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>It gives one 0/1 flag per comorbidity per person, ready to enter your model as covariates. (The same <code>group_by(pnr) %&gt;% summarise(any(.))</code> pattern is used on the <a href="./nmi.html">NMI</a> page, for example.)</p>
 <p>Step 2 collapses to one row per <code>pnr</code>, and step 3 rejoins on <code>pnr</code> alone - if your cohort has repeated <code>pnr</code> (e.g.&nbsp;a comparison group matched <strong>with replacement</strong>), that rejoin can attach one person’s flags to the wrong <code>index_date</code>’s row. See <a href="./comparison-cohort.html#step-4---assemble-validate-and-save">comparison cohort’s callout on it</a> if that applies to you.</p>
 </section>

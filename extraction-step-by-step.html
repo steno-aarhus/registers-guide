@@ -691,7 +691,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Why <code>rename_with(tolower)</code> as the first step?</strong> Raw column names in DST registers have inconsistent capitalisation - <code>PNR</code>, <code>pnr</code>, <code>Pnr</code>. By standardising to lower case immediately, the rest of your code can use <code>pnr</code> everywhere without thinking about it. Add it immediately after <code>open_dataset()</code> as the first step in your pipe - before filtering or selecting columns.</p>
+<p><strong>Why <code>rename_with(tolower)</code> as the first step?</strong> Raw column names in DST registers have inconsistent capitalisation - <code>PNR</code>, <code>pnr</code>, <code>Pnr</code>. By standardising to lower case immediately, the rest of your code can use <code>pnr</code> everywhere without thinking about it. Add it immediately after <code>read_register()</code> or <code>open_dataset()</code> as the first step in your pipe - before filtering or selecting columns.</p>
 </div>
 </div>
 </div>
@@ -745,15 +745,15 @@ In depth: what <code>!!</code> means, and when you need it (skip for now if this
 </summary>
 <p>Sometimes you filter on a <strong>list you defined in R yourself</strong> - typically a set of ICD or year codes:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>my_codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"DE10"</span>, <span class="st">"DE11"</span>, <span class="st">"DE14"</span>)   <span class="co"># local R vector you created</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>register <span class="sc">%&gt;%</span> <span class="fu">filter</span>(c_diag <span class="sc">%in%</span> <span class="sc">!!</span>my_codes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs <em>separately</em> from R and does not know your local variables. Without <code>!!</code>, the engine would look for a <em>column</em> called <code>my_codes</code> inside the register. It does not exist - <code>my_codes</code> is an R vector you created locally. <code>!!</code> means: <em>“this is an R object, not a column name - look up its values in R and use them in the query.”</em></p>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>register <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">substr</span>(c_diag, <span class="dv">1</span>, <span class="dv">4</span>) <span class="sc">%in%</span> <span class="sc">!!</span>my_codes)   <span class="co"># first 4 characters, so DE109, DE112 ... also match</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs <em>separately</em> from R and does not know your local variables. When the query is built, dplyr checks each name: if the register has a <em>column</em> called <code>my_codes</code>, it uses the column; if not, it looks up the R vector <code>my_codes</code> and copies its values into the query. So the code above usually works without <code>!!</code> too. The risk is a name clash: if your local variable has the same name as a column (e.g.&nbsp;a local <code>year</code> and the register’s <code>year</code> column), the column silently wins. <code>!!</code> removes that ambiguity - it means: <em>“this is an R object, not a column name - look up its values in R and use them in the query.”</em></p>
 <div class="callout callout-style-simple callout-tip">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p>Rule of thumb: if you refer to a <strong>column</strong> in the register, write the name directly. If you refer to an <strong>R variable</strong> you created yourself, put <code>!!</code> in front of it.</p>
+<p>Rule of thumb: if you refer to a <strong>column</strong> in the register, write the name directly. If you refer to an <strong>R variable</strong> you created yourself, putting <code>!!</code> in front of it is a recommended safeguard against a name clash.</p>
 </div>
 </div>
 </div>
@@ -779,31 +779,42 @@ In depth: what <code>!!</code> means, and when you need it (skip for now if this
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>"tbl_df" "data.frame"</code></td>
+<td><code>"tbl_df" "tbl" "data.frame"</code> (and no <code>"prudent_duckplyr_df"</code>)</td>
 <td>Data is in R</td>
 <td>Nothing - you are ready</td>
 </tr>
 <tr class="even">
-<td><code>"tbl_duckdb_connection"</code></td>
-<td>Unsent DuckDB query</td>
+<td><code>"prudent_duckplyr_df" "duckplyr_df" "tbl_df" "tbl" "data.frame"</code></td>
+<td>Unsent DuckDB query (from <code>read_register()</code>)</td>
 <td>Add <code>%&gt;% collect()</code></td>
 </tr>
 <tr class="odd">
-<td><code>"Table" "ArrowObject"</code></td>
+<td><code>"tbl_duckdb_connection"</code> …</td>
+<td>Unsent DuckDB query (from <code>to_duckdb()</code>)</td>
+<td>Add <code>%&gt;% collect()</code></td>
+</tr>
+<tr class="even">
+<td><code>"FileSystemDataset"</code> … <code>"ArrowObject"</code></td>
+<td>Arrow connection (from <code>open_dataset()</code>)</td>
+<td>Filter/select, then <code>%&gt;% collect()</code></td>
+</tr>
+<tr class="odd">
+<td><code>"arrow_dplyr_query"</code></td>
 <td>Unsent Arrow query</td>
 <td>Add <code>%&gt;% collect()</code></td>
 </tr>
 </tbody>
 </table>
+<p>A <code>read_register()</code> result says <code>"data.frame"</code> even though nothing has been fetched yet: look for <code>"prudent_duckplyr_df"</code> - as long as that is in the list, the data has not been collected. (<code>"Table"</code> is an Arrow table that is already in memory, which you rarely meet in this guide.)</p>
 <details>
 <summary>
 In depth: RAM is shared - clean up after large extractions
 </summary>
 <p>On DST all users share the server’s memory. When the memory bar in RStudio turns red, it slows everyone’s sessions.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span>(large_register)   <span class="co"># removes the object from your R session (disappears from the list in the top right of RStudio)</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">gc</span>()                 <span class="co"># asks the operating system to reclaim memory R no longer uses</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">gc</span>()                 <span class="co"># frees memory R no longer uses, so it can be handed back</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>rm()</code> removes the object from your active session - it can no longer be used in code and disappears from the Environment panel (top right in RStudio).</p>
-<p><code>gc()</code> (<em>garbage collection</em>) does not affect your session - all your other objects are still there. R normally holds on to freed memory a little longer, because it is faster to reuse than to request new memory from the operating system. <code>gc()</code> forces R to return that memory to the operating system <em>immediately</em>, so it becomes available to other users on the shared DST server. You lose nothing - it helps your colleagues.</p>
+<p><code>gc()</code> (<em>garbage collection</em>) does not affect your session - all your other objects are still there. R normally holds on to freed memory a little longer, because it is faster to reuse than to request new memory from the operating system. <code>gc()</code> makes R free that memory now, so it can be returned to the operating system and become available to other users on the shared DST server (how much is actually handed back, and when, depends on the system). You lose nothing - it helps your colleagues.</p>
 <p>Always clean up after large extractions before continuing.</p>
 </details>
 </section>
@@ -882,7 +893,7 @@ Want to know more? Parquet, Arrow and DuckDB - and when each is used
 </table>
 <p>To move an Arrow connection over to DuckDB, pipe through <code>to_duckdb()</code> (from the <code>arrow</code> package):</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"path/to/bef/"</span>) <span class="sc">%&gt;%</span> <span class="fu">to_duckdb</span>()   <span class="co"># now queried by DuckDB</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>read_register()</code> hands you a DuckDB connection already, so this step is built in - you do not call <code>to_duckdb()</code> yourself.</p>
+<p><code>read_register()</code> hands you a DuckDB-backed table already (a lazy <em>duckplyr</em> data frame), so this step is built in - you do not call <code>to_duckdb()</code> yourself.</p>
 <p>If you hit an error about an <em>“unsupported function”</em> in Arrow, that is the coverage gap: switch to DuckDB with <code>to_duckdb()</code>, or <code>collect()</code> into R first and do the operation there.</p>
 </details>
 </section>

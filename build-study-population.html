@@ -908,28 +908,29 @@ Example A: SKS codes (surgery/procedure)
 <span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>proc <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_procregistrering"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
 <span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>lpr_a_k  <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
-<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>exp_lpr3 <span class="ot">&lt;-</span> proc <span class="sc">%&gt;%</span></span>
-<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(proc_kode <span class="sc">%in%</span> <span class="sc">!!</span>BS_CODES) <span class="sc">%&gt;%</span>                     <span class="co"># only bariatric procedures</span></span>
-<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(dw_ek_kontakt, <span class="at">sks_code =</span> proc_kode) <span class="sc">%&gt;%</span>           <span class="co"># dw_ek_kontakt joins to the contact</span></span>
-<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(</span>
-<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>    lpr_a_k <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, dw_ek_kontakt, <span class="at">index_date =</span> kont_starttidspunkt),</span>
-<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span></span>
-<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">index_date =</span> <span class="fu">as.Date</span>(index_date))                  <span class="co"># datetime → date</span></span>
-<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a><span class="co"># 1A.3 Combine and take one procedure per person (the first) -------------------</span></span>
-<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a><span class="co"># The result is called "exposed" - only the exposed group, NOT the full cohort yet</span></span>
-<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>exposed <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(exp_lpr2, exp_lpr3) <span class="sc">%&gt;%</span></span>
-<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span>                                        <span class="co"># group per person</span></span>
-<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(index_date) <span class="sc">%&gt;%</span>                                   <span class="co"># oldest date first</span></span>
-<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span>                                              <span class="co"># one procedure per person (the first)</span></span>
-<span id="cb2-48"><a href="#cb2-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span>                                             <span class="co"># release grouping (see Phase 12)</span></span>
-<span id="cb2-49"><a href="#cb2-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">exposed =</span> <span class="dv">1</span>L)                                      <span class="co"># mark as exposed (1 = yes)</span></span>
-<span id="cb2-50"><a href="#cb2-50" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-51"><a href="#cb2-51" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(exposed)                                              <span class="co"># number of unique operated individuals</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)                  <span class="co"># only genuine LPR3 contacts, see Understand LPR</span></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>exp_lpr3 <span class="ot">&lt;-</span> proc <span class="sc">%&gt;%</span></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(proc_kode <span class="sc">%in%</span> <span class="sc">!!</span>BS_CODES) <span class="sc">%&gt;%</span>                     <span class="co"># only bariatric procedures</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(dw_ek_kontakt, <span class="at">sks_code =</span> proc_kode) <span class="sc">%&gt;%</span>           <span class="co"># dw_ek_kontakt joins to the contact</span></span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(</span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>    lpr_a_k <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, dw_ek_kontakt, <span class="at">index_date =</span> kont_starttidspunkt),</span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span></span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">index_date =</span> <span class="fu">as.Date</span>(index_date))                  <span class="co"># datetime → date</span></span>
+<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a><span class="co"># 1A.3 Combine and take one procedure per person (the first) -------------------</span></span>
+<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a><span class="co"># The result is called "exposed" - only the exposed group, NOT the full cohort yet</span></span>
+<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>exposed <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(exp_lpr2, exp_lpr3) <span class="sc">%&gt;%</span></span>
+<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span>                                        <span class="co"># group per person</span></span>
+<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(index_date) <span class="sc">%&gt;%</span>                                   <span class="co"># oldest date first</span></span>
+<span id="cb2-48"><a href="#cb2-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span>                                              <span class="co"># one procedure per person (the first)</span></span>
+<span id="cb2-49"><a href="#cb2-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span>                                             <span class="co"># release grouping (see Phase 12)</span></span>
+<span id="cb2-50"><a href="#cb2-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">exposed =</span> <span class="dv">1</span>L)                                      <span class="co"># mark as exposed (1 = yes)</span></span>
+<span id="cb2-51"><a href="#cb2-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-52"><a href="#cb2-52" aria-hidden="true" tabindex="-1"></a><span class="fu">nrow</span>(exposed)                                              <span class="co"># number of unique operated individuals</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Note that <code>exposed</code> holds only the operated individuals. The full cohort (exposed + comparison group) is built on <a href="./comparison-cohort.html">Comparison cohort</a> and saved as <code>cohort</code> - and it is <code>cohort</code>, not <code>exposed</code>, that the later phases use as <code>cohort_pnrs</code>.</p>
 </details>
 <details>
@@ -973,7 +974,7 @@ Example B: ICD diagnosis as exposure criterion
 </section>
 <section id="step-3---exclude-prevalent-cases" class="level2 step-heading">
 <h2 class="step-heading anchored" data-anchor-id="step-3---exclude-prevalent-cases">Step 3 - Exclude prevalent cases</h2>
-<p>People who already had <strong>your outcome</strong> before the index date must be excluded - otherwise they count as new cases even though they are not. This applies to <strong>all designs</strong>, including a prevalence study without a comparison group, so it belongs here where you build the exposed cohort.</p>
+<p>People who already had <strong>your outcome</strong> before the index date must be excluded - otherwise they count as new cases even though they are not. Convention used throughout this guide: a diagnosis <strong>on or before</strong> the index date is prevalent (<code>&lt;=</code>), and only one <strong>after</strong> it is an outcome (<code>&gt;</code>). This applies to <strong>all designs</strong>, including a prevalence study without a comparison group, so it belongs here where you build the exposed cohort.</p>
 <p>Count how many drop out at each exclusion step, so you can describe the attrition and later draw a <strong>STROBE flow diagram</strong> (also called a participant or attrition diagram; see the <a href="https://www.strobe-statement.org/checklists/">STROBE checklist</a>). The generic N-counting template is in <a href="./first-extraction.html">Phase 6</a>.</p>
 <p><strong>Helper function for excluding prevalent cases</strong></p>
 <p>If the same check is needed more than once (e.g.&nbsp;also on a comparison group later, see <a href="./comparison-cohort.html">Comparison cohort</a>), wrap the logic in a function so the two checks do not drift apart. See <a href="./good-coding-practice.html">Good coding practice</a>.</p>
@@ -989,12 +990,12 @@ Show the code: exclude prevalent cases
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   diagnoses = your LPR diagnosis extract (columns: pnr, date_contact, icd3)</span></span>
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   codes     = the ICD codes that define your outcome (here OUTCOME_CODES)</span></span>
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   cohort    = the group to check, with pnr + index_date</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># It returns the pnr that had the outcome BEFORE their own index date.</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># It returns the pnr that had the outcome ON or BEFORE their own index date.</span></span>
 <span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>prior_outcome_pnrs <span class="ot">&lt;-</span> <span class="cf">function</span>(diagnoses, codes, cohort) {</span>
 <span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  diagnoses <span class="sc">%&gt;%</span></span>
 <span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(icd3 <span class="sc">%in%</span> codes) <span class="sc">%&gt;%</span></span>
 <span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>   <span class="co"># attach each person's index</span></span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(date_contact <span class="sc">&lt;</span> index_date) <span class="sc">%&gt;%</span>                            <span class="co"># only contacts BEFORE index</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(date_contact <span class="sc">&lt;=</span> index_date) <span class="sc">%&gt;%</span>                           <span class="co"># contacts ON or BEFORE index</span></span>
 <span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># distinct(pnr) alone is only correct if pnr is unique in your cohort. If</span></span>
 <span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># it is not (e.g. a comparison cohort matched with replacement, so the</span></span>
 <span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># same pnr has several index_dates), this over-excludes: a diagnosis that</span></span>
@@ -1058,7 +1059,7 @@ Show the code: exclude prevalent cases
 </div>
 <p>How each step maps to the data:</p>
 <ul>
-<li><strong>Source registers:</strong> the whole population’s LPR data (you have no cohort list yet). LPR2 and LPR3 are opened lazily with <code>open_dataset()</code> - see Step 2 above.</li>
+<li><strong>Source registers:</strong> the whole population’s LPR data (you have no cohort list yet). LPR2 and LPR3 are opened lazily with <code>read_register()</code> - see Step 2 above.</li>
 <li><strong>Step 2:</strong> you filter on your exposure codes and attach <code>pnr</code> + <code>index_date</code>. The result is <code>exposed</code>.</li>
 <li><strong>Step 3 (exclusion):</strong> prevalent cases - people with the outcome before their index date - are found in the LPR diagnoses and removed. That is the <code>n_before - nrow(exposed)</code> shown in the exclusion box.</li>
 <li><strong>Final study population:</strong> <code>pnr</code> + <code>index_date</code> per person, ready for <a href="./extract-variables.html">Phase 11 - Extract variables</a>. If you build a comparison cohort, <a href="./comparison-cohort.html">Phase 10a</a> is inserted before the last step.</li>

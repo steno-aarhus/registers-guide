@@ -654,14 +654,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Cox or Poisson?</strong> They often answer almost the same question, and HR and IRR are close when the event is rare. Choose <strong>Cox</strong> if you think in individual follow-up time and time-to-first-event. Choose <strong>Poisson</strong> if you think in <strong>rates per person-year</strong> split by age/calendar time (classic in register studies of e.g.&nbsp;cancer or mortality), or if your data are already <strong>counted up</strong> (events and person-years per group).</p>
+<p><strong>Cox or Poisson?</strong> They often answer almost the same question, and HR and IRR agree closely when the Poisson model lets the baseline rate vary over follow-up (follow-up split into time bands, see <a href="#rates-over-time">below</a>); with a single constant rate they can differ if the hazard changes over time. Choose <strong>Cox</strong> if you think in individual follow-up time and time-to-first-event. Choose <strong>Poisson</strong> if you think in <strong>rates per person-year</strong> split by age/calendar time (classic in register studies of e.g.&nbsp;cancer or mortality), or if your data are already <strong>counted up</strong> (events and person-years per group).</p>
 </div>
 </div>
 </div>
 </section>
 <section id="starting-point" class="level2">
 <h2 class="anchored" data-anchor-id="starting-point">Starting point</h2>
-<p>You need two things per person, exactly as for <a href="./descriptive-tables.html#crude-rate">the crude rate</a>: the <strong>number of events</strong> (<code>event</code>, here 0 or 1) and the <strong>person-time</strong> (<code>followup_years</code>, follow-up time in years). Both are built in <a href="./joins.html#follow-up-time">Phase 12</a>.</p>
+<p>You need two things per person, exactly as for <a href="./descriptive-tables.html#crude-rate">the crude rate</a>: the <strong>number of events</strong> (<code>outcome</code>, here 0 or 1) and the <strong>person-time</strong> (<code>followup_years</code>, follow-up time in years). Both are built in <a href="./joins.html#follow-up-time">Phase 12</a>.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># %&gt;% (pipe)</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gtsummary) <span class="co"># tbl_regression() for tidy output</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -671,10 +671,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="anchored" data-anchor-id="poisson-regression-rate-ratio-irr">Poisson regression: rate ratio (IRR)</h2>
 <p>The model is a <code>glm</code> with <code>family = poisson</code>. The new part, compared with logistic regression, is the <strong>offset</strong>: it tells the model <strong>how long each person was at risk</strong>, so it models the <em>rate</em> (events per time) and not just the number of events.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>model <span class="ot">&lt;-</span> <span class="fu">glm</span>(</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  event <span class="sc">~</span> exposure <span class="sc">+</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  outcome <span class="sc">~</span> exposure <span class="sc">+</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    age <span class="sc">+</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    sex <span class="sc">+</span> <span class="co"># outcome (event count) explained by exposure + covariates</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">offset</span>(<span class="fu">log</span>(followup_years)), <span class="co"># offset = person-time: turns counts into a RATE</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">offset</span>(<span class="fu">log</span>(followup_years)), <span class="co"># offset = person-time: turns counts into a RATE (needs followup_years &gt; 0, see Phase 12)</span></span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df,</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">family =</span> poisson</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>) <span class="co"># family = poisson -&gt; rate model</span></span>
@@ -683,7 +683,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># exponentiate = TRUE -&gt; rate ratios (IRR)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <ul>
 <li><code>family = poisson</code> makes it a rate model.</li>
-<li><code>offset(log(followup_years))</code> is the person-time. It must be <strong>logged</strong> (<code>log()</code>), because the Poisson model works on the log scale. Without the offset you model the number of events, not the rate - and that is almost never what you want.</li>
+<li><code>offset(log(followup_years))</code> is the person-time. It must be <strong>logged</strong> (<code>log()</code>), because the Poisson model works on the log scale. Without the offset you model the number of events, not the rate - and that is almost never what you want. Zero follow-up gives <code>log(0) = -Inf</code>, which is why the <a href="./joins.html#follow-up-time">Phase 12 recipe</a> drops people with no follow-up.</li>
 <li><code>exponentiate = TRUE</code> shows <strong>rate ratios (IRR)</strong> instead of log-rate coefficients.</li>
 </ul>
 <p>An IRR reads exactly like an OR or HR: <strong>1 = no difference</strong>, above 1 = higher rate, below 1 = lower. See <a href="./regression.html#read-the-output">Reading your result</a>.</p>
@@ -693,7 +693,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p>Here <code>event</code> is 0/1 (one row per person), and the offset is the person’s total follow-up time. That gives a valid IRR adjusted for the covariates you have at <strong>baseline</strong> (at study start/index) - not one that changes as people age. For that, see <a href="#rates-over-time">Rates that vary over time</a> below.</p>
+<p>Here <code>outcome</code> is 0/1 (one row per person), and the offset is the person’s total follow-up time. That gives a valid IRR adjusted for the covariates you have at <strong>baseline</strong> (at study start/index) - not one that changes as people age. For that, see <a href="#rates-over-time">Rates that vary over time</a> below.</p>
 </div>
 </div>
 </div>
@@ -711,13 +711,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <summary>
 Check for overdispersion (and switch to negative binomial if needed)
 </summary>
-<p>Overdispersion means the events vary more than a pure Poisson distribution allows. The consequence is confidence intervals that are too narrow. Two common fixes:</p>
+<p>Overdispersion means the events vary more than a pure Poisson distribution allows. The consequence is confidence intervals that are too narrow. It matters for <strong>aggregated counts</strong> (events and person-years per group) and <strong>recurrent events</strong>; with one 0/1 row per person, as above, it cannot be meaningfully checked - there, use robust (sandwich) standard errors instead. On aggregated data, check first, then two common fixes:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MASS)                            <span class="co"># glm.nb(): negative binomial regression</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Negative binomial: like Poisson, but with an extra parameter that allows overdispersion</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">glm.nb</span>(event <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex <span class="sc">+</span> <span class="fu">offset</span>(<span class="fu">log</span>(followup_years)),</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>)    <span class="co"># -&gt; IRR with confidence intervals that account for overdispersion</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># df_agg: one row per group, outcome = number of events, followup_years = person-years</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>model_agg <span class="ot">&lt;-</span> <span class="fu">glm</span>(outcome <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex <span class="sc">+</span> <span class="fu">offset</span>(<span class="fu">log</span>(followup_years)),</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>                 <span class="at">data =</span> df_agg, <span class="at">family =</span> poisson)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="fu">residuals</span>(model_agg, <span class="at">type =</span> <span class="st">"pearson"</span>)<span class="sc">^</span><span class="dv">2</span>) <span class="sc">/</span> <span class="fu">df.residual</span>(model_agg) <span class="co"># about 1 = fine; well above 1 = overdispersion</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Negative binomial: like Poisson, but with an extra parameter that allows overdispersion</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="fu">glm.nb</span>(outcome <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex <span class="sc">+</span> <span class="fu">offset</span>(<span class="fu">log</span>(followup_years)),</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>       <span class="at">data =</span> df_agg) <span class="sc">%&gt;%</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>)    <span class="co"># -&gt; IRR with confidence intervals that account for overdispersion</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Alternatively you can keep the Poisson model and use <code>family = quasipoisson</code>, which scales the standard errors up without changing the distribution. Both give wider, more honest confidence intervals than a pure Poisson when there is overdispersion.</p>
 </details>
 </section>
@@ -735,13 +740,13 @@ Check for overdispersion (and switch to negative binomial if needed)
 </div>
 </div>
 </div>
-<div class="callout callout-style-simple callout-tip callout-titled" title="Read more {#read-more}">
+<div id="read-more" class="callout callout-style-simple callout-tip callout-titled" title="Read more">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Tip</span>Read more {#read-more}
+<span class="screen-reader-only">Tip</span>Read more
 </div>
 </div>
 <div class="callout-body-container callout-body">

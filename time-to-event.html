@@ -733,7 +733,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>attained age</strong>: so the model compares people at the <strong>same age</strong>. That adjusts for age automatically and flexibly (a strong confounder for most outcomes), without you having to model the shape of age yourself. Common in register studies.</li>
 <li><strong>calendar time</strong>: if the calendar period itself matters (e.g.&nbsp;treatment that has changed over the years).</li>
 </ul>
-<p>Time since index is simplest; age-as-time-scale is often stronger when risk is driven heavily by age. Technically you choose the time scale via what you put in as time in <code>Surv()</code>.</p>
+<p>Time since index is simplest; age-as-time-scale is often stronger when risk is driven heavily by age. Technically you choose the time scale via what you put in as time in <code>Surv()</code>. With age as time scale, each person enters at their age at index (<strong>delayed entry</strong>), so <code>Surv()</code> needs both entry and exit age - <code>Surv(age_at_exit, outcome)</code> alone would count everyone as at risk from birth:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">age_at_index =</span> <span class="fu">as.numeric</span>(index_date <span class="sc">-</span> birth_date) <span class="sc">/</span> <span class="fl">365.25</span>, <span class="co"># birth_date = foed_dag from BEF</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">age_at_exit  =</span> age_at_index <span class="sc">+</span> time_days <span class="sc">/</span> <span class="fl">365.25</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(<span class="fu">Surv</span>(age_at_index, age_at_exit, outcome) <span class="sc">~</span> exposure <span class="sc">+</span> sex, <span class="at">data =</span> df) <span class="co"># age is the time axis, so not a covariate</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
 </div>
@@ -741,10 +747,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="check-the-assumption-proportional-hazards" class="level2">
 <h2 class="anchored" data-anchor-id="check-the-assumption-proportional-hazards">Check the assumption: proportional hazards</h2>
 <p>The Cox model assumes <strong>proportional hazards</strong> (PH): that a variable’s effect is constant over time. If it does not hold, the single hazard ratio is misleading. Always check it with <code>cox.zph()</code>, which is based on <em>Schoenfeld residuals</em> (in short, a measure of whether the effect “drifts” over time).</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>ph <span class="ot">&lt;-</span> <span class="fu">cox.zph</span>(cox) <span class="co"># formal PH test per variable + global</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(ph) <span class="co"># small p-value = sign the assumption is VIOLATED</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(ph) <span class="co"># residual curve per variable; a sloping curve</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   indicates a non-proportional hazard</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>ph <span class="ot">&lt;-</span> <span class="fu">cox.zph</span>(cox) <span class="co"># formal PH test per variable + global</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(ph) <span class="co"># small p-value = sign the assumption is VIOLATED</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(ph) <span class="co"># residual curve per variable; a sloping curve</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   indicates a non-proportional hazard</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <details>
 <summary>
 What to do if the assumption is violated
@@ -774,30 +780,30 @@ What to do if the assumption is violated
 <li><code>status</code> - <strong>what</strong> happened: censored, outcome or death.</li>
 </ul>
 <p><code>status</code> must be a <strong>factor</strong>, and <code>tidycmprsk</code> requires <strong>“censored” to be the first level</strong>. The order of the levels is also where you tell R which level is your outcome and which is the competing risk:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidycmprsk) <span class="co"># cuminc(), crr()</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">status =</span> <span class="fu">factor</span>(</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>      status_code, <span class="co"># your raw code, one value per person (e.g. 0/1/2)</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">levels =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>), <span class="co"># the order sets the meaning:</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">labels =</span> <span class="fu">c</span>(</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"censored"</span>, <span class="co">#   1st level = censored (MUST be first)</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">"outcome"</span>, <span class="co">#   2nd level = your outcome (the one crr models)</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">"death"</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>      ) <span class="co">#   3rd level = the competing risk</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidycmprsk) <span class="co"># cuminc(), crr()</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">status =</span> <span class="fu">factor</span>(</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>      status_code, <span class="co"># your raw code, one value per person (e.g. 0/1/2)</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">levels =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>), <span class="co"># the order sets the meaning:</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">labels =</span> <span class="fu">c</span>(</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"censored"</span>, <span class="co">#   1st level = censored (MUST be first)</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">"outcome"</span>, <span class="co">#   2nd level = your outcome (the one crr models)</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">"death"</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>      ) <span class="co">#   3rd level = the competing risk</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>You build <code>status_code</code> (0/1/2) from the dates - what happened <em>first</em>: 0 = censored (e.g.&nbsp;end of follow-up, emigrated or otherwise lost), 1 = outcome, 2 = death. The construction lives in <a href="./joins.html#follow-up-time">Calculate follow-up time and event variable</a> (Phase 12). The <em>number</em> you give censoring does not matter - what matters is that the censored level is listed <strong>first</strong> in <code>levels =</code> (which is why it is 0 here).</p>
 </section>
 <section id="describe-the-risk-over-time-cif" class="level3">
 <h3 class="anchored" data-anchor-id="describe-the-risk-over-time-cif">2. Describe the risk over time (CIF)</h3>
 <p><strong>Instead of Kaplan-Meier</strong>, use the <strong>cumulative incidence function</strong> (CIF, also called Aalen-Johansen). It allocates people correctly across the competing outcomes, so death no longer “steals” risk from the outcome. (This is about the <em>curve</em>; the regression itself is still done with Cox, see step 3.)</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Surv(time, status) with the factor status -&gt; cumulative incidence for EACH event type:</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cuminc</span>(</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(time_days, status) <span class="sc">~</span> exposure, <span class="co"># one curve per exposure group</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>) <span class="co"># also gives Gray's test for a group difference</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Surv(time, status) with the factor status -&gt; cumulative incidence for EACH event type:</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cuminc</span>(</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(time_days, status) <span class="sc">~</span> exposure, <span class="co"># one curve per exposure group</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>) <span class="co"># also gives Gray's test for a group difference</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="regression-pick-the-model-to-match-your-question" class="level3">
 <h3 class="anchored" data-anchor-id="regression-pick-the-model-to-match-your-question">3. Regression: pick the model to match your question</h3>
@@ -806,16 +812,16 @@ What to do if the assumption is violated
 <li><strong>Etiology (the rate of the outcome):</strong> run an <strong>ordinary Cox</strong>, but <strong>censor</strong> the competing event. You do that by setting the event to <code>status == "outcome"</code>: both censored and dead people then become “no event”. This is the <em>cause-specific</em> hazard.</li>
 <li><strong>Absolute/cumulative risk:</strong> use <strong>Fine-Gray</strong> (<code>crr</code>), where the dead <strong>stay</strong> in the risk set. <code>crr</code> by default models the first event type after “censored” (here “outcome”) and treats the rest (“death”) as competing. This is the <em>subdistribution</em> hazard.</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Etiology - cause-specific Cox: status == "outcome" turns death (and censored) into "no event"</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(time_days, status <span class="sc">==</span> <span class="st">"outcome"</span>) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; cause-specific hazard ratio</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Absolute risk - Fine-Gray: uses the factor status directly (outcome vs. competing)</span></span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="fu">crr</span>(<span class="fu">Surv</span>(time_days, status) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex, <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; subdistribution hazard ratio</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Etiology - cause-specific Cox: status == "outcome" turns death (and censored) into "no event"</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(time_days, status <span class="sc">==</span> <span class="st">"outcome"</span>) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> df</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; cause-specific hazard ratio</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Absolute risk - Fine-Gray: uses the factor status directly (outcome vs. competing)</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">crr</span>(<span class="fu">Surv</span>(time_days, status) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex, <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; subdistribution hazard ratio</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <details>
 <summary>
 Rule of thumb: which one do I pick?

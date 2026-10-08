@@ -603,7 +603,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#1-check-that-parquet-files-are-up-to-date" id="toc-1-check-that-parquet-files-are-up-to-date" class="nav-link active" data-scroll-target="#1-check-that-parquet-files-are-up-to-date">1. Check that parquet files are up to date</a></li>
   <li><a href="#surgery-and-procedures" id="toc-surgery-and-procedures" class="nav-link" data-scroll-target="#surgery-and-procedures">2. Surgery and procedures</a></li>
   <li><a href="#lpr_a_diagnose---a-does-not-mean-a-type-diagnoses" id="toc-lpr_a_diagnose---a-does-not-mean-a-type-diagnoses" class="nav-link" data-scroll-target="#lpr_a_diagnose---a-does-not-mean-a-type-diagnoses">3. <code>lpr_a_diagnose</code> - “a” does not mean A-type diagnoses</a></li>
-  <li><a href="#nmi_count-nmi_score" id="toc-nmi_count-nmi_score" class="nav-link" data-scroll-target="#nmi_count-nmi_score">4. <code>nmi_count</code> ≠ <code>nmi_score</code></a></li>
+  <li><a href="#nmi_count-nmi" id="toc-nmi_count-nmi" class="nav-link" data-scroll-target="#nmi_count-nmi">4. <code>nmi_count</code> ≠ <code>nmi</code></a></li>
   <li><a href="#lpr3-lprindberetningssystem" id="toc-lpr3-lprindberetningssystem" class="nav-link" data-scroll-target="#lpr3-lprindberetningssystem">5. LPR3 - filter on <code>lprindberetningssystem == "LPR3"</code></a></li>
   <li><a href="#faik-2022" id="toc-faik-2022" class="nav-link" data-scroll-target="#faik-2022">6. In the DARTER delivery, FAIK carries <code>pnr</code> from 2022</a></li>
   <li><a href="#laboratory-results---use-laboratorieproevesvar_" id="toc-laboratory-results---use-laboratorieproevesvar_" class="nav-link" data-scroll-target="#laboratory-results---use-laboratorieproevesvar_">7. Laboratory results - use <code>laboratorieproevesvar_</code></a></li>
@@ -705,27 +705,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG - dw_ek_kontakt is NA:</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>proc <span class="sc">%&gt;%</span> <span class="fu">left_join</span>(contacts, <span class="at">by =</span> <span class="st">"dw_ek_kontakt"</span>) <span class="co"># joins nothing</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - use dw_ek_forloeb:</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># FALLBACK (course level) - use dw_ek_forloeb; better: lpr_a_procregistrering (above)</span></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>proc <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"procedurer_kirurgi"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(</span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">read_register</span>(<span class="st">"lpr_a_kontakt"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">select</span>(dw_ek_forloeb, pnr),</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">distinct</span>(dw_ek_forloeb, pnr), <span class="co"># one row per course, else each procedure repeats per contact</span></span>
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">"dw_ek_forloeb"</span></span>
 <span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="lpr_a_diagnose---a-does-not-mean-a-type-diagnoses" class="level2">
 <h2 class="anchored" data-anchor-id="lpr_a_diagnose---a-does-not-mean-a-type-diagnoses">3. <code>lpr_a_diagnose</code> - “a” does not mean A-type diagnoses</h2>
-<p>The table is called <code>lpr_a_diagnose</code> - “a” refers to the analysis model designation (LPR_A series). It is <strong>not</strong> a filter on A-type diagnoses. The table contains A, B and G. You still need to filter on <code>diag_kode_type</code>.</p>
+<p>The table is called <code>lpr_a_diagnose</code> - “a” refers to the analysis model designation (LPR_A series). It is <strong>not</strong> a filter on A-type diagnoses. The table contains A (main) and B (secondary), plus add-on codes; G (grundmorbus) is LPR2 only. You still need to filter on <code>diag_kode_type</code>.</p>
 </section>
-<section id="nmi_count-nmi_score" class="level2">
-<h2 class="anchored" data-anchor-id="nmi_count-nmi_score">4. <code>nmi_count</code> ≠ <code>nmi_score</code></h2>
+<section id="nmi_count-nmi" class="level2">
+<h2 class="anchored" data-anchor-id="nmi_count-nmi">4. <code>nmi_count</code> ≠ <code>nmi</code></h2>
 <table class="caption-top table">
-<colgroup>
-<col style="width: 11%">
-<col style="width: 88%">
-</colgroup>
 <thead>
 <tr class="header">
 <th>Variable</th>
@@ -734,16 +730,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>nmi_score</code></td>
-<td><strong>Weighted</strong> score - Nordic Multimorbidity Index (50 predictors with individual weights)</td>
+<td><code>nmi</code></td>
+<td><strong>Weighted</strong> score - Nordic Multimorbidity Index (50 predictors with individual weights), as computed on the <a href="./nmi.html">NMI page</a></td>
 </tr>
 <tr class="even">
 <td><code>nmi_count</code></td>
-<td>Simple <strong>count</strong> of the number of chronic conditions (33 possible)</td>
+<td>Simple <strong>count</strong> of the number of chronic conditions (33 possible), calculated separately</td>
 </tr>
 </tbody>
 </table>
-<p>If you use <code>nmi_count</code> in your Cox model instead of <code>nmi_score</code>, you are adjusting for something different than you think.</p>
+<p>If you use <code>nmi_count</code> in your Cox model instead of <code>nmi</code>, you are adjusting for something different than you think.</p>
 </section>
 <section id="lpr3-lprindberetningssystem" class="level2">
 <h2 class="anchored" data-anchor-id="lpr3-lprindberetningssystem">5. LPR3 - filter on <code>lprindberetningssystem == "LPR3"</code></h2>
@@ -762,7 +758,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><code>get_lpr_diagnoses()</code> in <code>darter-index.qmd</code> is updated with this filter. If you have copies of LPR3 code in your own scripts, you must add it manually.</p>
+<p><code>get_lpr_diagnoses()</code> in <code>darter-index.qmd</code> uses the date-cutover version of this filter (next callout). If you have copies of LPR3 code in your own scripts, you must add it manually.</p>
 </div>
 </div>
 </div>

@@ -650,7 +650,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Before you go looking in the code, do this in order:</p>
 <ol type="1">
 <li><strong>Read the error message:</strong> which line is mentioned? Which object name appears?</li>
-<li><strong>Run <code>class(object)</code>:</strong> is it data (<code>"data.frame"</code>) or still a connection (<code>"tbl_duckdb_connection"</code>)? See <a href="./extraction-step-by-step.html">Phase 5 - do you have data or just a connection?</a></li>
+<li><strong>Run <code>class(object)</code>:</strong> is it data (<code>"data.frame"</code>) or still a connection (<code>"prudent_duckplyr_df"</code> from <code>read_register()</code> - even though it also says <code>"data.frame"</code> - or <code>"arrow_dplyr_query"</code>, <code>"tbl_duckdb_connection"</code>)? See <a href="./extraction-step-by-step.html">Phase 5 - do you have data or just a connection?</a></li>
 <li><strong>Run <code>names(object)</code>:</strong> is the column named exactly what you think? A single letter or difference in capitalisation is enough to fail.</li>
 <li><strong>Isolate the failing line:</strong> run it alone and see what happens.</li>
 <li><strong>Restart the R session</strong> (Ctrl/Cmd+Shift+F10) and run from the top. This clears stale objects left behind by earlier runs, which is a surprisingly common cause. It also throws away everything in memory, so read <a href="#console-stuck">The console is stuck</a> first if you have unsaved results.</li>
@@ -753,8 +753,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 <tr class="even">
 <td><code>Error: object 'my_list' not found</code></td>
-<td><code>!!</code> missing in <code>filter()</code> on a lazy connection</td>
-<td>Write <code>filter(year %in% !!my_list)</code> - see <a href="./dst-pitfalls.html#bang-bang">pitfall 8</a></td>
+<td><code>my_list</code> was never created in this session (not run, or misspelt)</td>
+<td>Run the line that creates it; check the name with <code>ls()</code>. <code>!!</code> does not fix this - see <a href="./dst-pitfalls.html#bang-bang">pitfall 8</a> for what <code>!!</code> is for</td>
 </tr>
 <tr class="odd">
 <td><code>Error: could not find function "read_register"</code></td>
@@ -772,14 +772,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>Switch to <code>%&gt;%</code> - see <a href="./function-guide.html#the-pipe">the pipe</a></td>
 </tr>
 <tr class="even">
-<td><code>Error: Can't convert ... to ...</code></td>
-<td>Join on columns of different type (e.g.&nbsp;numeric vs.&nbsp;character)</td>
-<td>Use <code>mutate(pnr = as.character(pnr))</code> to match types</td>
+<td><code>Can't join ... due to incompatible types</code></td>
+<td>Join on columns of different type (e.g.&nbsp;numeric vs.&nbsp;character) on data in R (dplyr). A lazy Arrow/DuckDB join may instead give the engine’s own type error</td>
+<td>Use <code>mutate(pnr = as.character(pnr))</code> on both sides to match types</td>
 </tr>
 <tr class="odd">
 <td><code>object of type 'closure' is not subsettable</code></td>
-<td>A variable name overwrites a function (e.g.&nbsp;<code>data &lt;- ...</code>)</td>
-<td>Use a unique variable name - avoid <code>data</code>, <code>df</code>, <code>c</code> as object names</td>
+<td>The object you meant was never created (or is misspelt), so R found the built-in <em>function</em> of that name (e.g.&nbsp;<code>data</code>, <code>df</code>, <code>c</code>)</td>
+<td>Create the object first / check its name. Unique object names (not <code>data</code>, <code>df</code>, <code>c</code>) make this error easier to spot</td>
 </tr>
 </tbody>
 </table>
@@ -799,7 +799,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>This is the failure mode that does not announce itself. A filter that cannot match returns an empty result, R reports success, and the empty table looks like a finding: “no patients were exposed”. Two ways to produce it:</p>
 <ul>
 <li><strong>A pattern longer than the column:</strong> <code>atc2</code> in LMDB holds three characters, so <code>grepl("N02A", atc2)</code> compares four characters against three and matches nothing. See <a href="./medication.html#atc-columns">Medication (ATC)</a>.</li>
-<li><strong>A type mismatch in a join or filter:</strong> joining a character <code>pnr</code> to a numeric one matches no rows rather than failing, the same way a format table joined on the wrong type does (see <a href="./formatting-tables.html#education-level">Format tables</a>).</li>
+<li><strong>A type mismatch in a join or filter:</strong> a join on a character <code>pnr</code> and a numeric one usually <em>fails</em> (see the table above), but converting one side can still leave values that never meet - a code stored as a number loses its leading zero (<code>0001</code> becomes <code>1</code>), so it no longer matches the text <code>"0001"</code>, the same way a format table joined on the wrong type does (see <a href="./formatting-tables.html#education-level">Format tables</a>).</li>
 </ul>
 <p>So treat an empty result as a <strong>bug until proven otherwise</strong>. Count the rows before and after the filter, and check that the values you filter on actually occur:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># count, filter, collect</span></span>

@@ -687,7 +687,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(<span class="st">"synth_data/lpr_adm"</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
 <span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(tables<span class="sc">$</span>bef, <span class="st">"synth_data/bef/bef.parquet"</span>) <span class="co"># save as parquet</span></span>
 <span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="fu">write_parquet</span>(tables<span class="sc">$</span>lpr_adm, <span class="st">"synth_data/lpr_adm/lpr_adm.parquet"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>BEF is quarterly from 2008, and <code>year</code> is an integer, so 2015 holds several rows per person. With <code>n = 60</code> that year has 240 rows, enough for the sample below.</p>
+<p>BEF is quarterly from 2008, and <code>year</code> is an integer, so 2015 holds several rows per person. With <code>n = 60</code> that year has 240 rows but 60 people, enough for the sample below.</p>
 <div class="callout callout-style-simple callout-tip">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -711,18 +711,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>bef_data <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"synth_data/bef/"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 200 rows from one snapshot year, not 200 people:</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 30 people from one snapshot year:</span></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># quarterly BEF has several rows per person in 2015</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> bef_data <span class="sc">%&gt;%</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2015</span>) <span class="sc">%&gt;%</span> <span class="co"># take one snapshot year</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(pnr) <span class="sc">%&gt;%</span> <span class="co"># one row per person</span></span>
 <span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span> <span class="co"># HERE data is fetched into R</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">200</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_sample</span>(<span class="at">n =</span> <span class="dv">30</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(pnr)</span>
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="fu">length</span>(cohort_pnrs) <span class="co"># 200 rows; distinct pnr's can be fewer</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="fu">length</span>(cohort_pnrs) <span class="co"># 30 distinct pnr's</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p><code>slice_sample(n = 200)</code> draws rows. Because BEF is quarterly, the same <code>pnr</code> can appear more than once, so this is not a list of 200 people.</p>
+<p><code>slice_sample(n = 30)</code> draws rows. Because BEF is quarterly, the same <code>pnr</code> can appear more than once, so <code>distinct(pnr)</code> comes first - that way you sample 30 people, not 30 rows.</p>
 <p>In a real project, <code>cohort_pnrs</code> is a vector you built in a previous script and reload with <code>readRDS("path/to/full_cohort.rds") %&gt;% pull(pnr)</code>.</p>
 <p>The signs in <code>filter()</code>: <code>,</code>/<code>&amp;</code> = AND, <code>\|</code> = OR, <code>!</code> = NOT, plus <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>%in%</code>. Examples and the parentheses pitfall are in <a href="./function-guide.html#filter-conditions">Combining conditions in <code>filter()</code></a>.</p>
 <details>
@@ -780,7 +780,7 @@ Recode BEF variables - what do koen, civst and reg mean?
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>lpr_adm <span class="ot">&lt;-</span> <span class="fu">open_dataset</span>(<span class="st">"synth_data/lpr_adm/"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract: filter BEFORE collect - otherwise the session will crash</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract: subset to the cohort BEFORE collect - otherwise the session will crash</span></span>
 <span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>contacts <span class="ot">&lt;-</span> lpr_adm <span class="sc">%&gt;%</span></span>
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># only our cohort</span></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, recnum, d_inddto) <span class="sc">%&gt;%</span> <span class="co"># only the columns we use</span></span>
@@ -792,7 +792,7 @@ Recode BEF variables - what do koen, civst and reg mean?
 <p><strong>What happened?</strong></p>
 <ul>
 <li><code>open_dataset()</code> opened a lazy connection - no data in R yet</li>
-<li><code>filter()</code> and <code>select()</code> sent instructions to Arrow/DuckDB - still no data in R</li>
+<li><code>semi_join()</code> and <code>select()</code> sent instructions to Arrow/DuckDB - still no data in R</li>
 <li><code>collect()</code> executed the query and fetched only the necessary rows into R</li>
 </ul>
 <p>See <a href="./extraction-step-by-step.html">Extracting data step by step</a> for a detailed explanation of lazy evaluation.</p>
@@ -835,7 +835,7 @@ Recode BEF variables - what do koen, civst and reg mean?
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>The <code>datasets/</code> folder is stored locally on the DST server only.</strong> Intermediate results are repatriated via output control - see <a href="./export.html">14 - Export and repatriation</a>.</p>
+<p><strong>The <code>datasets/</code> folder is stored locally on the DST server only.</strong> Intermediate results stay on DST; only aggregated results leave via output control - see <a href="./export.html">14 - Export and repatriation</a>.</p>
 </div>
 </div>
 </div>

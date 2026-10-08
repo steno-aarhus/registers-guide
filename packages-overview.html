@@ -677,7 +677,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td><strong><a href="./osdc.html">Open Source Diabetes Classifier (OSDC)</a></strong></td>
 <td>Classifies everyone in Denmark as T1D, T2D or no diabetes</td>
-<td>Define a diabetes population, type and onset date</td>
+<td>Define a diabetes population, type and inclusion date</td>
 <td><a href="https://doi.org/10.2147/CLEP.S407019">doi:10.2147/CLEP.S407019</a></td>
 </tr>
 <tr class="even">
@@ -719,31 +719,65 @@ What heaven can do - and when to use it
 <p><strong>Lexis-splitting</strong> - split follow-up time across multiple time axes when a covariate changes over time (age, calendar period, time since exposure).</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(heaven)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>df_split <span class="ot">&lt;-</span> <span class="fu">lexisTwo</span>(</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">indat      =</span> cohort,</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">invars     =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"inn"</span>, <span class="st">"out"</span>, <span class="st">"event"</span>),   <span class="co"># id, start date, end date, outcome</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">splitvars  =</span> <span class="fu">list</span>(<span class="at">age =</span> <span class="fu">c</span>(<span class="dv">40</span>, <span class="dv">50</span>, <span class="dv">60</span>, <span class="dv">70</span>),       <span class="co"># age boundaries</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>                    <span class="at">cal =</span> <span class="fu">c</span>(<span class="dv">2010</span>, <span class="dv">2015</span>, <span class="dv">2020</span>))      <span class="co"># calendar years</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: one data frame with MORE rows per person - one per time interval.</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># New columns are added for the current bands (age group, calendar period etc.).</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Ready for a Cox model with time-varying covariates.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Age bands: the split points are added to each person's birth date</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>df_split <span class="ot">&lt;-</span> <span class="fu">lexisSeq</span>(</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">indat       =</span> cohort,</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">invars      =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"inn"</span>, <span class="st">"out"</span>, <span class="st">"event"</span>),   <span class="co"># id, start date, end date, outcome (0/1) - in that order</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">varname     =</span> <span class="st">"birth_date"</span>,                       <span class="co"># date the split points are added to</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">splitvector =</span> <span class="fu">round</span>(<span class="fu">c</span>(<span class="dv">40</span>, <span class="dv">50</span>, <span class="dv">60</span>, <span class="dv">70</span>) <span class="sc">*</span> <span class="fl">365.25</span>),  <span class="co"># age boundaries, in days</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">format      =</span> <span class="st">"vector"</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">value       =</span> <span class="st">"age_band"</span>                          <span class="co"># 0 before age 40, then +1 at each boundary</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Calendar periods: fixed dates, nothing added (varname = NULL)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>df_split <span class="ot">&lt;-</span> <span class="fu">lexisSeq</span>(</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">indat       =</span> df_split,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">invars      =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"inn"</span>, <span class="st">"out"</span>, <span class="st">"event"</span>),</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">splitvector =</span> <span class="fu">as.Date</span>(<span class="fu">c</span>(<span class="st">"2010-01-01"</span>, <span class="st">"2015-01-01"</span>, <span class="st">"2020-01-01"</span>)),</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">format      =</span> <span class="st">"vector"</span>,</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">value       =</span> <span class="st">"period"</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: a data.table with MORE rows per person - one per time interval.</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="co"># The new columns (age_band, period) count how many split points have passed.</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Ready for a Cox model with time-varying covariates. To split on event dates</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co"># (e.g. comorbidity onset) instead, use lexisTwo().</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Drug exposure from LMDB</strong> - calculate exposure periods from prescription data (e.g.&nbsp;“was the person on metformin at index date?”).</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>exp_table <span class="ot">&lt;-</span> <span class="fu">medicinMacro</span>(</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">indat =</span> lmdb_data, <span class="at">id =</span> <span class="st">"pnr"</span>, <span class="at">atc =</span> <span class="st">"atc"</span>, <span class="at">eksd =</span> <span class="st">"eksd"</span>,</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">ddds =</span> <span class="st">"ddds"</span>, <span class="at">maxdepot =</span> <span class="dv">3</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: one row per exposure period per person with start and end date</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># for the period. Use subsequent joins to determine exposure at index date.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># One list per drug: the ATC codes, and per pack strength (value) the assumed</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># minimum, maximum and default daily dose - the numbers here are illustrative.</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>metformin <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">atc      =</span> <span class="st">"A10BA02"</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">maxdepot =</span> <span class="dv">4000</span>,                                <span class="co"># max total dose a person can stockpile</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">period   =</span> <span class="fu">as.Date</span>(<span class="fu">c</span>(<span class="st">"1995-01-01"</span>, <span class="st">"2024-12-31"</span>)),</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">prescriptionwindow =</span> <span class="dv">2</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">doses    =</span> <span class="fu">list</span>(<span class="at">value =</span> <span class="fu">c</span>(<span class="dv">500</span>, <span class="dv">850</span>, <span class="dv">1000</span>),     <span class="co"># strengths (strnum) in your data</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>                  <span class="at">min   =</span> <span class="fu">c</span>(<span class="dv">500</span>, <span class="dv">850</span>, <span class="dv">1000</span>),</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                  <span class="at">max   =</span> <span class="fu">c</span>(<span class="dv">3000</span>, <span class="dv">3000</span>, <span class="dv">3000</span>),</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>                  <span class="at">def   =</span> <span class="fu">c</span>(<span class="dv">1000</span>, <span class="dv">1700</span>, <span class="dv">2000</span>))</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>exp_table <span class="ot">&lt;-</span> <span class="fu">medicinMacro</span>(</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">drugs  =</span> <span class="fu">list</span>(<span class="at">metformin =</span> metformin),</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">drugdb =</span> lmdb_data,  <span class="co"># pnr, eksd, atc, strnum, packsize, apk</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">admdb  =</span> <span class="cn">NULL</span>        <span class="co"># or admissions from getAdmLimits() to pause exposure during stays</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: a list with one data.table per drug (exp_table$metformin): one row</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="co"># per exposure period per person, with firstday, lastday and the estimated</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="co"># daily dose. Use subsequent joins to determine exposure at index date.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Charlson comorbidity score</strong> from LPR diagnoses:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>charlson_data <span class="ot">&lt;-</span> <span class="fu">charlsonIndex</span>(<span class="at">indat =</span> lpr_diag_data, <span class="at">id =</span> <span class="st">"pnr"</span>,</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>                               <span class="at">code =</span> <span class="st">"c_diag"</span>, <span class="at">code_type =</span> <span class="st">"icd10"</span>)</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: one row per person with total Charlson score and binary indicators</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># per Charlson disease group. The function matches ICD-10 codes to categories itself.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>Risk-set matching</strong> - match cases to controls at index date:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>matched <span class="ot">&lt;-</span> <span class="fu">riskSetMatch</span>(<span class="at">ptid =</span> <span class="st">"pnr"</span>, <span class="at">event =</span> <span class="st">"event"</span>,</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>                        <span class="at">terms =</span> <span class="fu">c</span>(<span class="st">"koen"</span>, <span class="st">"birth_year"</span>), <span class="at">dat =</span> cohort, <span class="at">ratio =</span> <span class="dv">5</span>)</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: matched dataset with matchID linking cases and controls.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>charlson_data <span class="ot">&lt;-</span> <span class="fu">charlsonIndex</span>(<span class="at">data =</span> lpr_diag_data, <span class="at">ptid =</span> <span class="st">"pnr"</span>,</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>                               <span class="at">vars =</span> <span class="st">"c_diag"</span>,              <span class="co"># D-prefixed codes, as in LPR</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                               <span class="at">data.date =</span> <span class="st">"d_inddto"</span>,       <span class="co"># date of each diagnosis</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>                               <span class="at">charlson.date =</span> <span class="st">"index_date"</span>, <span class="co"># date the index is computed at</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>                               <span class="at">look.back =</span> <span class="dv">5</span>)                <span class="co"># years</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: a list of two data.tables - [[1]] the Charlson index per (pnr,</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># index_date), [[2]] binary indicators per Charlson disease group. People with</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># no Charlson diagnosis are missing from both: set them to 0 after joining.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Risk-set matching</strong> - match cases to controls at index date (<code>incidenceMatch()</code>; <code>exposureMatch()</code> when exposure defines the case):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>matched <span class="ot">&lt;-</span> <span class="fu">incidenceMatch</span>(<span class="at">ptid =</span> <span class="st">"pnr"</span>, <span class="at">event =</span> <span class="st">"event"</span>,    <span class="co"># event: 0/1</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>                          <span class="at">terms =</span> <span class="fu">c</span>(<span class="st">"koen"</span>, <span class="st">"birth_year"</span>),   <span class="co"># exact matching - character/factor</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>                          <span class="at">data =</span> cohort, <span class="at">n.controls =</span> <span class="dv">5</span>,</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                          <span class="at">case.index =</span> <span class="st">"event_date"</span>,         <span class="co"># NA for non-cases</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>                          <span class="at">end.followup =</span> <span class="st">"end_date"</span>)         <span class="co"># death, emigration, study end</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: data.table of cases and their selected controls, with case.id</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co"># linking each case to its controls.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Average income over the years before a date</strong> - what <a href="./socioeconomic-variables.html#faik-income">Socioeconomic variables</a> does by hand:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>income <span class="ot">&lt;-</span> <span class="fu">averageIncome</span>(</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data       =</span> cohort,                          <span class="co"># id + the date to look back from</span></span>
@@ -807,21 +841,22 @@ Most important functions and when to use them
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(EpiForsk)</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>lpr_flat <span class="ot">&lt;-</span> <span class="fu">flatten_date_intervals</span>(</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> lpr_contacts, <span class="at">id =</span> <span class="st">"pnr"</span>,</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">start_date =</span> <span class="st">"d_inddto"</span>, <span class="at">end_date =</span> <span class="st">"d_uddto"</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> lpr_contacts, <span class="at">id =</span> pnr,        <span class="co"># bare column names, no quotes</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">in_date =</span> d_inddto, <span class="at">out_date =</span> d_uddto</span>
 <span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: a data frame with merged start/end per person -</span></span>
 <span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="co"># overlapping periods are reduced to the total covered period.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong><code>charlson_score()</code> - Danish-calibrated Charlson comorbidity score</strong> from ICD-10 (incl.&nbsp;D-prefix). See the callout below for what it requires.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>charlson <span class="ot">&lt;-</span> <span class="fu">charlson_score</span>(<span class="at">data =</span> lpr_diag_data, <span class="at">id =</span> <span class="st">"pnr"</span>, <span class="at">icd_codes =</span> <span class="st">"c_diag"</span>)</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: one row per person with Charlson score.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>charlson <span class="ot">&lt;-</span> <span class="fu">charlson_score</span>(<span class="at">data =</span> lpr_diag_data, <span class="at">Person_ID =</span> pnr, <span class="at">diagnosis_variable =</span> c_diag)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Returns: one row per person with three Charlson variants</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># (CCI_Quan, CCI_Christiensen, CCI_Charlson_Deyo).</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-important">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>What does <code>charlson_score()</code> require?</strong> You must extract a lookback period from LPR yourself (typically 5 years before index date) and give the function <strong>all diagnoses</strong> in that window - A, B and G type. You do <strong>not</strong> need to filter on specific ICD codes in advance; the function matches the codes to Charlson categories itself. The D-prefix (<code>DG30</code> etc.) is handled by EpiForsk - it does not need to be stripped first.</p>
+<p><strong>What does <code>charlson_score()</code> require?</strong> You must extract a lookback period from LPR yourself (typically 5 years before index date) and give the function <strong>all diagnoses</strong> in that window - all diagnosis types. You do <strong>not</strong> need to filter on specific ICD codes in advance; the function matches the codes to Charlson categories itself. The D-prefix (<code>DG30</code> etc.) is handled by EpiForsk - it does not need to be stripped first.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: extract lookback and pass all diagnoses</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="co"># pnr and d_inddto are in lpr_adm - not lpr_diag</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -859,7 +894,7 @@ Most important functions and when to use them
 <span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, index_date, d_inddto, c_diag) <span class="sc">%&gt;%</span></span>
 <span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
 <span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>charlson <span class="ot">&lt;-</span> <span class="fu">charlson_score</span>(<span class="at">data =</span> lpr2_lookback, <span class="at">id =</span> <span class="st">"pnr"</span>, <span class="at">icd_codes =</span> <span class="st">"c_diag"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>charlson <span class="ot">&lt;-</span> <span class="fu">charlson_score</span>(<span class="at">data =</span> lpr2_lookback, <span class="at">Person_ID =</span> pnr, <span class="at">diagnosis_variable =</span> c_diag)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </div>
 </div>
@@ -869,7 +904,7 @@ Most important functions and when to use them
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong><code>id = "pnr"</code> alone is not enough if your cohort has repeated <code>pnr</code>.</strong> <code>lpr2_lookback</code> above is correctly windowed per <code>(pnr, index_date)</code>, but <code>charlson_score()</code> itself only groups by the single <code>id</code> column you give it - it has no way to know about <code>index_date</code>. For a comparison cohort matched <strong>with replacement</strong>, that means diagnoses from <em>all</em> of a person’s <code>index_date</code> windows get pooled into one Charlson score, silently reattached to every occurrence of their <code>pnr</code>. If this applies to you, build a single combined key first (e.g.&nbsp;<code>mutate(pnr_index = paste(pnr, index_date))</code>) and pass <code>id = "pnr_index"</code> instead, then split the two columns back apart from the result afterwards.</p>
+<p><strong><code>Person_ID = pnr</code> alone is not enough if your cohort has repeated <code>pnr</code>.</strong> <code>lpr2_lookback</code> above is correctly windowed per <code>(pnr, index_date)</code>, but <code>charlson_score()</code> itself only groups by the single <code>Person_ID</code> column you give it - it has no way to know about <code>index_date</code>. For a comparison cohort matched <strong>with replacement</strong>, that means diagnoses from <em>all</em> of a person’s <code>index_date</code> windows get pooled into one Charlson score, silently reattached to every occurrence of their <code>pnr</code>. If this applies to you, build a single combined key first (e.g.&nbsp;<code>mutate(pnr_index = paste(pnr, index_date))</code>) and pass <code>Person_ID = pnr_index</code> instead, then split the two columns back apart from the result afterwards.</p>
 </div>
 </div>
 </div>
@@ -904,7 +939,7 @@ Most important functions and when to use them
 <p><em>(CRAN; always available - <a href="https://cran.r-project.org/package=survival">cran.r-project.org/package=survival</a>)</em></p>
 <p>Provides <code>Surv(time, status)</code>, <code>coxph()</code> and <code>survfit()</code> - the fundamental building blocks on which all survival packages below are built. You rarely call <code>{survival}</code> directly for plots and tables, but <code>library(survival)</code> belongs at the top of your analysis scripts.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival)</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(time, event) <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi_score, <span class="at">data =</span> cohort)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(time, event) <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi, <span class="at">data =</span> cohort)</span>
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(cox) <span class="co"># HR, 95% CI, p-values - pass to Publish or gtsummary for formatted output</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="gtsummary---table-1-and-manuscript-tables" class="level3">
@@ -918,7 +953,7 @@ Example: Table 1
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gtsummary)</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>table1 <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(group, age, sex, nmi_score, occupation_cat) <span class="sc">%&gt;%</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(group, age, sex, nmi, occupation_cat) <span class="sc">%&gt;%</span></span>
 <span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_summary</span>(</span>
 <span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> group,                                                <span class="co"># stratify by exposure</span></span>
 <span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">statistic =</span> <span class="fu">list</span>(</span>
@@ -935,7 +970,7 @@ Example: Table 1
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Output control:</strong> Counts of 0–4 may not be repatriated. Manual rounding: <code>round(x / 5) * 5</code>. <a href="https://github.com/zheer-kejlberg/Z.gtsummary.addons"><code>Z.gtsummary.addons::round_5_gtsummary()</code></a> automates this - not on DST, import via data manager.</p>
+<p><strong>Output control:</strong> counts below DST’s threshold (fewer than 5) must not be exported, and a suppressed cell must not be recoverable from totals or other cells. Rounding alone does not achieve this - see <a href="./export.html">Export and repatriation</a> for the rules. <a href="https://github.com/zheer-kejlberg/Z.gtsummary.addons"><code>Z.gtsummary.addons::round_5_gtsummary()</code></a> shows counts of 0-4 as “&lt;5” and rounds the rest to the nearest 5 - not on DST, import via data manager.</p>
 </div>
 </div>
 </div>
@@ -950,7 +985,7 @@ Example: Table 1
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="fu">outline_table</span>(cohort, <span class="st">"group"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_rows</span>(<span class="st">"age"</span>, stat_meanSD) <span class="sc">%&gt;%</span> <span class="co"># continuous: mean (SD)</span></span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_rows</span>(<span class="st">"sex"</span>, stat_nPct) <span class="sc">%&gt;%</span> <span class="co"># categorical: n (%)</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_rows</span>(<span class="st">"nmi_score"</span>, stat_medianIQR) <span class="sc">%&gt;%</span> <span class="co"># continuous: median (IQR)</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">add_rows</span>(<span class="st">"nmi"</span>, stat_medianIQR) <span class="sc">%&gt;%</span> <span class="co"># continuous: median (IQR)</span></span>
 <span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">build_table</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="prodlim---kaplanmeier-and-aalenjohansen-cumulative-incidence" class="level3">
@@ -995,7 +1030,7 @@ Example: CSC model and absolute risk
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival)</span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Cause-Specific Cox:</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>csc_model <span class="ot">&lt;-</span> <span class="fu">CSC</span>(<span class="fu">Hist</span>(time, status) <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi_score, <span class="at">data =</span> cohort)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>csc_model <span class="ot">&lt;-</span> <span class="fu">CSC</span>(<span class="fu">Hist</span>(time, status) <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi, <span class="at">data =</span> cohort)</span>
 <span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(csc_model)</span>
 <span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Absolute risk at 1, 3 and 5 years for primary event:</span></span>
@@ -1011,22 +1046,22 @@ Example: CSC model and absolute risk
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Publish)</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival)</span>
 <span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>cox_model <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(time, event) <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi_score, <span class="at">data =</span> cohort)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>cox_model <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(time, event) <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi, <span class="at">data =</span> cohort)</span>
 <span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="fu">regressionTable</span>(cox_model) <span class="co"># HR, 95% CI, p-values</span></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plotConfidence</span>(<span class="fu">regressionTable</span>(cox_model)) <span class="co"># forest plot</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">regressionTable</span>(cox_model)) <span class="co"># forest plot (calls plotConfidence())</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="matchit---propensity-score-and-exact-matching" class="level3">
 <h3 class="anchored" data-anchor-id="matchit---propensity-score-and-exact-matching"><code>MatchIt</code> - propensity score and exact matching</h3>
 <p><em>(CRAN - <a href="https://cran.r-project.org/package=MatchIt">cran.r-project.org/package=MatchIt</a>)</em></p>
-<p>Matches exposed to unexposed on observed covariates. Supports nearest-neighbour, exact and optimal matching. <code>summary()</code> gives balance statistics (SMD), <code>match.data()</code> returns the matched dataset. Alternative to <code>heaven::riskSetMatch()</code> with better balance diagnostics.</p>
+<p>Matches exposed to unexposed on observed covariates. Supports nearest-neighbour, exact and optimal matching. <code>summary()</code> gives balance statistics (SMD), <code>match.data()</code> returns the matched dataset. Alternative to <code>heaven::incidenceMatch()</code> with better balance diagnostics.</p>
 <details>
 <summary>
 Example: 1:1 nearest-neighbour matching
 </summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(MatchIt)</span>
 <span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>m <span class="ot">&lt;-</span> <span class="fu">matchit</span>(exposed <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi_score,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>m <span class="ot">&lt;-</span> <span class="fu">matchit</span>(exposed <span class="sc">~</span> age <span class="sc">+</span> sex <span class="sc">+</span> nmi,</span>
 <span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">data   =</span> cohort,</span>
 <span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">method =</span> <span class="st">"nearest"</span>,   <span class="co"># nearest-neighbour matching</span></span>
 <span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>             <span class="at">ratio  =</span> <span class="dv">1</span>)           <span class="co"># 1:1</span></span>
@@ -1061,7 +1096,7 @@ Example: 1:1 nearest-neighbour matching
 <section id="kinship2---pedigrees-and-kinship-matrices" class="level3">
 <h3 class="anchored" data-anchor-id="kinship2---pedigrees-and-kinship-matrices"><code>kinship2</code> - pedigrees and kinship matrices</h3>
 <p><em>(CRAN - <a href="https://cran.r-project.org/web/packages/kinship2/index.html">cran.r-project.org/web/packages/kinship2</a>)</em></p>
-<p>Creates pedigree objects from parent–child relationships and computes kinship coefficients (probability of shared allele: 0.5 = parent/child, 0.25 = siblings). Useful for multi-generational family studies. By Terry Therneau (Mayo Clinic).</p>
+<p>Creates pedigree objects from parent–child relationships and computes kinship coefficients (probability that alleles drawn at random from the two people are identical by descent: 0.25 for parent/child and for full siblings). Useful for multi-generational family studies. By Terry Therneau (Mayo Clinic).</p>
 <details>
 <summary>
 Example: create pedigree and compute kinship
@@ -1072,8 +1107,8 @@ Example: create pedigree and compute kinship
 <span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># DST's koen variable (1 = male, 2 = female) matches kinship2's expectation directly</span></span>
 <span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>ped <span class="ot">&lt;-</span> <span class="fu">pedigree</span>(</span>
 <span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">id    =</span> family<span class="sc">$</span>pnr,</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">dadid =</span> family<span class="sc">$</span>pnr_father,   <span class="co"># 0 or NA if father unknown</span></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">momid =</span> family<span class="sc">$</span>pnr_mother,   <span class="co"># 0 or NA if mother unknown</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">dadid =</span> family<span class="sc">$</span>pnr_father,   <span class="co"># NA if father unknown</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">momid =</span> family<span class="sc">$</span>pnr_mother,   <span class="co"># NA if mother unknown</span></span>
 <span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">sex   =</span> family<span class="sc">$</span>koen           <span class="co"># 1 = male, 2 = female</span></span>
 <span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a></span>

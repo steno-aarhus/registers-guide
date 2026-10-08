@@ -670,7 +670,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(bef_data) <span class="co"># column names as a vector</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Those four work on data that is already in R. On a <strong>lazy</strong> object - one you have opened but not yet <code>collect()</code>ed, called <code>bef</code> in the examples below - checking the column names is fiddlier than it looks, and both of the obvious ways can mislead you:</p>
 <ul>
-<li><code>names()</code> on a lazy object returns the <em>connection’s</em> parts (<code>src</code>, <code>lazy_query</code>), not the table’s columns.</li>
+<li><code>names()</code> on a lazy DuckDB connection made with <code>to_duckdb()</code> returns the <em>connection’s</em> parts (<code>src</code>, <code>lazy_query</code>), not the table’s columns.</li>
 <li><code>colnames()</code> works on the DuckDB objects <code>read_register()</code> gives you, but on a lazy <strong>Arrow</strong> query that has been through <code>rename_with()</code> it can return an <strong>empty vector</strong> without any error - so columns that exist look missing. (Seen on arrow 23.0.1 outside DST; not yet confirmed on the server.)</li>
 </ul>
 <p>The reliable version fetches the structure with zero rows:</p>
@@ -694,10 +694,11 @@ Example with simple data
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(bef_data) <span class="co"># same information, but more verbose output</span></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(bef_data) <span class="co"># object type - is data actually in R, or is it still a connection?</span></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(bef_data<span class="sc">$</span>alder) <span class="co"># type for one column: "numeric", "character", "Date" etc.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>class(bef_data)</code> tells you whether you have real data (<code>"data.frame"</code>/<code>"tbl_df"</code>) or still just an unsent query. You can see three different return values:</p>
+<p><code>class(bef_data)</code> tells you whether you have real data (<code>"data.frame"</code>/<code>"tbl_df"</code>) or still just an unsent query. You can see four different kinds of return value:</p>
 <ul>
-<li><code>"data.frame"</code> / <code>"tbl_df"</code> - data is in R. You can use all functions.</li>
-<li><code>"tbl_duckdb_connection"</code> / <code>"Table"</code> - lazy Arrow/DuckDB query. Missing <code>collect()</code>.</li>
+<li><code>"data.frame"</code> / <code>"tbl_df"</code> <em>without</em> <code>"prudent_duckplyr_df"</code> - data is in R. You can use all functions.</li>
+<li><code>"prudent_duckplyr_df"</code> (followed by <code>"duckplyr_df" "tbl_df" "tbl" "data.frame"</code>) - a lazy DuckDB table from <code>read_register()</code>. It says <code>"data.frame"</code>, but nothing is fetched yet. Missing <code>collect()</code>.</li>
+<li><code>"FileSystemDataset"</code> (from <code>open_dataset()</code>) or <code>"tbl_duckdb_connection"</code> (from <code>to_duckdb()</code>) - a lazy Arrow/DuckDB connection. Missing <code>collect()</code>.</li>
 <li><code>"arrow_dplyr_query"</code> - an Arrow query with one or more piped steps (e.g. <code>filter()</code> or <code>select()</code>), but not yet executed. Missing <code>collect()</code>.</li>
 </ul>
 <div class="callout callout-style-simple callout-tip">
@@ -706,7 +707,7 @@ Example with simple data
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong><code>class()</code> can help you debug</strong> Does the object look like data but behave strangely, or does your code fail with a mysterious message? Run <code>class(your_object)</code> - if it is not <code>"data.frame"</code>, you are probably missing a <code>collect()</code>. The full table of what <code>class()</code> can return - and why - is in <a href="./extraction-step-by-step.html#check-do-you-have-data-or-just-a-connection">Phase 5 - Extracting data step by step</a>.</p>
+<p><strong><code>class()</code> can help you debug</strong> Does the object look like data but behave strangely, or does your code fail with a mysterious message? Run <code>class(your_object)</code> - if it is not <code>"data.frame"</code>, or it still includes <code>"prudent_duckplyr_df"</code>, you are probably missing a <code>collect()</code>. The full table of what <code>class()</code> can return - and why - is in <a href="./extraction-step-by-step.html#check-do-you-have-data-or-just-a-connection">Phase 5 - Extracting data step by step</a>.</p>
 </div>
 </div>
 </div>
@@ -725,21 +726,19 @@ Example with simple data
 <div class="callout-body-container">
 <p><strong>Two things must be in place before the commands in the rest of this section work</strong></p>
 <p><strong>1. Give your extraction a name.</strong> If you just write <code>open_dataset(...)</code> (or <code>read_register(...)</code> in DARTER) without storing it in an object, R only prints a quick preview and throws the result away - there is nothing to inspect afterwards. Assign it a name with <code>&lt;-</code> (see <a href="./r-intro.html#what-is-an-object">Phase 2 - What is an object?</a>) so you can reuse it.</p>
-<p><strong>2. Pull the data into R with <code>collect()</code> first.</strong> Every command that uses <code>$</code> (e.g.&nbsp;<code>table(bef$koen)</code>, <code>unique()</code>, <code>summary()</code>, <code>min()/max()/median()</code>, <code>hist()</code>, <code>colSums(is.na())</code>) needs real data in R - <code>$</code> cannot extract a column from a lazy Arrow/DuckDB connection. Check with <code>class(bef)</code>: if it does not say <code>"data.frame"</code>/<code>"tbl_df"</code>, you are missing a <code>collect()</code>.</p>
-<p>You do <strong>not</strong> rewrite <code>read_register()</code>/<code>open_dataset()</code> to pull the data in - keep working with the object you already made. Reuse the name and store the result, usually under the same name, so <code>bef</code> is overwritten and is now real data. You can pull everything in as-is, or reduce it with <code>filter()</code>/<code>select()</code> first:</p>
+<p><strong>2. Pull the data into R with <code>collect()</code> first.</strong> Every command that uses <code>$</code> (e.g.&nbsp;<code>table(bef$koen)</code>, <code>unique()</code>, <code>summary()</code>, <code>min()/max()/median()</code>, <code>hist()</code>, <code>colSums(is.na())</code>) needs real data in R - <code>$</code> cannot extract a column from a lazy Arrow/DuckDB connection. Check with <code>class(bef)</code>: if it does not say <code>"data.frame"</code>/<code>"tbl_df"</code>, or it still says <code>"prudent_duckplyr_df"</code>, you are missing a <code>collect()</code>.</p>
+<p>You do <strong>not</strong> rewrite <code>read_register()</code>/<code>open_dataset()</code> to pull the data in - keep working with the object you already made. Reuse the name and store the result, usually under the same name, so <code>bef</code> is overwritten and is now real data. On a real register, always reduce it with <code>filter()</code>/<code>select()</code> first:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register()</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># %&gt;%, filter(), select(), collect()</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"bef"</span>) <span class="co"># lazy connection - just a name so far</span></span>
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span> <span class="fu">collect</span>() <span class="co"># pull EVERYTHING in as-is - overwrites bef</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="co"># OR reduce first (recommended on large registers):</span></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2015</span>) <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, koen, alder) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="co"># now bef$koen, table(bef$koen), summary(bef) etc. all work</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co"># reduce first, then fetch - overwrites bef (never collect() a whole register):</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>bef <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2015</span>) <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, koen, alder) <span class="sc">%&gt;%</span> <span class="fu">collect</span>()</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="co"># now bef$koen, table(bef$koen), summary(bef) etc. all work</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>(If you want to keep the lazy connection, give the fetched data a new name instead: <code>bef_2015 &lt;- bef %&gt;% filter(year == 2015) %&gt;% collect()</code>.)</p>
-<p><code>colnames()</code>, <code>glimpse()</code>, <code>head()</code> and dplyr verbs (<code>count()</code>, <code>filter()</code>, <code>select()</code>) do work fine on the lazy connection, though. So peek lazily, <code>filter()</code>/<code>select()</code> it down, and <code>collect()</code> a small slice before you dig into the values.</p>
+<p><code>glimpse()</code>, <code>head()</code> and dplyr verbs (<code>count()</code>, <code>filter()</code>, <code>select()</code>) do work fine on the lazy connection, though (for column names, use the zero-row trick above). So peek lazily, <code>filter()</code>/<code>select()</code> it down, and <code>collect()</code> a small slice before you dig into the values.</p>
 </div>
 </div>
 </div>
@@ -821,7 +820,7 @@ Example with simple data
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong><code>colSums(is.na())</code> counts only <em>true</em> <code>NA</code>.</strong> In register data, “missing” is often stored as an <strong>empty or blank string</strong> (whitespace) or a sentinel code - not as <code>NA</code>. A column can therefore show <code>0</code> NAs and <em>still</em> be full of empty values: e.g.&nbsp;a fixed-width key field filled with blanks (a 13-character field that <em>looks</em> empty but is 13 spaces, not <code>NA</code>). So also check for blank values - e.g.&nbsp;<code>sum(trimws(bef_data$dw_ek_forloeb) == "")</code> - and look at <code>nchar()</code>/<code>unique()</code> on a slice. This matters most for <strong>join keys</strong>: a blank-but-not-<code>NA</code> key causes silent join errors (rows that look filled but don’t match).</p>
+<p><strong><code>colSums(is.na())</code> counts only <em>true</em> <code>NA</code>.</strong> In register data, “missing” is often stored as an <strong>empty or blank string</strong> (whitespace) or a sentinel code - not as <code>NA</code>. A column can therefore show <code>0</code> NAs and <em>still</em> be full of empty values: e.g.&nbsp;a fixed-width key field filled with blanks (a 13-character field that <em>looks</em> empty but is 13 spaces, not <code>NA</code>). So also check for blank values - e.g.&nbsp;<code>sum(trimws(bef_data$pnr) == "", na.rm = TRUE)</code> - and look at <code>nchar()</code>/<code>unique()</code> on a slice. This matters most for <strong>join keys</strong>: a blank-but-not-<code>NA</code> key causes silent join errors (rows that look filled but don’t match).</p>
 </div>
 </div>
 </div>

@@ -608,7 +608,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses" id="toc-the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses" class="nav-link" data-scroll-target="#the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses">6. The “a” in <code>lpr_a_diagnose</code> does not mean A-type diagnoses</a></li>
   <li><a href="#categorical-codes-are-not-consistent-across-registers" id="toc-categorical-codes-are-not-consistent-across-registers" class="nav-link" data-scroll-target="#categorical-codes-are-not-consistent-across-registers">7. Categorical codes are not consistent across registers</a></li>
   <li><a href="#bang-bang" id="toc-bang-bang" class="nav-link" data-scroll-target="#bang-bang">8. <code>!!</code> (bang-bang) forgotten in lazy evaluation</a></li>
-  <li><a href="#nmi_count-nmi_score" id="toc-nmi_count-nmi_score" class="nav-link" data-scroll-target="#nmi_count-nmi_score">9. <code>nmi_count</code> ≠ <code>nmi_score</code></a></li>
+  <li><a href="#nmi_count-nmi" id="toc-nmi_count-nmi" class="nav-link" data-scroll-target="#nmi_count-nmi">9. <code>nmi_count</code> ≠ <code>nmi</code></a></li>
   <li><a href="#immortal-time-bias" id="toc-immortal-time-bias" class="nav-link" data-scroll-target="#immortal-time-bias">10. Immortal time bias - exposure defined using the future</a></li>
   <li><a href="#year-is-not-a-date" id="toc-year-is-not-a-date" class="nav-link" data-scroll-target="#year-is-not-a-date">11. <code>year</code> is a folder name, not a date</a></li>
   <li><a href="#dsts-own-published-totals-do-not-agree-with-each-other" id="toc-dsts-own-published-totals-do-not-agree-with-each-other" class="nav-link" data-scroll-target="#dsts-own-published-totals-do-not-agree-with-each-other">12. DST’s own published totals do not agree with each other</a></li>
@@ -834,16 +834,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2020</span>) <span class="co"># includes everyone in the 2020 snapshot</span></span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># - including those who die during 2020</span></span>
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT: combine with dodsaars to exclude deaths</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dodsaars"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("path/to/dodsaars/")</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, d_dodsdto) <span class="sc">%&gt;%</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>bef_alive <span class="ot">&lt;-</span> bef_data <span class="sc">%&gt;%</span></span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(deaths, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is.na</span>(d_dodsdto) <span class="sc">|</span> d_dodsdto <span class="sc">&gt;</span> index_date) <span class="co"># alive at index date</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT: combine with dod (not dodsaars - see pitfall 1) to exclude deaths</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>index_date <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2020-06-30"</span>) <span class="co"># your index date</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("path/to/dod/")</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, doddato) <span class="sc">%&gt;%</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>bef_alive <span class="ot">&lt;-</span> bef_2020 <span class="sc">%&gt;%</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>() <span class="sc">%&gt;%</span> <span class="co"># one row per person (BEF is quarterly)</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(deaths, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is.na</span>(doddato) <span class="sc">|</span> doddato <span class="sc">&gt;</span> index_date) <span class="co"># alive at index date</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses" class="level2">
 <h2 class="anchored" data-anchor-id="the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses">6. The “a” in <code>lpr_a_diagnose</code> does not mean A-type diagnoses</h2>
@@ -865,28 +871,28 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="bang-bang" class="level2">
 <h2 class="anchored" data-anchor-id="bang-bang">8. <code>!!</code> (bang-bang) forgotten in lazy evaluation</h2>
-<p>When filtering with a local R vector inside a DuckDB query, you must use <code>!!</code>. Without it, DuckDB looks for a column with that name - and fails silently or with a confusing message.</p>
+<p>When filtering with a local R vector inside a lazy query, dplyr first looks for a <em>column</em> with that name; only if there is none does it copy in the values of your R object. Usually that just works - the trap is a <strong>name clash</strong>: if your local object has the same name as a column, the column wins and you get a wrong result or a confusing message.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: a year list against bef (the principle applies to any local R vector)</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>my_years <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2018</span>, <span class="dv">2019</span>, <span class="dv">2020</span>) <span class="co"># local R vector (years, here as an example)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>year <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2018</span>, <span class="dv">2019</span>, <span class="dv">2020</span>) <span class="co"># local R vector - unluckily named like the column</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG - DuckDB looks for a column called "my_years"</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> my_years) <span class="co"># error or wrong result</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG - "year" is taken to be the column, so this compares the column with itself</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> year) <span class="co"># keeps every row, or a confusing error</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - !! tells DuckDB: "use the local R vector"</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>my_years)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - !! says: "use the local R vector"</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>year)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><code>!!</code> is necessary for <strong>all</strong> local R objects used inside <code>filter()</code>, <code>mutate()</code> etc. on lazy DuckDB connections - typically code or year lists (<code>%in% !!codes</code>, <code>&gt;= !!min_date</code>). If instead you filter on <strong>pnr</strong> against the whole cohort, use <code>semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)</code>: it takes a local table directly and needs no <code>!!</code>. See <a href="./function-guide.html#bang-bang-two-exclamation-marks">Functions guide</a> for full explanation.</p>
+<p><code>!!</code> is a recommended safeguard for <strong>all</strong> local R objects used inside <code>filter()</code>, <code>mutate()</code> etc. on lazy Arrow/DuckDB connections - typically code or year lists (<code>%in% !!codes</code>, <code>&gt;= !!min_date</code>). If instead you filter on <strong>pnr</strong> against the whole cohort, use <code>semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)</code>: it takes a local table directly and needs no <code>!!</code>. See <a href="./function-guide.html#bang-bang-two-exclamation-marks">Functions guide</a> for full explanation.</p>
 </div>
 </div>
 </div>
 </section>
-<section id="nmi_count-nmi_score" class="level2">
-<h2 class="anchored" data-anchor-id="nmi_count-nmi_score">9. <code>nmi_count</code> ≠ <code>nmi_score</code></h2>
+<section id="nmi_count-nmi" class="level2">
+<h2 class="anchored" data-anchor-id="nmi_count-nmi">9. <code>nmi_count</code> ≠ <code>nmi</code></h2>
 <p>These two variables are <strong>not</strong> the same and are not interchangeable:</p>
 <table class="caption-top table">
 <thead>
@@ -898,7 +904,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>nmi_score</code></td>
+<td><code>nmi</code></td>
 <td><strong>Weighted</strong> comorbidity score - Nordic Multimorbidity Index (Kristensen et al., <em>Clin Epidemiol</em> 2022). 50 predictors with individual weights; lung cancer counts e.g.&nbsp;19 points, type 2 diabetes counts 2.</td>
 <td>See <a href="./nmi.html">NMI page</a></td>
 </tr>
@@ -909,7 +915,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>If you use <code>nmi_count</code> in your regression model instead of <code>nmi_score</code>, you are adjusting for something different than you think - and you get no error message.</p>
+<p>If you use <code>nmi_count</code> in your regression model instead of <code>nmi</code>, you are adjusting for something different than you think - and you get no error message.</p>
 </section>
 <section id="immortal-time-bias" class="level2">
 <h2 class="anchored" data-anchor-id="immortal-time-bias">10. Immortal time bias - exposure defined using the future</h2>
@@ -934,25 +940,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tbody>
 <tr class="odd">
 <td>Surgery (immortal time counted as surgery time)</td>
-<td>30</td>
+<td>24</td>
 <td>12,000</td>
-<td>2.5</td>
+<td>2.0</td>
 </tr>
 <tr class="even">
-<td>Surgery (time correctly aligned)</td>
-<td>30</td>
-<td>8,000</td>
-<td>3.8</td>
+<td>No surgery (immortal time left out)</td>
+<td>51</td>
+<td>13,000</td>
+<td>3.9</td>
 </tr>
 <tr class="odd">
-<td>No surgery</td>
-<td>50</td>
-<td>13,000</td>
-<td>3.8</td>
+<td>Surgery (time correctly aligned)</td>
+<td>24</td>
+<td>8,000</td>
+<td>3.0</td>
+</tr>
+<tr class="even">
+<td>No surgery (immortal time moved here)</td>
+<td>51</td>
+<td>17,000</td>
+<td>3.0</td>
 </tr>
 </tbody>
 </table>
-<p>The true rates are identical (3.8) - surgery does nothing. But counting the 4,000 immortal person-years as surgery time drops its rate to 2.5 and makes surgery look <strong>34% protective</strong>. The “effect” is an artefact of the misaligned time zero, not of surgery.</p>
+<p>Correctly aligned, the 4,000 pre-surgery person-years count as <em>no-surgery</em> time, and the rates are identical (3.0) - surgery does nothing. But counting those 4,000 immortal person-years as surgery time drops its rate to 2.0, leaves the no-surgery rate at 3.9, and makes surgery look <strong>49% protective</strong> (rate ratio 0.51). The “effect” is an artefact of the misaligned time zero, not of surgery.</p>
 <p><strong>The fix: align time zero.</strong> Eligibility, exposure assignment and start of follow-up must coincide.</p>
 <ul>
 <li><strong>Risk-set (incidence-density) matching:</strong> start each person’s follow-up at the moment they become exposed, and assign each comparator the <em>same</em> index date (the core rule in <a href="./comparison-cohort.html">Comparison cohort</a>).</li>
