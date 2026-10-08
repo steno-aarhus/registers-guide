@@ -27,7 +27,7 @@ Statistics Denmark (DST) for research purposes. The guide covers many
 aspects of working with the registers, drawing from the experience of
 working within the Steno Diabetes Center Aarhus.
 
-Check out the [website](https://steno-aarhus.github.io/registers-guide/)
+Check out the [website](https://registerguide.org/)
 for the guide!
 
 > [!TIP]
