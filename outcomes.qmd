@@ -29,23 +29,24 @@ If a competing event (e.g. death) **precludes** your outcome rather than just en
 them from SAS yourself.
 
 ```r
-library(fastreg) # read_register()
-library(dplyr) # %>%, semi_join(), collect()
-library(tibble) # tibble()
+library(fastreg) # read_register(), used inside get_lpr_diagnoses()
+library(dplyr) # %>%, inner_join(), filter(), slice()
 
-# unique() removes duplicates, so you get one pnr per person - a clean list of the cohort's people
-cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr) # your cohort from Phase 10
+cohort <- readRDS("path/to/full_cohort.rds") # your cohort from Phase 10: pnr + index_date
+CODES <- c("F00", "F01", "F02", "F03", "G30") # dementia - change to your outcome
 
 # Example: first dementia diagnosis after index (outcome)
-outcome <- read_register("lpr_diag") %>% # without fastreg: open_dataset("path/to/lpr_diag/")
-  rename_with(tolower) %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # ONLY your cohort
-  # ... get the contact date from lpr_adm and filter on diagnosis codes - see Phase 9 ...
-  collect() %>%
+# lpr_diag has no pnr - pnr and contact date live in lpr_adm (join key recnum).
+# get_lpr_diagnoses() from Extract from LPR does that join for LPR2 and LPR3
+# and keeps ONLY your cohort; define it first (see Phase 9).
+outcome <- get_lpr_diagnoses(unique(cohort$pnr), icd_codes = CODES) %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact > index_date) %>% # AFTER index only = outcome
   group_by(pnr) %>%
-  arrange(event_date) %>%
+  arrange(date_contact) %>%
   slice(1) %>%
-  ungroup() # keep only first event per person
+  ungroup() %>% # keep only first event per person
+  select(pnr, event_date = date_contact)
 
 saveRDS(outcome, "path/to/extract_outcome.rds")
 ```

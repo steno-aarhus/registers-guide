@@ -144,6 +144,7 @@ If you cannot install fastreg, you can convert a single register yourself. This 
 ```r
 library(haven)    # read SAS file
 library(arrow)    # write Parquet
+library(dplyr)    # %>%, rename_with()
 
 sas_file  <- "E:/rawdata/[projectnumber]/rawdata/my_register.sas7bdat"
 parq_path <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/my_register/"
@@ -161,6 +162,11 @@ write_parquet(df, file.path(parq_path, "my_register.parquet"))
 # 4. Verify - open it lazily like any other register
 open_dataset(parq_path) %>% glimpse()
 ```
+
+This writes one flat file with no `year=` subfolders, so `read_register()`
+cannot see it (see [below](#when-read-register-fails)). Open it with
+`open_dataset(parq_path)` as in step 4, or with fastreg's
+`read_parquet_dataset(parq_path)`.
 
 ::: {.callout-tip}
 **Read only what you need.** Even before converting you can save RAM by limiting what is read in:
@@ -202,7 +208,8 @@ In that case you use one of fastreg's two other reading functions:
   | `read_parquet_dataset("path/to/folder")`    | the **full path** to the folder | a folder of parquet files        |
   | `read_parquet_file("path/to/file.parquet")` | the **full path** to the file   | a single parquet file            |
 
-All three hand you a **DuckDB table**, so the rest of your code is exactly the
+All three hand you a **DuckDB table** (a lazy *duckplyr* data frame - its
+`class()` starts with `"prudent_duckplyr_df"`), so the rest of your code is exactly the
 same whichever one you use.
 
 ::: {.callout-important}
@@ -304,9 +311,10 @@ no year subfolders, use `'.../faik/*.parquet'` and leave out
 
 - **Nothing is computed in R behind your back.** `read_register()` hands you a
   `duckplyr` table. duckplyr uses the same DuckDB engine, but when it cannot
-  translate a step it quietly computes that step in R's memory instead, with
-  no warning. For a whole-population step that means the data you meant to
-  keep in the database ends up in RAM. A `tbl()` on a plain DBI connection
+  translate a step it falls back to computing that step in R's memory instead,
+  with no warning. fastreg opens registers as "thrifty", so for a large table
+  that fallback stops with a materialization error rather than running in the
+  database; for a smaller one the data quietly ends up in RAM. A `tbl()` on a plain DBI connection
   uses `dbplyr`, which only ever sends SQL to DuckDB, and `show_query()`
   shows you exactly what it sent.
 - **Both registers on one connection.** A join runs inside the database only

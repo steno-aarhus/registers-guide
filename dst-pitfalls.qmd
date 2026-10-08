@@ -166,16 +166,22 @@ bef_2020 <- bef %>%
   filter(year == 2020) # includes everyone in the 2020 snapshot
 # - including those who die during 2020
 
-# CORRECT: combine with dodsaars to exclude deaths
-deaths <- read_register("dodsaars") %>% # without fastreg: open_dataset("path/to/dodsaars/")
+# CORRECT: combine with dod (not dodsaars - see pitfall 1) to exclude deaths
+index_date <- as.Date("2020-06-30") # your index date
+
+deaths <- read_register("dod") %>% # without fastreg: open_dataset("path/to/dod/")
   rename_with(tolower) %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>%
-  select(pnr, d_dodsdto) %>%
+  select(pnr, doddato) %>%
   collect()
 
-bef_alive <- bef_data %>%
+bef_alive <- bef_2020 %>%
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>%
+  select(pnr) %>%
+  distinct() %>% # one row per person (BEF is quarterly)
+  collect() %>%
   left_join(deaths, by = "pnr") %>%
-  filter(is.na(d_dodsdto) | d_dodsdto > index_date) # alive at index date
+  filter(is.na(doddato) | doddato > index_date) # alive at index date
 ```
 
 ## 6. The "a" in `lpr_a_diagnose` does not mean A-type diagnoses
@@ -217,40 +223,42 @@ class(register_b$koen)
 
 ## 8. `!!` (bang-bang) forgotten in lazy evaluation {#bang-bang}
 
-When filtering with a local R vector inside a DuckDB query, you must use `!!`.
-Without it, DuckDB looks for a column with that name - and fails silently or
-with a confusing message.
+When filtering with a local R vector inside a lazy query, dplyr first looks for
+a *column* with that name; only if there is none does it copy in the values of
+your R object. Usually that just works - the trap is a **name clash**: if your
+local object has the same name as a column, the column wins and you get a wrong
+result or a confusing message.
 
 ```r
 # Example: a year list against bef (the principle applies to any local R vector)
-my_years <- c(2018, 2019, 2020) # local R vector (years, here as an example)
+year <- c(2018, 2019, 2020) # local R vector - unluckily named like the column
 
-# WRONG - DuckDB looks for a column called "my_years"
-bef %>% filter(year %in% my_years) # error or wrong result
+# WRONG - "year" is taken to be the column, so this compares the column with itself
+bef %>% filter(year %in% year) # keeps every row, or a confusing error
 
-# CORRECT - !! tells DuckDB: "use the local R vector"
-bef %>% filter(year %in% !!my_years)
+# CORRECT - !! says: "use the local R vector"
+bef %>% filter(year %in% !!year)
 ```
 
 ::: {.callout-note}
-`!!` is necessary for **all** local R objects used inside `filter()`, `mutate()`
-etc. on lazy DuckDB connections - typically code or year lists (`%in% !!codes`,
+`!!` is a recommended safeguard for **all** local R objects used inside `filter()`, `mutate()`
+etc. on lazy Arrow/DuckDB connections - typically code or year lists (`%in% !!codes`,
 `>= !!min_date`). If instead you filter on **pnr** against the whole cohort, use
 `semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)`: it takes a local table
 directly and needs no `!!`. See [Functions
 guide](function-guide.qmd#bang-bang-two-exclamation-marks) for full explanation.
 :::
 
-## 9. `nmi_count` ≠ `nmi_score`
+## 9. `nmi_count` ≠ `nmi`
 
 These two variables are **not** the same and are not interchangeable:
 
   | Variable    | What it is                                                                                                                                                                                                   | Source                  |
   | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
-  | `nmi_score` | **Weighted** comorbidity score - Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 predictors with individual weights; lung cancer counts e.g. 19 points, type 2 diabetes counts 2. | See [NMI page](nmi.qmd) |
+  | `nmi` | **Weighted** comorbidity score - Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 predictors with individual weights; lung cancer counts e.g. 19 points, type 2 diabetes counts 2. | See [NMI page](nmi.qmd) |
   | `nmi_count` | Simple **count** of the number of chronic conditions (out of 33 possible) a person has been diagnosed with                                                                                                   | Calculated separately   |
 
-If you use `nmi_count` in your regression model instead of `nmi_score`, you are
+If you use `nmi_count` in your regression model instead of `nmi`, you are
 adjusting for something different than you think - and you get no error message.
 
 ## 10. Immortal time bias - exposure defined using the future {#immortal-time-bias}
@@ -275,13 +283,16 @@ years of guaranteed-alive person-time and labelled it "surgery" time.
 
   | Group                                           | Deaths | Person-years | Rate (per 1000 py) |
   | ----------------------------------------------- | ------ | ------------ | ------------------ |
-  | Surgery (immortal time counted as surgery time) | 30     | 12,000       | 2.5                |
-  | Surgery (time correctly aligned)                | 30     | 8,000        | 3.8                |
-  | No surgery                                      | 50     | 13,000       | 3.8                |
+  | Surgery (immortal time counted as surgery time) | 24     | 12,000       | 2.0                |
+  | No surgery (immortal time left out)             | 51     | 13,000       | 3.9                |
+  | Surgery (time correctly aligned)                | 24     | 8,000        | 3.0                |
+  | No surgery (immortal time moved here)           | 51     | 17,000       | 3.0                |
 
-The true rates are identical (3.8) - surgery does nothing. But counting the
-4,000 immortal person-years as surgery time drops its rate to 2.5 and makes
-surgery look **34% protective**. The "effect" is an artefact of the misaligned
+Correctly aligned, the 4,000 pre-surgery person-years count as *no-surgery*
+time, and the rates are identical (3.0) - surgery does nothing. But counting
+those 4,000 immortal person-years as surgery time drops its rate to 2.0, leaves
+the no-surgery rate at 3.9, and makes surgery look **49% protective** (rate
+ratio 0.51). The "effect" is an artefact of the misaligned
 time zero, not of surgery.
 
 **The fix: align time zero.** Eligibility, exposure assignment and start of

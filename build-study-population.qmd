@@ -260,7 +260,8 @@ exp_lpr2 <- lpr_sksopr %>%
 proc <- read_register("lpr_a_procregistrering") %>%
   rename_with(tolower)
 lpr_a_k  <- read_register("lpr_a_kontakt") %>%
-  rename_with(tolower)
+  rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3")                  # only genuine LPR3 contacts, see Understand LPR
 
 exp_lpr3 <- proc %>%
   filter(proc_kode %in% !!BS_CODES) %>%                     # only bariatric procedures
@@ -329,7 +330,9 @@ This example pulls from **LPR2** only. Always consider which registers your outc
 ## Step 3 - Exclude prevalent cases {.step-heading}
 
 People who already had **your outcome** before the index date must be excluded -
-otherwise they count as new cases even though they are not. This applies to
+otherwise they count as new cases even though they are not. Convention used
+throughout this guide: a diagnosis **on or before** the index date is prevalent
+(`<=`), and only one **after** it is an outcome (`>`). This applies to
 **all designs**, including a prevalence study without a comparison group, so it
 belongs here where you build the exposed cohort.
 
@@ -358,12 +361,12 @@ OUTCOME_CODES <- c("G30", "F00", "F01", "F02", "F03")   # ICD-10 for your outcom
 #   diagnoses = your LPR diagnosis extract (columns: pnr, date_contact, icd3)
 #   codes     = the ICD codes that define your outcome (here OUTCOME_CODES)
 #   cohort    = the group to check, with pnr + index_date
-# It returns the pnr that had the outcome BEFORE their own index date.
+# It returns the pnr that had the outcome ON or BEFORE their own index date.
 prior_outcome_pnrs <- function(diagnoses, codes, cohort) {
   diagnoses %>%
     filter(icd3 %in% codes) %>%
     inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%   # attach each person's index
-    filter(date_contact < index_date) %>%                            # only contacts BEFORE index
+    filter(date_contact <= index_date) %>%                           # contacts ON or BEFORE index
     # distinct(pnr) alone is only correct if pnr is unique in your cohort. If
     # it is not (e.g. a comparison cohort matched with replacement, so the
     # same pnr has several index_dates), this over-excludes: a diagnosis that
@@ -446,7 +449,7 @@ flowchart TD
 How each step maps to the data:
 
 - **Source registers:** the whole population's LPR data (you have no cohort list
-  yet). LPR2 and LPR3 are opened lazily with `open_dataset()` - see Step 2
+  yet). LPR2 and LPR3 are opened lazily with `read_register()` - see Step 2
   above.
 - **Step 2:** you filter on your exposure codes and attach `pnr` + `index_date`.
   The result is `exposed`.

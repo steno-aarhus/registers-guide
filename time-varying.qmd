@@ -76,9 +76,17 @@ A person with two measurements becomes two rows, each with its own
 
 ```r
 library(survival) # tmerge(), tdc(), event()
+library(dplyr) # transmute(), left_join(), mutate()
 
+# tmerge() needs ONE time scale: days since index, for both the exit and the measurements
 # base         = one row per person: pnr, exit_day (end of follow-up), status (1 = outcome)
+base <- df %>% # df = analysis-ready dataset (Phase 12)
+  transmute(pnr, age, exit_day = as.numeric(censor_date - index_date), status = outcome)
+
 # measurements = many rows per person: pnr, day (time of the measurement), value
+measurements <- measurements %>% # pnr, meas_date, value
+  left_join(df %>% select(pnr, index_date), by = "pnr") %>%
+  mutate(day = as.numeric(meas_date - index_date)) # a negative day (before index) sets the baseline value
 
 d <- tmerge(
   base,

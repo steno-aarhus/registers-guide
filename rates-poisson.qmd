@@ -39,7 +39,9 @@ Three models can be used on a "did the event happen?" outcome. The difference is
 
 ::: {.callout-tip}
 **Cox or Poisson?** They often answer almost the same question, and HR and IRR
-are close when the event is rare. Choose **Cox** if you think in individual
+agree closely when the Poisson model lets the baseline rate vary over follow-up
+(follow-up split into time bands, see [below](#rates-over-time)); with a single
+constant rate they can differ if the hazard changes over time. Choose **Cox** if you think in individual
 follow-up time and time-to-first-event. Choose **Poisson** if you think in
 **rates per person-year** split by age/calendar time (classic in register
 studies of e.g. cancer or mortality), or if your data are already **counted up**
@@ -49,7 +51,7 @@ studies of e.g. cancer or mortality), or if your data are already **counted up**
 ## Starting point
 
 You need two things per person, exactly as for [the crude
-rate](descriptive-tables.qmd#crude-rate): the **number of events** (`event`,
+rate](descriptive-tables.qmd#crude-rate): the **number of events** (`outcome`,
 here 0 or 1) and the **person-time** (`followup_years`, follow-up time in
 years). Both are built in [Phase 12](joins.qmd#follow-up-time).
 
@@ -69,10 +71,10 @@ number of events.
 
 ```r
 model <- glm(
-  event ~ exposure +
+  outcome ~ exposure +
     age +
     sex + # outcome (event count) explained by exposure + covariates
-    offset(log(followup_years)), # offset = person-time: turns counts into a RATE
+    offset(log(followup_years)), # offset = person-time: turns counts into a RATE (needs followup_years > 0, see Phase 12)
   data = df,
   family = poisson
 ) # family = poisson -> rate model
@@ -85,7 +87,8 @@ model %>% # send the model on to a table
 - `offset(log(followup_years))` is the person-time. It must be **logged**
   (`log()`), because the Poisson model works on the log scale. Without the
   offset you model the number of events, not the rate - and that is almost never
-  what you want.
+  what you want. Zero follow-up gives `log(0) = -Inf`, which is why the
+  [Phase 12 recipe](joins.qmd#follow-up-time) drops people with no follow-up.
 - `exponentiate = TRUE` shows **rate ratios (IRR)** instead of log-rate
   coefficients.
 
@@ -94,7 +97,7 @@ rate, below 1 = lower. See [Reading your
 result](regression.qmd#read-the-output).
 
 ::: {.callout-note}
-Here `event` is 0/1 (one row per person), and the offset is the person's total
+Here `outcome` is 0/1 (one row per person), and the offset is the person's total
 follow-up time. That gives a valid IRR adjusted for the covariates you have at
 **baseline** (at study start/index) - not one that changes as people age. For
 that, see [Rates that vary over time](#rates-over-time) below.
@@ -125,14 +128,19 @@ intervals in particular become misleading:
 <details>
 <summary>Check for overdispersion (and switch to negative binomial if needed)</summary>
 
-Overdispersion means the events vary more than a pure Poisson distribution allows. The consequence is confidence intervals that are too narrow. Two common fixes:
+Overdispersion means the events vary more than a pure Poisson distribution allows. The consequence is confidence intervals that are too narrow. It matters for **aggregated counts** (events and person-years per group) and **recurrent events**; with one 0/1 row per person, as above, it cannot be meaningfully checked - there, use robust (sandwich) standard errors instead. On aggregated data, check first, then two common fixes:
 
 ```r
 library(MASS)                            # glm.nb(): negative binomial regression
 
+# df_agg: one row per group, outcome = number of events, followup_years = person-years
+model_agg <- glm(outcome ~ exposure + age + sex + offset(log(followup_years)),
+                 data = df_agg, family = poisson)
+sum(residuals(model_agg, type = "pearson")^2) / df.residual(model_agg) # about 1 = fine; well above 1 = overdispersion
+
 # Negative binomial: like Poisson, but with an extra parameter that allows overdispersion
-glm.nb(event ~ exposure + age + sex + offset(log(followup_years)),
-       data = df) %>%
+glm.nb(outcome ~ exposure + age + sex + offset(log(followup_years)),
+       data = df_agg) %>%
   tbl_regression(exponentiate = TRUE)    # -> IRR with confidence intervals that account for overdispersion
 ```
 
@@ -167,7 +175,7 @@ functions. It is a descriptive standardisation, not an adjusted regression, so
 choose according to your question.
 :::
 
-::: {.callout-tip title="Read more {#read-more}"}
+::: {.callout-tip #read-more title="Read more"}
 - *The Epidemiologist R Handbook*, general background: [Univariate and
   multivariable
   regression](https://www.epirhandbook.com/en/new_pages/regression.html)

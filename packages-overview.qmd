@@ -19,7 +19,7 @@ for it is on [Socioeconomic variables](socioeconomic-variables.qmd).
 ::: {.wide-first-col}
   | Algorithm                                                                                           | What it does                                              | Use it to                                                                     | Article                                                          |
   | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-  | **[Open Source Diabetes Classifier (OSDC)](osdc.qmd)**                                              | Classifies everyone in Denmark as T1D, T2D or no diabetes | Define a diabetes population, type and onset date                             | [doi:10.2147/CLEP.S407019](https://doi.org/10.2147/CLEP.S407019) |
+  | **[Open Source Diabetes Classifier (OSDC)](osdc.qmd)**                                              | Classifies everyone in Denmark as T1D, T2D or no diabetes | Define a diabetes population, type and inclusion date                         | [doi:10.2147/CLEP.S407019](https://doi.org/10.2147/CLEP.S407019) |
   | **[Nordic Multimorbidity Index (NMI)](nmi.qmd)**                                                    | Weighted mortality-risk score (50 predictors)             | Adjust for mortality risk / predict 5-year mortality (NOT comorbidity burden) | [doi:10.2147/CLEP.S353398](https://doi.org/10.2147/CLEP.S353398) |
   | **[SEPLINE - Socioeconomic Position in Epidemiological Research](socioeconomic-variables.qmd)** | National guideline for socioeconomic variables            | Education, income, employment as covariates                                   | [doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772) |
 :::
@@ -51,43 +51,77 @@ education and ATC codes.
 ```r
 library(heaven)
 
-df_split <- lexisTwo(
-  indat      = cohort,
-  invars     = c("pnr", "inn", "out", "event"),   # id, start date, end date, outcome
-  splitvars  = list(age = c(40, 50, 60, 70),       # age boundaries
-                    cal = c(2010, 2015, 2020))      # calendar years
+# Age bands: the split points are added to each person's birth date
+df_split <- lexisSeq(
+  indat       = cohort,
+  invars      = c("pnr", "inn", "out", "event"),   # id, start date, end date, outcome (0/1) - in that order
+  varname     = "birth_date",                       # date the split points are added to
+  splitvector = round(c(40, 50, 60, 70) * 365.25),  # age boundaries, in days
+  format      = "vector",
+  value       = "age_band"                          # 0 before age 40, then +1 at each boundary
 )
-# Returns: one data frame with MORE rows per person - one per time interval.
-# New columns are added for the current bands (age group, calendar period etc.).
-# Ready for a Cox model with time-varying covariates.
+# Calendar periods: fixed dates, nothing added (varname = NULL)
+df_split <- lexisSeq(
+  indat       = df_split,
+  invars      = c("pnr", "inn", "out", "event"),
+  splitvector = as.Date(c("2010-01-01", "2015-01-01", "2020-01-01")),
+  format      = "vector",
+  value       = "period"
+)
+# Returns: a data.table with MORE rows per person - one per time interval.
+# The new columns (age_band, period) count how many split points have passed.
+# Ready for a Cox model with time-varying covariates. To split on event dates
+# (e.g. comorbidity onset) instead, use lexisTwo().
 ```
 
 **Drug exposure from LMDB** - calculate exposure periods from prescription data (e.g. "was the person on metformin at index date?").
 
 ```r
-exp_table <- medicinMacro(
-  indat = lmdb_data, id = "pnr", atc = "atc", eksd = "eksd",
-  ddds = "ddds", maxdepot = 3
+# One list per drug: the ATC codes, and per pack strength (value) the assumed
+# minimum, maximum and default daily dose - the numbers here are illustrative.
+metformin <- list(
+  atc      = "A10BA02",
+  maxdepot = 4000,                                # max total dose a person can stockpile
+  period   = as.Date(c("1995-01-01", "2024-12-31")),
+  prescriptionwindow = 2,
+  doses    = list(value = c(500, 850, 1000),     # strengths (strnum) in your data
+                  min   = c(500, 850, 1000),
+                  max   = c(3000, 3000, 3000),
+                  def   = c(1000, 1700, 2000))
 )
-# Returns: one row per exposure period per person with start and end date
-# for the period. Use subsequent joins to determine exposure at index date.
+exp_table <- medicinMacro(
+  drugs  = list(metformin = metformin),
+  drugdb = lmdb_data,  # pnr, eksd, atc, strnum, packsize, apk
+  admdb  = NULL        # or admissions from getAdmLimits() to pause exposure during stays
+)
+# Returns: a list with one data.table per drug (exp_table$metformin): one row
+# per exposure period per person, with firstday, lastday and the estimated
+# daily dose. Use subsequent joins to determine exposure at index date.
 ```
 
 **Charlson comorbidity score** from LPR diagnoses:
 
 ```r
-charlson_data <- charlsonIndex(indat = lpr_diag_data, id = "pnr",
-                               code = "c_diag", code_type = "icd10")
-# Returns: one row per person with total Charlson score and binary indicators
-# per Charlson disease group. The function matches ICD-10 codes to categories itself.
+charlson_data <- charlsonIndex(data = lpr_diag_data, ptid = "pnr",
+                               vars = "c_diag",              # D-prefixed codes, as in LPR
+                               data.date = "d_inddto",       # date of each diagnosis
+                               charlson.date = "index_date", # date the index is computed at
+                               look.back = 5)                # years
+# Returns: a list of two data.tables - [[1]] the Charlson index per (pnr,
+# index_date), [[2]] binary indicators per Charlson disease group. People with
+# no Charlson diagnosis are missing from both: set them to 0 after joining.
 ```
 
-**Risk-set matching** - match cases to controls at index date:
+**Risk-set matching** - match cases to controls at index date (`incidenceMatch()`; `exposureMatch()` when exposure defines the case):
 
 ```r
-matched <- riskSetMatch(ptid = "pnr", event = "event",
-                        terms = c("koen", "birth_year"), dat = cohort, ratio = 5)
-# Returns: matched dataset with matchID linking cases and controls.
+matched <- incidenceMatch(ptid = "pnr", event = "event",    # event: 0/1
+                          terms = c("koen", "birth_year"),   # exact matching - character/factor
+                          data = cohort, n.controls = 5,
+                          case.index = "event_date",         # NA for non-cases
+                          end.followup = "end_date")         # death, emigration, study end
+# Returns: data.table of cases and their selected controls, with case.id
+# linking each case to its controls.
 ```
 
 **Average income over the years before a date** - what [Socioeconomic variables](socioeconomic-variables.qmd#faik-income) does by hand:
@@ -174,8 +208,8 @@ A person can have two overlapping admissions in LPR (e.g. a transfer). Before co
 library(EpiForsk)
 
 lpr_flat <- flatten_date_intervals(
-  data = lpr_contacts, id = "pnr",
-  start_date = "d_inddto", end_date = "d_uddto"
+  data = lpr_contacts, id = pnr,        # bare column names, no quotes
+  in_date = d_inddto, out_date = d_uddto
 )
 # Returns: a data frame with merged start/end per person -
 # overlapping periods are reduced to the total covered period.
@@ -184,13 +218,14 @@ lpr_flat <- flatten_date_intervals(
 **`charlson_score()` - Danish-calibrated Charlson comorbidity score** from ICD-10 (incl. D-prefix). See the callout below for what it requires.
 
 ```r
-charlson <- charlson_score(data = lpr_diag_data, id = "pnr", icd_codes = "c_diag")
-# Returns: one row per person with Charlson score.
+charlson <- charlson_score(data = lpr_diag_data, Person_ID = pnr, diagnosis_variable = c_diag)
+# Returns: one row per person with three Charlson variants
+# (CCI_Quan, CCI_Christiensen, CCI_Charlson_Deyo).
 ```
 
 ::: {.callout-important}
 **What does `charlson_score()` require?**
-You must extract a lookback period from LPR yourself (typically 5 years before index date) and give the function **all diagnoses** in that window - A, B and G type. You do **not** need to filter on specific ICD codes in advance; the function matches the codes to Charlson categories itself. The D-prefix (`DG30` etc.) is handled by EpiForsk - it does not need to be stripped first.
+You must extract a lookback period from LPR yourself (typically 5 years before index date) and give the function **all diagnoses** in that window - all diagnosis types. You do **not** need to filter on specific ICD codes in advance; the function matches the codes to Charlson categories itself. The D-prefix (`DG30` etc.) is handled by EpiForsk - it does not need to be stripped first.
 
 ```r
 # Example: extract lookback and pass all diagnoses
@@ -230,20 +265,20 @@ lpr2_lookback <- lpr_adm %>%
   select(pnr, index_date, d_inddto, c_diag) %>%
   collect()
 
-charlson <- charlson_score(data = lpr2_lookback, id = "pnr", icd_codes = "c_diag")
+charlson <- charlson_score(data = lpr2_lookback, Person_ID = pnr, diagnosis_variable = c_diag)
 ```
 :::
 
 ::: {.callout-warning}
-**`id = "pnr"` alone is not enough if your cohort has repeated `pnr`.**
+**`Person_ID = pnr` alone is not enough if your cohort has repeated `pnr`.**
 `lpr2_lookback` above is correctly windowed per `(pnr, index_date)`, but
-`charlson_score()` itself only groups by the single `id` column you give it -
+`charlson_score()` itself only groups by the single `Person_ID` column you give it -
 it has no way to know about `index_date`. For a comparison cohort matched
 **with replacement**, that means diagnoses from *all* of a person's
 `index_date` windows get pooled into one Charlson score, silently reattached
 to every occurrence of their `pnr`. If this applies to you, build a single
 combined key first (e.g. `mutate(pnr_index = paste(pnr, index_date))`) and
-pass `id = "pnr_index"` instead, then split the two columns back apart from
+pass `Person_ID = pnr_index` instead, then split the two columns back apart from
 the result afterwards.
 :::
 
@@ -326,7 +361,7 @@ the top of your analysis scripts.
 
 ```r
 library(survival)
-cox <- coxph(Surv(time, event) ~ age + sex + nmi_score, data = cohort)
+cox <- coxph(Surv(time, event) ~ age + sex + nmi, data = cohort)
 summary(cox) # HR, 95% CI, p-values - pass to Publish or gtsummary for formatted output
 ```
 
@@ -346,7 +381,7 @@ for survival summaries. Published in R Journal 2021.
 library(gtsummary)
 
 table1 <- cohort %>%
-  select(group, age, sex, nmi_score, occupation_cat) %>%
+  select(group, age, sex, nmi, occupation_cat) %>%
   tbl_summary(
     by = group,                                                # stratify by exposure
     statistic = list(
@@ -360,7 +395,7 @@ table1 <- cohort %>%
 ```
 
 ::: {.callout-warning}
-**Output control:** Counts of 0–4 may not be repatriated. Manual rounding: `round(x / 5) * 5`. [`Z.gtsummary.addons::round_5_gtsummary()`](https://github.com/zheer-kejlberg/Z.gtsummary.addons) automates this - not on DST, import via data manager.
+**Output control:** counts below DST's threshold (fewer than 5) must not be exported, and a suppressed cell must not be recoverable from totals or other cells. Rounding alone does not achieve this - see [Export and repatriation](export.qmd) for the rules. [`Z.gtsummary.addons::round_5_gtsummary()`](https://github.com/zheer-kejlberg/Z.gtsummary.addons) shows counts of 0-4 as "<5" and rounds the rest to the nearest 5 - not on DST, import via data manager.
 :::
 
 </details>
@@ -380,7 +415,7 @@ library(carpenter)
 outline_table(cohort, "group") %>%
   add_rows("age", stat_meanSD) %>% # continuous: mean (SD)
   add_rows("sex", stat_nPct) %>% # categorical: n (%)
-  add_rows("nmi_score", stat_medianIQR) %>% # continuous: median (IQR)
+  add_rows("nmi", stat_medianIQR) %>% # continuous: median (IQR)
   build_table()
 ```
 
@@ -433,7 +468,7 @@ library(riskRegression)
 library(survival)
 
 # Cause-Specific Cox:
-csc_model <- CSC(Hist(time, status) ~ age + sex + nmi_score, data = cohort)
+csc_model <- CSC(Hist(time, status) ~ age + sex + nmi, data = cohort)
 summary(csc_model)
 
 # Absolute risk at 1, 3 and 5 years for primary event:
@@ -456,10 +491,10 @@ plots from the same output.
 library(Publish)
 library(survival)
 
-cox_model <- coxph(Surv(time, event) ~ age + sex + nmi_score, data = cohort)
+cox_model <- coxph(Surv(time, event) ~ age + sex + nmi, data = cohort)
 
 regressionTable(cox_model) # HR, 95% CI, p-values
-plotConfidence(regressionTable(cox_model)) # forest plot
+plot(regressionTable(cox_model)) # forest plot (calls plotConfidence())
 ```
 
 ### `MatchIt` - propensity score and exact matching
@@ -470,7 +505,7 @@ plotConfidence(regressionTable(cox_model)) # forest plot
 Matches exposed to unexposed on observed covariates. Supports nearest-neighbour,
 exact and optimal matching. `summary()` gives balance statistics (SMD),
 `match.data()` returns the matched dataset. Alternative to
-`heaven::riskSetMatch()` with better balance diagnostics.
+`heaven::incidenceMatch()` with better balance diagnostics.
 
 <details>
 <summary>Example: 1:1 nearest-neighbour matching</summary>
@@ -478,7 +513,7 @@ exact and optimal matching. `summary()` gives balance statistics (SMD),
 ```r
 library(MatchIt)
 
-m <- matchit(exposed ~ age + sex + nmi_score,
+m <- matchit(exposed ~ age + sex + nmi,
              data   = cohort,
              method = "nearest",   # nearest-neighbour matching
              ratio  = 1)           # 1:1
@@ -532,8 +567,8 @@ expected effect - useful before data collection or grant applications.
 [cran.r-project.org/web/packages/kinship2](https://cran.r-project.org/web/packages/kinship2/index.html))*
 
 Creates pedigree objects from parent--child relationships and computes kinship
-coefficients (probability of shared allele: 0.5 = parent/child, 0.25 =
-siblings). Useful for multi-generational family studies. By Terry Therneau (Mayo
+coefficients (probability that alleles drawn at random from the two people are
+identical by descent: 0.25 for parent/child and for full siblings). Useful for multi-generational family studies. By Terry Therneau (Mayo
 Clinic).
 
 <details>
@@ -546,8 +581,8 @@ library(kinship2)
 # DST's koen variable (1 = male, 2 = female) matches kinship2's expectation directly
 ped <- pedigree(
   id    = family$pnr,
-  dadid = family$pnr_father,   # 0 or NA if father unknown
-  momid = family$pnr_mother,   # 0 or NA if mother unknown
+  dadid = family$pnr_father,   # NA if father unknown
+  momid = family$pnr_mother,   # NA if mother unknown
   sex   = family$koen           # 1 = male, 2 = female
 )
 

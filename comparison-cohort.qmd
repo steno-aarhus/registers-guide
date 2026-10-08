@@ -92,7 +92,7 @@ Match only on what you want to adjust for by design (typically sex, age, calenda
 
 Ratio (e.g. 1:5): more comparison persons give more precision, but with **diminishing returns** - each extra comparison person raises precision less and less, so at some point the gain is not worth the extra data. A large ratio + a narrow pool can also deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 4).
 
-**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** captures most of the statistical power. [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/) concludes exactly that "it is questionable if there is much to gain in statistical power when the sampling ratio exceeds four". Choose a higher ratio if the outcome is rare or the pool is plentiful.
+**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** is commonly cited as capturing most of the statistical power (diminishing returns beyond that). Choose a higher ratio if the outcome is rare or the pool is plentiful.
 
 </details>
 
@@ -106,15 +106,18 @@ When you sample comparison persons, decide whether the **same person may be used
 more than once** - a choice that affects both the matching and the **analysis
 afterwards**. Decide BEFORE you match.
 
-- **If you have a large group to draw from** (e.g. the whole background
-  population), sampling **without replacement** is rarely a problem: there are
-  plenty of candidates, and each is used at most once (that is what the `used`
-  vector does in the manual loop).
-- **If the group is small** (rare matching strata, narrow age/sex bands, or a
-  high ratio like 1:25), the pool can be depleted. Then **replacement** may be
-  necessary to get enough comparison persons per exposed: a person can then be
-  matched to several exposed (and themselves become exposed/a case later). It is
-  also standard for pure incidence-density sampling.
+- **Default: sample with replacement (risk-set sampling).** A person can be
+  matched to several exposed (and themselves become exposed/a case later). In
+  [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/),
+  sampling with replacement did not bias the comparators' outcome risk, whereas
+  5:1 sampling **without** replacement biased it in older, high-risk cohorts,
+  and chronological sampling without replacement failed to fill the matching
+  ratio. `exposureMatch()` and the manual loop below both sample with
+  replacement by default.
+- **Without replacement** (each person used at most once) is not recommended
+  even when the pool is large. If you have a specific reason to use it, the
+  manual loop has a `WITHOUT_REPLACEMENT` switch - then check the match rate in
+  Step 4, and expect bias in older or high-risk cohorts.
 
 ::: {.callout-important}
 **With replacement, be careful in the analysis.** Standard models assume each
@@ -135,7 +138,7 @@ errors](regression.qmd#clustered-standard-errors).
   | `heaven::incidenceMatch()` | risk-set matching for [case-control](case-control.qmd) | see note below + `matchReport()`                              |
   | `MatchIt::matchit()`       | general matching (e.g. propensity score)                   | explicit via `replace = TRUE/FALSE`                           |
   | `Epi::ccwc()`              | nested case-control sampling                               | risk-set sampling, see [Case-control](case-control.qmd)   |
-  | manual loop                | full control                                               | you control it yourself (`used` vector = without replacement) |
+  | manual loop                | full control                                               | with replacement by default (`WITHOUT_REPLACEMENT` switch)    |
 
 That a control can be used for several cases IS exactly **replacement** (the
 control is "returned to the pool" and can be drawn again for another case). In
@@ -278,7 +281,7 @@ population](build-study-population.qmd#step-1) for the rule and the six things
 to check before trusting it.
 :::
 
-And yes: `bef` is loaded lazily (`open_dataset`), but `bef_py` is pulled into RAM with `collect()` - it is a concrete table we compute on, not a lazy filter.
+And yes: `bef` is loaded lazily (`read_register()`), but `bef_py` is pulled into RAM with `collect()` - it is a concrete table we compute on, not a lazy filter.
 
 </details>
 
@@ -394,7 +397,7 @@ saveRDS(vnds_ev, "path/to/migration_events.rds")  # ALL entries/exits (not one d
 
 ```r
 # Build the comparison pool (demographics + the dates) -------------------------
-# death, emig, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
+# death, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
 # (or loaded with readRDS if you saved them). Each is one row per person.
 
 # The pool REUSES demographics from Step 1 (we do NOT pull BEF again) and adds the dates.
@@ -460,17 +463,38 @@ uses `exposed` and `pool` directly and does not need this assembly.)
 library(heaven)   # exposureMatch
 STUDY_END <- as.Date("2022-12-31")   # we choose: last day of the study
 
+# Entry: the date a person first meets the SAME criteria as the exposed in Step 1
+# (age >= 18 and 5 years continuous residence since the latest immigration, or
+# since birth if none). Passed as a date.term below, so a control must have
+# reached it before the case's index - otherwise someone who immigrates after the
+# index date (or is too young / too recently arrived) could be drawn.
+last_entry <- vnds_ev %>%
+  filter(indud_kode == "I") %>%
+  group_by(pnr) %>%
+  summarise(last_entry = max(haend_dato), .groups = "drop")   # latest immigration
+
+add_entry <- function(x) {
+  x %>%
+    left_join(last_entry, by = "pnr") %>%
+    mutate(eligible_from = pmax(foed_dag + ceiling(18 * 365.25),                        # age >= 18 (adapt)
+                                coalesce(last_entry, foed_dag) + ceiling(5 * 365.25)))  # 5 years residence
+}
+
 # Assemble ONE table with both exposed and pool. transmute() = like mutate(), but keeps
 # ONLY the columns we name here (the rest are dropped) - so the table is clean for matching.
+# exposureMatch() requires each pnr ONCE: the exposed enter only as cases (exposureMatch
+# still lets them be controls for earlier cases until their own index), so they are
+# removed from the pool with anti_join().
 all_persons <- bind_rows(
-  exposed %>% transmute(
+  exposed %>% add_entry() %>% transmute(
     pnr,                                           # person id (kept)
     event      = 1L,                               # NEW column 'event' = 1: these are cases (exposed)
     sex, birth_year,                               # matching variables (kept)
     case_index = index_date,                       # NEW column: the case index = exposure date
-    end_fu     = STUDY_END                         # NEW column: end of follow-up (optionally refine w. death/outcome)
+    end_fu     = STUDY_END,                        # NEW column: end of follow-up (optionally refine w. death/outcome)
+    eligible_from = pmin(eligible_from, index_date - 1)  # met in Step 1; strictly before index, as date.terms compare with <
   ),
-  pool %>% transmute(
+  pool %>% anti_join(exposed, by = "pnr") %>% add_entry() %>% transmute(
     pnr,
     event      = 0L,                               # 'event' = 0: potential controls
     sex, birth_year,
@@ -479,7 +503,8 @@ all_persons <- bind_rows(
     # death, first exit AFTER study start, own exposure (= crossover), outcome or
     # study end. pmin = smallest/earliest.
     end_fu     = pmin(death_date, first_exit, exposure_date,
-                      first_outcome_date, STUDY_END, na.rm = TRUE)   # na.rm: ignore missing dates
+                      first_outcome_date, STUDY_END, na.rm = TRUE),  # na.rm: ignore missing dates
+    eligible_from                                  # entry date (see above)
   )
 ) %>%
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' MUST be factor/character
@@ -488,13 +513,14 @@ all_persons <- bind_rows(
 # In the call below: the name LEFT of = is the function's ARGUMENT (fixed, defined by exposureMatch);
 # the value on the RIGHT is what WE set it to (usually the name of a column in 'all_persons', in quotes).
 matched <- exposureMatch(
-  ptid         = "pnr",                  # argument 'ptid'  <- the person-id column
+  ptid         = "pnr",                  # argument 'ptid'  <- the person-id column (must be unique)
   event        = "event",                # argument 'event' <- the column that is 1 for case, 0 for control
   terms        = c("sex", "birth_year"), # argument 'terms' <- columns to match exactly on
   data         = all_persons,            # argument 'data'  <- the dataset itself (not in quotes)
   n.controls   = RATIO,                  # argument 'n.controls' <- controls per case
   case.index   = "case_index",           # argument 'case.index'  <- the column with the case index date
   end.followup = "end_fu",               # argument 'end.followup' <- the column with end-of-follow-up
+  date.terms   = "eligible_from",        # argument 'date.terms' <- control must have reached entry before the case's index
   seed         = 20260620                # argument 'seed' <- fixed number => reproducible result
 )
 # Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
@@ -532,8 +558,8 @@ it to our column `"event"`. Note the difference between `transmute(event = 1L)`
 (here we *point* the function's argument at that column). The arguments here:
 `ptid` = person id, `event` = 0/1 indicator, `terms` = matching variables (MUST
 be factor/character; categorize e.g. age), `data` = the dataset, `n.controls` =
-controls per case, `case.index` = the case's index date, `end.followup`, and
-`seed`. What an argument is, is explained in the [Function
+controls per case, `case.index` = the case's index date, `end.followup`,
+`date.terms` (here the entry date) and `seed`. What an argument is, is explained in the [Function
 guide](function-guide.qmd).
 
 **See a function's arguments and help in R:** type `?exposureMatch` or
@@ -559,13 +585,14 @@ It also shows what `exposureMatch()` does under the hood. The manual loop gives 
 
 For standard register matching (sex, birth year, calendar time, alive/resident/outcome-free/exposure-free at index, comorbidity timing) Route A is enough.
 
-**Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. Without replacement, the order also ensures each person is still at risk when used, and that the sampling is reproducible.
+**Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. With replacement (the default) the order does not change who can be drawn; it only matters with `WITHOUT_REPLACEMENT = TRUE`, where the earliest exposed use up candidates first - which is why chronological sampling without replacement can fail to fill the ratio (Heide-Jørgensen et al. 2018).
 
 ```r
 # Step 3 (Route B): manual risk-set loop ---------------------------------------
 set.seed(20260620)                                       # fixed seed => reproducible sampling
 exp_sorted  <- exposed %>% arrange(index_date)           # earliest exposed first (chronological)
-used        <- character(0)                              # empty list of already-used pnr (without replacement)
+WITHOUT_REPLACEMENT <- FALSE                             # FALSE = with replacement (default, recommended); TRUE = each person used at most once
+used        <- character(0)                              # already-used pnr (only consulted if WITHOUT_REPLACEMENT)
 match_list  <- vector("list", nrow(exp_sorted))          # empty list to collect each matched set
 
 for (i in seq_len(nrow(exp_sorted))) {                   # loop one exposed person at a time
@@ -591,7 +618,7 @@ for (i in seq_len(nrow(exp_sorted))) {                   # loop one exposed pers
     left_join(status_idx, by = "pnr") %>%                              # latest event before idx
     filter(is.na(last_code) | last_code == "I") %>%                    # resident on index (no event = never left)
     filter(as.numeric(idx - if_else(is.na(last_code), foed_dag, last_date)) / 365.25 >= 5) %>%  # 5 years continuous residence
-    filter(!pnr %in% used)                                             # not already used
+    filter(!WITHOUT_REPLACEMENT | !pnr %in% used)                      # not already used (only without replacement)
 
   n <- min(RATIO, nrow(eligible))                        # draw up to RATIO (fewer if the pool is thin)
   if (n == 0L) next                                      # none eligible? skip to the next exposed
@@ -605,7 +632,7 @@ for (i in seq_len(nrow(exp_sorted))) {                   # loop one exposed pers
                                exposure_date, as.Date(NA))   # censoring date if the control is later exposed
     )
   match_list[[i]] <- chosen                              # store this matched set
-  used <- c(used, chosen$pnr)                            # mark the chosen as used (without replacement)
+  if (WITHOUT_REPLACEMENT) used <- c(used, chosen$pnr)   # mark the chosen as used (only without replacement)
 }
 comparison_group <- bind_rows(match_list)                # combine all matched sets into one table
 ```
@@ -629,7 +656,7 @@ candidates  <- bind_rows(cand_frames[!sapply(cand_frames, is.null)]) %>%  # comb
 # then apply the SAME eligibility filters as above on 'candidates'
 ```
 
-Remove the chosen ones from their strata after each sampling (`pool_split[[k]] <- filter(pool_split[[k]], !pnr %in% chosen$pnr)`) to speed up later iterations. If you keep person-year rows (one per BEF year) to require a BEF record in the index year as a residency proxy, add the BEF year to the key.
+Only with `WITHOUT_REPLACEMENT = TRUE`: remove the chosen ones from their strata after each sampling (`pool_split[[k]] <- filter(pool_split[[k]], !pnr %in% chosen$pnr)`) to speed up later iterations. If you keep person-year rows (one per BEF year) to require a BEF record in the index year as a residency proxy, add the BEF year to the key.
 
 </details>
 
@@ -638,7 +665,7 @@ Remove the chosen ones from their strata after each sampling (`pool_split[[k]] <
 ```r
 # matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:
 cohort <- bind_rows(
-  exposed %>% mutate(exposed = 1L), # exposed = 1: the exposed
+  exposed %>% mutate(exposed = 1L, match_id = pnr), # exposed = 1: the exposed; match_id = own pnr (their matched set)
   comparison_group %>% mutate(exposed = 0L) # exposed = 0: the comparison group
 )
 
@@ -664,7 +691,7 @@ saveRDS(cohort, "path/to/full_cohort.rds")
 ```
 
 ::: {.callout-important}
-**If line 655 printed a number greater than 0, every join you do next needs
+**If the `count(pnr)` check above printed a number greater than 0, every join you do next needs
 one more thing than [Link your extracts](joins.qmd) shows by default.** That
 page - and most of this guide - assumes one row per `pnr` in `cohort`. With
 replacement, that is no longer true: the same `pnr` can carry several
@@ -688,8 +715,8 @@ works through this pattern end to end - why a plain `pnr` join goes wrong and
 how to carry the id through every subsequent extraction - use it as a
 template regardless of which variable you are attaching.
 
-**If line 655 printed 0** (no replacement, or none needed - the common case
-for most studies), none of this applies: `pnr` alone is a safe join key
+**If the `count(pnr)` check above printed 0** (no person drawn more than
+once), none of this applies: `pnr` alone is a safe join key
 throughout the rest of the guide, and you can ignore this callout entirely.
 :::
 
@@ -757,7 +784,7 @@ Every one of these is something you cannot repair after the fact:
 
 ## What now?
 
-You have `full_cohort.rds` - one row per person with `pnr` and `index_date` for
+You have `full_cohort.rds` - one row per person (per matched set, if drawn more than once) with `pnr` and `index_date` for
 **both groups** (exposed + comparison group). Use it in all subsequent
 extractions:
 

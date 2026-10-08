@@ -79,13 +79,13 @@ checks to run before you rely on it.
 # WRONG - dw_ek_kontakt is NA:
 proc %>% left_join(contacts, by = "dw_ek_kontakt") # joins nothing
 
-# CORRECT - use dw_ek_forloeb:
+# FALLBACK (course level) - use dw_ek_forloeb; better: lpr_a_procregistrering (above)
 proc <- read_register("procedurer_kirurgi") %>%
   rename_with(tolower) %>%
   left_join(
     read_register("lpr_a_kontakt") %>%
       rename_with(tolower) %>%
-      select(dw_ek_forloeb, pnr),
+      distinct(dw_ek_forloeb, pnr), # one row per course, else each procedure repeats per contact
     by = "dw_ek_forloeb"
   )
 ```
@@ -94,16 +94,17 @@ proc <- read_register("procedurer_kirurgi") %>%
 
 The table is called `lpr_a_diagnose` - "a" refers to the analysis model
 designation (LPR_A series). It is **not** a filter on A-type diagnoses. The
-table contains A, B and G. You still need to filter on `diag_kode_type`.
+table contains A (main) and B (secondary), plus add-on codes; G (grundmorbus)
+is LPR2 only. You still need to filter on `diag_kode_type`.
 
-## 4. `nmi_count` ≠ `nmi_score`
+## 4. `nmi_count` ≠ `nmi`
 
   | Variable    | What it is                                                                               |
   | ----------- | ---------------------------------------------------------------------------------------- |
-  | `nmi_score` | **Weighted** score - Nordic Multimorbidity Index (50 predictors with individual weights) |
-  | `nmi_count` | Simple **count** of the number of chronic conditions (33 possible)                       |
+  | `nmi`       | **Weighted** score - Nordic Multimorbidity Index (50 predictors with individual weights), as computed on the [NMI page](nmi.qmd) |
+  | `nmi_count` | Simple **count** of the number of chronic conditions (33 possible), calculated separately |
 
-If you use `nmi_count` in your Cox model instead of `nmi_score`, you are
+If you use `nmi_count` in your Cox model instead of `nmi`, you are
 adjusting for something different than you think.
 
 ## 5. LPR3 - filter on `lprindberetningssystem == "LPR3"` {#lpr3-lprindberetningssystem}
@@ -130,8 +131,9 @@ lpr3_d <- read_register("lpr_a_diagnose") %>%
 ```
 
 ::: {.callout-warning}
-`get_lpr_diagnoses()` in `darter-index.qmd` is updated with this filter. If
-you have copies of LPR3 code in your own scripts, you must add it manually.
+`get_lpr_diagnoses()` in `darter-index.qmd` uses the date-cutover version of
+this filter (next callout). If you have copies of LPR3 code in your own
+scripts, you must add it manually.
 :::
 
 ::: {.callout-warning}

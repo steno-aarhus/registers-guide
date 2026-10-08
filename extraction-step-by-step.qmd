@@ -76,8 +76,8 @@ step 3 is the only line that actually moves data.
 **Why `rename_with(tolower)` as the first step?** Raw column names in DST
 registers have inconsistent capitalisation - `PNR`, `pnr`, `Pnr`. By
 standardising to lower case immediately, the rest of your code can use `pnr`
-everywhere without thinking about it. Add it immediately after `open_dataset()`
-as the first step in your pipe - before filtering or selecting columns.
+everywhere without thinking about it. Add it immediately after `read_register()`
+or `open_dataset()` as the first step in your pipe - before filtering or selecting columns.
 :::
 
 ## The most important rule: filter and select columns BEFORE fetching {#filter-before-collect}
@@ -127,13 +127,13 @@ Sometimes you filter on a **list you defined in R yourself** - typically a set o
 
 ```r
 my_codes <- c("DE10", "DE11", "DE14")   # local R vector you created
-register %>% filter(c_diag %in% !!my_codes)
+register %>% filter(substr(c_diag, 1, 4) %in% !!my_codes)   # first 4 characters, so DE109, DE112 ... also match
 ```
 
-The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs *separately* from R and does not know your local variables. Without `!!`, the engine would look for a *column* called `my_codes` inside the register. It does not exist - `my_codes` is an R vector you created locally. `!!` means: *"this is an R object, not a column name - look up its values in R and use them in the query."*
+The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs *separately* from R and does not know your local variables. When the query is built, dplyr checks each name: if the register has a *column* called `my_codes`, it uses the column; if not, it looks up the R vector `my_codes` and copies its values into the query. So the code above usually works without `!!` too. The risk is a name clash: if your local variable has the same name as a column (e.g. a local `year` and the register's `year` column), the column silently wins. `!!` removes that ambiguity - it means: *"this is an R object, not a column name - look up its values in R and use them in the query."*
 
 ::: {.callout-tip}
-Rule of thumb: if you refer to a **column** in the register, write the name directly. If you refer to an **R variable** you created yourself, put `!!` in front of it.
+Rule of thumb: if you refer to a **column** in the register, write the name directly. If you refer to an **R variable** you created yourself, putting `!!` in front of it is a recommended safeguard against a name clash.
 :::
 
 The other place this comes up is subsetting a register to your cohort's `pnr` - but there you will use `semi_join`, which takes an ordinary local table and avoids `!!` entirely. See [Phase 9b](extract-from-lpr.qmd).
@@ -151,9 +151,16 @@ class(my_object)
 
   | What `class()` returns    | What it means       | What to do              |
   | ------------------------- | ------------------- | ----------------------- |
-  | `"tbl_df" "data.frame"`   | Data is in R        | Nothing - you are ready |
-  | `"tbl_duckdb_connection"` | Unsent DuckDB query | Add `%>% collect()`     |
-  | `"Table" "ArrowObject"`   | Unsent Arrow query  | Add `%>% collect()`     |
+  | `"tbl_df" "tbl" "data.frame"` (and no `"prudent_duckplyr_df"`) | Data is in R        | Nothing - you are ready |
+  | `"prudent_duckplyr_df" "duckplyr_df" "tbl_df" "tbl" "data.frame"` | Unsent DuckDB query (from `read_register()`) | Add `%>% collect()`     |
+  | `"tbl_duckdb_connection"` ... | Unsent DuckDB query (from `to_duckdb()`) | Add `%>% collect()`     |
+  | `"FileSystemDataset"` ... `"ArrowObject"` | Arrow connection (from `open_dataset()`) | Filter/select, then `%>% collect()` |
+  | `"arrow_dplyr_query"`     | Unsent Arrow query  | Add `%>% collect()`     |
+
+A `read_register()` result says `"data.frame"` even though nothing has been
+fetched yet: look for `"prudent_duckplyr_df"` - as long as that is in the list,
+the data has not been collected. (`"Table"` is an Arrow table that is already in
+memory, which you rarely meet in this guide.)
 
 <details>
 <summary>In depth: RAM is shared - clean up after large extractions</summary>
@@ -162,12 +169,12 @@ On DST all users share the server's memory. When the memory bar in RStudio turns
 
 ```r
 rm(large_register)   # removes the object from your R session (disappears from the list in the top right of RStudio)
-gc()                 # asks the operating system to reclaim memory R no longer uses
+gc()                 # frees memory R no longer uses, so it can be handed back
 ```
 
 `rm()` removes the object from your active session - it can no longer be used in code and disappears from the Environment panel (top right in RStudio).
 
-`gc()` (*garbage collection*) does not affect your session - all your other objects are still there. R normally holds on to freed memory a little longer, because it is faster to reuse than to request new memory from the operating system. `gc()` forces R to return that memory to the operating system *immediately*, so it becomes available to other users on the shared DST server. You lose nothing - it helps your colleagues.
+`gc()` (*garbage collection*) does not affect your session - all your other objects are still there. R normally holds on to freed memory a little longer, because it is faster to reuse than to request new memory from the operating system. `gc()` makes R free that memory now, so it can be returned to the operating system and become available to other users on the shared DST server (how much is actually handed back, and when, depends on the system). You lose nothing - it helps your colleagues.
 
 Always clean up after large extractions before continuing.
 
@@ -225,7 +232,7 @@ To move an Arrow connection over to DuckDB, pipe through `to_duckdb()` (from the
 bef <- open_dataset("path/to/bef/") %>% to_duckdb()   # now queried by DuckDB
 ```
 
-`read_register()` hands you a DuckDB connection already, so this step is built in - you do not call `to_duckdb()` yourself.
+`read_register()` hands you a DuckDB-backed table already (a lazy *duckplyr* data frame), so this step is built in - you do not call `to_duckdb()` yourself.
 
 If you hit an error about an *"unsupported function"* in Arrow, that is the coverage gap: switch to DuckDB with `to_duckdb()`, or `collect()` into R first and do the operation there.
 

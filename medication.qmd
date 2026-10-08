@@ -77,17 +77,20 @@ library(dplyr)
 
 cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr) # your cohort from Phase 10
 
-medication <- read_register("lmdb") %>% # without fastreg: open_dataset("path/to/lmdb/")
+medication_rx <- read_register("lmdb") %>% # without fastreg: open_dataset("path/to/lmdb/")
   rename_with(tolower) %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # ONLY your cohort
   filter(substr(atc, 1, 5) == "A10BJ") %>% # GLP-1 analogues - filter BEFORE collect
   select(pnr, atc, eksd, vnr) %>%
-  collect() %>% # only HERE is data pulled into RAM
+  collect() # only HERE is data pulled into RAM - ALL dispensings, one row per fill
+
+medication <- medication_rx %>%
   group_by(pnr) %>%
   arrange(eksd) %>%
   slice(1) %>%
   ungroup() # first dispensing per person
 
+saveRDS(medication_rx, "path/to/extract_medication_rx.rds") # keep all fills: the user definition below needs them
 saveRDS(medication, "path/to/extract_medication.rds")
 ```
 
@@ -127,7 +130,7 @@ flag_users <- function(data, min_dispensings = 2, window_days = 365) {
     summarise(onset_date = min(eksd), .groups = "drop")    # first date the rule is met
 }
 
-users <- flag_users(medication, min_dispensings = 2, window_days = 365)
+users <- flag_users(medication_rx, min_dispensings = 2, window_days = 365) # ALL fills, not the first-only table
 ```
 
 The two numbers are **your** choices, not standards - write them into your
@@ -334,8 +337,10 @@ want a descriptive breakdown by therapeutic subgroup, `atc2` is a ready-made
 grouping column and saves you a `substr()`:
 
 ```r
-medication %>%
-  count(atc2, sort = TRUE) # dispensings per therapeutic subgroup
+read_register("lmdb") %>% # the register itself: atc2 was not selected into medication_rx
+  rename_with(tolower) %>%
+  count(atc2, sort = TRUE) %>% # dispensings per therapeutic subgroup
+  collect()
 ```
 
 That is the use case. Filtering is not.
@@ -405,7 +410,7 @@ Two columns separate them:
 ozempic_vnr <- c("xxxxxx", "yyyyyy") # placeholders - replace with your looked-up numbers
 
 # 2. Keep only the dispensings whose vnr is on your list:
-medication %>%
+medication_rx %>%
   filter(atc == "A10BJ06") %>% # semaglutide (Ozempic AND Wegovy)
   filter(vnr %in% !!ozempic_vnr) # keep only rows with a vnr from your list
 ```

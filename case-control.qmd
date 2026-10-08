@@ -55,9 +55,10 @@ from there.
 [landing page](build-study-population.qmd).)*
 
 You need one row per person with matching variables and the dates eligibility
-depends on. Build it **exactly like the pool in [Comparison cohort, Steps
-3-4](comparison-cohort.qmd)** (demographics + `earliest_bef` + death date +
-emigration date + lookback). For case-control, though:
+depends on. Reuse the **`pool` from [Comparison cohort, Step
+2](comparison-cohort.qmd#step-2---build-the-comparison-pool)** (demographics +
+death date + first exit + first outcome date) and the migration events
+`vnds_ev` from Step 1 there, for the entry (residence) date. For case-control, though:
 
 - **Exposure is not an eligibility criterion here** (unlike the comparison
   cohort, where a control must be *exposure-free* at index). In case-control,
@@ -73,23 +74,35 @@ emigration date + lookback). For case-control, though:
 
 ```r
 # Step 1: build the dataset for matching ---------------------------------------
-# 'population' = one row per person from Comparison cohort (pnr, sex, birth_year,
-#                death_date, emigration_date, earliest_bef_year). See Comparison cohort, Steps 3-4.
+# 'pool' = one row per person from Comparison cohort, Step 2 (pnr, foed_dag, sex, birth_year,
+#          death_date, first_outcome_date, first_exit); 'vnds_ev' = all migration events
+#          from Comparison cohort, Step 1. The exposure date in 'pool' is NOT used here.
 STUDY_END <- as.Date("2022-12-31")                # we choose: last day of the study
-outcome <- readRDS("path/to/outcome_dates.rds")   # pnr, first_outcome_date (FIRST outcome; NA = never)
 
-all_persons <- population %>%
-  left_join(outcome, by = "pnr") %>%              # add outcome date (NA = never outcome)
+# Entry = the date a person first meets the inclusion criteria: here age >= 18 and
+# 5 years continuous residence since the latest immigration (or since birth) - adapt
+last_entry <- vnds_ev %>%
+  filter(indud_kode == "I") %>%
+  group_by(pnr) %>%
+  summarise(last_entry = max(haend_dato), .groups = "drop")   # latest immigration
+
+all_persons <- pool %>%
+  left_join(last_entry, by = "pnr") %>%
   transmute(                                       # keep ONLY the columns we name
     pnr,
-    case       = if_else(!is.na(first_outcome_date), 1L, 0L),  # 1 = case (had outcome), 0 = potential control
+    # 1 = case (outcome within the study period), 0 = potential control.
+    # An outcome after STUDY_END is NOT a case: that person is censored at STUDY_END.
+    case       = if_else(!is.na(first_outcome_date) & first_outcome_date <= STUDY_END, 1L, 0L),
     sex        = as.factor(sex),                   # matching variable MUST be factor/character
     birth_year = as.factor(birth_year),            # matching variable
-    case_index = first_outcome_date,               # the case index = outcome date (NA if never)
-    # end_fu = when the person leaves the risk set: the EARLIEST of death, emigration,
+    case_index = if_else(case == 1L, first_outcome_date, as.Date(NA)),  # the case index = outcome date (NA if not a case)
+    entry      = pmax(foed_dag + ceiling(18 * 365.25),                        # age >= 18
+                      coalesce(last_entry, foed_dag) + ceiling(5 * 365.25)),  # 5 years residence
+    # end_fu = when the person leaves the risk set: the EARLIEST of death, first exit,
     #          own outcome (they become a case then) or study end. pmin = earliest.
-    end_fu     = pmin(death_date, emigration_date, first_outcome_date, STUDY_END, na.rm = TRUE)
-  )
+    end_fu     = pmin(death_date, first_exit, first_outcome_date, STUDY_END, na.rm = TRUE)
+  ) %>%
+  filter(entry < end_fu)                           # never at risk (e.g. outcome before entry) -> neither case nor control
 ```
 
 </details>
@@ -117,6 +130,7 @@ matched <- incidenceMatch(
   n.controls   = 5,                      # controls per case
   case.index   = "case_index",           # the case's index date (the outcome date)
   end.followup = "end_fu",               # when a person stops being eligible as a control
+  date.terms   = "entry",                # a control must have entered before the case's index
   seed         = 20260620                # reproducibility
 )
 # Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
@@ -124,8 +138,8 @@ matched <- incidenceMatch(
 
 </details>
 
-**Route B - `Epi::ccwc()`** (counter-matched/risk-set sampling from entry and
-exit times). Confirm arguments with `?Epi::ccwc`.
+**Route B - `Epi::ccwc()`** (simple risk-set sampling from entry and
+exit times; not counter-matching). Confirm arguments with `?Epi::ccwc`.
 
 <details>
 <summary>Show the code (Route B): sample with Epi::ccwc()</summary>
@@ -136,9 +150,9 @@ library(Epi)   # ccwc - case-control within cohort
 
 cohort <- all_persons %>%
   mutate(
-    entry = as.Date("2010-01-01"),                # study start (adapt; e.g. 18th birthday or first eligible date)
+    entry = entry,                                # each person's own entry date (from Step 1)
     exit  = end_fu,                               # exit time = end of risk time (from Step 1)
-    fail  = case                                  # 1 if the person is a case at exit
+    fail  = case                                  # 1 if the person is a case at exit (0 if outcome after STUDY_END)
   )
 
 ncc <- ccwc(

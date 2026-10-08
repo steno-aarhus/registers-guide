@@ -57,7 +57,7 @@ erDiagram
     }
     extract_nmi {
         string pnr FK
-        int nmi_score
+        int nmi
     }
 ```
 
@@ -360,12 +360,14 @@ cohort <- cohort %>%
       na.rm = TRUE
     ),
 
-    # Follow-up time in years
-    followup_years = as.numeric(censor_date - index_date) / 365.25,
+    # Follow-up time in days (Cox) and in years (rates, Poisson)
+    time_days = as.numeric(censor_date - index_date),
+    followup_years = time_days / 365.25,
 
-    # Event variable: 1 = outcome occurred before censoring, 0 = censored
-    event = as.integer(!is.na(event_date) & event_date <= censor_date)
-  )
+    # Outcome variable: 1 = outcome occurred before censoring, 0 = censored
+    outcome = as.integer(!is.na(event_date) & event_date <= censor_date)
+  ) %>%
+  filter(time_days > 0) # drop zero/negative follow-up (see below)
 ```
 
 ::: {.callout-note}
@@ -374,9 +376,16 @@ per person - it is the vectorised version of `min()`. `na.rm = TRUE` ensures
 that a missing death date (= alive) does not make the censoring date `NA`.
 :::
 
+**Zero or negative follow-up.** Someone whose outcome, death or emigration is
+recorded on the index date itself gets `time_days = 0` and was never at risk;
+an event *before* index (a prevalent case that slipped through) gives a negative
+time. Both break the analysis (`log(0)` in Poisson, meaningless Cox time), so
+the `filter()` above drops them - count how many, and if same-day events are
+common in your data, decide deliberately whether they belong in the study.
+
 **Competing risks?** If a competing event (typically death) must be handled
 separately (see [Time-to-event](time-to-event.qmd#competing-risks)),
-then instead of a binary `event` (0/1) build a **status with three values** -
+then instead of a binary `outcome` (0/1) build a **status with three values** -
 what happened *first*:
 
 ```r
@@ -396,7 +405,7 @@ cohort <- cohort %>%
 
 By now your **cohort** is built in [Phase 10](build-study-population.qmd): a
 table with one row per person, `pnr` and `index_date` (and `exposed`/`case` if
-you have a comparison group) - one row per **person**, unless your comparison
+you have a comparison group - renamed to `exposure` in the final `select()`) - one row per **person**, unless your comparison
 group was matched **with replacement**, in which case the same `pnr` can carry
 several rows, one per `index_date` it was matched on. If that applies to you,
 see [comparison cohort's callout on
@@ -423,12 +432,15 @@ cohort_final <- cohort %>%
   select(
     pnr,
     index_date,
+    exposure = exposed, # renamed: the analysis pages call it `exposure`
     censor_date,
+    time_days,
     followup_years,
-    event,
-    alder,
-    koen,
-    nmi_score,
+    outcome,
+    status_code, # from the competing-risks block above
+    age,
+    sex,
+    nmi,
     occupation_cat,
     education_cat,
     income_cat
@@ -450,18 +462,18 @@ library(tibble)  # tibble()
 # 0. Load your cohort ----------------------------------------------------------
 cohort <- readRDS("path/to/full_cohort.rds")   # one row per person: pnr + index_date (Phase 10)
 
-# 1. Exclude prevalent cases ---------------------------------------------------
-# People who already had the outcome before index are not at risk of getting it,
-# so they go BEFORE anything else is joined on. anti_join keeps the rows of
-# `cohort` with NO match in `prevalent` - see Phase 10.
-# cohort_clean <- cohort %>% anti_join(prevalent, by = "pnr")
+# 1. Prevalent cases are already excluded --------------------------------------
+# People who already had the outcome before index are not at risk of getting it.
+# They were removed in Phase 10 (build-study-population.qmd, Step 3: the
+# `prevalent` object and filter(!pnr %in% prevalent)), so full_cohort.rds holds
+# only people at risk at index. The filter in step 4 catches any that slipped through.
 
 # 2. Link the outcome ----------------------------------------------------------
 # One row per person with the FIRST event date after index, or no row at all.
 # left_join keeps everyone, so people with no event get NA - which is exactly
-# what "no event" means here, and what the event indicator in step 4 reads.
-outcome  <- readRDS("path/to/extract_dementia.rds")   # pnr + event_date
-cohort <- cohort_clean %>% left_join(outcome, by = "pnr")
+# what "no event" means here, and what the outcome indicator in step 4 reads.
+dementia <- readRDS("path/to/extract_dementia.rds")   # pnr + event_date
+cohort <- cohort %>% left_join(dementia, by = "pnr")
 
 # 3. Link censoring: death date and emigration ---------------------------------
 deaths <- read_register("dod") %>%   # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")
@@ -488,19 +500,27 @@ cohort <- cohort %>%
   left_join(deaths,    by = "pnr") %>%
   left_join(vnds_data, by = "pnr")
 
-# 4. Follow-up time and the event indicator ------------------------------------
+# 4. Follow-up time and the outcome indicator ----------------------------------
 # censor_date = the FIRST of the four ways follow-up can end. pmin() with
 # na.rm = TRUE takes the earliest date that actually exists, so someone who never
 # died, never emigrated and never had the event simply ends at study_end.
-# event = 1 only if the outcome happened at or before that date: a diagnosis
-# recorded after the person emigrated does not count.
+# outcome = 1 only if the outcome happened at or before that date: a diagnosis
+# recorded after the person emigrated does not count. status_code adds death as
+# a competing event (0 = censored, 1 = outcome, 2 = death; outcome wins a tie).
 study_end <- as.Date("2024-12-31")
 cohort <- cohort %>%
   mutate(
     censor_date    = pmin(event_date, death_date, emigration_date, study_end, na.rm = TRUE),
-    followup_years = as.numeric(censor_date - index_date) / 365.25,   # 365.25 = leap years
-    event          = as.integer(!is.na(event_date) & event_date <= censor_date)
-  )
+    time_days      = as.numeric(censor_date - index_date),
+    followup_years = time_days / 365.25,   # 365.25 = leap years
+    outcome        = as.integer(!is.na(event_date) & event_date <= censor_date),
+    status_code    = case_when(
+      outcome == 1 ~ 1,
+      !is.na(death_date) & death_date <= censor_date ~ 2,
+      TRUE ~ 0
+    )
+  ) %>%
+  filter(time_days > 0)   # no follow-up = never at risk (event/death/emigration on index day)
 
 # 5. Link covariates (demographic, SES, comorbidity) ---------------------------
 # Each of these must already be ONE row per person. If one is not, the join
@@ -514,12 +534,12 @@ nmi_data <- readRDS("path/to/extract_nmi.rds")    # NMI score
 cohort <- cohort %>%
   left_join(bef_data, by = "pnr") %>%
   left_join(ses_data, by = "pnr") %>%
-  left_join(nmi_data, by = "pnr")
+  left_join(nmi_data, by = c("pnr", "index_date"))  # NMI is computed per index date - see nmi.qmd
 
 # 6. Keep ONLY the columns the analysis requires -------------------------------
 cohort_final <- cohort %>%
-  select(pnr, index_date, censor_date, followup_years, event,
-         alder, koen, nmi_score, occupation_cat, education_cat, income_cat)
+  select(pnr, index_date, exposure = exposed, censor_date, time_days, followup_years,
+         outcome, status_code, age, sex, nmi, occupation_cat, education_cat, income_cat)
 
 saveRDS(cohort_final, "path/to/analysis_dataset.rds")  # save the final dataset
 nrow(cohort_final)   # one row per person? compare with the cohort you started from

@@ -18,7 +18,8 @@ Before you go looking in the code, do this in order:
 1. **Read the error message:** which line is mentioned? Which object name
    appears?
 2. **Run `class(object)`:** is it data (`"data.frame"`) or still a connection
-   (`"tbl_duckdb_connection"`)? See [Phase 5 - do you have data or just a
+   (`"prudent_duckplyr_df"` from `read_register()` - even though it also says
+   `"data.frame"` - or `"arrow_dplyr_query"`, `"tbl_duckdb_connection"`)? See [Phase 5 - do you have data or just a
    connection?](extraction-step-by-step.qmd)
 3. **Run `names(object)`:** is the column named exactly what you think? A single
    letter or difference in capitalisation is enough to fail.
@@ -108,12 +109,12 @@ These are the ones you meet in a DST workflow rather than in R generally:
   | Error message                                    | Typical cause                                                  | Solution                                                                                        |
   | ------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
   | `Error: Column 'pnr' not found`                  | `rename_with(tolower)` is missing                              | Add `%>% rename_with(tolower)` immediately after `read_register()` - see [pitfall 3](dst-pitfalls.qmd#tolower)  |
-  | `Error: object 'my_list' not found`              | `!!` missing in `filter()` on a lazy connection                | Write `filter(year %in% !!my_list)` - see [pitfall 8](dst-pitfalls.qmd#bang-bang)                                |
+  | `Error: object 'my_list' not found`              | `my_list` was never created in this session (not run, or misspelt) | Run the line that creates it; check the name with `ls()`. `!!` does not fix this - see [pitfall 8](dst-pitfalls.qmd#bang-bang) for what `!!` is for |
   | `Error: could not find function "read_register"` | `library(fastreg)` missing                                     | Add `library(fastreg)` at the top of the script                                                 |
   | `non-numeric argument to binary operator`        | Date column is `character`, not `Date`                         | `mutate(date = as.Date(date))` - see [pitfall 4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) |
   | `Error in filter.default(...)`                   | Filtering on a lazy object without `%>%`                       | Switch to `%>%` - see [the pipe](function-guide.qmd#the-pipe)                                   |
-  | `Error: Can't convert ... to ...`                | Join on columns of different type (e.g. numeric vs. character) | Use `mutate(pnr = as.character(pnr))` to match types                                            |
-  | `object of type 'closure' is not subsettable`    | A variable name overwrites a function (e.g. `data <- ...`)     | Use a unique variable name - avoid `data`, `df`, `c` as object names                            |
+  | `Can't join ... due to incompatible types`       | Join on columns of different type (e.g. numeric vs. character) on data in R (dplyr). A lazy Arrow/DuckDB join may instead give the engine's own type error | Use `mutate(pnr = as.character(pnr))` on both sides to match types                                            |
+  | `object of type 'closure' is not subsettable`    | The object you meant was never created (or is misspelt), so R found the built-in *function* of that name (e.g. `data`, `df`, `c`) | Create the object first / check its name. Unique object names (not `data`, `df`, `c`) make this error easier to spot |
 
 ::: {.callout-note}
 **`unsupported function` in Arrow** is not a mistake in your code - it is a gap
@@ -131,9 +132,11 @@ a finding: "no patients were exposed". Two ways to produce it:
 - **A pattern longer than the column:** `atc2` in LMDB holds three characters,
   so `grepl("N02A", atc2)` compares four characters against three and matches
   nothing. See [Medication (ATC)](medication.qmd#atc-columns).
-- **A type mismatch in a join or filter:** joining a character `pnr` to a
-  numeric one matches no rows rather than failing, the same way a format table
-  joined on the wrong type does (see [Format
+- **A type mismatch in a join or filter:** a join on a character `pnr` and a
+  numeric one usually *fails* (see the table above), but converting one side can
+  still leave values that never meet - a code stored as a number loses its
+  leading zero (`0001` becomes `1`), so it no longer matches the text `"0001"`,
+  the same way a format table joined on the wrong type does (see [Format
   tables](formatting-tables.qmd#education-level)).
 
 So treat an empty result as a **bug until proven otherwise**. Count the rows

@@ -45,7 +45,11 @@ simple, but can give **bias and loss of power** if the data are not missing
 completely at random.
 
 ```r
-df_complete <- na.omit(df) # keep only rows with no NA at all (use deliberately)
+library(tidyr) # drop_na()
+
+# Name the model variables: na.omit(df) would also drop rows with a structural NA
+# in a column the model does not use (e.g. death_date = NA means "alive")
+df_complete <- df %>% drop_na(outcome, exposure, age) # rows complete on the MODEL variables only
 ```
 
 ## Approach 2: multiple imputation (mice)
@@ -58,18 +62,23 @@ combine the results, so the uncertainty from the imputation itself is counted.
 
 ```r
 library(mice) # md.pattern(), mice(), with(), pool()
+library(dplyr) # select()
 
 md.pattern(df) # which variables are missing TOGETHER? (patterns), not just how much
 
 # Step 1: fill in the gaps (impute) --------------------------------------------
 # mice() builds the IMPUTATION model and makes m complete datasets. By default it uses
-# ALL columns in df to predict each variable with gaps. This is NOT your analysis - it
-# only fills in the missing values.
+# ALL columns in the data to predict each variable with gaps - so first keep only the
+# model variables plus a few auxiliary variables that predict the gaps. pnr, dates and
+# derived columns (followup_years next to censor_date) would only add noise and
+# collinearity. For finer control, see mice's predictorMatrix argument and quickpred().
+# This is NOT your analysis - it only fills in the missing values.
+df_imp <- df %>% select(outcome, exposure, age, sex, education_cat, income_cat)
 # m = number of imputed datasets. You choose it yourself. Rule of thumb: at least as
 # many as the percentage of rows with at least one gap (if e.g. 30% of rows are
 # incomplete => set m around 30). Today 20-50 is typical; more m => more stable, but
 # slower.
-imp <- mice(df, m = 20, seed = 123) # seed = fixed number => reproducible (same idea as matching, see 10a)
+imp <- mice(df_imp, m = 20, seed = 123) # seed = fixed number => reproducible (same idea as matching, see 10a)
 
 # Step 2: run YOUR analysis on each completed dataset --------------------------
 # Here YOU choose the ANALYSIS model (your research question): which variables go in is
@@ -155,9 +164,9 @@ missing:
   unbiased, just less efficient.
 - In a regression model, complete-case is in fact unbiased when missingness does
   not depend on the **outcome** given the covariates, even when it is not MCAR.
-  (Analysing only the observed means conditioning on being observed; this
-  creates bias only when being observed depends on *both* exposure/covariates
-  and outcome - that is, a collider.)
+  (Analysing only the observed means conditioning on being observed. For odds
+  ratios, complete-case is also unbiased when missingness depends on the
+  outcome alone, not on the covariates - only the intercept is biased.)
 - mice is only as good as the imputation model you give it. Pick the wrong
   variables to predict the missing values, and the filled-in values, and hence
   your result, will be wrong too. mice invents no information; it only exploits

@@ -57,7 +57,7 @@ read_register("lpr_adm") %>% rename_with(tolower) %>%
   collect()
 ```
 
-If that date reaches DST's own cutover (31 March 2019 for LPR2/LPR3), the
+If that date reaches DST's own cutover (early 2019 for LPR2/LPR3: February-March 2019, depending on region), the
 simple filter is safe as written. If it does not, do not just drop the
 `lprindberetningssystem` filter to get the gap back - that reintroduces the
 duplicates it exists to remove. See [DARTER pitfalls,
@@ -309,7 +309,8 @@ outcome <- all_dx %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
 
   # 3. Keep only contacts AFTER index. This is what makes it an outcome rather
-  #    than pre-existing disease. Use < instead for a baseline covariate.
+  #    than pre-existing disease. Use <= instead for a baseline covariate
+  #    (convention: on or before index = prevalent, after index = outcome).
   filter(date_contact > index_date) %>%
 
   # 4. Reduce to the FIRST event per person:
@@ -637,7 +638,8 @@ library(tidyr) # replace_na
 
 # 1. Build your flags (one expression per variable)
 diagnosis_flags <- all_dx %>%
-  filter(date_contact <= index_date) %>% # before index only (baseline covariate)
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>% # attach index_date
+  filter(date_contact <= index_date) %>% # on or before index only (baseline covariate)
   mutate(
     dx_diabetes = icd3 %in% c("E10", "E11"),
     dx_copd = str_detect(c_diag, "^DJ4[1-4]"),

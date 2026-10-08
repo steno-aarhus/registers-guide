@@ -45,8 +45,8 @@ opened but not yet `collect()`ed, called `bef` in the examples below - checking
 the column names is fiddlier than it looks, and both of the obvious ways can
 mislead you:
 
-- `names()` on a lazy object returns the *connection's* parts (`src`,
-  `lazy_query`), not the table's columns.
+- `names()` on a lazy DuckDB connection made with `to_duckdb()` returns the
+  *connection's* parts (`src`, `lazy_query`), not the table's columns.
 - `colnames()` works on the DuckDB objects `read_register()` gives you, but on a
   lazy **Arrow** query that has been through `rename_with()` it can return an
   **empty vector** without any error - so columns that exist look missing.
@@ -87,20 +87,22 @@ class(bef_data$alder) # type for one column: "numeric", "character", "Date" etc.
 ```
 
 `class(bef_data)` tells you whether you have real data
-(`"data.frame"`/`"tbl_df"`) or still just an unsent query. You can see three
-different return values:
+(`"data.frame"`/`"tbl_df"`) or still just an unsent query. You can see four
+different kinds of return value:
 
-- `"data.frame"` / `"tbl_df"` - data is in R. You can use all functions.
-- `"tbl_duckdb_connection"` / `"Table"` - lazy Arrow/DuckDB query. Missing
-  `collect()`.
+- `"data.frame"` / `"tbl_df"` *without* `"prudent_duckplyr_df"` - data is in R. You can use all functions.
+- `"prudent_duckplyr_df"` (followed by `"duckplyr_df" "tbl_df" "tbl" "data.frame"`) -
+  a lazy DuckDB table from `read_register()`. It says `"data.frame"`, but nothing is fetched yet. Missing `collect()`.
+- `"FileSystemDataset"` (from `open_dataset()`) or `"tbl_duckdb_connection"` (from `to_duckdb()`) -
+  a lazy Arrow/DuckDB connection. Missing `collect()`.
 - `"arrow_dplyr_query"` - an Arrow query with one or more piped steps (e.g.
   `filter()` or `select()`), but not yet executed. Missing `collect()`.
 
 ::: {.callout-tip}
 **`class()` can help you debug** Does the object look like data but behave
 strangely, or does your code fail with a mysterious message? Run
-`class(your_object)` - if it is not `"data.frame"`, you are probably missing a
-`collect()`. The full table of what `class()` can return - and why - is in
+`class(your_object)` - if it is not `"data.frame"`, or it still includes
+`"prudent_duckplyr_df"`, you are probably missing a `collect()`. The full table of what `class()` can return - and why - is in
 [Phase 5 - Extracting data step by
 step](extraction-step-by-step.qmd#check-do-you-have-data-or-just-a-connection).
 :::
@@ -129,12 +131,12 @@ object?](r-intro.qmd#what-is-an-object)) so you can reuse it.
 (e.g. `table(bef$koen)`, `unique()`, `summary()`, `min()/max()/median()`,
 `hist()`, `colSums(is.na())`) needs real data in R - `$` cannot extract a column
 from a lazy Arrow/DuckDB connection. Check with `class(bef)`: if it does not say
-`"data.frame"`/`"tbl_df"`, you are missing a `collect()`.
+`"data.frame"`/`"tbl_df"`, or it still says `"prudent_duckplyr_df"`, you are missing a `collect()`.
 
 You do **not** rewrite `read_register()`/`open_dataset()` to pull the data in -
 keep working with the object you already made. Reuse the name and store the
 result, usually under the same name, so `bef` is overwritten and is now real
-data. You can pull everything in as-is, or reduce it with `filter()`/`select()`
+data. On a real register, always reduce it with `filter()`/`select()`
 first:
 
 ```r
@@ -143,9 +145,7 @@ library(dplyr) # %>%, filter(), select(), collect()
 
 bef <- read_register("bef") # lazy connection - just a name so far
 
-bef <- bef %>% collect() # pull EVERYTHING in as-is - overwrites bef
-
-# OR reduce first (recommended on large registers):
+# reduce first, then fetch - overwrites bef (never collect() a whole register):
 bef <- bef %>% filter(year == 2015) %>% select(pnr, koen, alder) %>% collect()
 
 # now bef$koen, table(bef$koen), summary(bef) etc. all work
@@ -154,8 +154,9 @@ bef <- bef %>% filter(year == 2015) %>% select(pnr, koen, alder) %>% collect()
 (If you want to keep the lazy connection, give the fetched data a new name
 instead: `bef_2015 <- bef %>% filter(year == 2015) %>% collect()`.)
 
-`colnames()`, `glimpse()`, `head()` and dplyr verbs (`count()`, `filter()`,
-`select()`) do work fine on the lazy connection, though. So peek lazily,
+`glimpse()`, `head()` and dplyr verbs (`count()`, `filter()`,
+`select()`) do work fine on the lazy connection, though (for column names, use
+the zero-row trick above). So peek lazily,
 `filter()`/`select()` it down, and `collect()` a small slice before you dig into
 the values.
 :::
@@ -266,7 +267,7 @@ often stored as an **empty or blank string** (whitespace) or a sentinel code -
 not as `NA`. A column can therefore show `0` NAs and *still* be full of empty
 values: e.g. a fixed-width key field filled with blanks (a 13-character field
 that *looks* empty but is 13 spaces, not `NA`). So also check for blank values -
-e.g. `sum(trimws(bef_data$dw_ek_forloeb) == "")` - and look at
+e.g. `sum(trimws(bef_data$pnr) == "", na.rm = TRUE)` - and look at
 `nchar()`/`unique()` on a slice. This matters most for **join keys**: a
 blank-but-not-`NA` key causes silent join errors (rows that look filled but
 don't match).

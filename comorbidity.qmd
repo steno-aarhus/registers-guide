@@ -106,17 +106,16 @@ per person per condition. `read_register()` assumes [fastreg is pointed at your
 registers](parquet-and-fastreg.qmd#fastreg-paths).
 
 ```r
-library(fastreg) # read_register()
-library(dplyr) # %>%, semi_join(), collect()
-library(tibble) # tibble()
+library(fastreg) # read_register(), used inside get_lpr_diagnoses()
+library(dplyr) # %>%, inner_join(), filter()
 
-cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr)
+cohort <- readRDS("path/to/full_cohort.rds") # pnr + index_date
 
-diagnoses_before_index <- read_register("lpr_diag") %>% # without fastreg: open_dataset("path/to/lpr_diag/")
-  rename_with(tolower) %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # ONLY your cohort
-  # ... join to lpr_adm for the contact date, keep diagnoses before index_date ...
-  collect()
+# lpr_diag has no pnr - pnr and contact date live in lpr_adm (join key recnum).
+# get_lpr_diagnoses() from Extract from LPR does that join and keeps ONLY your cohort.
+diagnoses_before_index <- get_lpr_diagnoses(unique(cohort$pnr)) %>%
+  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
+  filter(date_contact <= index_date) # on or before index = baseline
 ```
 
 Turning that event log into one 0/1 flag per condition per person is the `any()`

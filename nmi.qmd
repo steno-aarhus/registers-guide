@@ -56,7 +56,7 @@ multimorbidity index for that.
 
 **Watch for over-adjustment:** your own outcome must not be one of the score's
 predictors. NMI handles dementia studies, for example, by dropping the dementia
-predictor (`dx_F00_G30` and `rx_N06D`), since dementia would otherwise be part
+predictor (`dx_F00_G319` and `rx_N06D`), since dementia would otherwise be part
 of the score you adjust for.
 
 ## R implementation
@@ -190,7 +190,8 @@ nmi_icd <- c(
 # You can now extract the ICD and ATC codes with the steps in Phase 9 (Extract from LPR), or with its get_lpr_diagnoses() helper. With the helper, the code looks like this:
 nmi_diagnoses <- get_lpr_diagnoses(
   pnr_vector = unique(cohort$pnr), # all the cohort's pnr
-  icd_codes = nmi_icd # only NMI codes are collected
+  icd_codes = nmi_icd, # only NMI codes are collected
+  diagtypes = c("A", "B", "G", "H", "M", "C") # all diagnosis types, as above (LPR3 has only A and B)
 )
 stopifnot(nrow(nmi_diagnoses) > 0) # catch an empty extraction here, not three steps later
 saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # columns: pnr, date_contact, c_diag, c_diagtype, icd3
@@ -446,7 +447,7 @@ nmi_data <- cohort %>%   # reload your cohort here if needed (the name may be so
 stopifnot(nrow(nmi_data) == nrow(cohort))
 stopifnot(!anyNA(nmi_data$nmi))
 
-saveRDS(nmi_data %>% select(pnr, nmi), "datasets/extract_nmi.rds")
+saveRDS(nmi_data %>% select(pnr, index_date, nmi), "datasets/extract_nmi.rds")
 ```
 
 </details>
@@ -461,7 +462,7 @@ general version of this pattern, used the same way elsewhere in the guide.
 
 ### 3. Look at and describe the score
 
-The score is one number per person in `extract_nmi.rds`. Join it to your
+The score is one number per (`pnr`, `index_date`) in `extract_nmi.rds`. Join it to your
 analysis dataset (Phase 12) and inspect it - NMI is right-skewed (many low, a
 few high), so median [IQR] often describes it better than the mean, though mean
 + CI is fine for comparing groups.
@@ -472,9 +473,9 @@ few high), so median [IQR] often describes it better than the mean, though mean
 ```r
 library(dplyr)
 
-nmi <- readRDS("datasets/extract_nmi.rds") # pnr, nmi
+nmi <- readRDS("datasets/extract_nmi.rds") # pnr, index_date, nmi
 analysis <- readRDS("datasets/analysis.rds") %>% # your assembled dataset (Phase 12)
-  left_join(nmi, by = "pnr")
+  left_join(nmi, by = c("pnr", "index_date")) # both keys, as in 2.3
 
 # Distribution overall
 summary(analysis$nmi)

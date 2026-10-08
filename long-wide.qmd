@@ -74,7 +74,7 @@ The pattern is always the same: group by `pnr`, sort so the desired row is on
 top, take the first row per group.
 
 ```r
-# BEF: keep only the newest record per person (BEF has one snapshot per year)
+# BEF: keep only the newest record per person (BEF has one snapshot per year, or per quarter since 2008)
 bef_one_per_person <- bef %>%
   group_by(pnr) %>% # group: all rows with the same pnr are treated together
   arrange(desc(year)) %>% # sort within group: newest year first (desc = descending)
@@ -97,13 +97,17 @@ data.frame normal again. Rule of thumb: always end a `group_by()` chain with
 :::
 
 ```r
-# LPR / all_dx: find first diagnosis per person (for outcome definition)
-first_dementia <- all_dx %>%
-  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>% # only dementia codes
+# LPR / all_dx: find first diagnosis AFTER index per person (for outcome definition)
+# A diagnosis on or before index is a prevalent case (excluded in Phase 10), not an outcome.
+first_dementia <- cohort %>% # the cohort has pnr + index_date
+  left_join(all_dx, by = "pnr") %>%
+  filter(icd3 %in% c("G30", "F00", "F01", "F02", "F03")) %>% # only dementia codes (after removing the leading D - see Extract from LPR)
+  filter(date_contact > index_date) %>% # only diagnoses after index
   group_by(pnr) %>% # group per person
   arrange(date_contact) %>% # oldest date first (ascending - no desc)
   slice(1) %>% # first diagnosis per person
-  ungroup() # release grouping
+  ungroup() %>% # release grouping
+  select(pnr, event_date = date_contact)
 # → ready for join: cohort %>% left_join(first_dementia, by = "pnr")
 ```
 

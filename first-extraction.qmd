@@ -73,7 +73,7 @@ write_parquet(tables$lpr_adm, "synth_data/lpr_adm/lpr_adm.parquet")
 ```
 
 BEF is quarterly from 2008, and `year` is an integer, so 2015 holds several rows
-per person. With `n = 60` that year has 240 rows, enough for the sample below.
+per person. With `n = 60` that year has 240 rows but 60 people, enough for the sample below.
 
 ::: {.callout-tip}
 **The path is relative to your working directory.** `"synth_data/bef/"` is
@@ -94,20 +94,21 @@ cohort directly from the BEF register.
 bef_data <- open_dataset("synth_data/bef/") %>%
   rename_with(tolower)
 
-# 200 rows from one snapshot year, not 200 people:
+# 30 people from one snapshot year:
 # quarterly BEF has several rows per person in 2015
 cohort_pnrs <- bef_data %>%
   filter(year == 2015) %>% # take one snapshot year
-  select(pnr) %>%
+  distinct(pnr) %>% # one row per person
   collect() %>% # HERE data is fetched into R
-  slice_sample(n = 200) %>%
+  slice_sample(n = 30) %>%
   pull(pnr)
 
-length(cohort_pnrs) # 200 rows; distinct pnr's can be fewer
+length(cohort_pnrs) # 30 distinct pnr's
 ```
 
-`slice_sample(n = 200)` draws rows. Because BEF is quarterly, the same `pnr` can
-appear more than once, so this is not a list of 200 people.
+`slice_sample(n = 30)` draws rows. Because BEF is quarterly, the same `pnr` can
+appear more than once, so `distinct(pnr)` comes first - that way you sample 30
+people, not 30 rows.
 
 In a real project, `cohort_pnrs` is a vector you built in a previous script and
 reload with `readRDS("path/to/full_cohort.rds") %>% pull(pnr)`.
@@ -179,7 +180,7 @@ always the same: **open → filter → select columns → collect**.
 lpr_adm <- open_dataset("synth_data/lpr_adm/") %>%
   rename_with(tolower)
 
-# Extract: filter BEFORE collect - otherwise the session will crash
+# Extract: subset to the cohort BEFORE collect - otherwise the session will crash
 contacts <- lpr_adm %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # only our cohort
   select(pnr, recnum, d_inddto) %>% # only the columns we use
@@ -192,7 +193,7 @@ head(contacts) # the first six rows
 **What happened?**
 
 - `open_dataset()` opened a lazy connection - no data in R yet
-- `filter()` and `select()` sent instructions to Arrow/DuckDB - still no data in
+- `semi_join()` and `select()` sent instructions to Arrow/DuckDB - still no data in
   R
 - `collect()` executed the query and fetched only the necessary rows into R
 
@@ -237,7 +238,7 @@ Run `getwd()` to see which folder that is.
 
 ::: {.callout-warning}
 **The `datasets/` folder is stored locally on the DST server only.**
-Intermediate results are repatriated via output control - see [14 - Export and
+Intermediate results stay on DST; only aggregated results leave via output control - see [14 - Export and
 repatriation](export.qmd).
 :::
 
