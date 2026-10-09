@@ -127,14 +127,17 @@ matched <- incidenceMatch(ptid = "pnr", event = "event",    # event: 0/1
 **Average income over the years before a date** - what [Socioeconomic variables](socioeconomic-variables.qmd#faik-income) does by hand:
 
 ```r
+# averageIncome() only accepts data.tables: a tibble or data.frame stops with
+# an error, so convert both inputs with data.table::as.data.table() first.
 income <- averageIncome(
-  data       = cohort,                          # id + the date to look back from
-  income     = faik_linked,                     # id + year + income, already linked to pnr
+  data       = data.table::as.data.table(cohort),      # id + the date to look back from
+  income     = data.table::as.data.table(faik_linked), # id + year + income, already linked to pnr
   datvars    = c("pnr", "index_date"),
   incomevars = c("pnr", "year", "famaekvivadisp_13"),
   numyears   = 3                                # default is 5; SEPLINE uses 3
 )
-# Returns: one row per person with the averaged income.
+# Returns: one row per person and index year, with the columns pnr, year (the
+# index year) and income (the average).
 # It uses only years STRICTLY BEFORE the index year, and it keeps one row per
 # person-year, so repeated rows for the same person and year collapse.
 # It does NOT build the familie_id bridge for you - the income table you pass in
@@ -411,6 +414,11 @@ Luke Johnston.
 
 ```r
 library(carpenter)
+library(dplyr) # %>%, mutate()
+
+# carpenter stops with an error on character columns: the header (group) and
+# every categorical row (sex) must be factors
+cohort <- cohort %>% mutate(group = factor(group), sex = factor(sex))
 
 outline_table(cohort, "group") %>%
   add_rows("age", stat_meanSD) %>% # continuous: mean (SD)
