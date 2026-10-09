@@ -73,11 +73,19 @@ question produces a messy dataset. A precise question produces a clear plan.
 
 Ask yourself:
 
+::: {.callout-note}
+**Example study (illustration only).** The examples on this page, and in many
+code examples across the guide, use one made-up study: does **bariatric
+surgery** change the risk of **hip fracture**? It is not a real project. The
+choices in it are there to show the method, not as recommendations for your
+study.
+:::
+
   | Question                                  | Example                                              |
   | ----------------------------------------- | ---------------------------------------------------- |
   | Who is my population?                     | All adults with T2D in Denmark, 2010–2020            |
   | What is my exposure?                      | Bariatric surgery                                    |
-  | What is my outcome?                       | Dementia                                             |
+  | What is my outcome?                       | Hip fracture (ICD-10 S72)                            |
   | When does follow-up start?                | Date of surgery (index date)                         |
   | When does it end?                         | Diagnosis, death, emigration, or end of study period |
   | Which confounders should be adjusted for? | Age, sex, comorbidity, SES                           |
@@ -130,15 +138,15 @@ adjustment set**: the smallest group of variables that removes the confounding
 without opening a new bias through a collider.
 
 <details>
-<summary>Example: surgery and dementia - a DAG with confounder, mediator and collider</summary>
+<summary>Example study (illustration only): surgery and hip fracture - a DAG with confounder, mediator and collider</summary>
 
-A concrete example: does **surgery** affect the risk of **dementia**?
+A concrete example: does **bariatric surgery** affect the risk of **hip fracture**?
 
-![DAG of surgery → dementia with a confounder (age), a mediator (delirium) and a collider (hospitalisation).](images/dag_example.svg){#fig-dag fig-alt="Causal diagram with five variables: surgery (exposure), dementia (outcome), age (confounder), delirium (mediator) and hospitalisation (collider)." width="92%"}
+![DAG of surgery → hip fracture with a confounder (age), a mediator (bone loss) and a collider (hospitalisation).](images/dag_example.svg){#fig-dag fig-alt="Causal diagram with five variables: surgery (exposure), hip fracture (outcome), age (confounder), bone loss (mediator) and hospitalisation (collider)." width="92%"}
 
-- **Age** is a *confounder* - it affects both the probability of surgery and of dementia. **Adjust for it.**
-- **Delirium** (post-operative delirium) is a *mediator* - it lies on the path surgery → delirium → dementia. **Do not adjust** - that removes part of the effect you want to measure.
-- **Hospitalisation** is a *collider* - both surgery and dementia lead to hospitalisation. **Do not adjust** - it opens a spurious association.
+- **Age** is a *confounder* - it affects both the probability of surgery and of hip fracture. **Adjust for it.**
+- **Bone loss** (lower bone density after surgery) is a *mediator* - it lies on the path surgery → bone loss → hip fracture. **Do not adjust** - that removes part of the effect you want to measure.
+- **Hospitalisation** is a *collider* - both surgery and hip fracture lead to hospitalisation. **Do not adjust** - it opens a spurious association.
 
 You can paste the model straight into [dagitty.net](https://dagitty.net/dags.html) and have the minimal adjustment set computed:
 
@@ -146,15 +154,15 @@ You can paste the model straight into [dagitty.net](https://dagitty.net/dags.htm
 dag {
   Age            [pos="0,-1"]
   Surgery        [exposure, pos="-1.5,0"]
-  Delirium       [pos="0,0"]
-  Dementia       [outcome,  pos="1.5,0"]
+  BoneLoss       [pos="0,0"]
+  HipFracture    [outcome,  pos="1.5,0"]
   Hospitalisation [pos="0,1"]
   Age      -> Surgery
-  Age      -> Dementia
-  Surgery  -> Delirium
-  Delirium -> Dementia
-  Surgery  -> Hospitalisation
-  Dementia -> Hospitalisation
+  Age         -> HipFracture
+  Surgery     -> BoneLoss
+  BoneLoss    -> HipFracture
+  Surgery     -> Hospitalisation
+  HipFracture -> Hospitalisation
 }
 ```
 
@@ -208,15 +216,16 @@ Before opening R, answer these questions in writing:
 A solid overview on paper saves many hours of debugging in code.
 
 <details>
-<summary>Example: overview for a dementia study</summary>
+<summary>Example study (illustration only): overview for the hip fracture study</summary>
 
 ```
-Population:   Adults who have undergone bariatric surgery (identified via the Danish Obesity
-              Treatment Database - DBSO), 2010–2024
+Population:   Adults who have undergone bariatric surgery, 2010–2024, identified by
+              SKS procedure codes in LPR: lpr_sksopr (LPR2, to early 2019) and
+              lpr_a_procregistrering (LPR3, from 2019)
               Matched comparators from the Population Register (BEF)
 
-Outcome:      First dementia diagnosis (LPR - ICD-10: F00–F03, G30–G31)
-              Date: first contact with a dementia code after the surgery date
+Outcome:      First hip fracture (LPR - ICD-10: S72)
+              Date: first contact with an S72 diagnosis after the surgery date
 
 Covariates:   Age and sex (BEF)
               Comorbidity (LPR - 5-year lookback, i.e. diagnoses in the 5 years before index date)
