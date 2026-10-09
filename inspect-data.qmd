@@ -293,6 +293,53 @@ See [DST
 pitfalls](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) for the
 most common date conversion errors and how to fix them.
 
+## Check that every register reaches the end of your follow-up {#check-coverage}
+
+A register in your delivery does not necessarily run as far as DST says the
+register does. It may have been converted a year ago, ordered for fewer years,
+or be a register that has closed for good (`dodsaars` stops in 2001, see
+[pitfall 1](dst-pitfalls.qmd#death-registers)). Nothing errors when your
+follow-up runs past the end of the data: people simply look as if nothing
+happened to them, which quietly skews censoring, outcomes and matching.
+
+So for **every** register you use, check its first and last year or date
+against your study period before you build anything on it:
+
+```r
+library(fastreg) # read_register()
+library(dplyr) # summarise, collect
+
+# Yearly registers (BEF, AKM, UDDA, FAIK ...): look at the year column
+read_register("akm") %>%
+  rename_with(tolower) %>%
+  summarise(first_year = min(year), last_year = max(year)) %>%
+  collect()
+
+# Event registers (LMDB, LPR, DOD ...): look at the event date itself
+read_register("lmdb") %>%
+  rename_with(tolower) %>%
+  summarise(first_date = min(eksd, na.rm = TRUE), last_date = max(eksd, na.rm = TRUE)) %>%
+  collect()
+```
+
+For event registers, use the date column rather than `year`: `year` is the
+[folder the row was filed under](dst-pitfalls.qmd#year-is-not-a-date), not
+when the event happened.
+
+It also helps to know when the parquet copy was made. If the folder has not
+changed in a long time, newer years are probably missing:
+
+```r
+file.info("path/to/parquet-registers/bef/")$mtime # replace with your project's path
+```
+
+If a register stops before your follow-up ends, either end follow-up at the
+register's last date, or ask your data manager whether a newer delivery or the
+raw SAS files cover the missing years.
+
+Coverage is one of several things a delivery can get wrong. The rest are on
+[Check your delivery](delivery-check.qmd).
+
 <details>
 <summary>More exploration: count, sort and quick plots</summary>
 
