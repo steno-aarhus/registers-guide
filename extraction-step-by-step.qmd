@@ -106,6 +106,47 @@ faster and more stably it runs.
 *before* `collect()`, never after.
 :::
 
+### Very large registers: `compute()` instead of `collect()` {#compute-vs-collect}
+
+On the very largest registers (LMDB, laboratory results), even a filtered result
+can be too big to pull into R comfortably, or you may need it as the input to
+several later queries. Then end the pipe with `compute()` instead of
+`collect()`:
+
+```r
+library(fastreg) # read_register(): returns a DuckDB-backed (duckplyr) table
+library(dplyr) # filter, select, compute, collect
+
+# compute(): run the query and keep the result as a table inside DuckDB
+lmdb_cohort <- read_register("lmdb") %>%
+  rename_with(tolower) %>%
+  filter(year >= 2010) %>% # reduce rows first - compute() is not a shortcut
+  select(pnr, atc, eksd) %>% # reduce columns first
+  compute()
+
+# lmdb_cohort is still lazy: you can keep filtering and joining on it,
+# and every later query reads the stored result instead of the whole register.
+# collect() only at the end, once the result is small:
+statins <- lmdb_cohort %>%
+  filter(substr(atc, 1, 4) == "C10A") %>%
+  collect()
+```
+
+| | `collect()` | `compute()` |
+| --- | --- | --- |
+| Where the result ends up | an R data frame in R's memory | a temporary table inside DuckDB |
+| What you can do next | anything in R | more dplyr verbs, then `collect()` |
+| Use it when | the result is small and you are ready to analyse | the result is large, or several later queries start from it |
+
+`compute()` does not make the data disappear: DuckDB still holds the result in
+the server's memory until your R session ends. It only saves you from copying it
+into R as well, and from re-reading the whole register for every later query. So
+the rule above still applies: `filter()` and `select()` first.
+
+It works on the DuckDB-backed tables that `read_register()` and
+`read_parquet_duckdb()` give you. On an `open_dataset()` table (arrow), add
+`to_duckdb()` before `compute()`.
+
 ::: {.callout-note}
 **Later: keeping just your cohort.** Once you have built a study population, you
 will usually want to keep only *your cohort's* people in a register. That is done
