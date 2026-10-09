@@ -223,8 +223,7 @@ missing from one delivery is not deleted from it.
 **Column names can come from the data processing.** DST gives both psychiatric
 tables `RECNUM` and `PNR`; one delivery hands them over as `k_recnum`,
 `v_recnum` and `v_cpr`, so one key ends up with three names. DST's names are
-canonical here, with the delivery-specific name in a `reader_note`. The
-`darter-*` pages in the guide use the delivery's names, which is correct there.
+canonical here, with the delivery-specific name in a `reader_note`.
 
 **The guide is not an independent source.** Every word of it was written from
 one delivery, so when the guide and that delivery agree, that is one source and
