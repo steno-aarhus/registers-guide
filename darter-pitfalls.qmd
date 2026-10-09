@@ -1,0 +1,172 @@
+---
+title: "DARTER pitfalls"
+subtitle: "Quirks and known issues specific to project 708421"
+date: last-modified
+---
+
+This page only holds what is specific to the DARTER delivery. Everything that
+applies to all projects is in the general guide; the list at the bottom points
+to the general pitfalls that also bite on DARTER.
+
+## 1. How far the parquet files reach {#1-check-that-parquet-files-are-up-to-date}
+
+Most registers are as of 2026 updated to **end of 2024** (confirmed by Anders
+Aasted Isaksen/Marie Kempf Frydendahl, DARTER team).
+
+```r
+# Check when the parquet folder was last updated:
+file.info("E:/workdata/708421/cleaned-data/parquet-registers/bef/")$mtime
+```
+
+Check each register you use against your study period with the general
+[coverage check](inspect-data.qmd#check-coverage). If a register stops too
+early, comparators and BS patients whose events fall after its end date look
+like nothing happened to them, which affects censoring and matching in
+`01_build_cohorts.R` with no error message.
+
+::: {.callout-warning}
+**If the parquet file does not cover your study period:** You need to extract
+data from the raw SAS file on DST. Contact your data manager - they can help
+with raw data access and conversion.
+:::
+
+Deaths are the known case: `dod` is not in cleaned-data on DARTER. See
+[Register paths and datastores](darter-register-paths-datastores.qmd#critical-notes)
+for how to read it.
+
+## 2. Surgery and procedures
+
+Procedure codes are split across two registers by period:
+
+- **`lpr_sksopr`** (parquet-registers) - procedures and surgery 1996--2018,
+  joined to `lpr_adm` via `recnum`
+- **`procedurer_kirurgi`** (parquet-external) - 2019 and onwards, joined to
+  `lpr_a_kontakt` via `dw_ek_forloeb`
+
+::: {.callout-warning}
+**`dw_ek_kontakt` is NA for all rows in `procedurer_kirurgi`** (confirmed
+2026-06-02). Use `dw_ek_forloeb` - not `dw_ek_kontakt` - to fetch `pnr` from
+`lpr_a_kontakt`, or better, use `lpr_a_procregistrering`, which also exists on
+DARTER and joins on `dw_ek_kontakt` like `lpr_a_diagnose` does. The full
+column list, why the key is empty, and the fallback code are in [Register paths
+and datastores](darter-register-paths-datastores.qmd#procedurer-kirurgi).
+:::
+
+## 3. LPR3: DARTER's LPR2 stops a quarter early {#lpr3-lprindberetningssystem}
+
+The general guide filters `lpr_a_kontakt` and `lpr_a_diagnose` to
+`lprindberetningssystem == "LPR3"` to avoid counting LPR2 contacts twice (see
+[general pitfall 13](dst-pitfalls.qmd#lpr-a-not-pure-lpr3)). **On DARTER, that
+filter currently drops a real quarter of contacts, not just duplicates.**
+
+DST's LPR2 register closed 31 March 2019, but DARTER's `lpr_adm`/`lpr_diag`
+delivery available under cleaned_data currently stops **31 December 2018**, a
+full quarter earlier (confirmed directly, not DST's documented date). The
+LPR2-tagged rows still sitting in `lpr_a_kontakt` for January-March 2019 are
+the only record of those contacts anywhere in this delivery: filtering to
+`lprindberetningssystem == "LPR3"` removes them entirely, not just
+de-duplicates them. Direct measurement confirms the loss is bounded to that
+one quarter: almost nothing (under 100 rows, out of tens of millions) carries
+an LPR2-tagged start date after 31 March 2019, so this is not an open-ended
+problem spanning years.
+
+**Do not just drop the `lprindberetningssystem` filter to get the missing
+quarter back** - that also brings back the real 2017-2018 duplicates the filter
+exists to remove. The fix is a date cutover: keep genuine LPR3 rows, and keep
+LPR2-tagged rows only for the window DARTER's `lpr_adm` does not cover yet.
+
+```r
+library(fastreg) # read_register(), read_parquet_dataset()
+library(dplyr) # summarise, filter, mutate, semi_join, pull
+
+# 1. Where does DARTER's own LPR2 delivery actually stop? This decides which
+# LPR2-tagged rows in lpr_a_kontakt are genuine duplicates (already in
+# lpr_adm) versus genuinely missing from lpr_adm (the gap to recover).
+lpr_adm_last_date <- read_register("lpr_adm") %>%
+  rename_with(tolower) %>%
+  summarise(max_date = max(d_inddto, na.rm = TRUE)) %>%
+  collect() %>%
+  pull(max_date)
+
+# 2. Contacts: read_register() does not resolve lpr_a_kontakt on DARTER yet -
+# use read_parquet_dataset() with the full path as a temporary workaround
+# (see Parquet and fastreg). This is expected to be fixed soon; once
+# read_register("lpr_a_kontakt") resolves, switch back to it. Drop all of
+# LPR1 and MiniPAS (private hospitals), then drop only the LPR2-tagged rows
+# lpr_adm already covers. What survives is every genuine LPR3 contact, plus
+# the LPR2-tagged contacts for the gap lpr_adm is missing.
+lpr3_k <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_kontakt") %>%
+  rename_with(tolower) %>%
+  filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>% # only the two systems that can duplicate lpr_adm
+  mutate(start_date = as.Date(kont_starttidspunkt)) %>%
+  filter(!(lprindberetningssystem == "LPR2" & start_date <= lpr_adm_last_date)) # drop only the LPR2 rows lpr_adm already has
+
+# 3. Diagnoses: same temporary read_parquet_dataset() workaround as step 2 -
+# switch back to read_register("lpr_a_diagnose") once it resolves on DARTER.
+# This table carries no date of its own (unlike kontakt), so it cannot
+# repeat step 2's date logic directly. Instead, keep only the diagnosis
+# rows that belong to a contact step 2 already decided to keep, matched on
+# dw_ek_kontakt. Filtering this table to "LPR3" only would silently drop
+# the diagnosis codes for the recovered gap-window LPR2 contacts, making
+# them look like contacts with no diagnosis at all - that is the actual
+# reason for the semi_join below.
+lpr3_d <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_diagnose") %>%
+  rename_with(tolower) %>%
+  filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>%
+  semi_join(
+    lpr3_k %>% select(dw_ek_kontakt),
+    by = "dw_ek_kontakt"
+  )
+```
+
+The 2017-2018 LPR2-tagged rows stay excluded in both tables (their
+`start_date` is before `lpr_adm_last_date`, so step 2's `filter()` removes
+them, and step 3 only keeps what step 2 kept) - only the January-March 2019
+gap gets pulled back in, diagnosis codes included. This is also
+self-correcting: once Marie's delivery update lands and `lpr_adm_last_date`
+reaches 31 March 2019, step 2's `LPR2` branch stops matching anything and
+both tables quietly become equivalent to `lprindberetningssystem == "LPR3"`
+again - no need to remember to remove this code later.
+
+`get_lpr_diagnoses()` in [DARTER - overview and pipeline](darter-index.qmd)
+already uses this cutover. If you have copies of LPR3 code in your own
+scripts, you must add it manually.
+
+## 4. Laboratory results - use `laboratorieproevesvar_` {#laboratory}
+
+On DARTER the laboratory data is `laboratorieproevesvar_` (>2.2 billion rows).
+The old `lab_forsker` / `lab_dm_forsker` are also in the delivery and cover the
+same data, so use **only one source**. Why, and the column names of each cut,
+are in [Laboratory results](laboratory-results.qmd).
+
+```r
+lab <- read_register("laboratorieproevesvar") %>%
+  rename_with(tolower) %>%
+  rename(pnr = cprnummer) %>% # the person column is cprnummer here, patient_cpr in the other two tables
+  semi_join(tibble(pnr = cohort$pnr), by = "pnr", copy = TRUE) %>% # filter BEFORE collect - the register is very large
+  select(pnr, analysiscode, samplingdate, samplevalue) %>% # NPU is the coding system, analysiscode is the column
+  collect()
+# samplevalue is character - can contain "not detected", "negative" etc.,
+# so as.numeric() turns those into NA
+```
+
+## General pitfalls that also bite on DARTER
+
+These are explained in the general guide, with the DARTER case mentioned there:
+
+- [Death registers](dst-pitfalls.qmd#death-registers): `dodsaars` stops in
+  2001; use `dod`, which on DARTER is read from rawdata (see [Register paths
+  and datastores](darter-register-paths-datastores.qmd#critical-notes)).
+- [FAIK from 2022 carries `pnr`](socioeconomic-variables.qmd#faik-income) in
+  the DARTER delivery, repeating each family's row per member.
+- [The "a" in `lpr_a_diagnose`](dst-pitfalls.qmd) does not mean A-type
+  diagnoses (general pitfall 6), and [`nmi_count` is not
+  `nmi`](dst-pitfalls.qmd) (general pitfall 9).
+- [Reinstall `duckplyr`](log-in-dst.qmd#update-duckplyr) at the start of every
+  session.
+
+## See also
+
+- [General DST pitfalls](dst-pitfalls.qmd): pitfalls that apply to all projects
+- [Register paths and datastores](darter-register-paths-datastores.qmd): confirmed
+  paths and access methods
