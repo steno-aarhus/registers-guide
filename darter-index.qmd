@@ -80,11 +80,12 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes, diagtypes = c("A", "B")) {
     summarise(max_date = max(d_inddto, na.rm = TRUE)) %>%
     collect() %>%
     pull(max_date)                                                    # where DARTER's LPR2 delivery stops
+  lpr2_cutoff <- as.POSIXct(lpr_adm_last_date + 1, tz = "UTC")        # a datetime, made before the pipe (DST pitfall 4)
   lpr3_k    <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_kontakt") %>%
     rename_with(tolower) %>%
     filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>%       # CRITICAL: drop LPR1/MiniPAS rows
     filter(!(lprindberetningssystem == "LPR2" &
-             as.Date(kont_starttidspunkt) <= !!lpr_adm_last_date))   # drop only LPR2 rows lpr_adm already has
+             kont_starttidspunkt < !!lpr2_cutoff))                   # drop only LPR2 rows lpr_adm already has
   lpr3_d    <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_diagnose") %>%
     rename_with(tolower) %>%
     filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>%

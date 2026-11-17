@@ -135,6 +135,37 @@ mutate(date = as.Date(kont_starttidspunkt))
 class(bef$foed_dag) # "Date" - can be used directly
 ```
 
+::: {.callout-warning title="Filter a datetime column with a datetime, not a date"}
+A datetime and a date are two different types, and on a lazy table (before
+`collect()`) the engines do not reliably convert between them. Tested on
+`lpr_a_kontakt` on the DST server (fastreg 0.14.1, duckdb 2.0.0, arrow
+21.0.0.1, duckplyr 1.2.2):
+
+- `filter(as.Date(kont_starttidspunkt) >= as.Date("2023-01-01"))` on a table
+  from `read_parquet_dataset()` ran **without an error but returned 0 rows**,
+  although millions of rows match. Others have seen a `rapi` error from the
+  same pattern.
+- The same line on a table from `read_parquet_duckdb()` stops with
+  `This operation cannot be carried out by DuckDB`.
+- Comparing the column with a datetime **created before the pipe** gave the
+  same, correct count on both.
+
+```r
+# Wrong on a lazy table - date conversion inside the filter
+filter(as.Date(kont_starttidspunkt) >= as.Date("2023-01-01"))
+filter(kont_starttidspunkt >= as.Date("2023-01-01"))
+
+# Right - make the cut-off a datetime first, then compare datetime with datetime
+cutoff <- as.POSIXct("2023-01-01", tz = "UTC")
+filter(kont_starttidspunkt >= cutoff)
+```
+
+Convert to a plain date with `as.Date()` **after** `collect()`, when the data
+are in R. After any date filter, compare `count()` before and after to confirm
+that the filter did what you meant - a filter that keeps nothing, or
+everything, is the warning sign.
+:::
+
 ## 5. BEF is a status snapshot - not a live register
 
 BEF is a **status register**: it records the composition of the population at a
