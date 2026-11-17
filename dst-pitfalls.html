@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-13">
+<meta name="dcterms.date" content="2026-11-17">
 
 <title>DST pitfalls – Register-based research at Statistics Denmark</title>
 <style>
@@ -84,7 +84,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-0ef0e298a92dba1b0607a5627e7d88aa.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-685ee995db765bebc84ffd848c252c6f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -623,7 +623,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 13, 2026</p>
+      <p class="date">November 17, 2026</p>
     </div>
   </div>
   
@@ -802,6 +802,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(kont_starttidspunkt))</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(bef<span class="sc">$</span>foed_dag) <span class="co"># "Date" - can be used directly</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-simple callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Filter a datetime column with a datetime, not a date
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A datetime and a date are two different types, and on a lazy table (before <code>collect()</code>) the engines do not reliably convert between them. Tested on <code>lpr_a_kontakt</code> on the DST server (fastreg 0.14.1, duckdb 2.0.0, arrow 21.0.0.1, duckplyr 1.2.2):</p>
+<ul>
+<li><code>filter(as.Date(kont_starttidspunkt) &gt;= as.Date("2023-01-01"))</code> on a table from <code>read_parquet_dataset()</code> ran <strong>without an error but returned 0 rows</strong>, although millions of rows match. Others have seen a <code>rapi</code> error from the same pattern.</li>
+<li>The same line on a table from <code>read_parquet_duckdb()</code> stops with <code>This operation cannot be carried out by DuckDB</code>.</li>
+<li>Comparing the column with a datetime <strong>created before the pipe</strong> gave the same, correct count on both.</li>
+</ul>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrong on a lazy table - date conversion inside the filter</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="fu">as.Date</span>(kont_starttidspunkt) <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2023-01-01"</span>))</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(kont_starttidspunkt <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2023-01-01"</span>))</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Right - make the cut-off a datetime first, then compare datetime with datetime</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>cutoff <span class="ot">&lt;-</span> <span class="fu">as.POSIXct</span>(<span class="st">"2023-01-01"</span>, <span class="at">tz =</span> <span class="st">"UTC"</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(kont_starttidspunkt <span class="sc">&gt;=</span> cutoff)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Convert to a plain date with <code>as.Date()</code> <strong>after</strong> <code>collect()</code>, when the data are in R. After any date filter, compare <code>count()</code> before and after to confirm that the filter did what you meant - a filter that keeps nothing, or everything, is the warning sign.</p>
+</div>
+</div>
 </section>
 <section id="bef-is-a-status-snapshot---not-a-live-register" class="level2">
 <h2 class="anchored" data-anchor-id="bef-is-a-status-snapshot---not-a-live-register">5. BEF is a status snapshot - not a live register</h2>
@@ -818,57 +844,57 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <p>This means that a person who dies in June 2020 still appears in the 2020 BEF snapshot.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ERROR: do not use BEF to check "alive on a specific date"</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>bef_2020 <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2020</span>) <span class="co"># includes everyone in the 2020 snapshot</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># - including those who die during 2020</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT: combine with dod (not dodsaars - see pitfall 1) to exclude deaths</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>index_date <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2020-06-30"</span>) <span class="co"># your index date</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("path/to/dod/")</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, doddato) <span class="sc">%&gt;%</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>bef_alive <span class="ot">&lt;-</span> bef_2020 <span class="sc">%&gt;%</span></span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>() <span class="sc">%&gt;%</span> <span class="co"># one row per person (BEF is quarterly)</span></span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(deaths, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is.na</span>(doddato) <span class="sc">|</span> doddato <span class="sc">&gt;</span> index_date) <span class="co"># alive at index date</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ERROR: do not use BEF to check "alive on a specific date"</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>bef_2020 <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2020</span>) <span class="co"># includes everyone in the 2020 snapshot</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># - including those who die during 2020</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT: combine with dod (not dodsaars - see pitfall 1) to exclude deaths</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>index_date <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2020-06-30"</span>) <span class="co"># your index date</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>deaths <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("path/to/dod/")</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, doddato) <span class="sc">%&gt;%</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>bef_alive <span class="ot">&lt;-</span> bef_2020 <span class="sc">%&gt;%</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>() <span class="sc">%&gt;%</span> <span class="co"># one row per person (BEF is quarterly)</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(deaths, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">is.na</span>(doddato) <span class="sc">|</span> doddato <span class="sc">&gt;</span> index_date) <span class="co"># alive at index date</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses" class="level2">
 <h2 class="anchored" data-anchor-id="the-a-in-lpr_a_diagnose-does-not-mean-a-type-diagnoses">6. The “a” in <code>lpr_a_diagnose</code> does not mean A-type diagnoses</h2>
 <p>The table is called <code>lpr_a_diagnose</code> - the “a” refers to “analysis model” (the LPR_A series introduced in 2025). It does <strong>not</strong> mean the table only contains A-type (action) diagnoses.</p>
 <p>The table contains all diagnosis types: A (action), B (secondary diagnosis) and G (underlying condition). You still need to filter on <code>diag_kode_type</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>lpr_a_diagnose <span class="sc">%&gt;%</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(diag_kode_type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>)) <span class="sc">%&gt;%</span> <span class="co"># still necessary</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  ...</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>lpr_a_diagnose <span class="sc">%&gt;%</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(diag_kode_type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"A"</span>, <span class="st">"B"</span>)) <span class="sc">%&gt;%</span> <span class="co"># still necessary</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  ...</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="categorical-codes-are-not-consistent-across-registers" class="level2">
 <h2 class="anchored" data-anchor-id="categorical-codes-are-not-consistent-across-registers">7. Categorical codes are not consistent across registers</h2>
 <p>The same variable can have different coding in different registers - different type (numeric vs.&nbsp;character), different values, or both.</p>
 <p><strong>The worst case is ICD-10.</strong> LPR stores it with a Danish <code>D</code> in front (<code>DE119</code>), the cause-of-death registers and the cancer register store the plain WHO code (<code>E119</code>). A code list built for one matches nothing in the other, and the habit of stripping the D turns <code>E119</code> into <code>119</code>. See <a href="./understand-lpr.html#d-prefix-not-everywhere">ICD codes and the D-prefix</a>.</p>
 <p>In practice you extract demographic variables (sex, age) from BEF and rarely need to compare the same variable in another register. But if you do, always check with <code>table()</code> and <code>class()</code> before using the variable:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(register_a<span class="sc">$</span>koen) <span class="co"># what are the actual values and types?</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(register_a<span class="sc">$</span>koen)</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(register_b<span class="sc">$</span>koen)</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(register_b<span class="sc">$</span>koen)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(register_a<span class="sc">$</span>koen) <span class="co"># what are the actual values and types?</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(register_a<span class="sc">$</span>koen)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(register_b<span class="sc">$</span>koen)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(register_b<span class="sc">$</span>koen)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="bang-bang" class="level2">
 <h2 class="anchored" data-anchor-id="bang-bang">8. <code>!!</code> (bang-bang) forgotten in lazy evaluation</h2>
 <p>When filtering with a local R vector inside a lazy query, dplyr first looks for a <em>column</em> with that name; only if there is none does it copy in the values of your R object. Usually that just works - the trap is a <strong>name clash</strong>: if your local object has the same name as a column, the column wins and you get a wrong result or a confusing message.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: a year list against bef (the principle applies to any local R vector)</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>year <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2018</span>, <span class="dv">2019</span>, <span class="dv">2020</span>) <span class="co"># local R vector - unluckily named like the column</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG - "year" is taken to be the column, so this compares the column with itself</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> year) <span class="co"># keeps every row, or a confusing error</span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - !! says: "use the local R vector"</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>year)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: a year list against bef (the principle applies to any local R vector)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>year <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">2018</span>, <span class="dv">2019</span>, <span class="dv">2020</span>) <span class="co"># local R vector - unluckily named like the column</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># WRONG - "year" is taken to be the column, so this compares the column with itself</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> year) <span class="co"># keeps every row, or a confusing error</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co"># CORRECT - !! says: "use the local R vector"</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>bef <span class="sc">%&gt;%</span> <span class="fu">filter</span>(year <span class="sc">%in%</span> <span class="sc">!!</span>year)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -987,10 +1013,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="anchored" data-anchor-id="lpr-a-not-pure-lpr3">13. <code>lpr_a_kontakt</code>/<code>lpr_a_diagnose</code> are not pure LPR3</h2>
 <p>The name suggests these tables hold LPR3 data only. They do not: LPR_A also carries older LPR1, LPR2 and MiniPAS (private-hospital) rows, reloaded into the same table and tagged by <code>lprindberetningssystem</code>, going back to around 2017 - see <a href="./understand-lpr.html#lpr-a-format">Understand LPR</a> for why LPR_A is built this way.</p>
 <p>If you combine LPR2 (<code>lpr_adm</code>) and LPR_A without filtering, the same contacts get counted twice - once from each table. Filter both <code>lpr_a_kontakt</code> and <code>lpr_a_diagnose</code> to <code>lprindberetningssystem == "LPR3"</code> before using them alongside <code>lpr_adm</code>/<code>lpr_diag</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> lpr_a_kontakt <span class="sc">%&gt;%</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)   <span class="co"># keep only genuine LPR3 rows</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>lpr3_d <span class="ot">&lt;-</span> lpr_a_diagnose <span class="sc">%&gt;%</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)   <span class="co"># same column on the diagnosis table</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>lpr3_k <span class="ot">&lt;-</span> lpr_a_kontakt <span class="sc">%&gt;%</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)   <span class="co"># keep only genuine LPR3 rows</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>lpr3_d <span class="ot">&lt;-</span> lpr_a_diagnose <span class="sc">%&gt;%</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(lprindberetningssystem <span class="sc">==</span> <span class="st">"LPR3"</span>)   <span class="co"># same column on the diagnosis table</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
