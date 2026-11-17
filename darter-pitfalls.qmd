@@ -85,6 +85,11 @@ lpr_adm_last_date <- read_register("lpr_adm") %>%
   collect() %>%
   pull(max_date)
 
+# kont_starttidspunkt is a datetime. Compare it with a datetime made here,
+# before the pipe: as.Date() inside a lazy filter() silently returned 0 rows
+# on DST (see DST pitfall 4). The cut-off is midnight after lpr_adm's last day.
+lpr2_cutoff <- as.POSIXct(lpr_adm_last_date + 1, tz = "UTC")
+
 # 2. Contacts: read_register() does not resolve lpr_a_kontakt on DARTER yet -
 # use read_parquet_dataset() with the full path as a temporary workaround
 # (see Parquet and fastreg). This is expected to be fixed soon; once
@@ -95,8 +100,7 @@ lpr_adm_last_date <- read_register("lpr_adm") %>%
 lpr3_k <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-registers/lpr_a_kontakt") %>%
   rename_with(tolower) %>%
   filter(lprindberetningssystem %in% c("LPR2", "LPR3")) %>% # only the two systems that can duplicate lpr_adm
-  mutate(start_date = as.Date(kont_starttidspunkt)) %>%
-  filter(!(lprindberetningssystem == "LPR2" & start_date <= lpr_adm_last_date)) # drop only the LPR2 rows lpr_adm already has
+  filter(!(lprindberetningssystem == "LPR2" & kont_starttidspunkt < lpr2_cutoff)) # drop only the LPR2 rows lpr_adm already has
 
 # 3. Diagnoses: same temporary read_parquet_dataset() workaround as step 2 -
 # switch back to read_register("lpr_a_diagnose") once it resolves on DARTER.
@@ -117,7 +121,7 @@ lpr3_d <- read_parquet_dataset("E:/workdata/708421/cleaned-data/parquet-register
 ```
 
 The 2017-2018 LPR2-tagged rows stay excluded in both tables (their
-`start_date` is before `lpr_adm_last_date`, so step 2's `filter()` removes
+`kont_starttidspunkt` is before `lpr2_cutoff`, so step 2's `filter()` removes
 them, and step 3 only keeps what step 2 kept) - only the January-March 2019
 gap gets pulled back in, diagnosis codes included. This is also
 self-correcting: once an updated delivery lands and `lpr_adm_last_date`

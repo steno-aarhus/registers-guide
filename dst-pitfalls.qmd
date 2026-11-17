@@ -135,31 +135,35 @@ mutate(date = as.Date(kont_starttidspunkt))
 class(bef$foed_dag) # "Date" - can be used directly
 ```
 
-::: {.callout-warning title="Never compare a datetime column directly with a date"}
-A datetime and a date are two different types. Filtering a datetime column
-against a date (or a text string) on a lazy table goes wrong in one of two
-ways, depending on how the register was opened:
+::: {.callout-warning title="Filter a datetime column with a datetime, not a date"}
+A datetime and a date are two different types, and on a lazy table (before
+`collect()`) the engines do not reliably convert between them. Tested on
+`lpr_a_kontakt` on the DST server (fastreg 0.14.1, duckdb 2.0.0, arrow
+21.0.0.1, duckplyr 1.2.2):
 
-- With `open_dataset() %>% to_duckdb()` it can stop with a `rapi` error such as
-  `Can't convert ... of type TIMESTAMP_MS`.
-- With `read_register()` / `read_parquet_duckdb()` it can run **without an
-  error but keep every row**, with only a warning about
-  `Incompatible methods ("Ops.POSIXt", "Ops.Date")`. The filter has silently
-  done nothing.
+- `filter(as.Date(kont_starttidspunkt) >= as.Date("2023-01-01"))` on a table
+  from `read_parquet_dataset()` ran **without an error but returned 0 rows**,
+  although millions of rows match. Others have seen a `rapi` error from the
+  same pattern.
+- The same line on a table from `read_parquet_duckdb()` stops with
+  `This operation cannot be carried out by DuckDB`.
+- Comparing the column with a datetime **created before the pipe** gave the
+  same, correct count on both.
 
 ```r
-# Wrong - datetime compared with a date
-filter(kont_starttidspunkt >= as.Date("2020-01-01"))
+# Wrong on a lazy table - date conversion inside the filter
+filter(as.Date(kont_starttidspunkt) >= as.Date("2023-01-01"))
+filter(kont_starttidspunkt >= as.Date("2023-01-01"))
 
-# Right - convert the column inside the filter ...
-filter(as.Date(kont_starttidspunkt) >= as.Date("2020-01-01"))
-
-# ... or compare datetime with datetime
-filter(kont_starttidspunkt >= as.POSIXct("2020-01-01", tz = "UTC"))
+# Right - make the cut-off a datetime first, then compare datetime with datetime
+cutoff <- as.POSIXct("2023-01-01", tz = "UTC")
+filter(kont_starttidspunkt >= cutoff)
 ```
 
-After a date filter, check the result with `range()` on the date column to
-confirm that the filter did what you meant.
+Convert to a plain date with `as.Date()` **after** `collect()`, when the data
+are in R. After any date filter, compare `count()` before and after to confirm
+that the filter did what you meant - a filter that keeps nothing, or
+everything, is the warning sign.
 :::
 
 ## 5. BEF is a status snapshot - not a live register
