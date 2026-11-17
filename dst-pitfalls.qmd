@@ -135,6 +135,33 @@ mutate(date = as.Date(kont_starttidspunkt))
 class(bef$foed_dag) # "Date" - can be used directly
 ```
 
+::: {.callout-warning title="Never compare a datetime column directly with a date"}
+A datetime and a date are two different types. Filtering a datetime column
+against a date (or a text string) on a lazy table goes wrong in one of two
+ways, depending on how the register was opened:
+
+- With `open_dataset() %>% to_duckdb()` it can stop with a `rapi` error such as
+  `Can't convert ... of type TIMESTAMP_MS`.
+- With `read_register()` / `read_parquet_duckdb()` it can run **without an
+  error but keep every row**, with only a warning about
+  `Incompatible methods ("Ops.POSIXt", "Ops.Date")`. The filter has silently
+  done nothing.
+
+```r
+# Wrong - datetime compared with a date
+filter(kont_starttidspunkt >= as.Date("2020-01-01"))
+
+# Right - convert the column inside the filter ...
+filter(as.Date(kont_starttidspunkt) >= as.Date("2020-01-01"))
+
+# ... or compare datetime with datetime
+filter(kont_starttidspunkt >= as.POSIXct("2020-01-01", tz = "UTC"))
+```
+
+After a date filter, check the result with `range()` on the date column to
+confirm that the filter did what you meant.
+:::
+
 ## 5. BEF is a status snapshot - not a live register
 
 BEF is a **status register**: it records the composition of the population at a
