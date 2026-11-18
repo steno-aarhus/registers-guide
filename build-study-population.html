@@ -981,42 +981,55 @@ Example B: ICD diagnosis as exposure criterion
 Show the code: exclude prevalent cases
 </summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: exclude prevalent cases ----------------------------------------------</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># diagnoses = your LPR extract from Phase 9 (columns: pnr, date_contact, icd3)</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>OUTCOME_CODES <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"G30"</span>, <span class="st">"F00"</span>, <span class="st">"F01"</span>, <span class="st">"F02"</span>, <span class="st">"F03"</span>)   <span class="co"># ICD-10 for your outcome - adapt</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># We make our OWN function (a reusable block of code). It takes three arguments:</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   diagnoses = your LPR diagnosis extract (columns: pnr, date_contact, icd3)</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   codes     = the ICD codes that define your outcome (here OUTCOME_CODES)</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   cohort    = the group to check, with pnr + index_date</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># It returns the pnr that had the outcome ON or BEFORE their own index date.</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>prior_outcome_pnrs <span class="ot">&lt;-</span> <span class="cf">function</span>(diagnoses, codes, cohort) {</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  diagnoses <span class="sc">%&gt;%</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(icd3 <span class="sc">%in%</span> codes) <span class="sc">%&gt;%</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>   <span class="co"># attach each person's index</span></span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(date_contact <span class="sc">&lt;=</span> index_date) <span class="sc">%&gt;%</span>                           <span class="co"># contacts ON or BEFORE index</span></span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># distinct(pnr) alone is only correct if pnr is unique in your cohort. If</span></span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># it is not (e.g. a comparison cohort matched with replacement, so the</span></span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># same pnr has several index_dates), this over-excludes: a diagnosis that</span></span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># predates only ONE of a person's index_dates would drop them from ALL of</span></span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># their occurrences below, not just that one. Fix: distinct(pnr,</span></span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="co"># index_date) here, and anti_join(prevalent, by = c("pnr", "index_date"))</span></span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># in place of the filter(!pnr %in% prevalent) below - same idea as nmi.qmd.</span></span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">distinct</span>(pnr) <span class="sc">%&gt;%</span>                                                 <span class="co"># one row per person</span></span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pull</span>(pnr)                                                         <span class="co"># vector of pnr's to exclude</span></span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>prevalent <span class="ot">&lt;-</span> <span class="fu">prior_outcome_pnrs</span>(diagnoses, OUTCOME_CODES, exposed)</span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>n_before <span class="ot">&lt;-</span> <span class="fu">nrow</span>(exposed)                     <span class="co"># nrow() = number of rows (here: number of persons)</span></span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>exposed <span class="ot">&lt;-</span> exposed <span class="sc">%&gt;%</span></span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>pnr <span class="sc">%in%</span> prevalent)                 <span class="co"># keep only those WITHOUT a prevalent outcome - see the comment above if pnr repeats</span></span>
-<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a><span class="co"># cat() simply prints a readable line in the console so you can follow the attrition.</span></span>
-<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"After prevalence exclusion:"</span>, <span class="fu">nrow</span>(exposed),</span>
-<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>    <span class="st">"| excluded:"</span>, n_before <span class="sc">-</span> <span class="fu">nrow</span>(exposed), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a><span class="co"># If the message is only for yourself, you can settle for:  nrow(exposed)   # number remaining</span></span>
-<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">n_distinct</span>(exposed<span class="sc">$</span>pnr) <span class="sc">==</span> <span class="fu">nrow</span>(exposed))   <span class="co"># check: one row per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>OUTCOME_CODES <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"S72"</span>)   <span class="co"># hip fracture (example study) - ICD-10 for your outcome, adapt</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co"># diagnoses = every contact with an outcome code, for EVERYONE in BEF (not only</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># the exposed), so the same table can be reused for the comparison pool later.</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co"># get_lpr_diagnoses() is the helper from Phase 9 (Extract from LPR): define it first.</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>all_pnrs <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span>                <span class="co"># bef from Step 1 (still lazy)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(pnr) <span class="sc">%&gt;%</span>                <span class="co"># one row per person</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(pnr)                        <span class="co"># vector with every pnr in BEF</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>diagnoses <span class="ot">&lt;-</span> <span class="fu">get_lpr_diagnoses</span>(</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">pnr_vector =</span> all_pnrs,           <span class="co"># everyone, not only the exposed</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">icd_codes  =</span> OUTCOME_CODES       <span class="co"># only the outcome codes are fetched</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Columns: pnr | date_contact | c_diag | c_diagtype | icd3</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="co"># We make our OWN function (a reusable block of code). It takes three arguments:</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="co">#   diagnoses = your LPR diagnosis extract (columns: pnr, date_contact, icd3)</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="co">#   codes     = the ICD codes that define your outcome (here OUTCOME_CODES)</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co">#   cohort    = the group to check, with pnr + index_date</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="co"># It returns the pnr that had the outcome ON or BEFORE their own index date.</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>prior_outcome_pnrs <span class="ot">&lt;-</span> <span class="cf">function</span>(diagnoses, codes, cohort) {</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  diagnoses <span class="sc">%&gt;%</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(icd3 <span class="sc">%in%</span> codes) <span class="sc">%&gt;%</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">inner_join</span>(cohort <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, index_date), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>   <span class="co"># attach each person's index</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(date_contact <span class="sc">&lt;=</span> index_date) <span class="sc">%&gt;%</span>                           <span class="co"># contacts ON or BEFORE index</span></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    <span class="co"># distinct(pnr) alone is only correct if pnr is unique in your cohort. If</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="co"># it is not (e.g. a comparison cohort matched with replacement, so the</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>    <span class="co"># same pnr has several index_dates), this over-excludes: a diagnosis that</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>    <span class="co"># predates only ONE of a person's index_dates would drop them from ALL of</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>    <span class="co"># their occurrences below, not just that one. Fix: distinct(pnr,</span></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>    <span class="co"># index_date) here, and anti_join(prevalent, by = c("pnr", "index_date"))</span></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>    <span class="co"># in place of the filter(!pnr %in% prevalent) below - same idea as nmi.qmd.</span></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">distinct</span>(pnr) <span class="sc">%&gt;%</span>                                                 <span class="co"># one row per person</span></span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pull</span>(pnr)                                                         <span class="co"># vector of pnr's to exclude</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>prevalent <span class="ot">&lt;-</span> <span class="fu">prior_outcome_pnrs</span>(diagnoses, OUTCOME_CODES, exposed)</span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a>n_before <span class="ot">&lt;-</span> <span class="fu">nrow</span>(exposed)                     <span class="co"># nrow() = number of rows (here: number of persons)</span></span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a>exposed <span class="ot">&lt;-</span> exposed <span class="sc">%&gt;%</span></span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>pnr <span class="sc">%in%</span> prevalent)                 <span class="co"># keep only those WITHOUT a prevalent outcome - see the comment above if pnr repeats</span></span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a><span class="co"># cat() simply prints a readable line in the console so you can follow the attrition.</span></span>
+<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"After prevalence exclusion:"</span>, <span class="fu">nrow</span>(exposed),</span>
+<span id="cb4-47"><a href="#cb4-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"| excluded:"</span>, n_before <span class="sc">-</span> <span class="fu">nrow</span>(exposed), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb4-48"><a href="#cb4-48" aria-hidden="true" tabindex="-1"></a><span class="co"># If the message is only for yourself, you can settle for:  nrow(exposed)   # number remaining</span></span>
+<span id="cb4-49"><a href="#cb4-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-50"><a href="#cb4-50" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">n_distinct</span>(exposed<span class="sc">$</span>pnr) <span class="sc">==</span> <span class="fu">nrow</span>(exposed))   <span class="co"># check: one row per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <p><strong>Planning a comparison cohort?</strong> Extract the outcome (and exposure) dates for the <strong>whole population</strong> here rather than just for the exposed, and reuse them: restricted to the exposed as above, and later for the comparison pool (see <a href="./comparison-cohort.html">Comparison cohort</a>). Filtering the diagnosis codes returns everyone with the diagnosis anyway, so it saves a second query against the registers.</p>
 <p><strong>If that comparison group is matched with replacement, know what <code>distinct(pnr) %&gt;% pull(pnr)</code> actually excludes.</strong> <code>prior_outcome_pnrs()</code> correctly checks each row against <em>that row’s own</em> <code>index_date</code> (the <code>inner_join</code> before the filter), but the final <code>distinct(pnr)</code> collapses the result to a plain list of people - so <code>filter(!pnr %in% prevalent)</code> at line 369 drops <strong>every</strong> row for that <code>pnr</code>, not just the one instance where they had a prevalent outcome. If the same person is matched to a different case with an earlier <code>index_date</code>, where they did not yet have the outcome, that instance gets excluded too. That may be exactly the conservative rule you want - but decide it on purpose. See <a href="./comparison-cohort.html#step-4---assemble-validate-and-save">comparison cohort’s callout on it</a> for the general repeated-<code>pnr</code> problem this is one version of.</p>
@@ -1069,7 +1082,7 @@ Show the code: exclude prevalent cases
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Output control:</strong> the exclusion boxes show raw counts. Small numbers (e.g.&nbsp;an exclusion group with very few people) can be disclosive - round or combine them before the diagram leaves DST. See <a href="./export.html">Phase 14 - Export and repatriation</a>.</p>
+<p><strong>Output control:</strong> the exclusion boxes show raw counts. Small numbers (e.g.&nbsp;an exclusion group with very few people) can be disclosive. What to do about them before the diagram leaves DST is in <a href="./export.html#back-calculation">Phase 14 - A hidden number must not be possible to work out</a>.</p>
 </div>
 </div>
 </div>

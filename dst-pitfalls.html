@@ -795,7 +795,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>Datetime</td>
 <td><code>"2020-05-15 14:32:00"</code></td>
 <td><code>"POSIXct"</code></td>
-<td><code>as.Date(column)</code> to get only the date part</td>
+<td><code>as.Date(column)</code> after <code>collect()</code></td>
 </tr>
 <tr class="even">
 <td>SAS integer</td>
@@ -807,7 +807,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 <p><strong>The rule:</strong> always check <code>class()</code> on a date column before using it in calculations.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(lpr_a_kontakt<span class="sc">$</span>kont_starttidspunkt) <span class="co"># "POSIXct" - datetime, not Date</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Fix:</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Fix - AFTER collect(), when the data are in R (see the warning below):</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">mutate</span>(<span class="at">date =</span> <span class="fu">as.Date</span>(kont_starttidspunkt))</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">class</span>(bef<span class="sc">$</span>foed_dag) <span class="co"># "Date" - can be used directly</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -827,9 +827,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>The same line on a table from <code>read_parquet_duckdb()</code> stops with <code>This operation cannot be carried out by DuckDB</code>.</li>
 <li>Comparing the column with a datetime <strong>created before the pipe</strong> gave the same, correct count on both.</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrong on a lazy table - date conversion inside the filter</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="fu">as.Date</span>(kont_starttidspunkt) <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2023-01-01"</span>))</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(kont_starttidspunkt <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2023-01-01"</span>))</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Wrong on a lazy table - a date where the column is a datetime</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(<span class="fu">as.Date</span>(kont_starttidspunkt) <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2023-01-01"</span>)) <span class="co"># 0 rows or an error, see the list above</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">filter</span>(kont_starttidspunkt <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2023-01-01"</span>)) <span class="co"># kept EVERY row on a read_parquet_duckdb() table (synthetic data, duckplyr 1.2.1, duckdb 1.5.2)</span></span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Right - make the cut-off a datetime first, then compare datetime with datetime</span></span>
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>cutoff <span class="ot">&lt;-</span> <span class="fu">as.POSIXct</span>(<span class="st">"2023-01-01"</span>, <span class="at">tz =</span> <span class="st">"UTC"</span>)</span>

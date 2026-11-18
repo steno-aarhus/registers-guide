@@ -901,19 +901,12 @@ How does the 5-year lookback work?
 Show the code: extract the dates for the WHOLE population
 </summary>
 <p>Each date table ends up as <strong>one row per person</strong> (just the date eligibility depends on), so the pool join below keys on <code>pnr</code>.</p>
-<p><strong>You must first build <code>diagnoses</code> (and the exposure source) as shown in <a href="./extract-from-lpr.html">9b: Extract from LPR</a> - it is not a raw table.</strong> The diagnosis registers (<code>lpr_diag</code>, <code>lpr_a_diagnose</code>) have neither <code>pnr</code> nor a date, so you cannot just open them and filter. You extract <strong>one register at a time</strong> and <strong>combine</strong> them at the end, exactly as in 9b:</p>
-<ol type="1">
-<li><strong>LPR2:</strong> <code>lpr_adm</code> + <code>lpr_diag</code> joined on <code>recnum</code>.</li>
-<li><strong>LPR3:</strong> <code>lpr_a_kontakt</code> + <code>lpr_a_diagnose</code> joined on <code>dw_ek_kontakt</code>.</li>
-<li>Optionally <strong>psychiatry</strong> (LPR2 psych) the same way.</li>
-<li>Harmonize the date to <code>date_contact</code> (from <code>d_inddto</code> / <code>kont_starttidspunkt</code>), strip the D-prefix to <code>icd3</code>, and bind the registers together with <code>bind_rows()</code> into one table = <code>diagnoses</code>.</li>
-</ol>
-<p><strong>The only difference from 9b:</strong> you omit <code>semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)</code>, so you keep the WHOLE population - not just the exposed. (So the join keys <code>recnum</code>/<code>dw_ek_kontakt</code> belong to the LPR extract itself in 9b; here in the pool join the key is <code>pnr</code>, because the tables are now one row per person.)</p>
+<p><strong><code>diagnoses</code> and <code>exposure_raw</code> come from <a href="./build-study-population.html">Phase 10</a>.</strong> <code>diagnoses</code> is the table you built there in Step 3 with <code>get_lpr_diagnoses()</code>: every contact with an outcome code, for everyone in BEF and not only the exposed, with the columns <code>pnr</code>, <code>date_contact</code> and <code>icd3</code>. It is not a raw register: the diagnosis registers (<code>lpr_diag</code>, <code>lpr_a_diagnose</code>) have neither <code>pnr</code> nor a date, which is why <a href="./extract-from-lpr.html">9b: Extract from LPR</a> joins and combines them first. <code>exposure_raw</code> is built in 2.2 below from the procedure tables of Phase 10, Example A.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract eligibility dates for the WHOLE population ---------------------------</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg); <span class="fu">library</span>(arrow); <span class="fu">library</span>(dplyr)  <span class="co"># read_register (arrow/open_dataset as fallback)</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2.1 First outcome date for EVERYONE ------------------------------------------</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 'diagnoses' is the COMBINED LPR diagnosis table from Phase 9 (see the note above) - not a raw table.</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 'diagnoses' is the table from Phase 10, Step 3 (see the note above): outcome contacts for everyone in BEF.</span></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter on the outcome codes -&gt; all persons with the diagnosis, regardless of exposure.</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># (On Phase 10 we joined to the exposed; here we aggregate for everyone.)</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>outcome <span class="ot">&lt;-</span> diagnoses <span class="sc">%&gt;%</span></span>
@@ -927,32 +920,38 @@ Show the code: extract the dates for the WHOLE population
 <span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co"># 2.2 First exposure date for EVERYONE -----------------------------------------</span></span>
 <span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Same source you used to DEFINE exposure on Phase 10, but without restricting to the exposed -</span></span>
 <span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co"># future-exposed people (crossover) also need a date.</span></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>exp_dt <span class="ot">&lt;-</span> exposure_raw <span class="sc">%&gt;%</span>                            <span class="co"># your exposure extract, one row per exposure event</span></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(exposure_date) <span class="sc">%&gt;%</span></span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span>                                        <span class="co"># first exposure per person</span></span>
-<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, exposure_date)</span>
-<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a><span class="co"># 2.3 Date of death (DOD) for EVERYONE -----------------------------------------</span></span>
-<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Migration events are pulled in Step 1.</span></span>
-<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a><span class="co"># Same patterns as in Phase 12 - note: NO semi_join against the exposed (pnr).</span></span>
-<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>death <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")</span></span>
-<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span>            <span class="co"># exact date of death</span></span>
-<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
-<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a><span class="co"># VNDS: keep ALL events, not just the first exit. A person can have left and come</span></span>
-<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a><span class="co"># back, so whether they are resident depends on the index date. vnds_ev is already</span></span>
-<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a><span class="co"># extracted in Step 1 and reused here.</span></span>
-<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a><span class="co"># Do NOT take the first emigration as "the date the person leaves the study": it</span></span>
-<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a><span class="co"># can fall BEFORE index for someone who has moved back.</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co"># exp_lpr2 and exp_lpr3 are the procedure tables from Phase 10, Example A, BEFORE one row</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co"># per person was taken and before prevalent cases were excluded. With another exposure</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co"># (e.g. Example B), use the table you had at that same point.</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>exposure_raw <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(exp_lpr2, exp_lpr3) <span class="sc">%&gt;%</span>     <span class="co"># every exposure event, LPR2 and LPR3</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">exposure_date =</span> index_date)             <span class="co"># the event date, renamed to exposure_date</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>exp_dt <span class="ot">&lt;-</span> exposure_raw <span class="sc">%&gt;%</span>                            <span class="co"># one row per exposure event</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(exposure_date) <span class="sc">%&gt;%</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span>                                        <span class="co"># first exposure per person</span></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, exposure_date)</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="co"># 2.3 Date of death (DOD) for EVERYONE -----------------------------------------</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a><span class="co"># Migration events are pulled in Step 1.</span></span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a><span class="co"># Same patterns as in Phase 12 - note: NO semi_join against the exposed (pnr).</span></span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>death <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"dod"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")</span></span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">death_date =</span> doddato) <span class="sc">%&gt;%</span>            <span class="co"># exact date of death</span></span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
 <span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a><span class="co"># 2.4 Save as .rds (reused in both steps below) --------------------------------</span></span>
-<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(outcome, <span class="st">"path/to/outcome_dates.rds"</span>)     <span class="co"># first outcome per person</span></span>
-<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(exp_dt,  <span class="st">"path/to/exposure_dates.rds"</span>)    <span class="co"># first exposure per person</span></span>
-<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(death,   <span class="st">"path/to/death_dates.rds"</span>)       <span class="co"># date of death</span></span>
-<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(vnds_ev, <span class="st">"path/to/migration_events.rds"</span>)  <span class="co"># ALL entries/exits (not one date per person)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a><span class="co"># VNDS: keep ALL events, not just the first exit. A person can have left and come</span></span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a><span class="co"># back, so whether they are resident depends on the index date. vnds_ev is already</span></span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a><span class="co"># extracted in Step 1 and reused here.</span></span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a><span class="co"># Do NOT take the first emigration as "the date the person leaves the study": it</span></span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a><span class="co"># can fall BEFORE index for someone who has moved back.</span></span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a><span class="co"># 2.4 Save as .rds (reused in both steps below) --------------------------------</span></span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(outcome, <span class="st">"path/to/outcome_dates.rds"</span>)     <span class="co"># first outcome per person</span></span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(exp_dt,  <span class="st">"path/to/exposure_dates.rds"</span>)    <span class="co"># first exposure per person</span></span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(death,   <span class="st">"path/to/death_dates.rds"</span>)       <span class="co"># date of death</span></span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(vnds_ev, <span class="st">"path/to/migration_events.rds"</span>)  <span class="co"># ALL entries/exits (not one date per person)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Tip:</strong> extract these dates ONCE for the whole population and reuse them for both the exposed and the pool - so you don’t query the registers twice.</p>
 </details>
 <details>
@@ -1068,7 +1067,27 @@ Show the code (Route A): match with exposureMatch()
 <span id="cb5-62"><a href="#cb5-62" aria-hidden="true" tabindex="-1"></a>  <span class="at">date.terms   =</span> <span class="st">"eligible_from"</span>,        <span class="co"># argument 'date.terms' &lt;- control must have reached entry before the case's index</span></span>
 <span id="cb5-63"><a href="#cb5-63" aria-hidden="true" tabindex="-1"></a>  <span class="at">seed         =</span> <span class="dv">20260620</span>                <span class="co"># argument 'seed' &lt;- fixed number =&gt; reproducible result</span></span>
 <span id="cb5-64"><a href="#cb5-64" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb5-65"><a href="#cb5-65" aria-hidden="true" tabindex="-1"></a><span class="co"># Output: data.table with 'case.id' identifying each matched set (1 case + its controls)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb5-65"><a href="#cb5-65" aria-hidden="true" tabindex="-1"></a><span class="co"># Output: data.table with 'case.id' identifying each matched set (1 case + its controls)</span></span>
+<span id="cb5-66"><a href="#cb5-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-67"><a href="#cb5-67" aria-hidden="true" tabindex="-1"></a><span class="co"># Give the result the same columns as the Route B cohort, so that Step 4 and the</span></span>
+<span id="cb5-68"><a href="#cb5-68" aria-hidden="true" tabindex="-1"></a><span class="co"># later pages work for both routes. 'matched' has one row per person per matched</span></span>
+<span id="cb5-69"><a href="#cb5-69" aria-hidden="true" tabindex="-1"></a><span class="co"># set, and a control carries its case's index date in 'case_index'.</span></span>
+<span id="cb5-70"><a href="#cb5-70" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">as_tibble</span>(matched) <span class="sc">%&gt;%</span></span>
+<span id="cb5-71"><a href="#cb5-71" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb5-72"><a href="#cb5-72" aria-hidden="true" tabindex="-1"></a>    pnr,</span>
+<span id="cb5-73"><a href="#cb5-73" aria-hidden="true" tabindex="-1"></a>    <span class="at">index_date =</span> case_index,                 <span class="co"># the case's index date, also on its controls</span></span>
+<span id="cb5-74"><a href="#cb5-74" aria-hidden="true" tabindex="-1"></a>    <span class="at">exposed    =</span> <span class="fu">as.integer</span>(event),          <span class="co"># 1 = exposed (the case), 0 = comparison person</span></span>
+<span id="cb5-75"><a href="#cb5-75" aria-hidden="true" tabindex="-1"></a>    <span class="at">match_id   =</span> case.id,                    <span class="co"># the matched set</span></span>
+<span id="cb5-76"><a href="#cb5-76" aria-hidden="true" tabindex="-1"></a>    <span class="at">sex        =</span> <span class="fu">as.character</span>(sex)           <span class="co"># back from factor to text</span></span>
+<span id="cb5-77"><a href="#cb5-77" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb5-78"><a href="#cb5-78" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(demographics <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, foed_dag), <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>  <span class="co"># birth date (for age)</span></span>
+<span id="cb5-79"><a href="#cb5-79" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(exp_dt, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>                                  <span class="co"># own first exposure date; NA = never exposed</span></span>
+<span id="cb5-80"><a href="#cb5-80" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb5-81"><a href="#cb5-81" aria-hidden="true" tabindex="-1"></a>    <span class="co"># censoring date if a comparison person is later exposed - the same rule as in Route B</span></span>
+<span id="cb5-82"><a href="#cb5-82" aria-hidden="true" tabindex="-1"></a>    <span class="at">crossover_date =</span> <span class="fu">if_else</span>(exposed <span class="sc">==</span> <span class="dv">0</span>L <span class="sc">&amp;</span> <span class="sc">!</span><span class="fu">is.na</span>(exposure_date) <span class="sc">&amp;</span> exposure_date <span class="sc">&gt;</span> index_date,</span>
+<span id="cb5-83"><a href="#cb5-83" aria-hidden="true" tabindex="-1"></a>                             exposure_date, <span class="fu">as.Date</span>(<span class="cn">NA</span>))</span>
+<span id="cb5-84"><a href="#cb5-84" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb5-85"><a href="#cb5-85" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>exposure_date)                     <span class="co"># only needed to make crossover_date</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
@@ -1123,7 +1142,7 @@ Route B - manual risk-set loop (full control over eligibility)
 <span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">floor</span>(<span class="fu">as.numeric</span>(idx <span class="sc">-</span> foed_dag) <span class="sc">/</span> <span class="fl">365.25</span>) <span class="sc">==</span> age) <span class="sc">%&gt;%</span>      <span class="co"># same integer age ON idx</span></span>
 <span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">is.na</span>(death_date)         <span class="sc">|</span> death_date         <span class="sc">&gt;</span>  idx) <span class="sc">%&gt;%</span>  <span class="co"># alive on index</span></span>
 <span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">is.na</span>(exposure_date)      <span class="sc">|</span> exposure_date      <span class="sc">&gt;</span>  idx) <span class="sc">%&gt;%</span>  <span class="co"># exposure-free ON index</span></span>
-<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">is.na</span>(first_outcome_date) <span class="sc">|</span> first_outcome_date <span class="sc">&gt;=</span> idx) <span class="sc">%&gt;%</span>  <span class="co"># outcome-free on index</span></span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">is.na</span>(first_outcome_date) <span class="sc">|</span> first_outcome_date <span class="sc">&gt;</span>  idx) <span class="sc">%&gt;%</span>  <span class="co"># outcome-free on index (an outcome ON index is prevalent, as for the exposed)</span></span>
 <span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">left_join</span>(status_idx, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span>                              <span class="co"># latest event before idx</span></span>
 <span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">is.na</span>(last_code) <span class="sc">|</span> last_code <span class="sc">==</span> <span class="st">"I"</span>) <span class="sc">%&gt;%</span>                    <span class="co"># resident on index (no event = never left)</span></span>
 <span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="fu">as.numeric</span>(idx <span class="sc">-</span> <span class="fu">if_else</span>(<span class="fu">is.na</span>(last_code), foed_dag, last_date)) <span class="sc">/</span> <span class="fl">365.25</span> <span class="sc">&gt;=</span> <span class="dv">5</span>) <span class="sc">%&gt;%</span>  <span class="co"># 5 years continuous residence</span></span>
@@ -1164,34 +1183,36 @@ Performance: pre-split the pool (large datasets)
 </section>
 <section id="step-4---assemble-validate-and-save" class="level2 step-heading">
 <h2 class="step-heading anchored" data-anchor-id="step-4---assemble-validate-and-save">Step 4 - Assemble, validate and save</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  exposed <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">exposed =</span> <span class="dv">1</span>L, <span class="at">match_id =</span> pnr), <span class="co"># exposed = 1: the exposed; match_id = own pnr (their matched set)</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  comparison_group <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">exposed =</span> <span class="dv">0</span>L) <span class="co"># exposed = 0: the comparison group</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Age at index for EVERY row. The comparison rows come from the pool, which</span></span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># has no age column, so without this line their age_at_index would be NA.</span></span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_at_index =</span> <span class="fu">as.numeric</span>(index_date <span class="sc">-</span> foed_dag) <span class="sc">/</span> <span class="fl">365.25</span>)</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co"># The exposed must have exactly one row each</span></span>
-<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">n_distinct</span>(exposed<span class="sc">$</span>pnr) <span class="sc">==</span> <span class="fu">nrow</span>(exposed))</span>
-<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Bug check: same comparison person used twice in the SAME matched set (should be 0 rows;</span></span>
-<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co"># the usual cause is duplicate person-year rows in the pool, cf. Step 2)</span></span>
-<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>comparison_group <span class="sc">%&gt;%</span> <span class="fu">count</span>(match_id, pnr) <span class="sc">%&gt;%</span> <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>)</span>
-<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Info (not an error): a person can appear in several matched sets (replacement) or</span></span>
-<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a><span class="co"># both as a comparison person and later as exposed (crossover). Expected in a risk-set</span></span>
-<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="co"># design, but requires clustered standard errors in the analysis (Phase 13).</span></span>
-<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>cohort <span class="sc">%&gt;%</span> <span class="fu">count</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">nrow</span>()</span>
-<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(cohort<span class="sc">$</span>exposed) <span class="co"># group sizes</span></span>
-<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Match rate: how many exposed got fewer than RATIO comparison persons?</span></span>
-<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>n_per_exp <span class="ot">&lt;-</span> comparison_group <span class="sc">%&gt;%</span> <span class="fu">count</span>(match_id)</span>
-<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(n_per_exp<span class="sc">$</span>n <span class="sc">&lt;</span> RATIO) <span class="co"># exposed without full ratio</span></span>
-<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="sc">!</span>exposed<span class="sc">$</span>pnr <span class="sc">%in%</span> n_per_exp<span class="sc">$</span>match_id) <span class="co"># exposed without ANY comparison person</span></span>
-<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort, <span class="st">"path/to/full_cohort.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Route B only.</strong> Route A already assembled <code>cohort</code> at the end of its code, so skip this block. With the manual loop you put the exposed and the comparison group together yourself:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  exposed <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">exposed =</span> <span class="dv">1</span>L, <span class="at">match_id =</span> pnr), <span class="co"># exposed = 1: the exposed; match_id = own pnr (their matched set)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  comparison_group <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">exposed =</span> <span class="dv">0</span>L) <span class="co"># exposed = 0: the comparison group</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Both routes.</strong> Compute age, check the result and save it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Age at index for EVERY row. The comparison rows come from the pool,</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co"># which has no age column, so without this line their age_at_index would be NA.</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">age_at_index =</span> <span class="fu">as.numeric</span>(index_date <span class="sc">-</span> foed_dag) <span class="sc">/</span> <span class="fl">365.25</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co"># The exposed must have exactly one row each</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">n_distinct</span>(exposed<span class="sc">$</span>pnr) <span class="sc">==</span> <span class="fu">nrow</span>(exposed))</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Bug check: same comparison person used twice in the SAME matched set (should be 0 rows;</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the usual cause is duplicate person-year rows in the pool, cf. Step 2)</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>cohort <span class="sc">%&gt;%</span> <span class="fu">filter</span>(exposed <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span> <span class="fu">count</span>(match_id, pnr) <span class="sc">%&gt;%</span> <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Info (not an error): a person can appear in several matched sets (replacement) or</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="co"># both as a comparison person and later as exposed (crossover). Expected in a risk-set</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="co"># design, but requires clustered standard errors in the analysis (Phase 13).</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>cohort <span class="sc">%&gt;%</span> <span class="fu">count</span>(pnr) <span class="sc">%&gt;%</span> <span class="fu">filter</span>(n <span class="sc">&gt;</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="fu">nrow</span>()</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(cohort<span class="sc">$</span>exposed) <span class="co"># group sizes</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Match rate: how many exposed got fewer than RATIO comparison persons?</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>n_per_exp <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span> <span class="fu">filter</span>(exposed <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span> <span class="fu">count</span>(match_id) <span class="co"># comparison persons per matched set</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(n_per_exp<span class="sc">$</span>n <span class="sc">&lt;</span> RATIO) <span class="co"># exposed without full ratio</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="fu">sum</span>(<span class="sc">!</span>cohort<span class="sc">$</span>match_id[cohort<span class="sc">$</span>exposed <span class="sc">==</span> <span class="dv">1</span>] <span class="sc">%in%</span> n_per_exp<span class="sc">$</span>match_id) <span class="co"># exposed without ANY comparison person</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort, <span class="st">"path/to/full_cohort.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-important">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -1200,8 +1221,10 @@ Performance: pre-split the pool (large datasets)
 <div class="callout-body-container">
 <p><strong>If the <code>count(pnr)</code> check above printed a number greater than 0, <code>pnr</code> alone is no longer a safe join key for anything measured relative to the index date.</strong> Much of this guide shows the simple case with one row per <code>pnr</code> in <code>cohort</code>. With replacement, that is no longer true: the same <code>pnr</code> can carry several different <code>index_date</code>s, one per matched set it was drawn into. A downstream <code>left_join(..., by = "pnr")</code> - for outcomes, diagnoses, medication flags, SES variables, anything measured relative to <code>index_date</code> - will then silently mix values across that person’s different index dates: no error, no <code>NA</code>, just a value from the wrong window attached to the wrong row.</p>
 <p><strong>The fix:</strong> give <code>cohort</code> a stable row id before you extract anything else, and use it (or <code>pnr</code> + <code>index_date</code> together, as the complete recipe in <a href="./joins.html">Link your extracts</a> does) as the join key from here on, instead of <code>pnr</code> alone:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">row_id =</span> <span class="fu">row_number</span>()) <span class="co"># one id per cohort row - stays unique even if pnr repeats</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">row_id =</span> <span class="fu">row_number</span>()) <span class="co"># one id per cohort row - stays unique even if pnr repeats</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(cohort, <span class="st">"path/to/full_cohort.rds"</span>) <span class="co"># save again, now with row_id</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><a href="./socioeconomic-variables.html#row-id">Socioeconomic variables</a> works through this pattern end to end - why a plain <code>pnr</code> join goes wrong and how to carry the id through every subsequent extraction - use it as a template regardless of which variable you are attaching.</p>
 <p><strong>If the <code>count(pnr)</code> check above printed 0</strong> (no person drawn more than once), none of this applies: <code>pnr</code> alone is a safe join key throughout the rest of the guide, and you can ignore this callout entirely.</p>
 </div>
@@ -1254,8 +1277,8 @@ Performance: pre-split the pool (large datasets)
 <section id="what-now" class="level2">
 <h2 class="anchored" data-anchor-id="what-now">What now?</h2>
 <p>You have <code>full_cohort.rds</code> - one row per person (per matched set, if drawn more than once) with <code>pnr</code> and <code>index_date</code> for <strong>both groups</strong> (exposed + comparison group). Use it in all subsequent extractions:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr) <span class="co"># vector with all pnr's - both exposed and comparison persons</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(cohort<span class="sc">$</span>pnr) <span class="co"># vector with all pnr's - both exposed and comparison persons</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>cohort_pnrs</code> thus contains the pnr’s for <strong>both exposed and comparison persons</strong> - not just the exposed. Extraction of outcomes and covariates must cover the entire study population.</p>
 <table class="caption-top table">
 <thead>
