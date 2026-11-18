@@ -334,21 +334,14 @@ introduces bias.
 
 Each date table ends up as **one row per person** (just the date eligibility depends on), so the pool join below keys on `pnr`.
 
-**You must first build `diagnoses` (and the exposure source) as shown in [9b: Extract from LPR](extract-from-lpr.qmd) - it is not a raw table.** The diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, so you cannot just open them and filter. You extract **one register at a time** and **combine** them at the end, exactly as in 9b:
-
-1. **LPR2:** `lpr_adm` + `lpr_diag` joined on `recnum`.
-2. **LPR3:** `lpr_a_kontakt` + `lpr_a_diagnose` joined on `dw_ek_kontakt`.
-3. Optionally **psychiatry** (LPR2 psych) the same way.
-4. Harmonize the date to `date_contact` (from `d_inddto` / `kont_starttidspunkt`), strip the D-prefix to `icd3`, and bind the registers together with `bind_rows()` into one table = `diagnoses`.
-
-**The only difference from 9b:** you omit `semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)`, so you keep the WHOLE population - not just the exposed. (So the join keys `recnum`/`dw_ek_kontakt` belong to the LPR extract itself in 9b; here in the pool join the key is `pnr`, because the tables are now one row per person.)
+**`diagnoses` and `exposure_raw` come from [Phase 10](build-study-population.qmd).** `diagnoses` is the table you built there in Step 3 with `get_lpr_diagnoses()`: every contact with an outcome code, for everyone in BEF and not only the exposed, with the columns `pnr`, `date_contact` and `icd3`. It is not a raw register: the diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, which is why [9b: Extract from LPR](extract-from-lpr.qmd) joins and combines them first. `exposure_raw` is built in 2.2 below from the procedure tables of Phase 10, Example A.
 
 ```r
 # Extract eligibility dates for the WHOLE population ---------------------------
 library(fastreg); library(arrow); library(dplyr)  # read_register (arrow/open_dataset as fallback)
 
 # 2.1 First outcome date for EVERYONE ------------------------------------------
-# 'diagnoses' is the COMBINED LPR diagnosis table from Phase 9 (see the note above) - not a raw table.
+# 'diagnoses' is the table from Phase 10, Step 3 (see the note above): outcome contacts for everyone in BEF.
 # Filter on the outcome codes -> all persons with the diagnosis, regardless of exposure.
 # (On Phase 10 we joined to the exposed; here we aggregate for everyone.)
 outcome <- diagnoses %>%
@@ -362,7 +355,13 @@ outcome <- diagnoses %>%
 # 2.2 First exposure date for EVERYONE -----------------------------------------
 # Same source you used to DEFINE exposure on Phase 10, but without restricting to the exposed -
 # future-exposed people (crossover) also need a date.
-exp_dt <- exposure_raw %>%                            # your exposure extract, one row per exposure event
+# exp_lpr2 and exp_lpr3 are the procedure tables from Phase 10, Example A, BEFORE one row
+# per person was taken and before prevalent cases were excluded. With another exposure
+# (e.g. Example B), use the table you had at that same point.
+exposure_raw <- bind_rows(exp_lpr2, exp_lpr3) %>%     # every exposure event, LPR2 and LPR3
+  select(pnr, exposure_date = index_date)             # the event date, renamed to exposure_date
+
+exp_dt <- exposure_raw %>%                            # one row per exposure event
   group_by(pnr) %>%
   arrange(exposure_date) %>%
   slice(1) %>%                                        # first exposure per person
