@@ -101,7 +101,7 @@
 | `vakuumekstraktion` | character | code | Vacuum extraction (SKS procedure code) |  |
 
 - **`cpapbeh_neonatalafdeling`:** DST's variable list gives this column from 2000, but Sundhedsdatastyrelsen's documentation of the birth register for 1997-2018 (Dokumentation_Foedselsregisteret_1997_2018.xlsx) gives it as valid from 2001. Check the first years in your own data before relying on them.
-- **`levende_eller_doedfoedt`:** Stillbirths flagged here have their own richer detail table, mfrdfoed (see mfrdfoed.yaml), joined via FK_MFR - not confirmed one-to-one, but every stillbirth row here is expected to have a match there.
+- **`levende_eller_doedfoedt`:** DST gives no values for this column. DST also delivers a separate stillbirth dataset, mfrdfoed, with the key FK_MFR. DST's documentation does not say whether stillborn children have rows in this table: count the values in your own delivery.
 - **`markoer_accreta`:** A flag only - the actual SKS-coded placenta accreta finding is in a separate dataset, mfraccre (see mfraccre.yaml), joined via FK_MFR.
 - **`markoer_anaestesi_til_operation`:** A flag only - the actual SKS-coded anaesthesia for an operation finding is in a separate dataset, mfranaes (see mfranaes.yaml), joined via FK_MFR.
 - **`markoer_andre_foedselskomplikati`:** A flag only - the actual SKS-coded other birth complications not covered by the more specific sub-cuts finding is in a separate dataset, mfrakmpl (see mfrakmpl.yaml), joined via FK_MFR.

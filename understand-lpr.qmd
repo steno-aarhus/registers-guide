@@ -3,12 +3,12 @@ title: "Understand LPR"
 subtitle: "Structure, history and nuances - before you write code"
 date: last-modified
 pagetitle: "LPR: Danish National Patient Register"
-description: "How the Danish National Patient Register (LPR) is built: LPR2 vs LPR3 from 2019, the D-prefix on ICD codes, diagnosis types A, B and G, and patient type."
+description: "How the Danish National Patient Register (LPR) is built: LPR2 vs LPR3 from 2019, the D-prefix on ICD codes, the diagnosis types, and patient type."
 ---
 
 The National Patient Register (LPR) is the source of diagnoses and hospital
-contacts. It covers all public hospital admissions and outpatient contacts in
-Denmark.
+contacts. It covers all public hospital admissions in Denmark from 1977, and
+outpatient and emergency department contacts from 1995.
 
 LPR is more complex than most registers, because it changed format in 2019 and
 is split into somatic and psychiatric tables. This page explains the
@@ -19,18 +19,32 @@ you need to know before you extract data. The concrete extraction recipes are in
 ::: {.callout-tip}
 **In short:** LPR changed format in 2019 - use LPR2 (up to March 2019) and LPR3
 (after) and combine them. All ICD codes carry a `D` prefix you usually strip,
-and you choose diagnosis types (A/B for outcomes, +G for baseline comorbidity).
+and you choose diagnosis types (A/B for outcomes; G for baseline comorbidity
+exists only in 1995-2003).
 :::
 
 
 ## LPR is split into two periods
 
-In early 2019 (February-March 2019, depending on region) LPR changed format. Studies covering the period across 2019 must
-query **both systems** and combine them.
+In early 2019 LPR changed format, from LPR2 to LPR3. Two dates matter, and they
+are not the same thing:
+
+- **When the hospitals switched their reporting.** Region Hovedstaden, Region
+  Sjælland and Region Midtjylland switched to LPR3 on the weekend of 2-3
+  February 2019, Region Nordjylland and Region Syddanmark on the weekend of 2-3
+  March 2019 ([Sundhedsdatastyrelsen's data quality report on LPR3, April
+  2019](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/16452/Datakvalitetsrapport%20om%20LPR3%20pr.%2012.%20april%202019.pdf)).
+- **Where DST's LPR2 files end.** `lpr_adm`, `lpr_diag` and the other LPR2
+  registers at DST end on 31 March 2019 ([DST's register
+  overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)).
+
+Studies covering the period across 2019 must query **both systems** and combine
+them.
 
   |                        | LPR2 somatic                    | LPR2 psychiatric         | LPR3                                 |
   | ---------------------- | ------------------------------- | ------------------------ | ------------------------------------ |
-  | **Period**             | up to March 2019                | up to March 2019         | March 2019 and onwards               |
+  | **Period**             | 1977 to 31 March 2019           | 1995 to 31 March 2019    | February or March 2019 and onwards   |
+  | **Kinds of contact**   | inpatient only before 1995⁴     | all, from 1995           | all                                  |
   | **Contact register**   | `lpr_adm`                       | `t_psyk_adm`             | `lpr_a_kontakt`                      |
   | **Diagnosis register** | `lpr_diag`                      | `t_psyk_diag`            | `lpr_a_diagnose`                     |
   | **Covers psychiatry**  | No                              | Yes                      | Yes (both combined)                  |
@@ -46,6 +60,16 @@ delivery or data preprocessing: in DARTER the join key arrives as `k_recnum` in
 `t_psyk_adm` and `v_recnum` in `t_psyk_diag`, and the person column as `v_cpr`.
 Check `colnames()` and rename to `recnum` and `pnr` before joining. ² datetime
 format - convert with `as.Date()`.
+
+⁴ **LPR2 does not hold the same kinds of contact in all years.** From 1977
+through 1994 it holds inpatient contacts only. Outpatient and emergency
+department contacts, and contacts at psychiatric departments, are in it from
+1995. Some outpatient contacts were reported already in 1994, but not
+completely ([Schmidt et al. 2015](https://doi.org/10.2147/CLEP.S91125);
+[Sundhedsdatastyrelsen's LPR
+documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5)).
+A study that counts outpatient or emergency contacts therefore cannot start
+before 1995.
 
 This table lists what the registers contain, not what your project was given.
 Run `colnames()` on your own extract before you build anything on a column here -
@@ -91,8 +115,7 @@ gantt
 You access LPR3 through the LPR_A files (`lpr_a_kontakt`, `lpr_a_diagnose`).
 
 ::: {.callout-important #lpr-a-format}
-**Use the LPR_A files, and filter them. Two things, both easy to get wrong,
-and neither is publicly documented by DST.**
+**Use the LPR_A files, and filter them. Two things, both easy to get wrong.**
 
 1. **LPR_A, not LPR_F.** LPR3 has been delivered in two formats: the older
    **LPR_F** (`kontakter`, `diagnoser`, `forloeb`, a course-oriented model) and
@@ -102,10 +125,14 @@ and neither is publicly documented by DST.**
    the same contacts differently - so loading LPR_F as well, or mixing them,
    gives you **duplicated rows**.
 2. **LPR_A is not just LPR3 - it is four reporting systems in one table.**
-   `lpr_a_kontakt` and `lpr_a_diagnose` hold every contact DST has migrated
-   into the new data model, tagged by `lprindberetningssystem`: `LPR1`,
-   `LPR2`, `MiniPAS` (records from private hospitals) and `LPR3`. That is
-   why the files reach back to around 2017, years before LPR3 reporting
+   Besides LPR3 contacts, `lpr_a_kontakt` and `lpr_a_diagnose` hold contacts
+   from the older systems that ended in 2017 or later. Every row is tagged by
+   `lprindberetningssystem`: `LPR1`,
+   `LPR2`, `MiniPAS` (records from private hospitals) and `LPR3`. DST says
+   so in its [remark on
+   LPR_A_KONTAKT](https://www.dst.dk/extranet/ForskningVariabellister/Bemaerkning/LPR_A_KONTAKT%20-%20Landspatientregistret%20%28LPR3%29%20-Kontaktoplysninger%20omkring%20de%20enkelte%20kontakter.html).
+   That is
+   why the files reach back to 2017, years before LPR3 reporting
    itself began in early 2019 - "LPR3" as a period and "LPR_A" as a file are
    not the same thing. Filter both `lpr_a_kontakt` and `lpr_a_diagnose` with
    `lprindberetningssystem == "LPR3"`, or a contact already counted from
@@ -116,8 +143,8 @@ and neither is publicly documented by DST.**
    March 2019 onward, not LPR_A's migrated LPR1, LPR2 and MiniPAS history.
 
    **The `lprindberetningssystem == "LPR3"` filter above can drop real
-   contacts if your project's `lpr_adm` ends before DST's own early-2019
-   cutover (February-March 2019, depending on region), and MiniPAS needs a register of its own** - see the fuller caveat,
+   contacts if your project's `lpr_adm` ends before DST's own LPR2 files do
+   (31 March 2019), and MiniPAS needs a register of its own** - see the fuller caveat,
    including how to check your own delivery, in [Extract from
    LPR](extract-from-lpr.qmd#lpr3-filter-caveat) before trusting a count
    that spans 2019.
@@ -186,13 +213,31 @@ two classifications out of one column and needs a code list for each.
 The same applies to `dodsaars`, which runs from 1970 and changes over in the
 same year.
 
-## Diagnosis types: A, B and G {#diagtype}
+## Diagnosis types {#diagtype}
 
-  | Code | Meaning                                            | When to include               |
-  | ---- | -------------------------------------------------- | ----------------------------- |
-  | A    | Action diagnosis - primary reason for the contact  | Always for outcomes           |
-  | B    | Secondary diagnosis - additional condition present | Always for outcomes           |
-  | G    | Underlying condition - background comorbidity      | Only for baseline comorbidity |
+LPR2 (`c_diagtype`) has six diagnosis types, and three of them were only in use
+for some years:
+
+  | Code | Meaning                                                                          | In use in LPR2 | When to include               |
+  | ---- | -------------------------------------------------------------------------------- | -------------- | ----------------------------- |
+  | A    | Action diagnosis (primary diagnosis) - the main reason for the contact           | 1977 onwards   | Always for outcomes           |
+  | B    | Secondary diagnosis - additional condition present                               | 1977 onwards   | Always for outcomes           |
+  | G    | Underlying condition (grundmorbus), when different from the action diagnosis     | 1995-2003      | Only for baseline comorbidity |
+  | H    | Referral diagnosis - given by the referring unit as the reason for referral      | 1995 onwards   | Decide for your study         |
+  | M    | Provisional diagnosis - only for ongoing somatic outpatient contacts             | 1998-2013      | Decide for your study         |
+  | C    | Complication                                                                     | 2002-2013      | Decide for your study         |
+
+The codes and years are from Sundhedsdatastyrelsen's [code sheet for
+LPR](https://www.esundhed.dk/-/media/Files/Dokumentation/Landspatientregisteret/5_Kodeark_LPR---pdf.ashx);
+the explanations of A, H and M follow [Schmidt et al.
+2015](https://doi.org/10.2147/CLEP.S91125). G was voluntary to record in
+1995-2001, was recorded only for psychiatric patients in 2002-2003, and is not
+used after 2003 ([Sundhedsdatastyrelsen's LPR
+documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5)).
+
+LPR3 (`diag_kode_type`) has only two diagnosis types: action diagnosis (A) and
+secondary diagnosis (B) ([reporting guideline for LPR 2025, section
+6.1.3](https://cdn.sundhedsdatastyrelsen.dk/sundhedsdatastyrelsen/Media/638955095432142451/LPR-indberetningsvejledning_2025_v.5.1.pdf)).
 
 ```r
 # For outcomes and exclusion diagnoses:

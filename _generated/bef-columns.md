@@ -41,13 +41,13 @@
 | `statsb` | numeric | code | Citizenship | 1985 to 2026 |
 | `opholdmd_dk` | numeric | value | Months of residence in Denmark | 1985 to 2026 |
 | `van_vtil` | date | date | Immigration date | 1985-12 to 2003-12 |
-| `foerste_indvandring` | date | date | First immigration date | 2004-12 to 2026-06 |
-| `seneste_indvandring` | date | date | Most recent immigration date | 2004-12 to 2026-06 |
+| `foerste_indvandring` | date | date | First immigration date | 2004-12 to 2026-09 |
+| `seneste_indvandring` | date | date | Most recent immigration date | 2004-12 to 2026-09 |
 | `adresse_id` | character | identifier | Address id | 1985 to 2026 |
-| `fkirk` | character | code | Membership of the Danish National Church | 2004-12 to 2026-06 |
-| `cprtjek` | character | code | CPR check | 2004-12 to 2026-06 |
-| `cprtype` | character | code | CPR type | 2004-12 to 2026-06 |
-| `version` | numeric | code | Module data version | 2004-12 to 2026-06 |
+| `fkirk` | character | code | Membership of the Danish National Church | 2004-12 to 2026-09 |
+| `cprtjek` | character | code | CPR check |  |
+| `cprtype` | character | code | CPR type |  |
+| `version` | numeric | code | Module data version | 2004-12 to 2026-09 |
 | `betalingskom` | character | code | Betalingskommune | 1985 to 2026 |
 
 - **`mor_id`:** A pnr-like identifier for the mother, so BEF can be turned into a family structure without a separate register. It is only filled where the link is registered, which is not the case for everyone born before CPR.

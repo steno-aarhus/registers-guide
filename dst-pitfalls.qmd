@@ -190,14 +190,18 @@ See DST's official BEF documentation: [statistikdokumentation/befolkningen
 →](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen)
 :::
 
-This means that a person who dies in June 2020 still appears in the 2020 BEF
-snapshot.
+A person is in a BEF file only if they were alive and living in Denmark on that
+file's reference date. DST's file `BEF202012` is the status on 31 December 2020,
+so a person who died in June 2020 is in `BEF201912` and `BEF202003`, but not in
+`BEF202006` or any later file. Which file your project calls `year == 2020`
+depends on the convention above, so a filter on `year` cannot tell you who was
+alive on a given date.
 
 ```r
 # ERROR: do not use BEF to check "alive on a specific date"
 bef_2020 <- bef %>%
-  filter(year == 2020) # includes everyone in the 2020 snapshot
-# - including those who die during 2020
+  filter(year == 2020) # everyone alive and resident on that file's reference date
+# - including those who die after that date
 
 # CORRECT: combine with dod (not dodsaars - see pitfall 1) to exclude deaths
 index_date <- as.Date("2020-06-30") # your index date
@@ -223,8 +227,11 @@ The table is called `lpr_a_diagnose` - the "a" refers to "analysis model" (the
 LPR_A series introduced in 2025). It does **not** mean the table only contains
 A-type (action) diagnoses.
 
-The table contains all diagnosis types: A (action), B (secondary diagnosis) and
-G (underlying condition). You still need to filter on `diag_kode_type`:
+LPR3 has two diagnosis types, and the table holds both: A (action diagnosis)
+and B (secondary diagnosis). G (underlying condition) is an LPR2 type and is not
+reported in LPR3. The six LPR2 types and their years are in [Understand
+LPR](understand-lpr.qmd#diagtype). You still need to filter on
+`diag_kode_type`:
 
 ```r
 lpr_a_diagnose %>%
@@ -357,7 +364,8 @@ BEF). The two uses look identical in the code.
 Some registers arrive as a single file covering everything, and then every row
 carries the same `year` whatever its date. `dodsaars` spans 1970 to 2001 and
 says 2024 on every row. `lpr_a_kontakt` is worse, because it is the consolidated
-LPR_A table: one file holding the whole migrated history, so counting by `year`
+LPR_A table: one file holding every contact that ended in 2017 or later, so
+counting by `year`
 puts LPR1, LPR2, MiniPAS (records from private hospitals) and LPR3 contacts
 all in the same single year, and it looks as though four reporting systems
 ran at once.
@@ -401,9 +409,11 @@ extraction is wrong.
 
 The name suggests these tables hold LPR3 data only. They do not: LPR_A also
 carries older LPR1, LPR2 and MiniPAS (private-hospital) rows, reloaded into
-the same table and tagged by `lprindberetningssystem`, going back to around
-2017 - see [Understand LPR](understand-lpr.qmd#lpr-a-format) for why LPR_A is
-built this way.
+the same table and tagged by `lprindberetningssystem`, for contacts that ended
+in 2017 or later ([DST's remark on
+LPR_A_KONTAKT](https://www.dst.dk/extranet/ForskningVariabellister/Bemaerkning/LPR_A_KONTAKT%20-%20Landspatientregistret%20%28LPR3%29%20-Kontaktoplysninger%20omkring%20de%20enkelte%20kontakter.html)).
+See [Understand LPR](understand-lpr.qmd#lpr-a-format) for what that means for
+your extract.
 
 If you combine LPR2 (`lpr_adm`) and LPR_A without filtering, the same contacts
 get counted twice - once from each table. Filter both `lpr_a_kontakt` and
@@ -419,8 +429,8 @@ lpr3_d <- lpr_a_diagnose %>%
 
 ::: {.callout-warning}
 **This filter is not free of its own problems.** Your own `lpr_adm`
-delivery's actual coverage can end earlier than DST's official LPR2 cutover
-date, in which case the simple filter above silently drops real, unique
+delivery's actual coverage can end earlier than DST's own LPR2 files do
+(31 March 2019), in which case the simple filter above silently drops real, unique
 contacts along with the duplicates. See [Extract from
 LPR](extract-from-lpr.qmd#lpr3-filter-caveat) for how to check your own
 delivery's coverage before trusting it. On DARTER specifically, see [DARTER
