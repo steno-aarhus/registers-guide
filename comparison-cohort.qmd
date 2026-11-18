@@ -525,6 +525,26 @@ matched <- exposureMatch(
   seed         = 20260620                # argument 'seed' <- fixed number => reproducible result
 )
 # Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
+
+# Give the result the same columns as the Route B cohort, so that Step 4 and the
+# later pages work for both routes. 'matched' has one row per person per matched
+# set, and a control carries its case's index date in 'case_index'.
+cohort <- as_tibble(matched) %>%
+  transmute(
+    pnr,
+    index_date = case_index,                 # the case's index date, also on its controls
+    exposed    = as.integer(event),          # 1 = exposed (the case), 0 = comparison person
+    match_id   = case.id,                    # the matched set
+    sex        = as.character(sex)           # back from factor to text
+  ) %>%
+  left_join(demographics %>% select(pnr, foed_dag), by = "pnr") %>%  # birth date (for age)
+  left_join(exp_dt, by = "pnr") %>%                                  # own first exposure date; NA = never exposed
+  mutate(
+    # censoring date if a comparison person is later exposed - the same rule as in Route B
+    crossover_date = if_else(exposed == 0L & !is.na(exposure_date) & exposure_date > index_date,
+                             exposure_date, as.Date(NA))
+  ) %>%
+  select(-exposure_date)                     # only needed to make crossover_date
 ```
 
 </details>
@@ -664,13 +684,16 @@ Only with `WITHOUT_REPLACEMENT = TRUE`: remove the chosen ones from their strata
 ## Step 4 - Assemble, validate and save {.step-heading}
 
 ```r
-# matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:
+# Route A: 'cohort' was already assembled at the end of the Route A code - skip the bind_rows() below.
+# Route B (the manual loop): assemble the exposed and the comparison group yourself:
 cohort <- bind_rows(
   exposed %>% mutate(exposed = 1L, match_id = pnr), # exposed = 1: the exposed; match_id = own pnr (their matched set)
   comparison_group %>% mutate(exposed = 0L) # exposed = 0: the comparison group
-) %>%
-  # Age at index for EVERY row. The comparison rows come from the pool, which
-  # has no age column, so without this line their age_at_index would be NA.
+)
+
+# Both routes: age at index for EVERY row. The comparison rows come from the pool,
+# which has no age column, so without this line their age_at_index would be NA.
+cohort <- cohort %>%
   mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)
 
 # The exposed must have exactly one row each
@@ -678,7 +701,7 @@ stopifnot(n_distinct(exposed$pnr) == nrow(exposed))
 
 # Bug check: same comparison person used twice in the SAME matched set (should be 0 rows;
 # the usual cause is duplicate person-year rows in the pool, cf. Step 2)
-comparison_group %>% count(match_id, pnr) %>% filter(n > 1)
+cohort %>% filter(exposed == 0) %>% count(match_id, pnr) %>% filter(n > 1)
 
 # Info (not an error): a person can appear in several matched sets (replacement) or
 # both as a comparison person and later as exposed (crossover). Expected in a risk-set
@@ -687,9 +710,9 @@ cohort %>% count(pnr) %>% filter(n > 1) %>% nrow()
 table(cohort$exposed) # group sizes
 
 # Match rate: how many exposed got fewer than RATIO comparison persons?
-n_per_exp <- comparison_group %>% count(match_id)
+n_per_exp <- cohort %>% filter(exposed == 0) %>% count(match_id) # comparison persons per matched set
 sum(n_per_exp$n < RATIO) # exposed without full ratio
-sum(!exposed$pnr %in% n_per_exp$match_id) # exposed without ANY comparison person
+sum(!cohort$match_id[cohort$exposed == 1] %in% n_per_exp$match_id) # exposed without ANY comparison person
 
 saveRDS(cohort, "path/to/full_cohort.rds")
 ```
