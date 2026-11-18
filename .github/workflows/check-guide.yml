@@ -1,0 +1,62 @@
+name: Check guide
+
+# Runs the guide's own checker (tools/check-guide.R, the same as
+# `just check-guide`) on every pull request, so a problem is found before the
+# merge instead of after it. Until now the checker only ran when somebody
+# remembered to run it locally, and main ended up with a stale search index.
+#
+# What it checks: every R block parses, called functions exist, internal links
+# and anchors resolve, the house rules hold, the schema is valid, and the
+# generated files (_generated/, assets/variables.json and
+# assets/search-index.json) match their sources.
+#
+# If it fails on the search index, run `just build-search-index` and commit
+# assets/search-index.json. For the tables it is `just build-schema-tables`.
+
+on:
+  # Every pull request, including each new push to it.
+  pull_request:
+  # Lets you start the check by hand from the Actions tab.
+  workflow_dispatch: {}
+
+# Limit token permissions for security. The check only reads the repository.
+permissions: read-all
+
+jobs:
+  check-guide:
+    name: Check guide
+    runs-on: ubuntu-latest
+    steps:
+      # This is a useful security step to check for unexpected outbound calls from the runner,
+      # which could indicate a compromised token or runner.
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      # Fetch the pull request's files, so the checker has something to read.
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The checker is an R script.
+      - name: Set up R
+        uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      # The only package the checker needs beyond base R. It reads the schema
+      # and the search synonyms. Without it the schema and generated-files
+      # check is skipped without an error, so this step must not be removed.
+      - name: Install the yaml package
+        run: Rscript -e 'install.packages("yaml", repos = "https://cloud.r-project.org")'
+
+      # All five sub-checks run. The packages the guide's examples use (osdc,
+      # fastreg, heaven ...) are deliberately NOT installed here. The
+      # "functions" sub-check does not fail because of that: calls into a
+      # package that is not installed are counted as "cannot be verified" and
+      # are only reported. It fails only for pkg::fn() where pkg is installed
+      # and fn does not exist, which here means the packages that ship with R
+      # (for example survival). So in this workflow "functions" is a light
+      # check; the full one still needs `just check-guide` on a machine that
+      # has the packages. The script exits with 1 if any sub-check found an
+      # error, and that fails the pull request. Warnings do not.
+      - name: Run tools/check-guide.R
+        run: Rscript tools/check-guide.R
