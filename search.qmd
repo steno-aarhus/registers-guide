@@ -60,6 +60,23 @@ register instead.
       out = document.getElementById("gs-results"),
       count = document.getElementById("gs-count");
 
+  // A search can be opened from a link: search.html?query=death. The name is
+  // "query" and not "q", because Quarto's own search script also uses "q" and
+  // deletes it from the address before this script runs. "q" is still read,
+  // in case it ever survives.
+  var params = new URLSearchParams(location.search);
+  var linked = params.get("query") || params.get("q");
+
+  // Keep the address in step with the box, so it can be copied as a link to
+  // this search. replaceState changes the address without adding a step to
+  // the browser history, so Back still leaves the page in one press instead
+  // of undoing the query one letter at a time.
+  function updateAddress() {
+    var text = q.value.trim();
+    history.replaceState(null, "", location.pathname +
+      (text ? "?query=" + encodeURIComponent(text) : ""));
+  }
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
@@ -191,9 +208,8 @@ register instead.
     .then(function (d) {
       SECTIONS = d.sections; SYN = d.synonyms || [];
       buildExpand();
-      q.addEventListener("input", render);
-      var pre = new URLSearchParams(location.search).get("q");
-      if (pre) { q.value = pre; render(); }
+      q.addEventListener("input", function () { render(); updateAddress(); });
+      if (linked) { q.value = linked; render(); }
       q.focus();
     })
     .catch(function () {
