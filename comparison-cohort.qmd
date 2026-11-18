@@ -334,21 +334,14 @@ introduces bias.
 
 Each date table ends up as **one row per person** (just the date eligibility depends on), so the pool join below keys on `pnr`.
 
-**You must first build `diagnoses` (and the exposure source) as shown in [9b: Extract from LPR](extract-from-lpr.qmd) - it is not a raw table.** The diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, so you cannot just open them and filter. You extract **one register at a time** and **combine** them at the end, exactly as in 9b:
-
-1. **LPR2:** `lpr_adm` + `lpr_diag` joined on `recnum`.
-2. **LPR3:** `lpr_a_kontakt` + `lpr_a_diagnose` joined on `dw_ek_kontakt`.
-3. Optionally **psychiatry** (LPR2 psych) the same way.
-4. Harmonize the date to `date_contact` (from `d_inddto` / `kont_starttidspunkt`), strip the D-prefix to `icd3`, and bind the registers together with `bind_rows()` into one table = `diagnoses`.
-
-**The only difference from 9b:** you omit `semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)`, so you keep the WHOLE population - not just the exposed. (So the join keys `recnum`/`dw_ek_kontakt` belong to the LPR extract itself in 9b; here in the pool join the key is `pnr`, because the tables are now one row per person.)
+**`diagnoses` and `exposure_raw` come from [Phase 10](build-study-population.qmd).** `diagnoses` is the table you built there in Step 3 with `get_lpr_diagnoses()`: every contact with an outcome code, for everyone in BEF and not only the exposed, with the columns `pnr`, `date_contact` and `icd3`. It is not a raw register: the diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, which is why [9b: Extract from LPR](extract-from-lpr.qmd) joins and combines them first. `exposure_raw` is built in 2.2 below from the procedure tables of Phase 10, Example A.
 
 ```r
 # Extract eligibility dates for the WHOLE population ---------------------------
 library(fastreg); library(arrow); library(dplyr)  # read_register (arrow/open_dataset as fallback)
 
 # 2.1 First outcome date for EVERYONE ------------------------------------------
-# 'diagnoses' is the COMBINED LPR diagnosis table from Phase 9 (see the note above) - not a raw table.
+# 'diagnoses' is the table from Phase 10, Step 3 (see the note above): outcome contacts for everyone in BEF.
 # Filter on the outcome codes -> all persons with the diagnosis, regardless of exposure.
 # (On Phase 10 we joined to the exposed; here we aggregate for everyone.)
 outcome <- diagnoses %>%
@@ -362,7 +355,13 @@ outcome <- diagnoses %>%
 # 2.2 First exposure date for EVERYONE -----------------------------------------
 # Same source you used to DEFINE exposure on Phase 10, but without restricting to the exposed -
 # future-exposed people (crossover) also need a date.
-exp_dt <- exposure_raw %>%                            # your exposure extract, one row per exposure event
+# exp_lpr2 and exp_lpr3 are the procedure tables from Phase 10, Example A, BEFORE one row
+# per person was taken and before prevalent cases were excluded. With another exposure
+# (e.g. Example B), use the table you had at that same point.
+exposure_raw <- bind_rows(exp_lpr2, exp_lpr3) %>%     # every exposure event, LPR2 and LPR3
+  select(pnr, exposure_date = index_date)             # the event date, renamed to exposure_date
+
+exp_dt <- exposure_raw %>%                            # one row per exposure event
   group_by(pnr) %>%
   arrange(exposure_date) %>%
   slice(1) %>%                                        # first exposure per person
@@ -526,6 +525,26 @@ matched <- exposureMatch(
   seed         = 20260620                # argument 'seed' <- fixed number => reproducible result
 )
 # Output: data.table with 'case.id' identifying each matched set (1 case + its controls)
+
+# Give the result the same columns as the Route B cohort, so that Step 4 and the
+# later pages work for both routes. 'matched' has one row per person per matched
+# set, and a control carries its case's index date in 'case_index'.
+cohort <- as_tibble(matched) %>%
+  transmute(
+    pnr,
+    index_date = case_index,                 # the case's index date, also on its controls
+    exposed    = as.integer(event),          # 1 = exposed (the case), 0 = comparison person
+    match_id   = case.id,                    # the matched set
+    sex        = as.character(sex)           # back from factor to text
+  ) %>%
+  left_join(demographics %>% select(pnr, foed_dag), by = "pnr") %>%  # birth date (for age)
+  left_join(exp_dt, by = "pnr") %>%                                  # own first exposure date; NA = never exposed
+  mutate(
+    # censoring date if a comparison person is later exposed - the same rule as in Route B
+    crossover_date = if_else(exposed == 0L & !is.na(exposure_date) & exposure_date > index_date,
+                             exposure_date, as.Date(NA))
+  ) %>%
+  select(-exposure_date)                     # only needed to make crossover_date
 ```
 
 </details>
@@ -616,7 +635,7 @@ for (i in seq_len(nrow(exp_sorted))) {                   # loop one exposed pers
     filter(floor(as.numeric(idx - foed_dag) / 365.25) == age) %>%      # same integer age ON idx
     filter(is.na(death_date)         | death_date         >  idx) %>%  # alive on index
     filter(is.na(exposure_date)      | exposure_date      >  idx) %>%  # exposure-free ON index
-    filter(is.na(first_outcome_date) | first_outcome_date >= idx) %>%  # outcome-free on index
+    filter(is.na(first_outcome_date) | first_outcome_date >  idx) %>%  # outcome-free on index (an outcome ON index is prevalent, as for the exposed)
     left_join(status_idx, by = "pnr") %>%                              # latest event before idx
     filter(is.na(last_code) | last_code == "I") %>%                    # resident on index (no event = never left)
     filter(as.numeric(idx - if_else(is.na(last_code), foed_dag, last_date)) / 365.25 >= 5) %>%  # 5 years continuous residence
@@ -664,14 +683,23 @@ Only with `WITHOUT_REPLACEMENT = TRUE`: remove the chosen ones from their strata
 
 ## Step 4 - Assemble, validate and save {.step-heading}
 
+**Route B only.** Route A already assembled `cohort` at the end of its code, so
+skip this block. With the manual loop you put the exposed and the comparison
+group together yourself:
+
 ```r
-# matched from Route A IS already the full cohort. With the manual loop (Route B) you assemble yourself:
 cohort <- bind_rows(
   exposed %>% mutate(exposed = 1L, match_id = pnr), # exposed = 1: the exposed; match_id = own pnr (their matched set)
   comparison_group %>% mutate(exposed = 0L) # exposed = 0: the comparison group
-) %>%
-  # Age at index for EVERY row. The comparison rows come from the pool, which
-  # has no age column, so without this line their age_at_index would be NA.
+)
+```
+
+**Both routes.** Compute age, check the result and save it:
+
+```r
+# Age at index for EVERY row. The comparison rows come from the pool,
+# which has no age column, so without this line their age_at_index would be NA.
+cohort <- cohort %>%
   mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)
 
 # The exposed must have exactly one row each
@@ -679,7 +707,7 @@ stopifnot(n_distinct(exposed$pnr) == nrow(exposed))
 
 # Bug check: same comparison person used twice in the SAME matched set (should be 0 rows;
 # the usual cause is duplicate person-year rows in the pool, cf. Step 2)
-comparison_group %>% count(match_id, pnr) %>% filter(n > 1)
+cohort %>% filter(exposed == 0) %>% count(match_id, pnr) %>% filter(n > 1)
 
 # Info (not an error): a person can appear in several matched sets (replacement) or
 # both as a comparison person and later as exposed (crossover). Expected in a risk-set
@@ -688,9 +716,9 @@ cohort %>% count(pnr) %>% filter(n > 1) %>% nrow()
 table(cohort$exposed) # group sizes
 
 # Match rate: how many exposed got fewer than RATIO comparison persons?
-n_per_exp <- comparison_group %>% count(match_id)
+n_per_exp <- cohort %>% filter(exposed == 0) %>% count(match_id) # comparison persons per matched set
 sum(n_per_exp$n < RATIO) # exposed without full ratio
-sum(!exposed$pnr %in% n_per_exp$match_id) # exposed without ANY comparison person
+sum(!cohort$match_id[cohort$exposed == 1] %in% n_per_exp$match_id) # exposed without ANY comparison person
 
 saveRDS(cohort, "path/to/full_cohort.rds")
 ```
@@ -714,6 +742,8 @@ alone:
 ```r
 cohort <- cohort %>%
   mutate(row_id = row_number()) # one id per cohort row - stays unique even if pnr repeats
+
+saveRDS(cohort, "path/to/full_cohort.rds") # save again, now with row_id
 ```
 
 [Socioeconomic variables](socioeconomic-variables.qmd#row-id)
