@@ -96,10 +96,10 @@ register instead.
   // Danish inflects and compounds: "stien" should reach "sti", and
   // "doedsdato" should reach "doed". English inflects too: a reader types
   // "move abroad" or "moves abroad", the synonym list says "moved abroad". A
-  // shared prefix with a bounded leftover on each side covers all of that.
-  // The floor is three characters and the leftover is capped at six, which
-  // covers -en, -et, -erne, -ed, -es and a joined second word without
-  // letting "kom" swallow "kommunikation".
+  // shared start with a bounded leftover on each side covers all of that:
+  // -en, -et, -erne, -ed, -es and a joined second word, without letting
+  // "kom" swallow "kommunikation". The exact limits are at the end of the
+  // function.
   function stemMatch(term, w) {
     // Danish letters get typed both ways, "indlæggelse" and "indlaeggelse".
     // Compare both words in the second spelling, so the synonym list only
@@ -112,7 +112,21 @@ register instead.
     // "moved" even though neither word contains the other outright.
     var n = 0, max = Math.min(term.length, w.length);
     while (n < max && term[n] === w[n]) n++;
-    return n >= 3 && term.length - n <= 6 && w.length - n <= 6;
+    // What each word has left after the shared start: the shorter leftover
+    // (less) and the longer one (more).
+    var less = Math.min(term.length - n, w.length - n),
+        more = Math.max(term.length - n, w.length - n);
+    // One word is the start of the other. If the synonym is the short one
+    // ("sti", typed "stien") the typed word may add six letters, which covers
+    // Danish endings and compounds. If the typed word is the short one it
+    // may lack only three, so "log" reaches "login" but not "logistic".
+    if (less === 0) return more <= (w.length < term.length ? 3 : 6);
+    // Each word has its own ending: "moves" and "moved". Then four letters
+    // must be shared and the shorter ending is at most two. Before, three
+    // shared letters and six left on both sides were enough, so "indkomst"
+    // matched "indvandr" and "results" matched "resident", and a search for
+    // income also looked for immigration.
+    return n >= 4 && less <= 2 && more <= 6;
   }
 
   function expand(query) {
