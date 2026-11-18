@@ -73,7 +73,7 @@ matching](#without-matching-an-unmatched-comparison-group) after the four steps.
 
 In a risk-set design a future-exposed person is allowed to be a comparison person UNTIL their own exposure date. **So do NOT exclude everyone who ever becomes exposed** - that conditions on the future and can overestimate the effect (immortal-time / selection bias). Instead store a `crossover_date` = the date the person themselves becomes exposed, and decide how to handle it: censor at crossover, or let the person switch group.
 
-Crossover is explained briefly here; the full treatment (censoring) is in [Outcomes](outcomes.qmd).
+Crossover is explained briefly here; the censoring itself is done when follow-up time is calculated, in [Link your extracts](joins.qmd#follow-up-time).
 
 </details>
 
@@ -669,7 +669,10 @@ Only with `WITHOUT_REPLACEMENT = TRUE`: remove the chosen ones from their strata
 cohort <- bind_rows(
   exposed %>% mutate(exposed = 1L, match_id = pnr), # exposed = 1: the exposed; match_id = own pnr (their matched set)
   comparison_group %>% mutate(exposed = 0L) # exposed = 0: the comparison group
-)
+) %>%
+  # Age at index for EVERY row. The comparison rows come from the pool, which
+  # has no age column, so without this line their age_at_index would be NA.
+  mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)
 
 # The exposed must have exactly one row each
 stopifnot(n_distinct(exposed$pnr) == nrow(exposed))
@@ -693,9 +696,9 @@ saveRDS(cohort, "path/to/full_cohort.rds")
 ```
 
 ::: {.callout-important}
-**If the `count(pnr)` check above printed a number greater than 0, every join you do next needs
-one more thing than [Link your extracts](joins.qmd) shows by default.** That
-page - and most of this guide - assumes one row per `pnr` in `cohort`. With
+**If the `count(pnr)` check above printed a number greater than 0, `pnr` alone
+is no longer a safe join key for anything measured relative to the index date.**
+Much of this guide shows the simple case with one row per `pnr` in `cohort`. With
 replacement, that is no longer true: the same `pnr` can carry several
 different `index_date`s, one per matched set it was drawn into. A downstream
 `left_join(..., by = "pnr")` - for outcomes, diagnoses, medication flags, SES
@@ -704,8 +707,9 @@ mix values across that person's different index dates: no error, no `NA`,
 just a value from the wrong window attached to the wrong row.
 
 **The fix:** give `cohort` a stable row id before you extract anything else,
-and use it (or `pnr` + `index_date` together) as the join key from here on,
-instead of `pnr` alone:
+and use it (or `pnr` + `index_date` together, as the complete recipe in [Link
+your extracts](joins.qmd) does) as the join key from here on, instead of `pnr`
+alone:
 
 ```r
 cohort <- cohort %>%
