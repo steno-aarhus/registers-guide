@@ -331,7 +331,7 @@ outcome <- all_dx %>%
 # diagnosis get NA in event_date - that is the correct value for "no event",
 # and they are censored at end of follow-up rather than dropped.
 result <- cohort %>%
-  select(pnr) %>%
+  distinct(pnr) %>%   # one row per person, also if a pnr is in the cohort more than once
   left_join(outcome, by = "pnr")
 
 saveRDS(result, "path/to/extract_hip_fracture.rds")   # change filename for each new outcome
@@ -607,9 +607,9 @@ hip_fracture <- all_dx %>%
   inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>%
   filter(date_contact > index_date) %>%
   group_by(pnr) %>% arrange(date_contact) %>% slice(1) %>% ungroup() %>%
-  select(pnr, hip_fracture_date = date_contact)
+  select(pnr, event_date = date_contact)
 
-result <- cohort %>% select(pnr) %>% left_join(hip_fracture, by = "pnr")
+result <- cohort %>% distinct(pnr) %>% left_join(hip_fracture, by = "pnr") # one row per person
 saveRDS(result, "path/to/extract_hip_fracture.rds")
 ```
 
@@ -645,7 +645,7 @@ library(tidyr) # replace_na
 
 # 1. Build your flags (one expression per variable)
 diagnosis_flags <- all_dx %>%
-  inner_join(cohort %>% select(pnr, index_date), by = "pnr") %>% # attach index_date
+  inner_join(cohort %>% distinct(pnr, index_date), by = "pnr") %>% # attach index_date (every index date the person has)
   filter(date_contact <= index_date) %>% # on or before index only (baseline covariate)
   mutate(
     dx_diabetes = icd3 %in% c("E10", "E11"),
@@ -653,27 +653,28 @@ diagnosis_flags <- all_dx %>%
     dx_heart_failure = str_detect(c_diag, "^DI50")
   )
 
-# 2. Collapse to one row per person: any() = does the person have at least one?
+# 2. Collapse to one row per person and index date: any() = at least one in that window?
+#    index_date is in the grouping because the window "on or before index" is
+#    different for each index date the person has.
 diagnosis_flags_collapsed <- diagnosis_flags %>%
-  group_by(pnr) %>%
+  group_by(pnr, index_date) %>%
   summarise(across(starts_with("dx_"), ~ as.integer(any(.))), .groups = "drop")
 
 # 3. Merge onto the cohort; people with no diagnosis get NA -> set to 0
 cohort_diagnoses <- cohort %>%
-  left_join(diagnosis_flags_collapsed, by = "pnr") %>%
+  left_join(diagnosis_flags_collapsed, by = c("pnr", "index_date")) %>%
   mutate(across(starts_with("dx_"), ~ replace_na(., 0)))
 ```
 
 It gives one 0/1 flag per comorbidity per person, ready to enter your model as
-covariates. (The same `group_by(pnr) %>% summarise(any(.))` pattern is used on
-the [NMI](nmi.qmd) page, for example.)
+covariates. (The same `group_by(pnr, index_date) %>% summarise(any(.))` pattern
+is used on the [NMI](nmi.qmd) page, for example.)
 
-Step 2 collapses to one row per `pnr`, and step 3 rejoins on `pnr` alone - if
-your cohort has repeated `pnr` (e.g. a comparison group matched **with
-replacement**), that rejoin can attach one person's flags to the wrong
-`index_date`'s row. See [comparison cohort's callout on
-it](comparison-cohort.qmd#step-4---assemble-validate-and-save) if that
-applies to you.
+Step 2 groups on `pnr` **and** `index_date`, and step 3 rejoins on both. If
+your cohort has one row per person, that gives the same result as `pnr` alone.
+If a `pnr` is repeated (e.g. a comparison group matched **with replacement**),
+it keeps each row's flags tied to that row's own index date - see [comparison
+cohort's callout on it](comparison-cohort.qmd#step-4---assemble-validate-and-save).
 
 ## Remove unwanted diagnoses {#clean-diagnoses}
 

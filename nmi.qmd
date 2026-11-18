@@ -116,7 +116,7 @@ LPR](extract-from-lpr.qmd) as in the example here:
 # 1. EXTRACT diagnoses and prescriptions ---------------------------------------
 library(dplyr)
 
-cohort <- readRDS("datasets/full_cohort.rds") # your study population from Phase 10 (pnr + index_date)
+cohort <- readRDS("path/to/full_cohort.rds") # your study population from Phase 10 (pnr + index_date)
 
 # NMI diagnosis codes (3-char ICD, no D-prefix).
 # paste0("C", 76:80) makes "C76".."C80" - glues the letter onto each number
@@ -195,7 +195,7 @@ nmi_diagnoses <- get_lpr_diagnoses(
   diagtypes = c("A", "B", "G", "H", "M", "C") # all diagnosis types, as above (LPR3 has only A and B)
 )
 stopifnot(nrow(nmi_diagnoses) > 0) # catch an empty extraction here, not three steps later
-saveRDS(nmi_diagnoses, "datasets/nmi_diagnoses.rds") # columns: pnr, date_contact, c_diag, c_diagtype, icd3
+saveRDS(nmi_diagnoses, "path/to/nmi_diagnoses.rds") # columns: pnr, date_contact, c_diag, c_diagtype, icd3
 ```
 
 </details>
@@ -287,7 +287,7 @@ stopifnot(nrow(nmi_lmdb) > 0) # catch an empty extraction here, not three steps 
 stopifnot(all(nmi_lmdb$eksd < nmi_lmdb$index_date &
               nmi_lmdb$eksd >= nmi_lmdb$index_date - 180))
 
-saveRDS(nmi_lmdb, "datasets/nmi_lmdb.rds") # pnr, index_date, eksd, atc - already windowed
+saveRDS(nmi_lmdb, "path/to/nmi_lmdb.rds") # pnr, index_date, eksd, atc - already windowed
 ```
 
 </details>
@@ -312,9 +312,9 @@ library(lubridate)
 library(tidyr)
 
 # 2.0 Load data ----------------------------------------------------------------
-cohort <- readRDS("datasets/full_cohort.rds")   # pnr, index_date
-dx_raw <- readRDS("datasets/nmi_diagnoses.rds")  # from get_lpr_diagnoses(): pnr, date_contact, c_diag
-rx_raw <- readRDS("datasets/nmi_lmdb.rds")       # from the windowed LMDB extraction: pnr, index_date, eksd, atc - already windowed
+cohort <- readRDS("path/to/full_cohort.rds")   # pnr, index_date
+dx_raw <- readRDS("path/to/nmi_diagnoses.rds")  # from get_lpr_diagnoses(): pnr, date_contact, c_diag
+rx_raw <- readRDS("path/to/nmi_lmdb.rds")       # from the windowed LMDB extraction: pnr, index_date, eksd, atc - already windowed
 
 # 2.1 Diagnoses: 5-year lookback before index (Stata: 1825 days) ---------------
 # Four steps, one at a time - we keep reassigning dx all the way through.
@@ -448,7 +448,7 @@ nmi_data <- cohort %>%   # reload your cohort here if needed (the name may be so
 stopifnot(nrow(nmi_data) == nrow(cohort))
 stopifnot(!anyNA(nmi_data$nmi))
 
-saveRDS(nmi_data %>% select(pnr, index_date, nmi), "datasets/extract_nmi.rds")
+saveRDS(nmi_data %>% select(pnr, index_date, nmi), "path/to/extract_nmi.rds")
 ```
 
 </details>
@@ -463,8 +463,8 @@ general version of this pattern, used the same way elsewhere in the guide.
 
 ### 3. Look at and describe the score
 
-The score is one number per (`pnr`, `index_date`) in `extract_nmi.rds`. Join it to your
-analysis dataset (Phase 12) and inspect it - NMI is right-skewed (many low, a
+The score is one number per (`pnr`, `index_date`) in `extract_nmi.rds`. It is joined to your
+analysis dataset in [Phase 12](joins.qmd); inspect it there - NMI is right-skewed (many low, a
 few high), so median [IQR] often describes it better than the mean, though mean
 + CI is fine for comparing groups.
 
@@ -474,9 +474,7 @@ few high), so median [IQR] often describes it better than the mean, though mean
 ```r
 library(dplyr)
 
-nmi <- readRDS("datasets/extract_nmi.rds") # pnr, index_date, nmi
-analysis <- readRDS("datasets/analysis.rds") %>% # your assembled dataset (Phase 12)
-  left_join(nmi, by = c("pnr", "index_date")) # both keys, as in 2.3
+analysis <- readRDS("path/to/analysis.rds") # your assembled dataset (Phase 12) - it already holds nmi
 
 # Distribution overall
 summary(analysis$nmi)
@@ -484,7 +482,7 @@ hist(analysis$nmi)
 
 # By group (e.g. exposed vs comparison cohort): mean + 95% CI and median [IQR]
 analysis %>%
-  group_by(group) %>%
+  group_by(exposure) %>% # 1 = exposed, 0 = comparison cohort
   summarise(
     n = n(),
     mean_nmi = mean(nmi, na.rm = TRUE), # na.rm = TRUE: remove NA (missing values) before computing
@@ -502,7 +500,7 @@ analysis %>%
 
 </details>
 
-For a formatted Table 1 across groups, `gtsummary::tbl_summary(by = group)` does
+For a formatted Table 1 across groups, `gtsummary::tbl_summary(by = exposure)` does
 this automatically - see [Descriptive tables](descriptive-tables.qmd).
 
 ::: {.callout-important}

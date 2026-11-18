@@ -35,35 +35,43 @@ key column they share (e.g. `pnr`).
 When you join your **finished person-level extracts onto the cohort**, the key
 is usually `pnr`. Inside a register it is other keys: joining contact and
 diagnosis in LPR, for instance, happens on `recnum` or `dw_ek_kontakt`, not
-`pnr` (see [the overview of LPR join keys](understand-lpr.qmd)). The ER
-diagram below shows the common join on `pnr` - extracts joined onto the cohort:
+`pnr` (see [the overview of LPR join keys](understand-lpr.qmd)). A value that
+is measured **relative to the index date** (socioeconomic position, a
+comorbidity score) is joined on `pnr` + `index_date`, so it still lands on the
+right row when the same person is in the cohort with more than one index date.
+The ER diagram below shows both - extracts joined onto the cohort:
 
 ```{mermaid}
 erDiagram
-    full_cohort ||--o| extract_hip_fracture : pnr
-    full_cohort ||--o| extract_bef : pnr
-    full_cohort ||--o| extract_nmi : pnr
+    full_cohort ||--o| extract_hip_fracture : "pnr"
+    full_cohort ||--o| extract_ses : "pnr + index_date"
+    full_cohort ||--o| extract_nmi : "pnr + index_date"
     full_cohort {
         string pnr PK
-        date index_date
+        date index_date PK
         int exposed
+        string sex
+        date foed_dag
     }
     extract_hip_fracture {
         string pnr FK
         date event_date
     }
-    extract_bef {
+    extract_ses {
         string pnr FK
-        int age
-        int sex
+        date index_date FK
+        string education_cat
+        string occupation_cat
+        string income_cat
     }
     extract_nmi {
         string pnr FK
+        date index_date FK
         int nmi
     }
 ```
 
-`pnr` is the primary key (PK) in the cohort and a foreign key (FK) in each
+The key is marked PK (primary key) in the cohort and FK (foreign key) in each
 extract. The symbol `||--o|` is standard ER notation ("crow's foot"): `||` =
 exactly one, `o|` = zero or one. So the line reads: each person in the cohort
 matches **zero or one** row in the extract.
@@ -252,8 +260,13 @@ library(dplyr) # %>%, semi_join(), left_join(), collect()
 library(tibble) # tibble()
 
 # Attach date of death (DOD) to the cohort -------------------------------------
-# Cohort data (one row per person):
-cohort <- readRDS("path/to/full_cohort.rds")
+# Cohort data from Phase 10. Keep only the columns that identify a row and the
+# ones Phase 10 owns. The file also holds working columns from the matching
+# (death_date, first_outcome_date ...); attach those fresh here, so no column
+# ends up twice (death_date.x / death_date.y).
+cohort <- readRDS("path/to/full_cohort.rds") %>%
+  select(pnr, index_date, exposed, sex, foed_dag,
+         any_of(c("match_id", "crossover_date"))) # any_of(): kept if the column exists
 
 # Death dates from DOD:
 dod <- read_register("dod") %>% # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/dod/")
@@ -263,7 +276,7 @@ dod <- read_register("dod") %>% # without fastreg: open_dataset("E:/workdata/[pr
   collect()                              # fetch into R
 
 # Join: all cohort members retained; the living get death_date = NA
-cohort_with_death <- cohort %>%
+cohort <- cohort %>%
   left_join(dod, by = "pnr")       # attach death date - NA = still alive
 ```
 
@@ -286,18 +299,24 @@ vnds <- read_register("vnds") %>%              # without fastreg: open_dataset("
   collect()
 
 emigration <- cohort %>%                         # the cohort has pnr + index_date
-  left_join(vnds, by = "pnr") %>%
+  distinct(pnr, index_date) %>%                  # one row per person and index date
+  left_join(vnds, by = "pnr", relationship = "many-to-many") %>% # several index dates x several exits per person is expected here
   filter(haend_dato > index_date) %>%            # only exits AFTER index - those are the ones that censor
-  group_by(pnr) %>%                              # group to find the first of them
+  group_by(pnr, index_date) %>%                  # per person AND index date: the answer depends on the index date
   arrange(haend_dato) %>%                        # oldest date first
-  slice(1) %>%                                   # first exit after index per person
+  slice(1) %>%                                   # first exit after that index date
   ungroup() %>%                                  # release grouping
-  select(pnr, emigration_date = haend_dato)      # rename haend_dato to emigration_date
+  select(pnr, index_date, emigration_date = haend_dato) # rename haend_dato to emigration_date
 
 # Join: all cohort members retained; non-emigrants get emigration_date = NA
-cohort_with_emigration <- cohort %>%
-  left_join(emigration, by = "pnr")              # NA = no exit after index
+cohort <- cohort %>%
+  left_join(emigration, by = c("pnr", "index_date")) # NA = no exit after index
 ```
+
+The date of death is one date per person, so `pnr` alone is the right key. The
+emigration date depends on the index date, so it is keyed on `pnr` **and**
+`index_date`: a person who was drawn as a comparison person on two different
+dates then gets the right exit for each of them.
 
 </details>
 
@@ -344,10 +363,17 @@ Before you can analyse, each cohort member needs a **censoring date** (when
 follow-up ends) and an **event variable** (did they experience the outcome?).
 
 The censoring date is the *earliest* of: event date, date of death, emigration
-date and end of study period.
+date, the date a comparison person becomes exposed themselves (crossover) and
+end of study period. `death_date` and `emigration_date` were joined on in the
+practical examples above; the outcome date is joined on first here.
 
 ```r
 # Calculate follow-up time and event variable ----------------------------------
+# The outcome extract from Phase 9/11: pnr + event_date, one row per person
+hip_fracture <- readRDS("path/to/extract_hip_fracture.rds") %>%
+  distinct(pnr, event_date)
+cohort <- cohort %>% left_join(hip_fracture, by = "pnr") # NA = no event
+
 study_end <- as.Date("2024-12-31") # replace with your actual study end date
 # format: "yyyy-mm-dd" (ISO 8601 - R's standard)
 
@@ -358,6 +384,7 @@ cohort <- cohort %>%
       event_date,
       death_date,
       emigration_date,
+      crossover_date, # comparison person becomes exposed (NA for everyone else)
       study_end,
       na.rm = TRUE
     ),
@@ -377,6 +404,17 @@ cohort <- cohort %>%
 per person - it is the vectorised version of `min()`. `na.rm = TRUE` ensures
 that a missing death date (= alive) does not make the censoring date `NA`.
 :::
+
+**Crossover.** A comparison person who later becomes exposed stops being a
+comparison person on that day, so follow-up is censored at `crossover_date`
+(made in [Phase 10](comparison-cohort.qmd), `NA` for the exposed and for
+comparison persons who never become exposed). Without that line, time after
+their own exposure is counted as unexposed time. If your cohort has no
+`crossover_date` column (no comparison group, or one that can never become
+exposed), leave the line out. The alternative to censoring is to let the person
+**switch group** at crossover and contribute exposed time from then on. That
+needs a dataset with several rows per person, see [Time-varying
+exposure](time-varying.qmd).
 
 **Zero or negative follow-up.** Someone whose outcome, death or emigration is
 recorded on the index date itself gets `time_days = 0` and was never at risk;
@@ -406,13 +444,13 @@ cohort <- cohort %>%
 ## Assemble the final analysis dataset
 
 By now your **cohort** is built in [Phase 10](build-study-population.qmd): a
-table with one row per person, `pnr` and `index_date` (and `exposed`/`case` if
+table with `pnr` and `index_date` (and `exposed`/`case` if
 you have a comparison group - renamed to `exposure` in the final `select()`) - one row per **person**, unless your comparison
 group was matched **with replacement**, in which case the same `pnr` can carry
-several rows, one per `index_date` it was matched on. If that applies to you,
-see [comparison cohort's callout on
-it](comparison-cohort.qmd#step-4---assemble-validate-and-save) before joining
-on `pnr` alone below. Your **outcomes, covariates and censoring variables**
+several rows, one per `index_date` it was matched on. The recipe below works
+for both: everything measured relative to the index date is joined on `pnr` +
+`index_date`, see [comparison cohort's callout on
+it](comparison-cohort.qmd#step-4---assemble-validate-and-save). Your **outcomes, covariates and censoring variables**
 are extracted as separate RDS files ([Phase 9](extract-from-lpr.qmd), [Phase
 11](extract-variables.qmd)). This last step joins them onto the cohort with
 `left_join()`, calculates follow-up time, and keeps only the columns the
@@ -440,15 +478,15 @@ cohort_final <- cohort %>%
     followup_years,
     outcome,
     status_code, # from the competing-risks block above
-    age,
-    sex,
+    age, # age, nmi and the three _cat columns are added in the
+    sex, # complete recipe below (steps 4 and 5)
     nmi,
     occupation_cat,
     education_cat,
     income_cat
   )
 
-saveRDS(cohort_final, "path/to/analysis_dataset.rds") # save the final dataset
+saveRDS(cohort_final, "path/to/analysis.rds") # save the final dataset
 ```
 :::
 
@@ -462,7 +500,19 @@ library(dplyr)   # left_join, semi_join, mutate, group_by, slice
 library(tibble)  # tibble()
 
 # 0. Load your cohort ----------------------------------------------------------
-cohort <- readRDS("path/to/full_cohort.rds")   # one row per person: pnr + index_date (Phase 10)
+# One row per person and index date. Keep only the columns that identify a row
+# and the ones Phase 10 owns; everything else is attached fresh below, so no
+# column ends up twice (death_date.x / death_date.y).
+cohort <- readRDS("path/to/full_cohort.rds") %>%
+  select(pnr, index_date, exposed, sex, foed_dag,
+         any_of(c("match_id", "crossover_date"))) # any_of(): kept if the column exists
+n_start <- nrow(cohort)   # to check below that no join adds or loses rows
+
+# THE JOIN KEY. A date that belongs to the person (outcome, death) is joined on
+# pnr. Anything measured RELATIVE TO THE INDEX DATE (emigration after index, SES,
+# NMI) is joined on pnr + index_date: with a comparison group matched with
+# replacement the same pnr has several rows, one per index date, and a join on
+# pnr alone would then silently multiply the rows.
 
 # 1. Prevalent cases are already excluded --------------------------------------
 # People who already had the outcome before index are not at risk of getting it.
@@ -474,7 +524,8 @@ cohort <- readRDS("path/to/full_cohort.rds")   # one row per person: pnr + index
 # One row per person with the FIRST event date after index, or no row at all.
 # left_join keeps everyone, so people with no event get NA - which is exactly
 # what "no event" means here, and what the outcome indicator in step 4 reads.
-hip_fracture <- readRDS("path/to/extract_hip_fracture.rds")   # pnr + event_date
+hip_fracture <- readRDS("path/to/extract_hip_fracture.rds") %>%   # pnr + event_date
+  distinct(pnr, event_date)                                       # one row per person
 cohort <- cohort %>% left_join(hip_fracture, by = "pnr")
 
 # 3. Link censoring: death date and emigration ---------------------------------
@@ -491,28 +542,35 @@ vnds_data <- read_register("vnds") %>%    # without fastreg: open_dataset("E:/wo
 
 # Emigration needs the first exit AFTER index, not the first ever: someone who
 # lived abroad as a child and moved back is not censored at that childhood exit.
-# So attach index_date first, filter, and only then take the earliest remaining.
+# So attach index_date first, filter, and only then take the earliest remaining,
+# per person AND index date.
 vnds_data <- cohort %>%
-  left_join(vnds_data, by = "pnr") %>%
+  distinct(pnr, index_date) %>%
+  left_join(vnds_data, by = "pnr", relationship = "many-to-many") %>%   # several index dates x several exits per person is expected
   filter(haend_dato > index_date) %>%
-  group_by(pnr) %>% arrange(haend_dato) %>% slice(1) %>% ungroup() %>%
-  select(pnr, emigration_date = haend_dato)
+  group_by(pnr, index_date) %>% arrange(haend_dato) %>% slice(1) %>% ungroup() %>%
+  select(pnr, index_date, emigration_date = haend_dato)
 
 cohort <- cohort %>%
   left_join(deaths,    by = "pnr") %>%
-  left_join(vnds_data, by = "pnr")
+  left_join(vnds_data, by = c("pnr", "index_date"))
+
+stopifnot(nrow(cohort) == n_start)   # a join that multiplied rows stops here
 
 # 4. Follow-up time and the outcome indicator ----------------------------------
-# censor_date = the FIRST of the four ways follow-up can end. pmin() with
+# censor_date = the FIRST of the ways follow-up can end. pmin() with
 # na.rm = TRUE takes the earliest date that actually exists, so someone who never
 # died, never emigrated and never had the event simply ends at study_end.
+# crossover_date = the day a comparison person becomes exposed themselves (from
+# Phase 10; NA for everyone else). Leave that line out if your cohort has no such column.
 # outcome = 1 only if the outcome happened at or before that date: a diagnosis
 # recorded after the person emigrated does not count. status_code adds death as
 # a competing event (0 = censored, 1 = outcome, 2 = death; outcome wins a tie).
-study_end <- as.Date("2024-12-31")
+study_end <- as.Date("2024-12-31")   # replace with your actual study end date (the last date your data cover)
 cohort <- cohort %>%
   mutate(
-    censor_date    = pmin(event_date, death_date, emigration_date, study_end, na.rm = TRUE),
+    censor_date    = pmin(event_date, death_date, emigration_date, crossover_date,
+                          study_end, na.rm = TRUE),
     time_days      = as.numeric(censor_date - index_date),
     followup_years = time_days / 365.25,   # 365.25 = leap years
     outcome        = as.integer(!is.na(event_date) & event_date <= censor_date),
@@ -520,31 +578,35 @@ cohort <- cohort %>%
       outcome == 1 ~ 1,
       !is.na(death_date) & death_date <= censor_date ~ 2,
       TRUE ~ 0
-    )
+    ),
+    age            = as.numeric(index_date - foed_dag) / 365.25   # age at index, for every row
   ) %>%
   filter(time_days > 0)   # no follow-up = never at risk (event/death/emigration on index day)
 
-# 5. Link covariates (demographic, SES, comorbidity) ---------------------------
-# Each of these must already be ONE row per person. If one is not, the join
-# silently multiplies your rows - check with the validation code above. If a
-# pnr can appear more than once in your cohort (e.g. controls matched with
-# replacement), join on a row id instead - see socioeconomic-variables.qmd#row-id.
-bef_data <- readRDS("path/to/extract_bef.rds")    # age, sex from BEF
-ses_data <- readRDS("path/to/extract_ses.rds")    # education, income, employment
-nmi_data <- readRDS("path/to/extract_nmi.rds")    # NMI score
+# 5. Link covariates (SES, comorbidity) ----------------------------------------
+# sex and age are already on the cohort (step 0 and step 4). The extracts below
+# are measured relative to the index date, so they are joined on pnr + index_date.
+# distinct() makes sure each extract has ONE row per key: the same person can be
+# drawn into two matched sets on the same date, and two identical rows on each
+# side would otherwise become four.
+ses_data <- readRDS("path/to/extract_ses.rds") %>%    # education_cat, occupation_cat, income_cat
+  distinct(pnr, index_date, .keep_all = TRUE)
+nmi_data <- readRDS("path/to/extract_nmi.rds") %>%    # NMI score - see nmi.qmd
+  distinct(pnr, index_date, .keep_all = TRUE)
 
+n_before <- nrow(cohort)
 cohort <- cohort %>%
-  left_join(bef_data, by = "pnr") %>%
-  left_join(ses_data, by = "pnr") %>%
-  left_join(nmi_data, by = c("pnr", "index_date"))  # NMI is computed per index date - see nmi.qmd
+  left_join(ses_data, by = c("pnr", "index_date")) %>%
+  left_join(nmi_data, by = c("pnr", "index_date"))
+stopifnot(nrow(cohort) == n_before)   # same number of rows as before the joins
 
 # 6. Keep ONLY the columns the analysis requires -------------------------------
 cohort_final <- cohort %>%
   select(pnr, index_date, exposure = exposed, censor_date, time_days, followup_years,
          outcome, status_code, age, sex, nmi, occupation_cat, education_cat, income_cat)
 
-saveRDS(cohort_final, "path/to/analysis_dataset.rds")  # save the final dataset
-nrow(cohort_final)   # one row per person? compare with the cohort you started from
+saveRDS(cohort_final, "path/to/analysis.rds")  # save the final dataset
+nrow(cohort_final)   # n_start minus the rows dropped for zero follow-up in step 4
 names(cohort_final)  # did every join actually add the columns you expected?
 ```
 
@@ -552,7 +614,8 @@ names(cohort_final)  # did every join actually add the columns you expected?
 
 ## Next steps
 
-You now have one analysis-ready dataset with one row per person. The next step
+You now have one analysis-ready dataset with one row per person (one row per
+person and index date, if your comparison group was matched with replacement). The next step
 is the analysis:
 
 → [Phase 13 - Analysis](analysis.qmd)
