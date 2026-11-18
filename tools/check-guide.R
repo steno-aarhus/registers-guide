@@ -178,7 +178,7 @@ collect_calls <- function(expr, acc = new.env(parent = emptyenv())) {
   acc
 }
 
-# Funktioner defineret i selve filen (fx tf_bef, check_types, sas_to_parquet).
+# Functions defined in the file itself (e.g. tf_bef, check_types, sas_to_parquet).
 locally_defined <- function(exprs) {
   found <- character()
   walk <- function(e) {
@@ -262,7 +262,7 @@ check_functions <- function() {
     )
   }
 
-  # Egen allowlist.
+  # Our own allowlist.
   allow_file <- file.path(ROOT, ".config", "known-functions.txt")
   if (file.exists(allow_file)) {
     allow <- trimws(readLines(allow_file, warn = FALSE))
@@ -354,7 +354,7 @@ check_functions <- function() {
     } else {
       # All the page's packages are installed, and the function still exists nowhere.
       n_unknown <- n_unknown + length(genuinely_unknown)
-      warn(rel(f), " - ukendte funktioner: ", paste(sort(genuinely_unknown), collapse = ", "))
+      warn(rel(f), " - unknown functions: ", paste(sort(genuinely_unknown), collapse = ", "))
     }
   }
 
@@ -409,7 +409,7 @@ check_style <- function() {
     hits <- grep("—", lines)
     for (i in hits) {
       n <- n + 1L
-      fail(rel(f), ":", i, " - em-dash (U+2014). Brug komma, kolon, parentes eller ' - '.")
+      fail(rel(f), ":", i, " - em-dash (U+2014). Use a comma, colon, parentheses or ' - '.")
     }
 
     # %>% not |>, but ONLY in actual R code. The guide deliberately explains the
@@ -420,7 +420,7 @@ check_style <- function() {
       hits <- grep("|>", b$code, fixed = TRUE)
       for (h in hits) {
         n <- n + 1L
-        fail(rel(f), ":", b$start + h, " - native pipe |> i kode. Guiden bruger %>%.")
+        fail(rel(f), ":", b$start + h, " - native pipe |> in code. The guide uses %>%.")
       }
     }
 
@@ -449,14 +449,14 @@ check_style <- function() {
 # Pandoc's auto_identifiers, in the order pandoc itself applies them:
 #   1) remove formatting and links (keep the link text)
 #   2) remove everything that is not alphanumeric, underscore, hyphen or dot
-#   3) mellemrum -> bindestreger
+#   3) spaces -> hyphens
 #   4) lowercase
 #   5) drop everything before the first letter (an id must not start with a digit)
 # Note the order of 2 and 3: " - " becomes "---", not "-".
 heading_id <- function(txt) {
-  x <- sub("\\{[^}]*\\}\\s*$", "", txt)                  # eksplicitte attributter
-  x <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", x)        # [tekst](url) -> tekst
-  x <- gsub("[*_`]", "", x)                              # fed, kursiv, kode
+  x <- sub("\\{[^}]*\\}\\s*$", "", txt)                  # explicit attributes
+  x <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", x)        # [text](url) -> text
+  x <- gsub("[*_`]", "", x)                              # bold, italic, code
   x <- gsub("[^[:alnum:] _.-]", "", x)
   x <- gsub("[[:space:]]+", "-", trimws(x))
   x <- tolower(x)
