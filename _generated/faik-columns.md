@@ -2,7 +2,6 @@
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier |  |
 | **`familie_id`** | character | join key | Household key |  |
 | `famaekvivadisp_13` | numeric | value | Household-equivalised disposable income |  |
 | `year` | integer | date | Register year |  |
@@ -12,10 +11,11 @@
 | `famtype` | numeric | code | Family type |  |
 
 <details>
-<summary>All other columns (79)</summary>
+<summary>All other columns (80)</summary>
 
 | Column | Type | Role | Label | Years |
 | --- | --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |  |
 | `famaekvivadisp` | numeric | value | Equivalised disposable family income | 1990 to 2012 |
 | `famaekvivaindknetto` | numeric | value | Equivalised total income including net interest | 1990 to 2012 |
 | `famaktieindk` | numeric | value | Share income | 1990 to 2009 |
@@ -96,6 +96,7 @@
 | `famvirkoverskud_13` | numeric | value | Total profit from self-employment |  |
 | `version` | numeric | code | Module data version |  |
 
+- **`pnr`:** Not in DST's variable list for FAIK, which documents the register as keyed on the household. Where it is present, the household's row is repeated once per family member, so joining on familie_id alone multiplies rows.
 - **`famaekvivadisp`:** The same weighting scheme as FAMAEKVIVADISP_13 below, just algebraically rearranged on the source page: the first adult over 14 counts as 1.0, each further person over 14 as 0.5, and each child under 15 as 0.3. All persons belonging to the same family on 31 December of the income year (same E-familienummer), including resident children under 25, are assigned the family's equivalised income. `FAMDISPONIBEL` is the same money before that division.
 - **`famandoverforsel`:** DST flags a data break both within this variable and across variables, and discontinued it in 2013. It sums housing benefit, child benefit and student grants, each of which changed rules over the period (child benefit rates, for example), so year-to-year changes can be rule changes rather than real ones.
 - **`famdisponibel`:** DST flags a data break within this variable. It was discontinued in 2013 and replaced by famdisponibel_13, which runs 1987-2024 on one definition; use that for any time series. The main changes in this old series: labour market contribution introduced in 1994, imputed rental value of owner-occupied homes calculated differently from 1994 and again from 2007, and tax-free social assistance and heating aid included from 2002.
@@ -209,7 +210,6 @@ FAMSUMINDKNETTORENT = FAMINDKOMSTIALT + FAMLEJEVAERDI - FAMRENTEUDGIFTER
 
 **Worth knowing:**
 
-- **`pnr`:** Not in DST's variable list for FAIK, which documents the register as keyed on the household. Where it is present, the household's row is repeated once per family member, so joining on familie_id alone multiplies rows.
 - **`familie_id`:** There is no person identifier here. Fetch familie_id from BEF for the relevant year, then join on it.
 - **`famaekvivadisp_13`:** This is the family's disposable income divided by an equivalence factor, so that families of different sizes can be compared. The factor counts the first adult as 1.0, each further person over 14 as 0.5, and each child under 15 as 0.3: a couple with two young children comes to 1 + 0.5 + 0.6 = 2.1, so a family income of 420,000 is recorded as 200,000 for each of the four. `FAMDISPONIBEL_13` is the same money before that division, and `FAMAEKVIVAINDKNETTO` is a different income concept (total income with net interest), so check which one your analysis plan means. The `_13` suffix marks the definition that replaced the older variables from 2013: DST states that FAMDISPONIBEL was discontinued in 2013 and replaced by FAMDISPONIBEL_13. A study spanning 2013 has to know which side of that change it is on. DST's year ranges settle the relationship with the sister column FAMAEKVIVADISP, which has no _13: the old one runs 1990-2012, this one runs 1987-2024. The _13 definition was applied backwards as well as forwards, so it is not a newer variable covering later years only. A study spanning the 2013 changeover should use _13 for the whole period rather than splicing the two, which would mix two definitions in one series.
 - **`year`:** Not a DST variable. It comes from fastreg's parquet conversion, which concatenates the yearly deliveries, so it exists in the data you read but not in DST's own documentation of this register.
