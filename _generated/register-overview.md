@@ -3,16 +3,16 @@
 | Register | Read as | Join key | Period | Often used |
 | --- | --- | --- | --- | --- |
 | [AKM](https://www.dst.dk/extranet/ForskningVariabellister/AKM%20-%20Arbejdsklassifikationsmodulet.html) | `"akm"` | `pnr` | 1976 to 2024 | `socio13`, `socio02`, `socio` |
-| [BEF](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html) | `"bef"` | `pnr` | 1985-12 to 2026-06 | `koen`, `foed_dag`, `familie_id` |
+| [BEF](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html) | `"bef"` | `pnr` | 1985-12 to 2026-09 | `koen`, `foed_dag`, `familie_id` |
 | [CANCER](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=23) | `"cancer"` | `k_cprnr` | 1943 to 2024 | `c_icd10`, `c_morfo03`, `c_topo3` |
 | [DOD](https://www.dst.dk/extranet/ForskningVariabellister/DOD%20-%20D%C3%B8de%20i%20Danmark.html) | `"dod"` | `pnr` | 1970 to 2025 | `doddato` |
 | [DODSAARS](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARS%20-%20D%C3%B8ds%C3%A5rssagsregistret.html) | `"dodsaars"` | `pnr` | 1970 to 2001 | `d_dodsdto`, `c_dodsmaade`, `c_dod1` |
 | [DODSAARSAGER](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARSAGER%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaarsager"` | `pnr` | 2022 to 2024 | `doedsdato`, `doedsaarsag_tilgrundliggende`, `doedsaarsag_kode_1` |
 | [DODSAASG](https://www.dst.dk/extranet/ForskningVariabellister/DODSAASG%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaasg"` | `pnr` | 2002 to 2022 | `d_dodsdato`, `c_dodtilgrundl_acme`, `c_dod_1a` |
 | [FAIK](https://www.dst.dk/extranet/ForskningVariabellister/FAIK%20-%20Familieindkomster.html) | `"faik"` | `familie_id` | 1987 to 2024 | `famaekvivadisp_13`, `year`, `famdisponibel_13` |
-| [FTBARN](https://www.dst.dk/extranet/ForskningVariabellister/FTBARN%20-%20Fertilitet%20-%20b%C3%B8rn.html) | `"ftbarn"` | `PNR` | 1973 to 2023 | `FOED_DAG`, `LEVENDE_ELLER_DOEDFOEDT` |
-| [FTFORAEL](https://www.dst.dk/extranet/ForskningVariabellister/FTFORAEL%20-%20Fertilitet%20-%20for%C3%A6lder.html) | `"ftforael"` | `PNR` | 1973 to 2023 | `FORAELDER_PNR`, `MOR_FAR` |
-| [FTNAEVN](https://www.dst.dk/extranet/ForskningVariabellister/FTNAEVN%20-%20Fertilitet%20-%20N%C3%A6vner.html) | `"ftnaevn"` | `PNR`, `AAR` | 1973 to 2023 |  |
+| [FTBARN](https://www.dst.dk/extranet/ForskningVariabellister/FTBARN%20-%20Fertilitet%20-%20b%C3%B8rn.html) | `"ftbarn"` | `PNR` | 1973 to 2025 | `FOED_DAG`, `LEVENDE_ELLER_DOEDFOEDT` |
+| [FTFORAEL](https://www.dst.dk/extranet/ForskningVariabellister/FTFORAEL%20-%20Fertilitet%20-%20for%C3%A6lder.html) | `"ftforael"` | `PNR` | 1973 to 2025 | `FORAELDER_PNR`, `MOR_FAR` |
+| [FTNAEVN](https://www.dst.dk/extranet/ForskningVariabellister/FTNAEVN%20-%20Fertilitet%20-%20N%C3%A6vner.html) | `"ftnaevn"` | `PNR`, `AAR` | 1973 to 2025 |  |
 | [LAB_DM_FORSKER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen) | `"lab_dm_forsker"` | `patient_cpr` | 2008 to 2025 | `samplingdate`, `analysiscode`, `value` |
 | [LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html) | `"lmdb"` | `pnr` | 1995-12 to 2025-12 | `eksd`, `atc`, `atc1` |
 | [LPR_A_DIAGNOSE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_DIAGNOSE%20-%20Landspatientregistret%20%28LPR3%29%20-Diagnoseoplysning.html) | `"lpr_a_diagnose"` | `dw_ek_kontakt` | 2019 to 2025 | `diag_kode`, `diag_kode_type`, `senere_afkraeftet` |
