@@ -34,33 +34,65 @@ json_string <- function(x) {
   paste0('"', trimws(x), '"')
 }
 
-# Quarto builds an anchor from the heading text using pandoc's auto_identifiers
-# rules, in this order: (1) strip formatting, (2) drop everything that isn't
-# alphanumeric/underscore/hyphen/dot, (3) THEN turn spaces into hyphens, (4)
-# lowercase, (5) drop leading non-letters. The order of (2) and (3) matters: a
-# literal " - " in the heading text survives step 2 as a hyphen, then each of
-# its surrounding spaces becomes another hyphen in step 3, so "MFR - Medical"
-# becomes "mfr---medical" (three hyphens), not "mfr-medical". Getting this
-# wrong means every search hit for a register whose heading uses " - " (nearly
-# all of them: "MFR - Medical Birth Register", "DODSAASG - the 2002-2021 link
-# in the chain", ...) lands at the top of register-reference.qmd instead of at
-# its own section.
+# Quarto gives every heading an id, and a search result links to that id. If the
+# heading has an explicit {#id}, Quarto uses it. Otherwise pandoc builds the id
+# from the heading text (its auto_identifiers rule):
+#   1. drop formatting, raw HTML tags and link targets, keep the text
+#   2. lowercase
+#   3. drop every character that is not a letter, a digit, a space or one of
+#      "_", "-" and "."
+#   4. join the words that are left with single hyphens
+#   5. drop everything before the first letter
+# Step 3 comes before step 4, so "MFR - Medical" becomes "mfr---medical": the
+# hyphen survives as a word of its own and gets a hyphen on each side.
+# Underscores are kept, so `case_when(x)` becomes "case_whenx".
 #
-# This must stay in lockstep with heading_id() in tools/check-guide.R, which
-# derives the same ids to verify every internal link and anchor in the guide
-# actually resolves. That check passing is what proves this algorithm right;
-# if the two ever drift apart, one of them is wrong.
+# Not handled: _emphasis_ written with underscores (no heading uses it; write
+# *emphasis* instead), and a heading with no letters at all.
+#
+# tools/check-guide.R has its own heading_id() for the link check. It still
+# drops underscores, so the two functions disagree on headings that have one.
+# The proof that this one is right is the rendered site: every anchor in the
+# index must exist as an id in the HTML that `quarto render` writes.
 anchor_for <- function(heading) {
-  m <- regmatches(heading, regexpr("\\{#([^}]+)\\}", heading))
-  if (length(m)) return(sub("\\{#(.*)\\}", "\\1", m))
-  h <- sub("^#{2,3}\\s+", "", heading)
-  h <- gsub("\\{[^}]*\\}\\s*$", "", h)
-  h <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", h)
-  h <- gsub("[*_`]", "", h)
+  # Attribute block at the end of the heading, e.g. {#step-1 .step-heading}.
+  attrs <- regmatches(heading, regexpr("\\{[^}]*\\}\\s*$", heading))
+  # Explicit id: take only the word after "#", not the classes next to it.
+  if (length(attrs) && grepl("#", attrs, fixed = TRUE)) {
+    return(sub(".*#([^ }]+).*", "\\1", attrs))
+  }
+  h <- sub("^#{1,6}\\s+", "", heading)
+  h <- sub("\\{[^}]*\\}\\s*$", "", h)
+
+  # Split on backticks: pieces 1, 3, 5 ... are prose, pieces 2, 4 ... are code.
+  # Pandoc keeps code exactly as written but changes prose first, so the three
+  # rules below must only touch the prose pieces.
+  parts <- strsplit(h, "`", fixed = TRUE)[[1]]
+  prose <- seq_along(parts) %% 2 == 1
+  # Raw HTML tags such as <small> are dropped, the text between them stays.
+  parts[prose] <- gsub("<[^>]+>", "", parts[prose])
+  # A link keeps its text and loses its url.
+  parts[prose] <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", parts[prose])
+  # "--" and "..." are turned into a dash and an ellipsis character, and both
+  # are punctuation, so they vanish in step 3 ("Kaplan--Meier" -> "kaplanmeier").
+  parts[prose] <- gsub("--+|\\.\\.\\.", "", parts[prose])
+  h <- paste(parts, collapse = "")
+
+  h <- tolower(h)
   h <- gsub("[^[:alnum:] _.-]", "", h)
   h <- gsub("[[:space:]]+", "-", trimws(h))
-  h <- tolower(h)
-  sub("^[^a-z]+", "", h)
+  sub("^[^[:alpha:]]+", "", h)
+}
+
+# When two headings on a page get the same id, pandoc adds -1 to the second,
+# -2 to the third and so on. Takes the ids of ALL headings on a page, in order.
+number_repeats <- function(ids) {
+  out <- ids
+  for (k in seq_along(ids)) {
+    seen_before <- sum(ids[seq_len(k - 1)] == ids[k])
+    if (seen_before > 0) out[k] <- paste0(ids[k], "-", seen_before)
+  }
+  out
 }
 
 heading_text <- function(heading) {
@@ -103,7 +135,13 @@ clean_prose <- function(lines) {
 # Harvest ----------------------------------------------------------------------
 
 qmd <- list.files(ROOT, pattern = "\\.qmd$", recursive = TRUE, full.names = TRUE)
-qmd <- qmd[!grepl("/_ignore/|/_site/|/\\.quarto/", qmd)]
+# Index only the files Quarto renders as pages, otherwise a search result links
+# to a page that does not exist on the site. Quarto skips every file and folder
+# whose name starts with "_" (includes/_badges.qmd, _ignore/, _site/) or with
+# "." (.quarto/), and it skips README.qmd, which is only built into README.md.
+rel_path <- sub(paste0("^", ROOT, "/"), "", qmd)
+not_a_page <- grepl("(^|/)[_.]", rel_path) | basename(rel_path) == "README.qmd"
+qmd <- qmd[!not_a_page]
 
 entries <- list()
 for (path in sort(qmd)) {
@@ -124,6 +162,37 @@ for (path in sort(qmd)) {
   # Split on H2 and H3. Anything before the first heading belongs to the page.
   is_head <- grepl("^#{2,3} ", lines) & cumsum(grepl("^\\s*```", lines)) %% 2 == 0
   starts <- which(is_head)
+
+  # Ids for every heading on the page (H1 to H6), because a repeated id is
+  # numbered across all levels, not only the H2 and H3 that are indexed.
+  in_code <- cumsum(grepl("^\\s*```", lines)) %% 2 == 1
+  all_heads <- which(grepl("^#{1,6} ", lines) & !in_code)
+  head_ids <- number_repeats(vapply(lines[all_heads], anchor_for, character(1)))
+
+  # A heading inside a ::: {.panel-tabset} block becomes a tab label, and a tab
+  # label has no id on the page. Find those headings, so their sections can
+  # link to the nearest real heading above instead. A div opens with ":::"
+  # plus a name and closes with a bare ":::", so the list of divs that are
+  # open at a line tells whether that line sits inside a tabset.
+  open_divs <- character()
+  in_tabset <- logical(length(lines))
+  for (k in seq_along(lines)) {
+    if (!in_code[k] && grepl("^\\s*:::+\\s*$", lines[k])) {
+      open_divs <- utils::head(open_divs, -1)   # closes the innermost div
+    } else if (!in_code[k] && grepl("^\\s*:::", lines[k])) {
+      open_divs <- c(open_divs, lines[k])       # opens a new div
+    }
+    in_tabset[k] <- any(grepl("panel-tabset", open_divs, fixed = TRUE))
+  }
+  real_heads <- all_heads[!in_tabset[all_heads]]
+
+  # The id to link to for a section that starts at line_no: its own heading,
+  # or for a tab the last real heading before it ("" if there is none).
+  anchor_at <- function(line_no) {
+    above <- real_heads[real_heads <= line_no]
+    if (!length(above)) return("")
+    head_ids[match(max(above), all_heads)]
+  }
   bounds <- c(1, starts, length(lines) + 1)
 
   for (i in seq_len(length(bounds) - 1)) {
@@ -140,7 +209,7 @@ for (path in sort(qmd)) {
       page = rel,
       title = title,
       heading = if (nzchar(head_line)) heading_text(head_line) else "",
-      anchor = if (nzchar(head_line)) anchor_for(head_line) else "",
+      anchor = if (nzchar(head_line)) anchor_at(from) else "",
       # Cut at a word boundary: a snippet ending in "sampl" reads as a typo,
       # and the spell checker flags it as one.
       text = if (nchar(body) <= 1200) body
