@@ -101,7 +101,7 @@
 Where these values come from:
 
 - **`kont_type`:** [Vejledning til indberetning til LPR3](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15700/LPR_indberetningsvejledning_v.1.2.pdf), published on [medinfo.dk](https://medinfo.dk/sks/brows.php).
-- **`lprindberetningssystem`:** [No DST/Sundhedsdatastyrelsen kodeark for this column exists; the value set below is reconstructed from DARTER-team-confirmed facts already established elsewhere in this guide (this pitfalls page, and kont_type.yaml), not from a published code list.](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
+- **`lprindberetningssystem`:** [No DST/Sundhedsdatastyrelsen kodeark for this column exists; the value set below is reconstructed from DARTER-team-confirmed facts already established elsewhere in this guide (this pitfalls page, and kont_type.yaml), not from a published code list.](https://registerguide.org/darter-pitfalls.html#lpr3-lprindberetningssystem).
 - **`icd10_sks`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 - **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
@@ -110,7 +110,7 @@ Where these values come from:
 
 **Worth knowing:**
 
-- **`dw_ek_kontakt`:** The key the diagnosis and procedure tables join on. Sundhedsdatastyrelsen's guide to its own LPR3 research model (Vejledning til LPR3_F, 2023, https://sundhedsdatastyrelsen.dk/media/1 6364/Vejledning%20til%20LPR3_F.pdf) says the dw_ek keys are made by Sundhedsdatastyrelsen and stay the same when a report is updated. They only change if the whole LPR3 base model is reloaded. That is the opposite of LPR2's recnum. DST does not document whether LPR_A carries the same keys, so treat this as likely, not confirmed.
+- **`dw_ek_kontakt`:** The key the diagnosis and procedure tables join on. Sundhedsdatastyrelsen's guide to its own LPR3 research model (Vejledning til LPR3_F, 2023, https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.pdf) says the dw_ek keys are made by Sundhedsdatastyrelsen and stay the same when a report is updated. They only change if the whole LPR3 base model is reloaded. That is the opposite of LPR2's recnum. DST does not document whether LPR_A carries the same keys, so treat this as likely, not confirmed.
 - **`dw_ek_forloeb`:** One level above the contact: a course of treatment can span several contacts, so joining on this is not the same as joining on the contact. Procedures and results registered on the course rather than on a contact hang on dw_ek_forloeb, and this column is the way to reach them when the course table is not delivered (Vejledning til LPR3_F, sections 3.4 and 3.7).
 - **`kont_starttidspunkt`:** A datetime, not a date. as.Date() it before comparing with an index date.
 - **`lprindberetningssystem`:** Filter to "LPR3". The table reaches back to 2017, and the outpatient contacts from before March 2019 are also in LPR2, so combining the two without this filter counts the same contact twice. This is a different thing from LPR_F vs LPR_A: those are two file formats, a choice made before you even open a file, not a value this column can hold. See the lprindberetningssystem code system for the full value set and its confidence levels.

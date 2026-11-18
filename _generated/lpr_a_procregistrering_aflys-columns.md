@@ -61,7 +61,7 @@
 
 Where these values come from:
 
-- **`lprindberetningssystem`:** [No DST/Sundhedsdatastyrelsen kodeark for this column exists; the value set below is reconstructed from DARTER-team-confirmed facts already established elsewhere in this guide (this pitfalls page, and kont_type.yaml), not from a published code list.](darter-pitfalls.qmd#lpr3-lprindberetningssystem).
+- **`lprindberetningssystem`:** [No DST/Sundhedsdatastyrelsen kodeark for this column exists; the value set below is reconstructed from DARTER-team-confirmed facts already established elsewhere in this guide (this pitfalls page, and kont_type.yaml), not from a published code list.](https://registerguide.org/darter-pitfalls.html#lpr3-lprindberetningssystem).
 - **`sks`:** [SKS browser (medinfo.dk)](https://medinfo.dk/sks/brows.php).
 
 </details>

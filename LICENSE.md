@@ -30,7 +30,7 @@ exhaustive, and do not form part of our licenses.
     not subject to the license. This includes other CC-licensed
     material, or material used under an exception or limitation to
     copyright. [More considerations for
-    licensors](http://wiki.creativecommons.org/Considerations_for_licensors_and_licensees#Considerations_for_licensors).
+    licensors](https://wiki.creativecommons.org/wiki/Considerations_for_licensors_and_licensees#Considerations_for_licensors).
 
 -   **Considerations for the public:** By using one of our public
     licenses, a licensor grants the public permission to use the
@@ -46,7 +46,7 @@ exhaustive, and do not form part of our licenses.
     described. Although not required by our licenses, you are encouraged
     to respect those requests where reasonable. [More considerations for
     the
-    public](http://wiki.creativecommons.org/Considerations_for_licensors_and_licensees#Considerations_for_licensees).
+    public](https://wiki.creativecommons.org/wiki/Considerations_for_licensors_and_licensees#Considerations_for_licensees).
 
 ## Creative Commons Attribution 4.0 International Public License
 
