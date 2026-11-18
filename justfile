@@ -16,6 +16,12 @@ build-schema-tables:
 build-search-index:
   Rscript tools/build-search-index.R
 
+# Measure how well "Search by meaning" ranks: runs the queries in
+# tools/search-queries.csv through the page's own script and prints the rank of
+# the expected page for each. A measurement, not a pass/fail check.
+check-search: build-search-index
+  node tools/search-quality.js
+
 # The weekly once-over: everything that can rot without the build noticing
 check-weekly: check-guide check-urls check-spelling check-dst-overview
 
