@@ -11,10 +11,16 @@ check-all: check-spelling check-urls check-guide
 build-schema-tables:
   Rscript tools/build-schema-tables.R
 
-# Rebuild the search index from the guide. Run after adding or renaming a page,
-# or after editing .config/search-synonyms.yaml.
+# Build the search index for a LOCAL preview of "Search by meaning". The
+# published site does not need this: the website build makes the index itself.
 build-search-index:
   Rscript tools/build-search-index.R
+
+# Measure how well "Search by meaning" ranks: runs the queries in
+# tools/search-queries.csv through the page's own script and prints the rank of
+# the expected page for each. A measurement, not a pass/fail check.
+check-search: build-search-index
+  node tools/search-quality.js
 
 # The weekly once-over: everything that can rot without the build noticing
 check-weekly: check-guide check-urls check-spelling check-dst-overview

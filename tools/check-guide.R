@@ -687,9 +687,12 @@ check_schema <- function() {
   # The variable index lives in assets/ rather than _generated/, because Quarto
   # does not copy anything under a directory starting with an underscore and the
   # browser fetches this one at runtime. It drifts the same way, so check it too.
-  # The search index is harvested from the .qmd sources, so it goes stale the
-  # moment a page is added, renamed or rewritten. Same drift check as the tables.
-  si <- file.path(ROOT, "assets", "search-index.json")
+  # The search index is NOT a committed file, so there is nothing to compare:
+  # the website build makes it from the pages every time (see
+  # .github/workflows/build-website.yml). What can still go wrong is that a
+  # page or the synonym list breaks the builder, and that would stop the site
+  # from being published. So build the index into a temp dir here and fail if
+  # no file comes out. Nothing is written into the repository.
   si_tmp <- file.path(tempdir(), "search-index-check")
   unlink(si_tmp, recursive = TRUE)
   old_si <- Sys.getenv("SEARCH_INDEX_OUT", unset = NA)
@@ -698,14 +701,9 @@ check_schema <- function() {
     source(file.path(ROOT, "tools", "build-search-index.R"), local = new.env()),
     silent = TRUE))))
   if (is.na(old_si)) Sys.unsetenv("SEARCH_INDEX_OUT") else Sys.setenv(SEARCH_INDEX_OUT = old_si)
-  si_fresh <- file.path(si_tmp, "search-index.json")
-  if (!file.exists(si)) {
-    fail("assets/search-index.json is missing. Run: just build-search-index")
-    n_drift <- n_drift + 1
-  } else if (file.exists(si_fresh) &&
-             !identical(readLines(si, warn = FALSE), readLines(si_fresh, warn = FALSE))) {
-    fail("assets/search-index.json does not match the guide. Run: just build-search-index")
-    n_drift <- n_drift + 1
+  if (!file.exists(file.path(si_tmp, "search-index.json"))) {
+    fail("the search index could not be built. ",
+         "Run this to see the error: Rscript tools/build-search-index.R")
   }
 
   vj <- file.path(ROOT, "assets", "variables.json")

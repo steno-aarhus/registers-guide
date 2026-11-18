@@ -12,10 +12,31 @@
 # register uses, still lands on the right section.
 #
 # Why generate rather than search the rendered site: the .qmd source is what we
-# control, the anchors are predictable from the headings, and a static index can
-# be committed and diffed like the register tables.
+# control, and the anchors are predictable from the headings.
+#
+# The index is NOT committed (it is in .gitignore). The website build runs this
+# script right before `quarto render`, so the published index always matches
+# the published pages and nobody has to rebuild it by hand in a pull request.
+# For a local preview, run `just build-search-index` first.
 
 suppressWarnings(suppressMessages(library(yaml)))
+
+# The same guide must give the same index on every machine. The guide contains
+# non-English letters, and R only treats them as letters when it runs with
+# UTF-8 text. Started without it (LC_ALL=C, common in automated jobs), R cut
+# the text in the middle of a letter and built different anchors, so the file
+# came out different. So switch R to UTF-8 here, and stop if that is impossible
+# rather than write a wrong index. The two names are the ones Linux and macOS
+# use.
+if (!l10n_info()[["UTF-8"]]) {
+  for (loc in c("C.UTF-8", "en_US.UTF-8")) {
+    if (nzchar(suppressWarnings(Sys.setlocale("LC_CTYPE", loc)))) break
+  }
+  if (!l10n_info()[["UTF-8"]]) {
+    stop("build-search-index.R needs a UTF-8 locale. Run it as: ",
+         "LC_ALL=en_US.UTF-8 Rscript tools/build-search-index.R")
+  }
+}
 
 ROOT <- normalizePath(file.path(dirname(sub("--file=", "",
   grep("--file=", commandArgs(FALSE), value = TRUE)[1])), ".."))
@@ -144,7 +165,10 @@ not_a_page <- grepl("(^|/)[_.]", rel_path) | basename(rel_path) == "README.qmd"
 qmd <- qmd[!not_a_page]
 
 entries <- list()
-for (path in sort(qmd)) {
+# method = "radix" sorts the same way on every machine. A plain sort() follows
+# the computer's language settings, and they disagree on where "-" goes, so
+# extract-variables.qmd and extraction-step-by-step.qmd could swap places.
+for (path in sort(qmd, method = "radix")) {
   rel <- sub(paste0("^", ROOT, "/"), "", path)
   lines <- readLines(path, warn = FALSE)
 
