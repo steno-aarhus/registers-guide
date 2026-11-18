@@ -103,7 +103,13 @@ clean_prose <- function(lines) {
 # Harvest ----------------------------------------------------------------------
 
 qmd <- list.files(ROOT, pattern = "\\.qmd$", recursive = TRUE, full.names = TRUE)
-qmd <- qmd[!grepl("/_ignore/|/_site/|/\\.quarto/", qmd)]
+# Index only the files Quarto renders as pages, otherwise a search result links
+# to a page that does not exist on the site. Quarto skips every file and folder
+# whose name starts with "_" (includes/_badges.qmd, _ignore/, _site/) or with
+# "." (.quarto/), and it skips README.qmd, which is only built into README.md.
+rel_path <- sub(paste0("^", ROOT, "/"), "", qmd)
+not_a_page <- grepl("(^|/)[_.]", rel_path) | basename(rel_path) == "README.qmd"
+qmd <- qmd[!not_a_page]
 
 entries <- list()
 for (path in sort(qmd)) {
