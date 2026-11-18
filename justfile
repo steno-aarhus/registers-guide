@@ -11,8 +11,8 @@ check-all: check-spelling check-urls check-guide
 build-schema-tables:
   Rscript tools/build-schema-tables.R
 
-# Rebuild the search index from the guide. Run after adding or renaming a page,
-# or after editing .config/search-synonyms.yaml.
+# Build the search index for a LOCAL preview of "Search by meaning". The
+# published site does not need this: the website build makes the index itself.
 build-search-index:
   Rscript tools/build-search-index.R
 

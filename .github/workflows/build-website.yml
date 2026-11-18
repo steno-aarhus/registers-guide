@@ -34,6 +34,33 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0
 
+      # The next three steps build assets/search-index.json, the file the
+      # "Search by meaning" page reads. It is built here, from the pages that
+      # are about to be published, and it is not committed. That way the
+      # published index cannot be out of date, and a pull request never needs
+      # a manual rebuild. If one of these steps fails, the whole job stops
+      # before publishing, so the site stays as it was instead of going out
+      # without a search index.
+
+      # The index builder is an R script. Same action and version as in
+      # check-guide.yml.
+      - name: Set up R
+        uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+
+      # The only package the builder needs beyond base R: it reads the page
+      # titles and .config/search-synonyms.yaml. Same line as in
+      # check-guide.yml.
+      - name: Install the yaml package
+        run: Rscript -e 'install.packages("yaml", repos = "https://cloud.r-project.org")'
+
+      # Must run BEFORE the render step below: Quarto copies the file into the
+      # site while rendering (it is listed under resources in _quarto.yml).
+      # The second line stops the job if no file was written.
+      - name: Build the search index
+        run: |
+          Rscript tools/build-search-index.R
+          test -s assets/search-index.json
+
       # NOTE: Needs the contents and pages write permissions (used above).
       - name: Render and publish to GitHub Pages
         uses: quarto-dev/quarto-actions/publish@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0

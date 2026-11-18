@@ -12,8 +12,12 @@
 # register uses, still lands on the right section.
 #
 # Why generate rather than search the rendered site: the .qmd source is what we
-# control, the anchors are predictable from the headings, and a static index can
-# be committed and diffed like the register tables.
+# control, and the anchors are predictable from the headings.
+#
+# The index is NOT committed (it is in .gitignore). The website build runs this
+# script right before `quarto render`, so the published index always matches
+# the published pages and nobody has to rebuild it by hand in a pull request.
+# For a local preview, run `just build-search-index` first.
 
 suppressWarnings(suppressMessages(library(yaml)))
 
