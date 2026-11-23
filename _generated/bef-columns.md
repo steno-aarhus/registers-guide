@@ -50,7 +50,8 @@
 | `version` | numeric | code | Module data version | 2004-12 to 2026-09 |
 | `betalingskom` | character | code | Betalingskommune | 1985 to 2026 |
 
-- **`mor_id`:** A pnr-like identifier for the mother, so BEF can be turned into a family structure without a separate register. It is only filled where the link is registered, which is not the case for everyone born before CPR.
+- **`mor_id`:** The mother's person id, from the parental link in CPR. It is the legal parent, not necessarily the biological one, and missing where no link is registered: for many people born before 1960, for many people born abroad, and for a second parent not yet registered on a newborn. BEF is a snapshot register, so the value can differ between snapshots. See [Family links](family-links.qmd).
+- **`far_id`:** The father's person id, from the parental link in CPR. See mor_id.
 - **`aegte_id`:** Not proof of a current marriage. What it points to depends on civst: the current spouse if married (G), the former spouse if divorced (F), the deceased spouse if widowed (E), and the same for registered partnerships (P, O, L). Read it together with civst before treating it as a living partner.
 - **`fdato`:** Not on DST's variable list for BEF, which documents foed_dag instead. Present in this delivery. Prefer foed_dag unless you have checked what yours contains.
 - **`antefam`:** A household can hold several families. That is why the family counts and the household counts differ, and why FAIK's household income cannot be read as one family's income without checking this.
