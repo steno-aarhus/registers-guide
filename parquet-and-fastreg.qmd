@@ -5,47 +5,30 @@ date: last-modified
 description: "Set up fastreg's read_register() on your DST project, convert SAS files to parquet, read files it cannot find by name, and join registers in DuckDB."
 ---
 
-Everything about getting registers into parquet and reading them with
-[`fastreg`](https://dp-next.github.io/fastreg/), in the order most people need
-it:
-
-1. **[Point fastreg at your registers](#fastreg-paths)** - one `options()` call
-   at the top of each script. Every `read_register()` example in this guide
-   assumes you have done this. If a colleague already converted the registers,
-   this is the only section you need.
-2. **[Convert SAS files to Parquet](#convert-sas-to-parquet)** - when your
-   project received `.sas7bdat` and nothing has been converted yet. Done once
-   per register, usually by one person for the whole project.
-3. **[When `read_register()` cannot find the
-   register](#when-read-register-fails)** - reading parquet that is not in
-   fastreg's layout.
-4. **[Several registers on one DuckDB connection](#duckdb-views)** - for
-   heavy work across the whole population, where everything has to stay in
-   the database until the result is small.
-
-Which file types you meet on the server, and what opens each one, is [Phase 4 -
-File types and loading](file-formats.qmd).
+Use this page when you set up the reading of registers for a project. Most
+people need only the first section, [Point fastreg at your
+registers](#fastreg-paths): one `options()` call at the top of each script,
+which every `read_register()` example in this guide assumes. The later
+sections are for the person who converts SAS files to parquet (once per
+register, usually one person for the whole project), for registers that
+`read_register()` cannot find by name, and for heavy whole-population joins
+that must stay inside DuckDB. Which file types you meet on the server, and what
+opens each one, is [Phase 4 - File types and loading](file-formats.qmd); the
+extraction pattern itself is [Phase 5](extraction-step-by-step.qmd).
 
 ## What is parquet, and why use it? {#what-is-parquet}
 
 **Parquet** is a file format built for exactly the kind of work this guide
 does: a large table, read many times, usually filtered down to a few columns
-and a cohort's worth of rows. Unlike SAS (`.sas7bdat`) or `.rds`, which store
-data row by row and load the whole file before you can use any of it, parquet
+and a cohort's worth of rows. A SAS file (`.sas7bdat`) or an `.rds` file has to
+be read in whole before you can use any of it; parquet
 lets you open a *connection* and read only what you actually ask for.
 
-Think of a supermarket. You can either buy the whole shop and sort through it
-at home, or send a shopping list and only have what is on the list delivered.
-A SAS or RDS file is buying the whole shop. Parquet is sending the list first
-- `filter()`, `select()` - and only paying for delivery (`collect()`) once you
-know exactly what you want. That is why a filtered, cohort-sized extract from
-a register with tens of millions of rows can come back in seconds, without
-ever loading the whole register into RAM. See [Phase 4 - File types and
-loading](file-formats.qmd) for the mechanics behind this (lazy vs. full
-loading).
-
-This is why almost every register on DST is worth converting to parquet once
-- the rest of this page shows how.
+That is why a filtered, cohort-sized extract from a register with tens of
+millions of rows can come back in seconds, without ever loading the whole
+register into RAM, and why almost every register on DST is worth converting to
+parquet once. The lazy pattern itself is explained in [Phase 5 - Extracting
+data step by step](extraction-step-by-step.qmd).
 
 ## Point fastreg at your registers {#fastreg-paths}
 
@@ -58,7 +41,7 @@ name. Ask whoever set the project up for the exact paths:
 library(fastreg)
 
 options(
-  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/cleaned-data/",
+  fastreg.project_workdata_dir = "E:/workdata/[projectnumber]/[your-parquet-folder]/",
   fastreg.project_rawdata_dir = "E:/rawdata/[projectnumber]/"
 )
 ```
@@ -78,22 +61,15 @@ Two things that otherwise cost you time:
   in from a Mac. fastreg's own guide shows `E` without the colon, but only
   because the example writes to a temporary folder with `fs::path_temp()`.
 - **The folder does not have to be the innermost one**: you can set the path to
-  `cleaned-data/` even though it holds several subfolders (`parquet-registers/`,
-  `parquet-external/`). `read_register()` searches further down for the register
-  name.
+  a folder that holds several subfolders of parquet registers.
+  `read_register()` searches further down for the register name.
 
 ## Convert SAS files to Parquet {#convert-sas-to-parquet}
 
 Most projects on DST receive registers as SAS files (`.sas7bdat`). Before you
 can use them with `open_dataset()` and lazy evaluation, they must be converted
 to Parquet **once**. After that you use them exactly like any other register.
-
-::: {.callout-important}
-**Relevant for most projects outside DARTER.** If you are working on a project
-where the registers have not already been converted to parquet, this step is
-necessary before you can run extractions. Done once per register - after that
-the normal extraction pattern applies.
-:::
+If your project's registers are already converted, skip this section.
 
 <details>
 <summary>Why Parquet is worth it (SAS vs Parquet)</summary>
@@ -148,7 +124,7 @@ library(arrow)    # write Parquet
 library(dplyr)    # %>%, rename_with()
 
 sas_file  <- "E:/rawdata/[projectnumber]/rawdata/my_register.sas7bdat"
-parq_path <- "E:/workdata/[projectnumber]/cleaned-data/parquet-registers/my_register/"
+parq_path <- "E:/workdata/[projectnumber]/[your-parquet-folder]/my_register/"
 
 # 1. Read the SAS file into R
 df <- read_sas(sas_file)            # reads the entire file into RAM - we call it "df", but you can use any name
@@ -209,17 +185,21 @@ In that case you use one of fastreg's two other reading functions:
   | `read_parquet_dataset("path/to/folder")`    | the **full path** to the folder | a folder of parquet files        |
   | `read_parquet_file("path/to/file.parquet")` | the **full path** to the file   | a single parquet file            |
 
-All three hand you a **DuckDB table** (a lazy *duckplyr* data frame - its
-`class()` starts with `"prudent_duckplyr_df"`), so the rest of your code is exactly the
-same whichever one you use.
+All three hand you a lazy **DuckDB table**, so the rest of your code is exactly
+the same whichever one you use. What kind of DuckDB table depends on the
+fastreg version: up to 0.14.2 (which includes the CRAN release, 0.14.1) it is a
+`tbl_duckdb_connection` made through arrow; from 0.14.3 (installed from
+[GitHub](https://github.com/dp-next/fastreg)) it is a duckplyr data frame whose
+`class()` starts with `"prudent_duckplyr_df"`. Check yours with
+`packageVersion("fastreg")`.
 
 ::: {.callout-important}
 **`read_parquet_dataset()` does not use your `options()` path.** Only
 `read_register()` looks names up under the folders you set. The two
 `read_parquet_*()` functions need the **full path**, including any subfolders
-below the folder you set. So if you set the path to `cleaned-data/`, you still
+below the folder you set. So if you set the path to a parent folder, you still
 have to write the whole way down:
-`"E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"`.
+`"E:/workdata/[projectnumber]/[your-parquet-folder]/lmdb"`.
 :::
 
 ```r
@@ -233,12 +213,12 @@ list_parquet_datasets()
 
 # 2. If the register is not on the list, point at the folder with the full path
 lmdb <- read_parquet_dataset(
-  "E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"
+  "E:/workdata/[projectnumber]/[your-parquet-folder]/lmdb"
 )
 
 # 3. If it is a single file rather than a folder, use read_parquet_file()
 table <- read_parquet_file(
-  "E:/workdata/[projectnumber]/cleaned-data/parquet-external/my_table.parquet"
+  "E:/workdata/[projectnumber]/[your-parquet-folder]/my_table.parquet"
 )
 
 # From there the code is the same as after read_register()
@@ -248,15 +228,6 @@ lmdb %>%
   select(pnr, atc, eksd) %>%
   collect()
 ```
-
-::: {.callout-note}
-**On DARTER (project 708421)** the remaining registers are being converted to
-fastreg format during **August 2026**. Until then a few registers may need
-`read_parquet_dataset()` even though they are listed with `read_register()` in
-[DARTER - Register paths and
-datastores](darter-register-paths-datastores.qmd). After that, the name
-lookup works for all of them. *(Noted July 2026.)*
-:::
 
 ## Several registers on one DuckDB connection {#duckdb-views}
 
@@ -288,10 +259,10 @@ dbExecute(con, "SET temp_directory = 'E:/workdata/[projectnumber]/duckdb_tmp'")
 #    *.parquet  = every file ending in .parquet
 #    hive_partitioning = true reads the year from folder names like year=2015/
 dbExecute(con, "CREATE VIEW bef AS SELECT * FROM read_parquet(
-  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/**/*.parquet',
+  'E:/workdata/[projectnumber]/[your-parquet-folder]/bef/**/*.parquet',
   hive_partitioning = true)")
 dbExecute(con, "CREATE VIEW faik AS SELECT * FROM read_parquet(
-  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/faik/**/*.parquet',
+  'E:/workdata/[projectnumber]/[your-parquet-folder]/faik/**/*.parquet',
   hive_partitioning = true)")
 
 # 4. Lazy dplyr tables - nothing is loaded into R yet
@@ -310,10 +281,11 @@ no year subfolders, use `'.../faik/*.parquet'` and leave out
 
 **Why this, and not `read_register()`, for these steps:**
 
-- **Nothing is computed in R behind your back.** `read_register()` hands you a
-  `duckplyr` table. duckplyr uses the same DuckDB engine, but when it cannot
-  translate a step it falls back to computing that step in R's memory instead,
-  with no warning. fastreg opens registers as "thrifty", so for a large table
+- **Nothing is computed in R behind your back.** From fastreg 0.14.3,
+  `read_register()` hands you a `duckplyr` table. duckplyr uses the same DuckDB
+  engine, but when it cannot translate a step it falls back to computing that
+  step in R's memory instead, with no warning. fastreg opens registers as
+  "thrifty", so for a large table
   that fallback stops with a materialization error rather than running in the
   database; for a smaller one the data quietly ends up in RAM. A `tbl()` on a plain DBI connection
   uses `dbplyr`, which only ever sends SQL to DuckDB, and `show_query()`
