@@ -86,7 +86,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-2c458bc0c34172ddcace88404c2b0f6b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-09f8af1e44e4ef4f394a74dca0ee9d58.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -169,8 +169,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         </a>
     </div>
   </nav>
-  <div id="quarto-announcement" data-announcement-id="0e54b61ec1f111f5c7143fb93e093365" class="alert alert-light hidden"><div class="quarto-announcement-content">
-<p>Guide under active development - content is continuously added and revised.</p>
+  <div id="quarto-announcement" data-announcement-id="e880f7853e360563c35bd4980b16529c" class="alert alert-light hidden"><div class="quarto-announcement-content">
+<p>Last reviewed November 2026. Found something wrong or out of date? Use the feedback box on the page.</p>
 </div><i class="bi bi-x-lg quarto-announcement-action"></i></div>
 </header>
 <!-- content -->
@@ -625,7 +625,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
     
     <div>
-    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-heading">Last modified</div>
     <div class="quarto-title-meta-contents">
       <p class="date">November 23, 2026</p>
     </div>
@@ -671,41 +671,51 @@ Classic case-control vs.&nbsp;nested case-control: what is the difference?
 </section>
 <section id="step-1---build-the-dataset-for-matching" class="level2 step-heading">
 <h2 class="step-heading anchored" data-anchor-id="step-1---build-the-dataset-for-matching">Step 1 - Build the dataset for matching</h2>
-<p>Identifying cases and excluding prevalent cases are done on <a href="./build-study-population.html">Build your study population</a>. Here you need one row per person with matching variables and the dates eligibility depends on. Reuse the <code>pool</code> from <a href="./comparison-cohort.html#step-2---build-the-comparison-pool">Comparison cohort, Step 2</a> (demographics + death date + first exit + first outcome date) and the migration events <code>vnds_ev</code> from Step 1 there, for the entry (residence) date. For case-control, though:</p>
+<p>Identifying cases and excluding prevalent cases are done on <a href="./build-study-population.html">Build your study population</a>. Here you need one row per person and residence spell, with matching variables and the dates eligibility depends on. Reuse the <code>pool</code> from <a href="./comparison-cohort.html#step-2---build-the-comparison-pool">Comparison cohort, Step 2</a> (demographics + death date + first outcome date), and <code>demographics</code> and the migration events <code>vnds_ev</code> from Step 1 there, for the residence spells. For case-control, though:</p>
 <ul>
 <li><strong>Exposure is not an eligibility criterion here:</strong> unlike the comparison cohort, where a control must be exposure-free at index. In case-control, exposure is what you study: you measure it for both cases and controls afterwards and do not use it to decide who can be a control. A control just needs to be outcome-free (and meet your other criteria) at the case’s index.</li>
 <li><strong>Who is a case, and when:</strong> the outcome date is the index date.</li>
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: build the dataset for matching ---------------------------------------</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 'pool' = one row per person from Comparison cohort, Step 2 (pnr, foed_dag, sex, birth_year,</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#          death_date, first_outcome_date, first_exit); 'vnds_ev' = all migration events</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">#          from Comparison cohort, Step 1. The exposure date in 'pool' is NOT used here.</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>STUDY_END <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2022-12-31"</span>)                <span class="co"># we choose: last day of the study</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Entry = the date a person first meets the inclusion criteria: here age &gt;= 18 and</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 5 years continuous residence since the latest immigration (or since birth) - adapt</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>last_entry <span class="ot">&lt;-</span> vnds_ev <span class="sc">%&gt;%</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(indud_kode <span class="sc">==</span> <span class="st">"I"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">last_entry =</span> <span class="fu">max</span>(haend_dato), <span class="at">.groups =</span> <span class="st">"drop"</span>)   <span class="co"># latest immigration</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>all_persons <span class="ot">&lt;-</span> pool <span class="sc">%&gt;%</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(last_entry, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(                                       <span class="co"># keep ONLY the columns we name</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    pnr,</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 1 = case (outcome within the study period), 0 = potential control.</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># An outcome after STUDY_</span><span class="re">END</span><span class="co"> is NOT a case: that person is censored at STUDY_</span><span class="re">END</span><span class="co">.</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">case       =</span> <span class="fu">if_else</span>(<span class="sc">!</span><span class="fu">is.na</span>(first_outcome_date) <span class="sc">&amp;</span> first_outcome_date <span class="sc">&lt;=</span> STUDY_END, <span class="dv">1</span>L, <span class="dv">0</span>L),</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">sex        =</span> <span class="fu">as.factor</span>(sex),                   <span class="co"># matching variable MUST be factor/character</span></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">birth_year =</span> <span class="fu">as.factor</span>(birth_year),            <span class="co"># matching variable</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">case_index =</span> <span class="fu">if_else</span>(case <span class="sc">==</span> <span class="dv">1</span>L, first_outcome_date, <span class="fu">as.Date</span>(<span class="cn">NA</span>)),  <span class="co"># the case index = outcome date (NA if not a case)</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">entry      =</span> <span class="fu">pmax</span>(foed_dag <span class="sc">+</span> <span class="fu">ceiling</span>(<span class="dv">18</span> <span class="sc">*</span> <span class="fl">365.25</span>),                        <span class="co"># age &gt;= 18</span></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>                      <span class="fu">coalesce</span>(last_entry, foed_dag) <span class="sc">+</span> <span class="fu">ceiling</span>(<span class="dv">5</span> <span class="sc">*</span> <span class="fl">365.25</span>)),  <span class="co"># 5 years residence</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="co"># end_fu = when the person leaves the risk set: the EARLIEST of death, first exit,</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    <span class="co">#          own outcome (they become a case then) or study end. pmin = earliest.</span></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">end_fu     =</span> <span class="fu">pmin</span>(death_date, first_exit, first_outcome_date, STUDY_END, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(entry <span class="sc">&lt;</span> end_fu)                           <span class="co"># never at risk (e.g. outcome before entry) -&gt; neither case nor control</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#          death_date, first_outcome_date); 'vnds_ev' = all migration events and</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">#          'demographics' = one row per person, both from Comparison cohort, Step 1.</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">#          The exposure date in 'pool' is NOT used here.</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>STUDY_END <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="st">"2022-12-31"</span>)                <span class="co"># we choose: last day of the study</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Residence spells, as in Comparison cohort, Route A: one row per period of residence,</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># from birth or an immigration to the next migration event (NA = no later event).</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># incidenceMatch() allows only one at-risk interval per row, so a person who left and</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># came back gets one row per spell. join_by(closest()) needs dplyr 1.1.0 or newer.</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>spells <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  demographics <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, <span class="at">spell_start =</span> foed_dag),                            <span class="co"># from birth</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  vnds_ev <span class="sc">%&gt;%</span> <span class="fu">filter</span>(indud_kode <span class="sc">==</span> <span class="st">"I"</span>) <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, <span class="at">spell_start =</span> haend_dato)  <span class="co"># from each immigration</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds_ev <span class="sc">%&gt;%</span> <span class="fu">select</span>(pnr, <span class="at">spell_end =</span> haend_dato),</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>            <span class="fu">join_by</span>(pnr, <span class="fu">closest</span>(spell_start <span class="sc">&lt;</span> spell_end)))   <span class="co"># the next migration event after the start</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>all_persons <span class="ot">&lt;-</span> pool <span class="sc">%&gt;%</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">inner_join</span>(spells, <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">relationship =</span> <span class="st">"one-to-many"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(                                       <span class="co"># keep ONLY the columns we name</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">spell_id   =</span> <span class="fu">paste</span>(pnr, spell_start),          <span class="co"># one id per row (incidenceMatch needs a unique id)</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    pnr,</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 1 = case: the outcome falls within the study period AND within this spell (resident</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    <span class="co"># when it happened); 0 = potential control. An outcome after STUDY_</span><span class="re">END</span><span class="co"> is NOT a case.</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">case       =</span> <span class="fu">if_else</span>(<span class="sc">!</span><span class="fu">is.na</span>(first_outcome_date) <span class="sc">&amp;</span> first_outcome_date <span class="sc">&lt;=</span> STUDY_END <span class="sc">&amp;</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>                           spell_start <span class="sc">&lt;=</span> first_outcome_date <span class="sc">&amp;</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>                           (<span class="fu">is.na</span>(spell_end) <span class="sc">|</span> spell_end <span class="sc">&gt;</span> first_outcome_date), <span class="dv">1</span>L, <span class="dv">0</span>L),</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">sex        =</span> <span class="fu">as.factor</span>(sex),                   <span class="co"># matching variable MUST be factor/character</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">birth_year =</span> <span class="fu">as.factor</span>(birth_year),            <span class="co"># matching variable</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">case_index =</span> <span class="fu">if_else</span>(case <span class="sc">==</span> <span class="dv">1</span>L, first_outcome_date, <span class="fu">as.Date</span>(<span class="cn">NA</span>)),  <span class="co"># the case index = outcome date (NA if not a case)</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Entry = the date the person first meets the inclusion criteria within this spell:</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    <span class="co"># here age &gt;= 18 and 5 years continuous residence - adapt</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">entry      =</span> <span class="fu">pmax</span>(foed_dag <span class="sc">+</span> <span class="fu">ceiling</span>(<span class="dv">18</span> <span class="sc">*</span> <span class="fl">365.25</span>),     <span class="co"># age &gt;= 18</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>                      spell_start <span class="sc">+</span> <span class="fu">ceiling</span>(<span class="dv">5</span> <span class="sc">*</span> <span class="fl">365.25</span>)),  <span class="co"># 5 years residence in this spell</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    <span class="co"># end_fu = when this row leaves the risk set: the EARLIEST of the next migration event</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    <span class="co">#          (end of the spell), death, own outcome (they become a case then) or study end.</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">end_fu     =</span> <span class="fu">pmin</span>(spell_end, death_date, first_outcome_date, STUDY_END, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(entry <span class="sc">&lt;</span> end_fu)                           <span class="co"># never at risk in this spell (e.g. outcome before entry) -&gt; neither case nor control</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="step-2---sample-controls" class="level2 step-heading">
 <h2 class="step-heading anchored" data-anchor-id="step-2---sample-controls">Step 2 - Sample controls</h2>
@@ -716,7 +726,7 @@ Classic case-control vs.&nbsp;nested case-control: what is the difference?
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Argument (left of =) &lt;- value we set (usually a column name in quotes)</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>matched <span class="ot">&lt;-</span> <span class="fu">incidenceMatch</span>(</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">ptid         =</span> <span class="st">"pnr"</span>,                  <span class="co"># the person-id column</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">ptid         =</span> <span class="st">"spell_id"</span>,             <span class="co"># the row-id column (one row per person and residence spell)</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">event        =</span> <span class="st">"case"</span>,                 <span class="co"># the column that is 1 for case (outcome), 0 for potential control</span></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">terms        =</span> <span class="fu">c</span>(<span class="st">"sex"</span>, <span class="st">"birth_year"</span>), <span class="co"># matching variables (exact match; factor/character)</span></span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">data         =</span> all_persons,            <span class="co"># the dataset from Step 1</span></span>
@@ -738,7 +748,7 @@ Route B code: sample with Epi::ccwc() instead of heaven
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> all_persons <span class="sc">%&gt;%</span></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">entry =</span> entry,                                <span class="co"># each person's own entry date (from Step 1)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">entry =</span> entry,                                <span class="co"># each row's own entry date (from Step 1)</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">exit  =</span> end_fu,                               <span class="co"># exit time = end of risk time (from Step 1)</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">fail  =</span> case                                  <span class="co"># 1 if the person is a case at exit (0 if outcome after STUDY_</span><span class="re">END</span><span class="co">)</span></span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  )</span>
@@ -1354,7 +1364,7 @@ Route B code: sample with Epi::ccwc() instead of heaven
 
   var t = {
     tab: "Feedback", heading: "Feedback on this page",
-    intro: "All input, big or small, is appreciated. It is anonymous.",
+    intro: "All input, big or small, is appreciated. It is anonymous unless you give your email, which is used only to reply.",
     message: "Your feedback", email: "Email",
     opt: "(optional - for a reply, or to hear when this page is updated)",
     send: "Send", sending: "Sending…",
