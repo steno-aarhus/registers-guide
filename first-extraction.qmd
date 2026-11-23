@@ -1,19 +1,23 @@
 ---
 title: "First extraction"
-subtitle: "From register to analysis-ready data - step by step"
+subtitle: "Run one complete extraction yourself on synthetic data: population, contacts, variables, saved file"
 date: last-modified
 pagetitle: "Your first register extraction in R"
 description: "A first register extraction in R on synthetic DST data from the fiktive package: define a population from BEF, extract LPR contacts, build variables, save."
 ---
 
-This page shows the complete process from a raw register to a saved dataset
-ready for analysis. You will see the pattern that recurs in almost every
-register extraction.
+On this page you run one complete extraction yourself, on synthetic register
+data on your own computer: pick a small population from BEF, pull their
+hospital contacts from `lpr_adm`, add two variables and save the result. Do it
+after [Phase 5 - Extracting data step by step](extraction-step-by-step.qmd),
+which explains the pattern you use here; this page is the practice, not the
+explanation. When you are done you have a script with the four steps that most
+extractions in a real project repeat.
 
 ::: {.callout-important}
 **These examples cannot be run on the DST server.** The synthetic data
-package (`fiktive`) is not available there. You need **RStudio installed locally on
-your computer**:
+package (`fiktive`) is not available there. You need R and RStudio installed
+locally on your computer:
 
 1. Download R: [cran.r-project.org](https://cran.r-project.org/)
 2. Download RStudio:
@@ -21,8 +25,8 @@ your computer**:
 3. Open RStudio, create a new script (**File → New File → R Script**), and copy
    the code there.
 
-When you are ready to work with real register data, you use the same pattern -
-but on the DST server and with your project's register data.
+With real register data you use the same pattern, on the DST server and with
+your project's registers.
 :::
 
 The data is synthetic, from
@@ -87,7 +91,7 @@ You can now practise `open_dataset()` exactly as on the DST server.
 
 ## Step 1 - Define your study population
 
-Every extraction starts with a list of pnr's - the people you want data for. In
+Every extraction starts with a list of `pnr` values: the people you want data for. In
 practice this comes from your cohort script. Here we build a small practice
 cohort directly from the BEF register.
 
@@ -156,7 +160,7 @@ bef_clean <- bef_data %>%
       TRUE      ~ NA_character_
     ),
 
-    # partnered from civst; opr_land is all missing in this synthetic BEF
+    # partnered: married or in a registered partnership
     partnered    = civst %in% c("G", "P")
   )
 
@@ -167,22 +171,19 @@ The code lists above are an excerpt, adapted from Anders Aasted Isaksen's
 dplyr practice vignette (MIT licence, Steno Diabetes Center Aarhus). The full
 vignette covers more variables and patterns.
 
-`opr_land` is entirely missing in this synthetic BEF, so the country-of-origin
-flag is replaced with `partnered` from `civst`.
-
 </details>
 
 ## Step 2 - Extract data from a register
 
-Now we extract hospital contacts from `lpr_adm` for our cohort. The pattern is
-always the same: **open → filter → select columns → collect**.
+Now extract hospital contacts from `lpr_adm` for the cohort, with the pattern
+from Phase 5: open, filter, select columns, collect.
 
 ```r {filename="step2_extraction.R"}
 # Open lpr_adm - lazy connection
 lpr_adm <- open_dataset("synth_data/lpr_adm/") %>%
   rename_with(tolower)
 
-# Extract: subset to the cohort BEFORE collect - otherwise the session will crash
+# Extract: subset to the cohort BEFORE collect - on a real register, collecting first can crash the session
 contacts <- lpr_adm %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>% # only our cohort
   select(pnr, recnum, d_inddto) %>% # only the columns we use
@@ -205,9 +206,10 @@ detailed explanation of lazy evaluation.
 ::: {.callout-tip}
 **Test on a small sample first.** Before running a heavy extraction on the full
 cohort, test the code on a few people or rows - this catches errors quickly
-without waiting. E.g.
-`semi_join(tibble(pnr = head(cohort_pnrs, 10)), by = "pnr")`, or
-`collect() %>% head(100)` while building the code.
+without waiting. For example
+`semi_join(tibble(pnr = head(cohort_pnrs, 10)), by = "pnr", copy = TRUE)`, or
+`head(100) %>% collect()` while building the code. Put `head()` before
+`collect()`: the other way round fetches everything first.
 :::
 
 ## Step 3 - Build analysis variables
@@ -239,9 +241,10 @@ If you do not write a full path, the file is saved in your working directory.
 Run `getwd()` to see which folder that is.
 
 ::: {.callout-warning}
-**The `datasets/` folder is stored locally on the DST server only.**
-Intermediate results stay on DST; only aggregated results leave via output control - see [14 - Export and
-repatriation](export.qmd).
+**On DST, saved files stay on the server.** Save intermediate datasets in your
+project folder (for example `datasets/`, see [Log in to
+DST](log-in-dst.qmd)). Only aggregated results leave, through output control:
+see [Phase 14 - Export and repatriation](export.qmd).
 :::
 
 ## Inspect the result
@@ -295,5 +298,5 @@ explore data thoroughly:
 
 Step 1 (cohort construction from BEF) is adapted from Anders Aasted Isaksen's
 dplyr practice vignette (MIT licence, Steno Diabetes Center Aarhus). The
-synthetic tables come from `fiktive`. Steps 2--4 and the checklist are written
+synthetic tables come from `fiktive`. Steps 2-4 and the checklist are written
 for this guide.
