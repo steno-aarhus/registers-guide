@@ -1,6 +1,6 @@
 ---
 title: "Check your delivery"
-subtitle: "What you were given is not always what DST documents"
+subtitle: "Six checks to run on your project's registers before you build a cohort"
 date: last-modified
 pagetitle: "Check your DST register delivery"
 description: "Six checks to run on your own DST register delivery before building a cohort: years covered, documented columns, join keys, one row per key, missing registers."
@@ -12,9 +12,11 @@ project's drive. The two can differ. Columns can be missing, keys renamed or
 empty, years cut off, and registers left out of the parquet folder. None of this
 causes an error. Your code runs, and the result is quietly wrong.
 
-So before you build a cohort, spend an hour running the checks on this page
-against **your own** delivery. Each check comes with an example of what it
-catches.
+Use this page once you can open and inspect a register ([Phase 7 - Inspect
+your data](inspect-data.qmd)) and before you build a cohort: spend an hour
+running the six checks against your own delivery. When you are done you know
+which registers, columns, keys and years you can rely on, and what to ask your
+data manager about. Each check comes with an example of what it catches.
 
 ::: {.callout-note}
 **The examples are examples.** Each one is a problem that turned up in one real
@@ -26,7 +28,9 @@ anyone's list of known issues, this one included.
 
 All the code reads registers with `read_register()` from fastreg. Without
 fastreg, use `open_dataset("path/to/<register>/")` instead; the rest is the
-same.
+same. To list the columns, the code fetches zero rows and reads their names,
+because `colnames()` on a lazy arrow table after `rename_with()` can come back
+empty (see [Inspect your data](inspect-data.qmd#the-shape)).
 
 ```r
 library(fastreg) # read_register(): opens a parquet register by name
@@ -38,15 +42,13 @@ library(dplyr) # summarise, count, filter, collect and the pipe
 Check the first and last year or date of every register you use against your
 study period. The code is in [Inspect your data](inspect-data.qmd#check-coverage).
 
-::: {.callout-tip}
-**Example:** in one delivery, the LPR2 contact register `lpr_adm` stopped on
+In one delivery, the LPR2 contact register `lpr_adm` stopped on
 31 December 2018, a full quarter before DST's own LPR2 files end (31 March 2019;
 the regions switched their reporting to LPR3 on 2-3 February or 2-3 March 2019).
 Contacts from those three months existed only in the LPR3 tables, so the
 standard LPR3 filter quietly removed them. See [Extract from
 LPR](extract-from-lpr.qmd#lpr3-filter-caveat) for how to check where your LPR2
 stops.
-:::
 
 ## 2. Does each register have the columns DST documents?
 
@@ -56,18 +58,18 @@ register ([Overview of registers](register-reference.qmd) links to each one).
 ```r
 read_register("lpr_sksube") %>% # replace with the register you need
   rename_with(tolower) %>%
-  colnames() # the columns you actually have
+  head(0) %>% # zero rows: only the structure
+  collect() %>%
+  names() # the columns you actually have
 ```
 
 If a column you need is not there, no amount of filtering will bring it back.
 Ask your data manager whether it can be added to the delivery.
 
-::: {.callout-tip}
-**Example:** in one delivery, `lpr_sksube` (examinations and treatments) had
-only three columns: `recnum`, `d_odto` and `year`. DST documents it with the
-procedure code `c_opr` and three more. The table could say *that* a procedure
+In one delivery, `lpr_sksube` (examinations and treatments) had
+only three columns: `recnum`, `d_odto` and `year`. DST's variable list for it
+has 11 variables, among them the procedure code `c_opr`. The table could say *that* a procedure
 happened and when, but not *which* procedure.
-:::
 
 ## 3. Are the join keys named as documented?
 
@@ -77,15 +79,15 @@ expects. Look for the key columns before you write a join.
 ```r
 read_register("t_psyk_adm") %>%
   rename_with(tolower) %>%
-  colnames() # is the person key pnr? is the contact key recnum?
+  head(0) %>% # zero rows: only the structure
+  collect() %>%
+  names() # is the person key pnr? is the contact key recnum?
 ```
 
-::: {.callout-tip}
-**Example:** in one delivery, the psychiatric LPR2 tables used `v_cpr` instead
+In one delivery, the psychiatric LPR2 tables used `v_cpr` instead
 of `pnr` and `k_recnum` / `v_recnum` instead of `recnum`. See [Overview of
 registers](register-reference.qmd) for how to rename them only when your
 delivery needs it.
-:::
 
 ## 4. Are the join keys actually filled in?
 
@@ -106,13 +108,11 @@ Some missing keys can be by design: in LPR3, a procedure attaches either to a
 contact or to a whole course, and the other key is left empty. A key that is
 missing on **every** row is not by design.
 
-::: {.callout-tip}
-**Example:** in one delivery, a project-specific LPR3 procedure table had the
+In one delivery, a project-specific LPR3 procedure table had the
 contact key `dw_ek_kontakt` empty on every single row, so joining it to the
 contacts returned nothing. The general LPR3 procedure register,
 [`lpr_a_procregistrering`](register-reference.qmd#lpr3-procedures), had the key
 filled in and was the way out.
-:::
 
 ## 5. Is there one row per key, as documented?
 
@@ -129,12 +129,10 @@ read_register("faik") %>%
   collect()
 ```
 
-::: {.callout-tip}
-**Example:** in one delivery, FAIK (family income) from 2022 onward also
+In one delivery, FAIK (family income) from 2022 onward also
 carried `pnr` and repeated each family's row once per family member. See
 [Socioeconomic variables](socioeconomic-variables.qmd#faik-income) for the full
 check and the fix. BEF can do the same with quarterly snapshots.
-:::
 
 ## 6. Is every register in the parquet folder?
 
@@ -150,12 +148,10 @@ If a register is missing, ask your data manager where it is. Reading a raw SAS
 file and converting it are covered in [Parquet and
 fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet).
 
-::: {.callout-tip}
-**Example:** in one delivery, the death register `dod` was only a raw SAS file,
+In one delivery, the death register `dod` was only a raw SAS file,
 while `dodsaars` was converted and easy to load. `dodsaars` stops in 2001 (see
 [pitfall 1](dst-pitfalls.qmd#death-registers)), so anyone who took the
 convenient one treated everyone who died after 2001 as alive.
-:::
 
 ## When you find something
 
