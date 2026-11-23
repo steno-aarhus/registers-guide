@@ -36,11 +36,12 @@ contains](understand-lpr.qmd#lpr-is-split-into-two-periods). List them with
 [`arrow::schema()`](function-guide.qmd#arrow-schema), and look the confirmed
 ones up in [Overview of registers](register-reference.qmd).
 
-**Two facts from [Understand LPR](understand-lpr.qmd) that the code depends
+**Three facts from [Understand LPR](understand-lpr.qmd) that the code depends
 on.** Use the LPR_A files and filter them with `lprindberetningssystem ==
-"LPR3"` ([why](understand-lpr.qmd#lpr-a-format)), and expect a spike in
-diagnosis counts around 2019-2020 if your analysis counts diagnoses or looks at
-trends ([why](understand-lpr.qmd#lpr3-spike)).
+"LPR3"` ([why](understand-lpr.qmd#lpr-a-format)), read LPR2's open contacts as
+well as `lpr_adm` ([why](understand-lpr.qmd#lpr2-open-contacts)), and expect a
+spike in diagnosis counts around 2019-2020 if your analysis counts diagnoses or
+looks at trends ([why](understand-lpr.qmd#lpr3-spike)).
 
 ::: {#lpr3-filter-caveat .callout-warning}
 **Check that your LPR2 files reach the end of March 2019 before you rely on the
@@ -163,6 +164,56 @@ lpr2_dm <- lpr_adm %>%
   mutate(icd3 = substr(c_diag, 2, 4))                # strip the D-prefix: "DE11" -> "E11"
 ```
 
+#### LPR2 contacts that never closed {#step-1-open-contacts}
+
+`uaf_adm` + `uaf_diag`. A contact that was never closed, for example one still open
+after the switch to LPR3, is not in `lpr_adm` at all, only in the open-contact
+tables ([why](understand-lpr.qmd#lpr2-open-contacts)). Same shape as above, with one
+addition: read only the **last year** of the open tables, because a contact
+that is open for several years is in each of them.
+
+```r
+uaf_adm  <- read_register("uaf_adm")  %>% rename_with(tolower)
+uaf_diag <- read_register("uaf_diag") %>% rename_with(tolower)
+
+uaf_last_year <- uaf_adm %>%                        # the last year of the open tables (2019 in DST's files)
+  summarise(last_year = max(year, na.rm = TRUE)) %>%
+  collect() %>%
+  pull(last_year)
+
+lpr2_open_dm <- uaf_adm %>%
+  filter(year == !!uaf_last_year) %>%               # ONLY the last year: the contacts still open when DST took its copy
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>%
+  select(pnr, recnum, date_contact = d_inddto) %>%  # d_inddto = the date the contact started
+  inner_join(
+    uaf_diag %>%
+      filter(year == !!uaf_last_year,               # the same year on the diagnosis table
+             c_diagtype %in% c("A", "B"),
+             grepl(CODES_REGEX, c_diag)) %>%
+      select(recnum, c_diag, c_diagtype),
+    by = "recnum"
+  ) %>%
+  collect() %>%
+  mutate(icd3 = substr(c_diag, 2, 4))
+```
+
+Reading only the last year is what keeps a contact from being counted twice:
+those contacts had not ended when DST's copy was made, so none of them is in
+`lpr_adm`. Two things have to hold for that:
+
+- **Your `lpr_adm` reaches the same year.** Check with `lpr_adm %>%
+  summarise(last_year = max(year, na.rm = TRUE)) %>% collect()`. If the two
+  differ, read [Understand LPR](understand-lpr.qmd#lpr2-open-contacts) before
+  you combine more years.
+- **`uaf_adm` and `uaf_diag` are split by year.** `count(uaf_adm, year) %>%
+  collect()` should show one row per year. A single row means the column
+  labels the delivery and not the year ([DST pitfalls,
+  11](dst-pitfalls.qmd#year-is-not-a-date)).
+
+If `read_register("uaf_adm")` cannot find the register, your project was not
+given the open-contact tables. DST lists them as `UAF_ADM` and `UAF_DIAG`, and
+you can ask DST to add them to your delivery.
+
 ### Step 2: LPR3 {#step-2-lpr3}
 
 `lpr_a_kontakt` + `lpr_a_diagnose`, from early 2019 onwards. Same shape,
@@ -223,7 +274,7 @@ lpr2_psyk_dm <- psyk_adm %>%
 This works only because all three steps produced the same column names:
 
 ```r
-dm_dx <- bind_rows(lpr2_dm, lpr2_psyk_dm, lpr3_dm)   # drop lpr2_psyk_dm if you skipped step 3
+dm_dx <- bind_rows(lpr2_dm, lpr2_open_dm, lpr2_psyk_dm, lpr3_dm)   # drop lpr2_psyk_dm if you skipped step 3
 # Columns: pnr | date_contact | c_diag | c_diagtype | icd3
 ```
 
@@ -281,9 +332,10 @@ It is the same four steps, with three changes:
 
 1. **Drop `CODES_REGEX` and the `grepl()` line** from every step. You are no
    longer filtering on codes at the source.
-2. **Name the results `lpr2_dx`, `lpr3_dx`, `lpr2_psyk_dx`** and combine them
-   into `all_dx` instead of `dm_dx`. Always include the psychiatric step here -
-   `all_dx` is meant to serve outcomes you have not thought of yet.
+2. **Name the results `lpr2_dx`, `lpr2_open_dx`, `lpr3_dx`, `lpr2_psyk_dx`**
+   and combine them into `all_dx` instead of `dm_dx`. Always include the
+   psychiatric step here - `all_dx` is meant to serve outcomes you have not
+   thought of yet.
 3. **Save it**, so later scripts reuse it rather than re-querying:
    `saveRDS(all_dx, "path/to/all_dx.rds")`.
 
@@ -522,9 +574,9 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   #   diagtypes  : "A"=action, "B"=secondary, "G"=grundmorbus (LPR2 only)
   # read_register (fastreg) reads each register by name - without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/<register>/") %>% rename_with(tolower)
 
-  # keep_codes() applies the icd_codes filter to EACH of the three register queries
+  # keep_codes() applies the icd_codes filter to EACH of the four register queries
   # below, BEFORE collect(), so only the wanted rows are pulled (that's why it appears
-  # three times). icd_codes = NULL -> no filter (pull everything).
+  # four times). icd_codes = NULL -> no filter (pull everything).
   keep_codes <- function(x) {
     if (is.null(icd_codes)) return(x)                                # NULL = pull everything
     pattern <- paste0("^D(", paste(icd_codes, collapse = "|"), ")")  # D-prefix + code (3 or 4 chars)
@@ -535,6 +587,10 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   # Open registers
   lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts
   lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatic diagnoses
+  uaf_adm   <- read_register("uaf_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts still open
+  uaf_diag  <- read_register("uaf_diag")  %>% rename_with(tolower)   # their diagnoses
+  uaf_last_year <- uaf_adm %>% summarise(last_year = max(year, na.rm = TRUE)) %>%
+    collect() %>% pull(last_year)                                     # last year of the open tables
   # Some deliveries rename the psychiatric keys (v_cpr, k_recnum, v_recnum).
   # any_of() renames them if they are there and does nothing if they are not.
   psyk_adm  <- read_register("t_psyk_adm")  %>% rename_with(tolower) %>%
@@ -557,6 +613,21 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
     keep_codes() %>% # filter to icd_codes (before collect)
     collect() %>%
     mutate(icd3 = substr(c_diag, 2, 4))                       # strip D-prefix
+
+  # LPR2 somatic, contacts that never closed: last year of the open tables only
+  lpr2_open_dx <- uaf_adm %>%
+    filter(year == !!uaf_last_year) %>%
+    semi_join(tibble(pnr = pnr_vector), by = "pnr", copy = TRUE) %>%
+    select(pnr, recnum, date_contact = d_inddto) %>%
+    inner_join(
+      uaf_diag %>%
+        filter(year == !!uaf_last_year, c_diagtype %in% !!diagtypes) %>%
+        select(recnum, c_diag, c_diagtype),
+      by = "recnum"
+    ) %>%
+    keep_codes() %>% # filter to icd_codes (before collect)
+    collect() %>%
+    mutate(icd3 = substr(c_diag, 2, 4))
 
   # LPR2 psychiatric
   lpr2_psyk_dx <- psyk_adm %>%
@@ -586,7 +657,7 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
     mutate(date_contact = as.Date(date_contact),               # datetime → date
            icd3 = substr(c_diag, 2, 4))
 
-  bind_rows(lpr2_dx, lpr2_psyk_dx, lpr3_dx) %>%              # combine the three sources
+  bind_rows(lpr2_dx, lpr2_open_dx, lpr2_psyk_dx, lpr3_dx) %>% # combine the four sources
     select(pnr, date_contact, c_diag, c_diagtype, icd3)      # identical columns, drop join keys (recnum/dw_ek_kontakt)
 }
 ```
