@@ -1,18 +1,17 @@
 ---
 title: "Inspect and understand your data"
-subtitle: "The most important commands for seeing what you actually have"
+subtitle: "Commands to check what an extract contains: columns and types, values, missing values, dates and register coverage"
 date: last-modified
 pagetitle: "Inspect your register data in R"
 description: "R commands to inspect a register extract: column types, glimpse, table and summary, missing values, dates, and whether each register covers your follow-up."
 ---
 
-In Phase 6 you made your first extraction - with synthetic data from `fiktive`.
-Now you have data, and before you analyse it you need to understand what you
-have. It is only here that these commands make sense: they are tools for
-*looking at* a dataset, so they are meaningless without data to look at.
-
-This page shows the commands you will use again and again to inspect your
-extracts.
+Use this page every time you have pulled data into R and before you build
+anything on it: it collects the commands for checking what an extract actually
+contains. You need an extract to look at, so do [Phase 6 - First
+extraction](first-extraction.qmd) first. When you are done you know the size,
+column types, values, missing values and date ranges of your extract, and
+whether each register you use reaches the end of your follow-up.
 
 ::: {.callout-note}
 **`$` - access one column in a table** `data$koen` means: "the column `koen` in
@@ -50,9 +49,9 @@ mislead you:
 - `names()` on a lazy DuckDB connection made with `to_duckdb()` returns the
   *connection's* parts (`src`, `lazy_query`), not the table's columns.
 - `colnames()` works on the DuckDB objects `read_register()` gives you, but on a
-  lazy **Arrow** query that has been through `rename_with()` it can return an
-  **empty vector** without any error - so columns that exist look missing.
-  (Seen on arrow 23.0.1 outside DST; not yet confirmed on the server.)
+  lazy **Arrow** query that has been through `rename_with()` it can return
+  `NULL` without any error, so columns that exist look missing. (Seen with
+  arrow 23.0.1; other arrow versions may behave differently.)
 
 The reliable version fetches the structure with zero rows:
 
@@ -94,8 +93,8 @@ different kinds of return value:
 
 - `"data.frame"` / `"tbl_df"` *without* `"prudent_duckplyr_df"` - data is in R. You can use all functions.
 - `"prudent_duckplyr_df"` (followed by `"duckplyr_df" "tbl_df" "tbl" "data.frame"`) -
-  a lazy DuckDB table from `read_register()`. It says `"data.frame"`, but nothing is fetched yet. Missing `collect()`.
-- `"FileSystemDataset"` (from `open_dataset()`) or `"tbl_duckdb_connection"` (from `to_duckdb()`) -
+  a lazy DuckDB table from `read_parquet_duckdb()`, or from `read_register()` in fastreg 0.14.3 or newer. It says `"data.frame"`, but nothing is fetched yet. Missing `collect()`.
+- `"FileSystemDataset"` (from `open_dataset()`) or `"tbl_duckdb_connection"` (from `to_duckdb()`, or from `read_register()` in fastreg 0.14.2 or older) -
   a lazy Arrow/DuckDB connection. Missing `collect()`.
 - `"arrow_dplyr_query"` - an Arrow query with one or more piped steps (e.g.
   `filter()` or `select()`), but not yet executed. Missing `collect()`.
@@ -123,8 +122,8 @@ tail(bef_data) # the last 6 rows - useful for detecting incomplete datasets
 **Two things must be in place before the commands in the rest of this section
 work**
 
-**1. Give your extraction a name.** If you just write `open_dataset(...)` (or
-`read_register(...)` in DARTER) without storing it in an object, R only prints a
+**1. Give your extraction a name.** If you just write `open_dataset(...)` or
+`read_register(...)` without storing it in an object, R only prints a
 quick preview and throws the result away - there is nothing to inspect
 afterwards. Assign it a name with `<-` (see [Phase 2 - What is an
 object?](r-intro.qmd#what-is-an-object)) so you can reuse it.
@@ -223,9 +222,12 @@ NAs"). `is.na(x)` returns `TRUE` for NA values and `FALSE` for everything else.
 - **NA in a covariate** (e.g. income) can often be handled - e.g. with a
   separate "unknown" category or
   [imputation](https://pmc.ncbi.nlm.nih.gov/articles/PMC8499698/).
-- **NA from a join** usually means a person was not found in the right-hand
-  dataset - e.g. no prescription record. Here `NA` is effectively a "no/none",
-  not an error.
+- **NA from a join** means the person was not found in the right-hand dataset.
+  What that means depends on the register. In an event register (prescriptions,
+  hospital contacts) no row usually means no event, so `NA` is effectively a
+  "no". In a status register (education, income, employment) no row means the
+  information is unknown for that person, so `NA` is genuinely missing and
+  must not be recoded to "none".
 
 Always check `colSums(is.na(data))` immediately after an extraction or a join,
 so you detect unexpected gaps before they propagate silently through the
@@ -338,11 +340,16 @@ the years before it.
 # Rows per year of the event date: look for a year that is missing or much smaller
 read_register("lmdb") %>%
   rename_with(tolower) %>%
-  mutate(event_year = year(eksd)) %>% # the year the event happened
-  count(event_year) %>% # number of rows in each year
-  arrange(event_year) %>% # oldest year first
-  collect()
+  count(eksd) %>% # rows per date, counted in DuckDB: one row per day comes back
+  collect() %>%
+  mutate(event_year = as.integer(format(eksd, "%Y"))) %>% # the year the event happened, now in R
+  count(event_year, wt = n) %>% # add up the daily counts per year
+  arrange(event_year) # oldest year first
 ```
+
+The year is taken in R, after `collect()`, because the DuckDB backend that
+newer fastreg versions use cannot translate `year()` and stops with an error
+on a large register.
 
 It also helps to know when the parquet copy was made. If the folder has not
 changed in a long time, newer years are probably missing:
