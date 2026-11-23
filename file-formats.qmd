@@ -1,30 +1,34 @@
 ---
 title: "File types and how to open them"
-subtitle: "What you encounter in your workspace - and what opens it"
+subtitle: "Which R function opens each file type on the DST server, and which ones load the whole file into memory"
 date: last-modified
 pagetitle: "DST file types and how to open them in R"
 description: "Which R function opens each file type on the DST server: parquet with arrow, fastreg or duckplyr, plus RDS, SAS, CSV and xlsx, and which ones load lazily."
 ---
 
-When you open File Explorer on the DST server, you encounter files with
-different extensions. This page is your reference tool: what file type is it,
-which function opens it, and does the data enter memory immediately or not?
-
-The last point - **lazy vs. full loading** - is the most important distinction
-here.
+Use this page when you meet a file on the server at Statistics Denmark (DST)
+and need to know what opens it. It shows how a project folder is laid out, which
+R function reads each file type, and which of them read the whole file into
+memory at once (full loading) and which only open a connection (lazy loading).
+You need it right after [logging in](log-in-dst.qmd), before your first
+extraction, and later as a look-up. How to write a query against a lazy
+connection is the next page, [Phase 5](extraction-step-by-step.qmd); converting
+registers to parquet and setting up fastreg is on [Parquet and
+fastreg](parquet-and-fastreg.qmd).
 
 ## What a project folder looks like
 
-A typical project on the DST server is organised roughly like this. The
-registers live under `cleaned-data/`; your own scripts and results sit under
-`workspace/[your-name]/`:
+A project on the DST server can be organised like this. The raw data DST
+delivers is under `rawdata/`. The folder names under `workdata/` shown here
+(`cleaned-data/`, `parquet-registers/`) are from one project, and yours may
+differ:
 
 ```
 E:/rawdata/[projectnumber]/
-├── Grunddata/                     # raw register data from DST (often SAS) - read-only
+├── Grunddata/                   # (basic data) raw registers from DST, often SAS - read-only
 │   └── bef/  lpr_adm/  lpr_diag/  …
-└── Eksterne data/
-│   └── project-specific extracts etc/  …
+└── Eksterne data/               # (external data) project-specific extracts
+    └── …
 
 E:/workdata/[projectnumber]/
 ├── cleaned-data/
@@ -37,24 +41,22 @@ E:/workdata/[projectnumber]/
         └── output/              # tables, figures and logs
 ```
 
-The paths in the code examples follow this structure, but **your own folder
-names may well differ** - check with File Explorer. Two things are worth
-knowing:
+The paths in the code examples follow this structure. Check your own folder
+names with File Explorer. Two things are worth knowing:
 
-- **`rawdata/` is read-only.** You cannot edit or write to the raw register data
-  DST delivers. You work in `workspace/`, where each project member typically
+- **`rawdata/` is read-only:** you cannot edit or write to the raw register data
+  DST delivers. You work in `workspaces/`, where each project member typically
   has their own subfolder (`[your-name]/`) for scripts, intermediate results and
   output.
-- **Almost all the code in this guide assumes the registers are in parquet.** If
-  your project only has raw SAS files, converting them to parquet - and setting
-  up a sensible folder structure for the project - is the first job. See
-  [Convert SAS files to
+- **Almost all the code in this guide assumes the registers are in parquet:** if
+  your project only has raw SAS files, converting them to parquet is the first
+  job. See [Convert SAS files to
   Parquet](parquet-and-fastreg.qmd#convert-sas-to-parquet).
 
-How to name the scripts in `R/` is covered in [Good code
+How to name the scripts in `R/` is covered in [Good coding
 practice](good-coding-practice.qmd).
 
-## Lazy vs. full loading - which file types behave which way
+## Lazy or full loading: parquet is lazy, everything else is not {#lazy-vs-full}
 
 Every file type below loads one of two ways.
 
@@ -66,27 +68,23 @@ it would crash your session on a whole register.
 when you call `collect()`. That is what lets you work with registers of millions
 of rows.
 
-For this page that is all you need: parquet is lazy, everything else is not.
-*Why* it works, and how to write a query against a lazy connection, is [Phase 5 -
-Extracting data step by step](extraction-step-by-step.qmd).
+How to write a query against a lazy connection is [Phase 5 - Extracting data
+step by step](extraction-step-by-step.qmd).
 
-::: {.callout-important}
-**SAS files are also large - and are shared with everyone on the server.** On
-DST all users share the server's RAM. `read_sas()` on a large SAS file burdens
-the server for everyone at the same time. DST **automatically kills processes**
-(RStudio sessions, jobs, etc.) when RAM is close to full - so an oversized
-extraction can cost you your unsaved work. If you use a SAS file repeatedly, it
-is worth converting it to parquet once - this saves significant RAM and makes
-loading much faster. See [Convert SAS to
-parquet](parquet-and-fastreg.qmd#convert-sas-to-parquet) for the procedure, and
+::: {.callout-warning}
+**A full load of a large SAS file can cost you your session, and slows everyone
+else.** On DST all users share the server's RAM, and DST automatically closes
+processes (RStudio sessions, jobs) when RAM is close to full, so an oversized
+`read_sas()` can lose you your unsaved work. If you use a SAS file repeatedly,
+convert it to parquet once: see [Convert SAS to
+parquet](parquet-and-fastreg.qmd#convert-sas-to-parquet) for the procedure and
 [Mind your RAM in the shared
 environment](good-coding-practice.qmd#mind-your-ram) for the practical habits.
-DST's official advice is collected in [DST guide: Reducing RAM use in the shared
-environment (PDF,
+DST's own advice is in [Reducing RAM use in the shared environment (PDF, in
 Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
 :::
 
-## Overview - file type, package, function
+## Which function opens which file type {#which-function}
 
   | File type                   | Package                          | Function                                                                           | Loading                                     |
   | --------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------- |
@@ -96,20 +94,19 @@ Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=45004151
   | `.csv`                      | `readr`                          | `read_csv("path/to/file.csv")`                                                     | **Full** - entire file into RAM             |
   | `.xlsx`                     | `readxl`                         | `read_xlsx("path/to/file.xlsx")`                                                   | **Full** - entire file into RAM             |
 
-The last column is the lazy/full distinction from above: parquet is the only
-lazy format, everything else loads fully into RAM.
+### Three ways to open parquet {#three-ways-to-open-parquet}
 
-**What do you write in the parentheses?**
-
-- With `open_dataset()` (arrow) you write the **path** to the parquet folder -
-  e.g. `open_dataset("path/to/bef/")`. It works on any parquet, on any project.
-- With `read_register()` (fastreg) you write just the register **name** - e.g.
-  `read_register("bef")` - because fastreg already knows where your parquet
-  lives (you set that once during conversion). It also hands you a DuckDB-backed
-  table (a lazy duckplyr data frame, like `read_parquet_duckdb()` below), so more
-  dplyr functions work without an extra `to_duckdb()` step.
-  It requires that the registers were set up with fastreg.
-- With `read_parquet_duckdb()` (duckplyr) you write the **path**, like
+- **`open_dataset()` (arrow):** you write the path to the parquet folder, e.g.
+  `open_dataset("path/to/bef/")`. It works on any parquet, on any project.
+- **`read_register()` (fastreg):** you write only the register name, e.g.
+  `read_register("bef")`, because you have told fastreg once where the parquet
+  lives (see [Point fastreg at your
+  registers](parquet-and-fastreg.qmd#fastreg-paths); every `read_register()`
+  example in this guide assumes that call has been made). It hands you a
+  DuckDB-backed table, so more dplyr functions work without an extra
+  `to_duckdb()` step. It requires that the registers were converted with
+  fastreg.
+- **`read_parquet_duckdb()` (duckplyr):** you write the path, like
   `open_dataset()`, but you get a DuckDB-backed table straight away. It is
   reported to be the fastest of the three and to keep memory use lowest, and to
   avoid the `rapi` errors that the arrow-to-DuckDB route (`to_duckdb()`)
@@ -117,23 +114,23 @@ lazy format, everything else loads fully into RAM.
   datetime column such as `kont_starttidspunkt` with a date: that rule applies
   whichever of the three you use (see [pitfall
   4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format)). It
-  needs an up-to-date **`duckplyr` and `duckdb`**: DST's pre-installed versions
+  needs an up-to-date `duckplyr` and `duckdb`: DST's pre-installed versions
   are old and come back after every server reset, so [reinstall them at the
   start of each session](log-in-dst.qmd#update-duckplyr).
 
 Whichever you pick, the rest of your code is the same: `filter()`, `select()`
-and `collect()` behave identically. You do **not** need to rewrite existing
-scripts to use a different one.
+and `collect()` are written the same way, and you do not need to rewrite
+existing scripts to use a different one.
 
 The exact path depends on your project and server. Column names for each
 register are in [Overview of registers](register-reference.qmd).
 
 ::: {.callout-note collapse="true" title="When the years do not have the same columns - `union_by_name`"}
-A converted register folder holds **one parquet file per year** (see [Reading a
+A converted register folder holds one parquet file per year (see [Reading a
 register that is split by year](#year-column)), and they are read as one table.
 That works as long as every year has the same columns. It stops working when a
-register **changes structure partway through** - a column that appears in 2022
-but not in 2021, for instance.
+register changes structure partway through, for instance a column that appears
+in 2022 but not in 2021.
 
 With `read_parquet_duckdb()` you handle that with an option:
 
@@ -146,75 +143,67 @@ bef <- read_parquet_duckdb(
 )
 ```
 
-`union_by_name = TRUE` matches the files' columns **by name** instead of by
+`union_by_name = TRUE` matches the files' columns by name instead of by
 position, and fills in `NA` for the years where a column does not exist. Without
 it, DuckDB expects every file to have the same columns and stops with an error
 when they do not.
 
-**Use it deliberately, not by default.** Without it you get an error, and that
-error is information: it tells you the register changed structure, which is
-something you want to know before you analyse it. With it you get a column that
-is silently `NA` for some years, and an `NA` you did not expect is much harder
-to spot than an error. Reach for it once you know what changed and have decided
-to read everything anyway.
+Do not switch it on by default. Without it you get an error that tells you the
+register changed structure, which you want to know before you analyse it. With
+it you get a column that is silently `NA` for some years, and an `NA` you did
+not expect is much harder to spot than an error. Use it once you know what
+changed and have decided to read everything anyway.
 
 You only need it for a folder of several files with differing columns. A single
 file, or a register whose years all match, does not need it.
 
-Note that fastreg's `read_register()` and `read_parquet_dataset()` already switch
-`union_by_name` on, so with them you get the `NA`-filled columns, not the error.
-:::
-
-::: {.callout-important}
-**Before any `read_register()` works, point fastreg at your registers once.**
-It is a single `options()` call at the top of each script, and every
-`read_register()` example in this guide assumes you have made it:
-[Point fastreg at your
-registers](parquet-and-fastreg.qmd#fastreg-paths). Using `open_dataset()`
-instead? Then you write the path in each call and there is nothing to set up.
+fastreg's `read_register()` and `read_parquet_dataset()` already combine the
+years by column name (with arrow's `unify_schemas` up to version 0.14.2, with
+`union_by_name` from 0.14.3), so with them you get the `NA`-filled columns, not
+the error.
 :::
 
 ## Reading a register that is split by year {#year-column}
 
 DST delivers registers as SAS files, often one per year. Converting them to
 parquet is a job the project does once, and fastreg writes the result
-**partitioned by year** -
-`<register>/year=YYYY/part-XXX.parquet` - so a converted register is a folder of
-yearly files. See [Parquet and
+partitioned by year, as `<register>/year=YYYY/part-XXX.parquet`, so a converted
+register is a folder of yearly files. See [Parquet and
 fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet).
 
 You do not open those one at a time. Both `open_dataset("path/to/bef/")` and
-`read_register("bef")` read the **whole folder, including the per-year
-subfolders, as a single combined dataset**. So you pick years by filtering on the
-year column *in the data*:
+`read_register("bef")` read the whole folder, including the per-year
+subfolders, as a single combined dataset. So you pick years by filtering on the
+year column in the data:
 
 ```r
 bef %>% filter(year == 2015)
 ```
 
 That column exists because of how the register was partitioned at conversion, not
-because DST supplies it - so its name can differ between projects. Confirm it
-against your own files rather than assuming.
+because DST supplies it, so its name can differ between projects. Check it in
+your own files.
 
-::: {.callout-important}
+::: {.callout-warning}
 **`year` says which folder a row came from, nothing more.** It is not a date and
 it is not a DST variable. Because the files are split by year, filtering on it
-means the other years are never opened at all, which is what makes a query
-against a register with a billion rows finish in seconds. That is what it is
-for: **limiting how much gets read**.
+means the other years are never opened, which keeps a query against a very large
+register fast. Use it to limit how much gets read.
 
-It is not for deciding *when* something happened. `year == 2020` in BEF does not
+Do not use it to decide when something happened. `year == 2020` in BEF does not
 tell you which of the four quarterly snapshots you have, only which folder the
 row sat in. Whenever the timing matters to your research question, use the
-register's own date column - `hf_vfra` in UDDA, `d_inddto` in `lpr_adm`,
-`referencetid` in BEF - and keep `year` for speed.
+register's own date column (`hf_vfra` in UDDA, `d_inddto` in `lpr_adm`,
+`referencetid` in BEF) and keep `year` for speed.
 
-The two uses are easy to mix up because they look identical in the code, which
-is why it is also listed in [DST pitfalls](dst-pitfalls.qmd).
+The two uses look identical in the code, which is why this is also listed in
+[DST pitfalls](dst-pitfalls.qmd#year-is-not-a-date).
 :::
 
-**RDS is the format you write yourself most.** It is R's own format - fast,
-compact, and it preserves types, factor levels and column names exactly. You save
+## RDS: the format you write yourself {#rds}
+
+RDS is R's own format. It preserves types, factor levels and column names
+exactly. You save
 an intermediate result in one script and reload it in the next, so script 2 does
 not have to re-run script 1:
 
@@ -226,7 +215,7 @@ cohort <- readRDS("path/to/full_cohort.rds") # read it back in the next script
 <details>
 <summary>Rarer formats (Stata, SPSS, Feather, RData)</summary>
 
-You rarely encounter these in a typical DST cohort study, but here they are for completeness:
+You rarely meet these in a DST cohort study:
 
 | File type | Package | Function |
 |---|---|---|
@@ -257,7 +246,7 @@ library(haven)
 df <- read_sas("E:/rawdata/[projectnumber]/lpr_adm2018.sas7bdat")
 ```
 
-Loading large SAS files is **very slow** - which is exactly why data on DST is converted to parquet. Only use SAS for format tables and files without a parquet version.
+Loading a large SAS file is slow and takes the whole file into RAM, which is why projects convert their registers to parquet. Only use SAS for format tables and files without a parquet version.
 
 **CSV** - for exporting finished tables (e.g. at repatriation):
 
@@ -266,26 +255,22 @@ library(readr)
 write_csv(my_table, "output/table1.csv")
 ```
 
-**Never** save raw register data as CSV - only aggregated results. See [Phase 14 - Export and repatriation](export.qmd) for the rules.
+Never save raw register data as CSV, only aggregated results. See [Phase 14 - Export and repatriation](export.qmd) for the rules.
 
 </details>
 
 ## Next step
 
-Why lazy loading works, and how `collect()` functions, is the topic of the next
-phase.
+How to query a lazy connection, and what `collect()` does, is the next phase:
+[Phase 5 - Extracting data step by step](extraction-step-by-step.qmd).
 
-→ [Phase 5 - Extracting data step by step](extraction-step-by-step.qmd)
+If your project has no parquet yet, or `read_register()` cannot see a register
+you know is there, go to [Parquet and fastreg](parquet-and-fastreg.qmd).
 
-Not got parquet yet, or `read_register()` cannot see a register you know is
-there? Both are on [Parquet and fastreg](parquet-and-fastreg.qmd).
-
-::: {.callout-tip title="Further information"}
-Further depth (in English):
-
+::: {.callout-tip title="Further reading"}
 - [Import and export](https://www.epirhandbook.com/en/new_pages/importing.html)
   in *The Epidemiologist R Handbook*.
 - [Arrow](https://r4ds.hadley.nz/arrow.html) in *R for Data Science*: reading
-  parquet with `open_dataset()` and using dplyr directly on arrow data - exactly
-  the loading pattern this guide builds on.
+  parquet with `open_dataset()` and using dplyr directly on arrow data, the
+  loading pattern this guide builds on.
 :::
