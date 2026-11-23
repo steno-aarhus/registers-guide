@@ -390,12 +390,9 @@ Download R: [cran.r-project.org](https://cran.r-project.org/) · Download RStudi
 It uses `open_dataset()` on local `synth_data/` folders; fastreg's `read_register()` is for a configured DST project, not ad-hoc local folders.
 :::
 
-The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the complete pattern from the theory section above, but runnable locally with synthetic data. It follows the [one-outcome route](#one-outcome): specific codes are filtered out *before* `collect()`.
+The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the same steps as above, runnable locally on synthetic data. It follows the [one-outcome route](#one-outcome): specific codes are filtered out *before* `collect()`.
 
 The synthetic LPR data is generated with [`fiktive`](https://github.com/sara-schwartz/fiktive), which you already know from [Phase 6 - First extraction](first-extraction.qmd#preparation-install-fiktive-and-generate-synthetic-data). Phase 6 saves `bef` and `lpr_adm` only. Run the block below for the diagnosis tables. It uses the same `n`, window, and seed, so `lpr_adm` matches.
-
-Adapted from Anders Aasted Isaksen's data.table practice notes (MIT licence, Steno Diabetes Center Aarhus).
-Rewritten to dplyr + arrow and adapted to this guide's pattern.
 
 ```r
 # Install fiktive for the first time:
@@ -495,7 +492,7 @@ copy them per outcome, wrap them once: `get_lpr_diagnoses()` takes the code list
 as an argument and returns the combined extract. Define it at the top of your
 script, or in a `functions.R` you `source()`.
 
-If you have more than one or two outcomes, this is the version to use.
+Use it when you have more than one or two outcomes:
 
 - One place to fix when a register or a column name changes, instead of one fix
   per copy
@@ -508,9 +505,6 @@ Read the four steps above first: when a column name in your delivery differs
 from the one the function assumes, you need to recognise which step it belongs
 to. On DARTER, [DARTER - overview and pipeline](darter-index.qmd) carries this
 function already adapted, with the confirmed register names.
-
-<details>
-<summary>See the full <code>get_lpr_diagnoses()</code> function and usage</summary>
 
 ```r
 library(fastreg) # read_register - read a register by name
@@ -597,13 +591,13 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
 }
 ```
 
-**Use the function** - one call per extraction, only change `CODES`:
+**Use the function.** One call per extraction; only `CODES` changes:
 
 ```r
 cohort    <- readRDS("path/to/full_cohort.rds")
 pnr_list  <- unique(cohort$pnr)
 
-# Fetch all diagnoses for the cohort (Phase 1 - see hospital contacts page)
+# Fetch all A and B diagnoses for the cohort once (no icd_codes = everything)
 all_dx <- get_lpr_diagnoses(
   pnr_vector    = pnr_list,
   diagtypes     = c("A", "B")    # A=action, B=secondary. To also include grundmorbus, add "G" (LPR2 only): c("A", "B", "G")
@@ -625,29 +619,27 @@ saveRDS(result, "path/to/extract_hip_fracture.rds")
 ```
 
 ::: {.callout-tip}
-**Two ways to call the function (RAM).** For a **few codes**, pass them via
-`icd_codes` - they are filtered BEFORE `collect()`, so only those rows are pulled:
-`get_lpr_diagnoses(pnr_list, icd_codes = c("E11", "I50"))`. For **many different
-outcomes**, pull everything once (omit `icd_codes`), save with `saveRDS()`, free
-memory with `rm()` + `gc()` ([Phase 5](extraction-step-by-step.qmd)), then filter
-locally with `readRDS() %>% filter(icd3 %in% ...)` - so you don't re-scan the
-registers for each outcome.
+**Two ways to call the function, depending on RAM.** For a few codes, pass them
+via `icd_codes`: they are filtered before `collect()`, so only those rows are
+pulled, e.g. `get_lpr_diagnoses(pnr_list, icd_codes = c("E11", "I50"))`. For
+many different outcomes, pull everything once (omit `icd_codes`), save with
+`saveRDS()`, free memory with `rm()` + `gc()` ([Phase
+5](extraction-step-by-step.qmd)), then filter locally with `readRDS() %>%
+filter(icd3 %in% ...)`, so you do not scan the registers again for each outcome.
 :::
-
-</details>
 
 ## From event log to one row per person {#one-row-per-person}
 
 `get_lpr_diagnoses()` (and the extracts above) return an **event log**: many
-rows per person, one per diagnosis. That is not analysis-ready. Two patterns
+rows per person, one per diagnosis. An analysis needs one row per person. Two patterns
 turn it into one row per person:
 
 **A) One outcome with a date** (e.g. time-to-event): filter to the codes, and
-take each person's *first* contact - the `slice(1)` pattern above.
+take each person's first contact, the `slice(1)` pattern above.
 
 **B) Many binary variables at once** (e.g. comorbidity flags): build the flags,
 collapse with `any()`, and merge onto the cohort. `any()` returns `TRUE` if the
-person has **at least one** matching diagnosis in the window (0/1, not a count):
+person has at least one matching diagnosis in the window (0/1, not a count):
 
 ```r
 library(dplyr)
@@ -681,19 +673,19 @@ It gives one 0/1 flag per comorbidity per person, ready to enter your model as
 covariates. (The same `group_by(pnr, index_date) %>% summarise(any(.))` pattern
 is used on the [NMI](nmi.qmd) page, for example.)
 
-Step 2 groups on `pnr` **and** `index_date`, and step 3 rejoins on both. If
+Step 2 groups on `pnr` and `index_date`, and step 3 rejoins on both. If
 your cohort has one row per person, that gives the same result as `pnr` alone.
-If a `pnr` is repeated (e.g. a comparison group matched **with replacement**),
-it keeps each row's flags tied to that row's own index date - see [comparison
-cohort's callout on it](comparison-cohort.qmd#step-4---assemble-validate-and-save).
+If a `pnr` is repeated (e.g. a comparison group matched with replacement),
+it keeps each row's flags tied to that row's own index date, see [the callout on
+repeated `pnr` on Comparison cohort](comparison-cohort.qmd#step-4---assemble-validate-and-save).
 
 ## Remove unwanted diagnoses {#clean-diagnoses}
 
-A few codes are **administrative artefacts** rather than the patient's own
-disease, and should typically be removed from both outcomes and comorbidity:
+A few codes record why a person was at the hospital rather than a disease of
+their own, and are usually removed from both outcomes and comorbidity:
 
-- **"Healthy companion"** (someone admitted as a companion to another patient,
-  e.g. a parent): ICD-10 `DZ763`. Related contact/observation codes with no
+- **"Healthy companion":** someone admitted as a companion to another patient,
+  e.g. a parent, ICD-10 `DZ763`. Related contact/observation codes with no
   disease: `DZ032`, `DZ038`, `DZ039`.
 
 ```r
@@ -708,10 +700,13 @@ OSF](https://osf.io/zhfyp/overview); verify against your own data.
 
 ## Next steps
 
-You have now extracted diagnoses from two LPR generations. Next steps are to
-shape and combine your extracts:
+If you do not have a cohort yet, build it next: the same LPR extracts are how
+you find cases or exposed people and exclude prevalent cases.
 
-→ [Phase 12 - Assemble and prepare the dataset](data-manipulation.qmd)
+→ [Phase 10 - Build your study population](build-study-population.qmd)
+
+Once the cohort and your extracts exist, [Phase 12 - Assemble and prepare the
+dataset](data-manipulation.qmd) combines them.
 
 ## See also
 
@@ -722,3 +717,7 @@ shape and combine your extracts:
 - [Overview of registers](register-reference.qmd): confirmed column names for
   all LPR registers
 - [DST pitfalls](dst-pitfalls.qmd): known issues with LPR on DST
+
+The synthetic-data example is adapted from Anders Aasted Isaksen's data.table
+practice notes (MIT licence, Steno Diabetes Center Aarhus), rewritten to dplyr
+and arrow.
