@@ -46,16 +46,49 @@ register instead.
 
 <script>
 (function () {
-  var SECTIONS = [], SYN = [], EXPAND = {};
+  var SECTIONS = [], GROUPS = [], VOCAB = {};
 
-  // Without this, "folk der flytter til udlandet" matches almost every section,
-  // because "der" and "til" are everywhere and drown the one word that matters.
-  var STOP = ("a an and are as at be but by can do does for from has have how i " +
-    "if in is it its me my of on or people person someone that the their then " +
-    "there they this to was what when where which who why will with you your " +
-    "af alle at bruge da de den der det dette du eller en er et for fra gør har " +
-    "hvad hvor hvordan hvorfor hvilke hvilken i ikke jeg kan man med mig min mine " +
-    "og om på selv skal som til ved vi").split(" ");
+  // Shown while the box is empty. One of each kind of search the page is
+  // meant for: a lay phrase, Danish, a register name, an error message.
+  var EXAMPLES = ["people who move abroad", "dødsårsag", "hvordan kobler jeg registre",
+    "matched controls", "hfaudd", "could not find function", "small numbers in a table"];
+
+  // How much a match counts, depending on where it is. A word in the section
+  // heading says the section is about it; a word in the text only says it is
+  // mentioned. The page title counts most on the entry for the top of the
+  // page (so "lpr" lands on the page about LPR) and little on the sections
+  // further down, which all share that title.
+  var HEADING = 10, TITLE_TOP = 12, TITLE_BELOW = 2, CODE = 2, BODY = 2;
+  // A synonym counts for less than the word the reader typed.
+  var SYNONYM = 0.6;
+  // The whole query found word for word, as with a pasted error message.
+  var PHRASE_HEADING = 20, PHRASE_BODY = 12;
+  // Headings of sections that only point to other pages (see search()).
+  var SIGNPOST = /^(\d+ )?(see also|next steps?)\b/;
+
+  // One spelling for comparing: lower case, the Danish letters written out
+  // (people type both "indlæggelse" and "indlaeggelse"), and everything that
+  // is not a letter, a digit or "_" turned into a space. So "follow-up" and
+  // "follow up" are the same, and so are "as.Date" and "as date".
+  function norm(s) {
+    return String(s == null ? "" : s).toLowerCase()
+      .replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa")
+      .replace(/[^a-z0-9_]+/g, " ").trim();
+  }
+
+  // Words that say nothing about the subject. Without this list, "folk der
+  // flytter til udlandet" matches almost every section, because "der" and
+  // "til" are everywhere. "find" and "get" are here because every search is
+  // about finding something.
+  var STOP = norm("a about am an and are as at be been but by can did do does " +
+    "find for from get has have how i if in into is it its me my need not of on " +
+    "or people person should someone that the their then there they this to " +
+    "use want was were what when where which who why will with would you your " +
+    "af alle at blev bliver bruge da de den der det dette du eller en er et " +
+    "finde finder for fra få gør har hvad hvem hvis hvor hvordan hvorfor hvornår " +
+    "hvilke hvilken i ikke jeg kan man med mig min mine og om på selv skal som " +
+    "til ved vi").split(" ");
+
   var q = document.getElementById("gs-q"),
       out = document.getElementById("gs-results"),
       count = document.getElementById("gs-count");
@@ -83,29 +116,14 @@ register instead.
     });
   }
 
-  // Every term in a synonym group expands to the whole group. Longer terms are
-  // matched first so "flytter til udlandet" wins over "udlandet" alone.
-  function buildExpand() {
-    SYN.forEach(function (group) {
-      group.forEach(function (term) {
-        EXPAND[term.toLowerCase()] = group.map(function (t) { return t.toLowerCase(); });
-      });
-    });
-  }
-
   // Danish inflects and compounds: "stien" should reach "sti", and
   // "doedsdato" should reach "doed". English inflects too: a reader types
   // "move abroad" or "moves abroad", the synonym list says "moved abroad". A
   // shared start with a bounded leftover on each side covers all of that:
   // -en, -et, -erne, -ed, -es and a joined second word, without letting
   // "kom" swallow "kommunikation". The exact limits are at the end of the
-  // function.
+  // function. Both words must already be in the norm() spelling.
   function stemMatch(term, w) {
-    // Danish letters get typed both ways, "indlæggelse" and "indlaeggelse".
-    // Compare both words in the second spelling, so the synonym list only
-    // needs one of them.
-    term = term.replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa");
-    w = w.replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa");
     if (w === term) return true;
     if (term.length < 3 || w.length < 3) return false;
     // Shared prefix rather than strict containment, so "moves" reaches
@@ -129,114 +147,339 @@ register instead.
     return n >= 4 && less <= 2 && more <= 6;
   }
 
-  function expand(query) {
-    var lower = " " + query.toLowerCase().replace(/[^\p{L}\p{N}_ -]/gu, " ") + " ";
-    var words = lower.trim().split(/\s+/).filter(Boolean);
-    var terms = words.filter(function (w) { return STOP.indexOf(w) === -1 && w.length > 1; });
-    if (!terms.length) terms = words;  // a query of nothing but stop words
+  // How a term is looked for in a section: at the start of a word. Plain
+  // "contains" found "ram" in "program" and "age" in "page". A term may
+  // continue ("join" finds "joins"), and "_" starts a word too ("join" finds
+  // "left_join"). A term of three letters or fewer must be the whole word,
+  // so "bef" does not find "before"; a digit may follow ("lpr" finds "lpr3").
+  function finder(term) {
+    return new RegExp("(?:^|[ _])" + term + (term.length <= 3 ? "(?![a-z])" : ""), "g");
+  }
+  function times(re, text) {
+    var n = 0;
+    re.lastIndex = 0;
+    while (re.exec(text)) n++;
+    return n;
+  }
 
-    var extra = [], via = [];
-    Object.keys(EXPAND).forEach(function (term) {
-      var hit;
-      if (term.indexOf(" ") !== -1) {
-        // A multi-word synonym like "moved abroad" used to require that exact
-        // phrase. Match it word by word instead, order and tense free of
-        // each other, so "people who move abroad" reaches it too.
-        // Compared with every typed word (words), not only the ones kept
-        // for searching (terms). "log in" and "table 1" contain a small word
-        // or a digit that terms leaves out, so they could never match.
-        var parts = term.split(" ");
-        hit = parts.every(function (p) {
+  // Turn what was typed into "concepts": one per word that carries meaning,
+  // each with the word itself and the synonyms it brought along. Keeping the
+  // synonyms with their word is what lets a section that covers every typed
+  // word come before one that repeats a single word many times.
+  function expand(query) {
+    var raw = query.toLowerCase();
+    var words = norm(raw).split(" ").filter(Boolean);
+    var kept = words.filter(function (w) { return STOP.indexOf(w) === -1 && w.length > 1; });
+    if (!kept.length) kept = words;  // a query of nothing but stop words
+
+    var concepts = kept.map(function (w) {
+      // Plural "s" off, so "deaths" looks for "death". The search is for the
+      // start of a word, so "death" still finds "deaths" in the text.
+      var look = (w.length >= 5 && /[^s]s$/.test(w)) ? w.slice(0, -1) : w;
+      return { word: w, typed: [look], synonyms: [] };
+    });
+    var via = [];
+
+    function attach(concept, group, term) {
+      group.forEach(function (g) {
+        if (g.norm && concept.typed.indexOf(g.norm) === -1 &&
+            concept.synonyms.indexOf(g.norm) === -1) concept.synonyms.push(g.norm);
+      });
+      if (via.indexOf(term.raw) === -1) via.push(term.raw);
+    }
+
+    GROUPS.forEach(function (group) {
+      group.forEach(function (term) {
+        if (term.symbol) {
+          // A term like "%>%" or "!!" has no letters to compare, so look
+          // for it in the query exactly as typed. It becomes a concept of
+          // its own, because no typed word stands for it.
+          if (raw.indexOf(term.raw) === -1) return;
+          var own = { word: term.raw, typed: [], synonyms: [] };
+          concepts.push(own);
+          attach(own, group, term);
+          return;
+        }
+        var parts = term.norm.split(" ");
+        // A synonym of several words, like "moved abroad", is matched word
+        // by word, order and tense free of each other, so "people who move
+        // abroad" reaches it. Compared with every typed word (words), not
+        // only the ones kept for searching: "log in" and "table 1" contain
+        // a small word or a digit that is otherwise left out.
+        var all = parts.every(function (p) {
           return words.some(function (w) { return stemMatch(p, w); });
         });
-      } else {
-        hit = terms.some(function (w) { return stemMatch(term, w); });
-      }
-      if (hit) {
-        EXPAND[term].forEach(function (t) { if (extra.indexOf(t) === -1) extra.push(t); });
-        if (via.indexOf(term) === -1) via.push(term);
-      }
+        if (!all) return;
+        concepts.forEach(function (c) {
+          if (parts.some(function (p) { return stemMatch(p, c.word); })) attach(c, group, term);
+        });
+      });
     });
-    return { terms: terms, all: terms.concat(extra), via: via, extra: extra };
+    return { words: words, concepts: concepts, via: via };
   }
 
-  function score(sec, all, terms) {
-    // The anchor counts as a heading. An explicit {#fastreg-paths} is the
-    // author labelling the section, and it often carries the word the reader
-    // types when the prose does not.
-    var head = (sec.heading + " " + sec.title + " " +
-                (sec.anchor || "").replace(/-/g, " ")).toLowerCase(),
-        body = sec.text.toLowerCase(),
-        code = (sec.code || "").toLowerCase(), s = 0;
-    all.forEach(function (t) {
-      var typed = terms.indexOf(t) !== -1;
-      if (head.indexOf(t) !== -1) s += typed ? 12 : 6;
-      // Identifiers from the code blocks. "How do I set the fastreg path" is
-      // answered by a line of code, and the prose around it never says "path".
-      if (code.indexOf(t) !== -1) s += typed ? 4 : 2;
-      var n = body.split(t).length - 1;
-      if (n) s += (typed ? 3 : 1.5) * Math.min(n, 4);
+  // Small typing errors: "emmigration", "comorbidty". If a typed word of five
+  // letters or more starts no word in the guide and no synonym, swap it for
+  // the closest word that does exist: one wrong letter for short words, two
+  // for words of eight letters or more, and the same first letter.
+  function editDistance(a, b) {
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur = [i];
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
+                          prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  function closestWord(w) {
+    var allowed = w.length >= 8 ? 2 : 1, best = null, bestD = allowed + 1;
+    Object.keys(VOCAB).forEach(function (v) {
+      if (v[0] !== w[0] || Math.abs(v.length - w.length) > allowed) return;
+      var d = editDistance(w, v);
+      if (d < bestD || (d === bestD && best && VOCAB[v] > VOCAB[best])) { best = v; bestD = d; }
     });
-    return s;
+    return best;
+  }
+  function correctTypos(query) {
+    var fixed = [];
+    var e = expand(query);
+    var known = Object.keys(VOCAB);
+    e.concepts.forEach(function (c) {
+      var w = c.typed[0];
+      if (!w || w.length < 5 || c.synonyms.length) return;
+      if (known.some(function (v) { return v.indexOf(w) === 0; })) return;
+      var better = closestWord(w);
+      if (better) fixed.push({ from: c.word, to: better });
+    });
+    if (!fixed.length) return { query: query, fixed: fixed };
+    var words = norm(query).split(" ").map(function (w) {
+      var f = fixed.filter(function (x) { return x.from === w; })[0];
+      return f ? f.to : w;
+    });
+    return { query: words.join(" "), fixed: fixed };
   }
 
-  function snippet(text, all) {
-    var lower = text.toLowerCase(), at = -1, hit = "";
-    all.some(function (t) { var i = lower.indexOf(t); if (i !== -1) { at = i; hit = t; return true; } });
-    if (at === -1) return esc(text.slice(0, 200)) + "...";
-    var from = Math.max(0, at - 90), to = Math.min(text.length, at + 150);
-    var s = esc((from ? "..." : "") + text.slice(from, to) + (to < text.length ? "..." : ""));
-    all.forEach(function (t) {
-      if (!t) return;
-      // escape every non-word character so a term like "c_opr (main)" is literal
-      var safe = t.replace(/[^\w\s]/g, "\\$&");
-      s = s.replace(new RegExp("(" + safe + ")", "gi"), "<mark>$1</mark>");
+  // Score every section for a query. Returns the sections that match, best
+  // first.
+  function search(query) {
+    var e = expand(query);
+    // The project pages for DARTER are notes for one project. They are left
+    // out unless the search names the project.
+    var project = /darter|708421/.test(query.toLowerCase());
+    var pool = SECTIONS.filter(function (sec) { return project || !sec.project; });
+
+    // Give every term its finder, and a weight for how rare it is: a word
+    // found in a handful of sections tells them apart, a word found in half
+    // the guide ("data", "register") tells nothing. This is the usual
+    // inverse document frequency, scaled to lie between 0 and 1.
+    function prepare(term, factor) {
+      var re = finder(term), found = 0;
+      pool.forEach(function (sec) {
+        re.lastIndex = 0;
+        if (re.test(sec.all)) found++;
+      });
+      return { re: re, weight: factor * Math.log(1 + pool.length / (1 + found)) /
+                                        Math.log(1 + pool.length) };
+    }
+    e.concepts.forEach(function (c) {
+      c.terms = c.typed.map(function (t) { return prepare(t, 1); })
+        .concat(c.synonyms.map(function (t) { return prepare(t, SYNONYM); }));
     });
-    return s;
+    var phrase = e.words.length > 1 ? finder(e.words.join(" ")) : null;
+
+    var hits = [];
+    pool.forEach(function (sec) {
+      var total = 0, covered = 0;
+      e.concepts.forEach(function (c) {
+        var best = 0, rest = 0;
+        c.terms.forEach(function (t) {
+          var s = 0;
+          if (times(t.re, sec.head)) s += HEADING;
+          if (times(t.re, sec.title)) s += sec.heading ? TITLE_BELOW : TITLE_TOP;
+          if (times(t.re, sec.code)) s += CODE;
+          // The first mention in the text counts fully, the next ones less
+          // and less: a long section should not win only by being long.
+          var n = times(t.re, sec.body);
+          if (n) s += BODY * (1 + Math.log(n));
+          s *= t.weight;
+          if (s > best) { rest += best; best = s; } else rest += s;
+        });
+        // A concept counts by its best term, plus a little for each further
+        // synonym found. Adding them all up let a concept with twelve
+        // synonyms outweigh a typed word that has none.
+        if (best > 0) { covered++; total += best + 0.25 * rest; }
+      });
+      if (!total) return;
+      // A section that covers every typed concept comes before one that
+      // covers half of them, however often it repeats that half.
+      var share = covered / e.concepts.length;
+      total *= share * share;
+      if (phrase) {
+        if (times(phrase, sec.head)) total += PHRASE_HEADING;
+        else if (times(phrase, sec.body)) total += PHRASE_BODY;
+      }
+      // "See also" and "Next steps" sections are lists of other pages. They
+      // mention every subject in a few words, so without this they came
+      // first for searches such as "export results", ahead of the page they
+      // point to.
+      if (SIGNPOST.test(sec.head)) total *= 0.5;
+      hits.push({ sec: sec, score: total });
+    });
+    hits.sort(function (a, b) { return b.score - a.score; });
+    return { hits: hits, expanded: e };
+  }
+
+  // A stretch of the section's text around the place where most of the
+  // searched words sit, with those words marked. Typed words count for more
+  // than synonyms when choosing the place.
+  function snippet(text, e) {
+    var typed = [], other = [];
+    e.concepts.forEach(function (c) {
+      c.typed.forEach(function (t) { typed = typed.concat(t.split(" ")); });
+      c.synonyms.forEach(function (t) { other = other.concat(t.split(" ")); });
+    });
+    var useful = function (w) { return w.length > 1 && STOP.indexOf(w) === -1; };
+    typed = typed.filter(useful); other = other.filter(useful);
+    function starts(list, piece) {
+      return list.some(function (t) {
+        return piece.indexOf(t) === 0 && (t.length > 3 || !/[a-z]/.test(piece.charAt(t.length)));
+      });
+    }
+    // Every word of the text with its position, and whether it is one of
+    // the searched words. "left_join" is also tried piece by piece.
+    var marks = [], m, wordRe = /[\p{L}\p{N}_]+/gu;
+    while ((m = wordRe.exec(text))) {
+      var pieces = [norm(m[0])].concat(norm(m[0]).split("_"));
+      var value = pieces.some(function (p) { return starts(typed, p); }) ? 3 :
+                  pieces.some(function (p) { return starts(other, p); }) ? 1 : 0;
+      if (value) marks.push({ at: m.index, end: m.index + m[0].length, value: value });
+    }
+    var SPAN = 260, from = 0;
+    if (marks.length) {
+      var bestSum = -1;
+      marks.forEach(function (first) {
+        var start = Math.max(0, first.at - 60), sum = 0;
+        marks.forEach(function (k) { if (k.at >= start && k.end <= start + SPAN) sum += k.value; });
+        if (sum > bestSum) { bestSum = sum; from = start; }
+      });
+    }
+    var to = Math.min(text.length, from + SPAN);
+    // Start and stop at a space, so the snippet does not open or close in
+    // the middle of a word.
+    if (from > 0) { var sp = text.indexOf(" ", from); if (sp !== -1 && sp < from + 30) from = sp + 1; }
+    if (to < text.length) { var ep = text.lastIndexOf(" ", to); if (ep > from) to = ep; }
+    var html = "", at = from;
+    marks.forEach(function (k) {
+      if (k.at < from || k.end > to) return;
+      html += esc(text.slice(at, k.at)) + "<mark>" + esc(text.slice(k.at, k.end)) + "</mark>";
+      at = k.end;
+    });
+    html += esc(text.slice(at, to));
+    return (from > 0 ? "... " : "") + html + (to < text.length ? " ..." : "");
+  }
+
+  function showExamples() {
+    count.textContent = "";
+    out.innerHTML = '<p class="gs-empty" id="gs-try">Try one of these:</p>' +
+      '<ul class="gs-examples" aria-labelledby="gs-try">' + EXAMPLES.map(function (x) {
+        return '<li><button type="button" data-query="' + esc(x) + '">' + esc(x) + "</button></li>";
+      }).join("") + "</ul>";
   }
 
   function render() {
-    if (!q.value.trim()) { out.innerHTML = ""; count.textContent = ""; return; }
-    var e = expand(q.value);
-    var hits = SECTIONS.map(function (sec) { return { sec: sec, s: score(sec, e.all, e.terms) }; })
-                       .filter(function (h) { return h.s > 0; })
-                       .sort(function (a, b) { return b.s - a.s; });
+    var text = q.value.trim();
+    if (!text) { showExamples(); return; }
+    var fix = correctTypos(text);
+    var found = search(fix.query), hits = found.hits, e = found.expanded;
 
-    count.textContent = hits.length + " section" + (hits.length === 1 ? "" : "s") +
-      (e.extra.length ? ", including matches on " + e.extra.slice(0, 6).join(", ") : "");
+    var notes = [];
+    fix.fixed.forEach(function (f) {
+      notes.push('Nothing matches "' + f.from + '", searched for "' + f.to + '" instead.');
+    });
+    notes.push(hits.length + " section" + (hits.length === 1 ? "" : "s") + " found" +
+      (hits.length > 20 ? ", the 20 best shown" : "") + ".");
+    if (e.via.length) notes.push("Also searched for the synonyms of: " + e.via.slice(0, 6).join(", ") + ".");
+    count.textContent = notes.join(" ");
 
     if (!hits.length) {
-      out.innerHTML = '<p class="gs-empty">Nothing found. Try a single word, or a column name on ' +
-        '<a href="find-a-variable.html">Find a variable</a>. If a search you expected to work ' +
-        'came up empty, the feedback box below is how that gets fixed.</p>';
+      out.innerHTML = '<p class="gs-empty">Nothing found for these words. Try one word at a time, ' +
+        "or the Danish or English word for the same thing. A column name is better looked up on " +
+        '<a href="find-a-variable.html">Find a variable</a>. If you expected this search to work, ' +
+        "write the words in the feedback box on this page.</p>";
       return;
     }
 
-    out.innerHTML = hits.slice(0, 25).map(function (h) {
+    out.innerHTML = '<ol class="gs-list">' + hits.slice(0, 20).map(function (h) {
       var sec = h.sec;
       var href = sec.page.replace(/\.qmd$/, ".html") + (sec.anchor ? "#" + sec.anchor : "");
-      return '<div class="gs-hit">' +
-        '<div class="gs-where">' + esc(sec.title) + "</div>" +
+      return '<li class="gs-hit">' +
+        '<div class="gs-where">' + esc(sec.titleText) + "</div>" +
         '<div class="gs-head"><a href="' + esc(href) + '">' +
-          esc(sec.heading || sec.title) + "</a></div>" +
-        '<p class="gs-snip">' + snippet(sec.text, e.all) + "</p>" +
-        "</div>";
-    }).join("") + (hits.length > 25
-      ? '<p class="gs-empty">Showing the 25 best matches.</p>' : "");
+          esc(sec.heading || sec.titleText) + "</a></div>" +
+        '<p class="gs-snip">' + snippet(sec.text, e) + "</p>" +
+        "</li>";
+    }).join("") + "</ol>";
   }
 
   fetch("assets/search-index.json")
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      SECTIONS = d.sections; SYN = d.synonyms || [];
-      buildExpand();
+      // Prepare each section once, so typing does not redo it: the same
+      // fields in the norm() spelling. The anchor counts as part of the
+      // heading. An explicit {#fastreg-paths} is the author labelling the
+      // section, and it often carries the word the reader types.
+      SECTIONS = d.sections.map(function (s) {
+        var sec = {
+          page: s.page, anchor: s.anchor, heading: s.heading, titleText: s.title, text: s.text,
+          project: /^darter-/.test(s.page),
+          head: norm(s.heading + " " + s.anchor), title: norm(s.title),
+          body: norm(s.text), code: norm(s.code)
+        };
+        sec.all = sec.head + " " + sec.title + " " + sec.body + " " + sec.code;
+        return sec;
+      });
+      // A term with a character that norm() would remove, and no letters
+      // left to compare ("%>%", "!!"), is a symbol and is matched as typed.
+      GROUPS = (d.synonyms || []).map(function (group) {
+        return group.map(function (t) {
+          var raw = String(t).toLowerCase();
+          return { raw: raw, norm: norm(raw), symbol: !/[a-zæøå]/.test(raw) && !/^\d+$/.test(raw) };
+        });
+      });
+      // Every word the guide or the synonym list contains, with how many
+      // sections use it. Used to tell a typing error from a real word.
+      SECTIONS.forEach(function (sec) {
+        var seen = {};
+        sec.all.split(/[ _]/).forEach(function (w) {
+          if (w.length >= 4 && !seen[w]) { seen[w] = 1; VOCAB[w] = (VOCAB[w] || 0) + 1; }
+        });
+      });
+      GROUPS.forEach(function (group) {
+        group.forEach(function (t) {
+          t.norm.split(" ").forEach(function (w) { if (w.length >= 4 && !VOCAB[w]) VOCAB[w] = 1; });
+        });
+      });
+
       q.addEventListener("input", function () { render(); updateAddress(); });
-      if (linked) { q.value = linked; render(); }
-      q.focus();
+      // The example buttons: put the text in the box and search.
+      out.addEventListener("click", function (ev) {
+        var text = ev.target && ev.target.getAttribute && ev.target.getAttribute("data-query");
+        if (!text) return;
+        q.value = text; render(); updateAddress(); q.focus();
+      });
+      if (linked) q.value = linked;
+      render();
+      // Put the cursor in the box, except on a touch screen, where that
+      // opens the keyboard over the page before the reader has seen it.
+      if (!(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) q.focus();
     })
     .catch(function () {
-      out.innerHTML = '<p class="gs-empty">The search index could not be loaded. ' +
-        "It is generated from the guide by <code>just build-search-index</code>.</p>";
+      out.innerHTML = '<p class="gs-empty">The search could not be loaded just now. Reload the ' +
+        "page, or use the search box in the top bar.</p>";
     });
 })();
 </script>
