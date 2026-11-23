@@ -574,7 +574,8 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   #                Default NULL = pull ALL diagnoses (run once, save, filter locally).
   #   diagtypes  : "A"=action, "B"=secondary, "G"=grundmorbus (LPR2 only)
   #   open_contacts : TRUE = also read LPR2's open contacts (uaf_adm, uaf_diag).
-  #                Set FALSE if your delivery does not have those tables.
+  #                If your delivery does not have them, the function warns and
+  #                goes on without them. FALSE = do not read them.
   # read_register (fastreg) reads each register by name - without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/<register>/") %>% rename_with(tolower)
 
   # keep_codes() applies the icd_codes filter to EACH of the four register queries
@@ -591,7 +592,16 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts
   lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatic diagnoses
   if (open_contacts) {
-    uaf_adm  <- read_register("uaf_adm")  %>% rename_with(tolower)   # LPR2 somatic contacts still open
+    # Not every delivery has the open-contact tables: warn and go on without them
+    uaf_adm <- tryCatch(read_register("uaf_adm"), error = function(e) NULL)
+    if (is.null(uaf_adm)) {
+      warning("uaf_adm not found, so LPR2 contacts that never closed are left out. ",
+              "Set open_contacts = FALSE to drop this warning.")
+      open_contacts <- FALSE
+    }
+  }
+  if (open_contacts) {
+    uaf_adm  <- uaf_adm %>% rename_with(tolower)                     # LPR2 somatic contacts still open
     uaf_diag <- read_register("uaf_diag") %>% rename_with(tolower)   # their diagnoses
     uaf_last_year <- uaf_adm %>% summarise(last_year = max(year, na.rm = TRUE)) %>%
       collect() %>% pull(last_year)                                   # last year of the open tables
