@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.11.9">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-11-23">
+<meta name="description" content="The Danish Hospital Medication Register (SMR) from the Danish Health Data Authority: coverage from 15 May 2018, gaps by region and drug, breaks at reporting guide 2.0, and a check per region and month in R.">
+
+<title>Hospital medication (SMR, Sygehusmedicinregisteret) – Register Guide</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./laboratory-results.html" rel="next">
+<link href="./medication.html" rel="prev">
+<link href="./favicon.ico" rel="icon">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/scrollable-regions/scrollable-regions.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-09f8af1e44e4ef4f394a74dca0ee9d58.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": "parent",
+  "language": {
+    "search-no-results-text": "No results. Try Search by meaning in the top bar: it also looks for synonyms and Danish words.",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "Search exact words",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<style>html{ scroll-behavior: smooth; }</style>
+<script data-goatcounter="https://dsthelp.goatcounter.com/count" async="" src="//gc.zgo.at/count.js"></script>
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/favicon-192.png">
+<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+
+
+<meta property="og:title" content="Hospital medication (SMR, Sygehusmedicinregisteret)">
+<meta property="og:description" content="The Danish Hospital Medication Register (SMR) from the Danish Health Data Authority: coverage from 15 May 2018, gaps by region and drug, breaks at reporting guide 2.0, and a check per region and month in R.">
+<meta property="og:site_name" content="Register Guide">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light"><a id="quarto-skip-link" class="visually-hidden-focusable" href="#quarto-document-content">Skip to main content</a>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark" aria-label="Site">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">Register-based research at Statistics Denmark</span>
+    </a>
+  </div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item">
+    <a class="nav-link active" href="./search.html" aria-current="page"> <i class="bi bi-lightbulb" role="img">
+</i> 
+<span class="menu-text">Search by meaning</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="https://steno-aarhus.github.io"> <i class="bi bi-globe" role="img" aria-label="Steno Aarhus: project overview">
+</i> 
+<span class="menu-text">Steno Aarhus</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+    <a href="https://github.com/steno-aarhus/registers-guide" title="" class="quarto-navigation-tool px-1" aria-label="GitHub: source code"><i class="bi bi-github"></i></a>
+</div>
+            <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav" aria-label="Toolbar">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./extract-variables.html">Variables and dataset · 11-12</a></li><li class="breadcrumb-item"><a href="./extract-variables.html">11 - Extract variables</a></li><li class="breadcrumb-item"><a href="./hospital-medication.html">Hospital medication (SMR)</a></li></ol></nav>
+        <a class="flex-grow-1" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+  <div id="quarto-announcement" data-announcement-id="e880f7853e360563c35bd4980b16529c" class="alert alert-light hidden"><div class="quarto-announcement-content">
+<p>Last reviewed November 2026. Found something wrong or out of date? Use the feedback box on the page.</p>
+</div><i class="bi bi-x-lg quarto-announcement-action"></i></div>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto" aria-label="Section">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" aria-controls="quarto-sidebar-section-1" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-1-label">Get started · 1-3</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-1" aria-labelledby="quarto-sidebar-section-1-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./plan-your-study.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1 - Plan your study</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./r-intro.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2 - R: the bare essentials</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./log-in-dst.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3 - Log in to DST</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" aria-controls="quarto-sidebar-section-2" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-2-label">Get your data · 4-8</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-2" aria-labelledby="quarto-sidebar-section-2-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./file-formats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4 - File types and loading</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./extraction-step-by-step.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5 - Extracting data step by step</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./first-extraction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6 - First extraction</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./inspect-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7 - Inspect your data</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./delivery-check.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7b - Check your delivery</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./find-your-registers.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8 - Find your registers</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" aria-controls="quarto-sidebar-section-3" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-3-label">Build the study · 9-10</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-3" aria-labelledby="quarto-sidebar-section-3-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./understand-lpr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-4-label">9 - Hospital contacts (LPR)</span></a>
+            <button type="button" class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" aria-controls="quarto-sidebar-section-4" aria-expanded="false" aria-label="Toggle section: 9 - Hospital contacts (LPR)">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-4" aria-labelledby="quarto-sidebar-section-4-label" class="collapse list-unstyled sidebar-section depth2 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./extract-from-lpr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Extract from LPR</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+          <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./build-study-population.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-5-label">10 - Build your study population</span></a>
+            <button type="button" class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" aria-controls="quarto-sidebar-section-5" aria-expanded="false" aria-label="Toggle section: 10 - Build your study population">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-5" aria-labelledby="quarto-sidebar-section-5-label" class="collapse list-unstyled sidebar-section depth2 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./comparison-cohort.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Comparison cohort</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./case-control.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Case-control</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./special-designs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Self-controlled and family-based designs</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" aria-controls="quarto-sidebar-section-6" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-6-label">Variables and dataset · 11-12</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-6" aria-labelledby="quarto-sidebar-section-6-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./extract-variables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-7-label">11 - Extract variables</span></a>
+            <button type="button" class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" aria-controls="quarto-sidebar-section-7" aria-expanded="true" aria-label="Toggle section: 11 - Extract variables">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-7" aria-labelledby="quarto-sidebar-section-7-label" class="collapse list-unstyled sidebar-section depth2 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./outcomes.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Outcomes</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./socioeconomic-variables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Socioeconomic variables</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./comorbidity.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Comorbidity</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./medication.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Medication (ATC)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./hospital-medication.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Hospital medication (SMR)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./laboratory-results.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Laboratory results</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+          <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./data-manipulation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-8-label">12 - Assemble and prepare the dataset</span></a>
+            <button type="button" class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" aria-controls="quarto-sidebar-section-8" aria-expanded="false" aria-label="Toggle section: 12 - Assemble and prepare the dataset">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-8" aria-labelledby="quarto-sidebar-section-8-label" class="collapse list-unstyled sidebar-section depth2 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./long-wide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Long ↔︎ wide format</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./joins.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Link your extracts</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./missing-data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Missing data</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./time-varying.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Time-varying variables</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" aria-controls="quarto-sidebar-section-9" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-9-label">Analyse and finish · 13-14</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-9" aria-labelledby="quarto-sidebar-section-9-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-10-label">13 - Analysis</span></a>
+            <button type="button" class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" aria-controls="quarto-sidebar-section-10" aria-expanded="false" aria-label="Toggle section: 13 - Analysis">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-10" aria-labelledby="quarto-sidebar-section-10-label" class="collapse list-unstyled sidebar-section depth2 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./choosing-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Choosing a statistical analysis</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./descriptive-tables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Descriptive tables (Table 1)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./figures.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Figures for publication</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./time-to-event.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Time-to-event</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./rates-poisson.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Rates and rate ratios (Poisson)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./weighting-iptw.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">IP weighting (IPTW and IPCW)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./sensitivity-analyses.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Sensitivity analyses</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./export.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">14 - Export and repatriation</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <button type="button" class="sidebar-item-text sidebar-item-toggle sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-11" aria-controls="quarto-sidebar-section-11" aria-expanded="true">
+ <span class="menu-text" id="quarto-sidebar-section-11-label">Look-ups</span><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+      </div>
+      <ul id="quarto-sidebar-section-11" aria-labelledby="quarto-sidebar-section-11-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Search by meaning</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./register-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview of registers</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./find-a-variable.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Find a variable</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./formatting-tables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Format tables</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./parquet-and-fastreg.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Parquet and fastreg</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./function-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Functions: overview</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./good-coding-practice.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Good coding practice</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./dst-pitfalls.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">DST pitfalls</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./troubleshooting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Troubleshooting</span></a>
+  </div>
+</li>
+          <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./packages-overview.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-12-label">Algorithms &amp; special packages</span></a>
+            <button type="button" class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-12" aria-controls="quarto-sidebar-section-12" aria-expanded="false" aria-label="Toggle section: Algorithms &amp; special packages">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-12" aria-labelledby="quarto-sidebar-section-12-label" class="collapse list-unstyled sidebar-section depth2 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./osdc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">OSDC - Open Source Diabetes Classifier</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./nmi.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">NMI - Nordic Multimorbidity Index</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./learning-resources.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Learning resources</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./darter-index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text" id="quarto-sidebar-section-13-label">DARTER - Project 708421</span></a>
+            <button type="button" class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-13" aria-controls="quarto-sidebar-section-13" aria-expanded="true" aria-label="Toggle section: DARTER - Project 708421">
+              <i class="bi bi-chevron-right ms-2" aria-hidden="true"></i>
+            </button> 
+      </div>
+      <ul id="quarto-sidebar-section-13" aria-labelledby="quarto-sidebar-section-13-label" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./darter-register-paths-datastores.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Register paths and datastores</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./darter-pitfalls.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">DARTER pitfalls</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./contribute.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Want to help?</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" aria-labelledby="toc-title" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#what-smr-holds" id="toc-what-smr-holds" class="nav-link active" data-scroll-target="#what-smr-holds">What SMR holds</a></li>
+  <li><a href="#completeness" id="toc-completeness" class="nav-link" data-scroll-target="#completeness">Completeness differs by region and drug</a></li>
+  <li><a href="#guide-2" id="toc-guide-2" class="nav-link" data-scroll-target="#guide-2">Breaks when a region moves to reporting guide 2.0</a></li>
+  <li><a href="#atc-changes" id="toc-atc-changes" class="nav-link" data-scroll-target="#atc-changes">ATC codes change over time</a></li>
+  <li><a href="#check" id="toc-check" class="nav-link" data-scroll-target="#check">Check your drugs before you use them</a></li>
+  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/hospital-medication.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/hospital-medication.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content" tabindex="-1">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./extract-variables.html">Variables and dataset · 11-12</a></li><li class="breadcrumb-item"><a href="./extract-variables.html">11 - Extract variables</a></li><li class="breadcrumb-item"><a href="./hospital-medication.html">Hospital medication (SMR)</a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title">Hospital medication (SMR)</h1>
+<p class="subtitle lead">What to check before you use the Hospital Medication Register, medication given at public hospitals from May 2018</p>
+</div>
+
+<div>
+  <div class="description">
+    The Danish Hospital Medication Register (SMR) from the Danish Health Data Authority: coverage from 15 May 2018, gaps by region and drug, breaks at reporting guide 2.0, and a check per region and month in R.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Last modified</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">November 23, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Use this page if your study needs medication given in hospital, which is not in the prescription register LMDB (see <a href="./medication.html#coverage">Medication (ATC)</a>). Cancer drugs and biologics given at a hospital are typical examples. SMR is not a DST register. It is held by the Danish Health Data Authority (Sundhedsdatastyrelsen, SDS), its data quality has not yet been evaluated, and some clinical specialties are missing (<a href="https://doi.org/10.2147/CLEP.S487838">Rosenkrantz et al. 2024</a>). This page says what to check before you rely on it.</p>
+<section id="what-smr-holds" class="level2">
+<h2 class="anchored" data-anchor-id="what-smr-holds">What SMR holds</h2>
+<p>The Hospital Medication Register (Sygehusmedicinregisteret, SMR) holds medication given or dispensed at public hospitals and hospital outpatient clinics, reported by the five regions. The regions started reporting on 15 May 2018, so there is nothing before that date (<a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639178923683784980/datadeklaration-smr-v2-juni-2026.pdf">data declaration, June 2026</a>, section 1.2). Private hospitals, hospices and specialist hospitals run as independent institutions are not reported (<a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639178923683784980/datadeklaration-smr-v2-juni-2026.pdf">data declaration, June 2026</a>).</p>
+<p>You apply for SMR through the Forskerservice of SDS, which says that data are as a rule made available on research machines at SDS or at DST (<a href="https://sundhedsdatastyrelsen.dk/data-og-registre/forskerservice">Forskerservice</a>). Ask Forskerservice how SMR will reach your project before you plan the linkage to your DST registers. SDS also warns that replacement civil registration (CPR) numbers are not unique across regions, so read <code>V_CPR</code> together with the region (<a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639178923683784980/datadeklaration-smr-v2-juni-2026.pdf">data declaration, section 4.1.16</a>).</p>
+<p>The column names below are the ones in SDS’s data declaration. Check them against the columns in your own delivery with <code>colnames()</code>.</p>
+</section>
+<section id="completeness" class="level2">
+<h2 class="anchored" data-anchor-id="completeness">Completeness differs by region and drug</h2>
+<p>At the end of 2022 SDS wrote that heavy medicines (cancer drugs and biologics) were missing for Region Nordjylland and Region Syddanmark. Dispensed medicine was missing for Region Hovedstaden, Region Sjælland, Region Nordjylland and Region Syddanmark, and only partly reported by Region Midtjylland. A cost could be calculated for only about 60% of the reported administrations (<a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639120159392949453/gevinstrealisering-i-forbindelse-med-smr2-projektet.pdf">SDS, gevinstrealisering i forbindelse med SMR2-projektet, 9 March 2023</a>).</p>
+<p>The June 2026 declaration describes cancer drugs region by region:</p>
+<ul>
+<li><strong>Midtjylland</strong> reports them from early 2019 for oncology departments, from September 2019 for haematology outpatients, from mid-2021 for haematology inpatients and from early 2023 for children and young people.</li>
+<li><strong>Nordjylland</strong> does not give parenteral cancer drugs in the medication module, so they are not reported. Reporting from the haematology department starts in August 2025.</li>
+<li><strong>Syddanmark</strong> does not handle cancer drugs in the medication module. An electronic treatment scheme was in use in some departments in September 2025, and SDS calls the data incomplete.</li>
+<li><strong>Hovedstaden and Sjælland</strong> do not report cytostatics dispensed for home treatment.</li>
+</ul>
+<p>A zero count for a cancer drug or a biologic in a region is therefore not evidence of no use. The same section lists other gaps, such as intensive care and anaesthesia, eye departments and some outpatient clinics. Read the entries for the departments and drugs in your study.</p>
+</section>
+<section id="guide-2" class="level2">
+<h2 class="anchored" data-anchor-id="guide-2">Breaks when a region moves to reporting guide 2.0</h2>
+<p>Each region moves from reporting guide 1.x to reporting guide 2.0 (called “SMR2” in the declaration) on its own date. Rows from before and after the move are not the same kind of rows.</p>
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Guide 2.0 dates, mixtures and infusion times by region
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 11%">
+<col style="width: 13%">
+<col style="width: 40%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Region</th>
+<th>Guide 2.0 from</th>
+<th>Mixtures</th>
+<th>Infusion time in <code>D_ADM</code> before 2.0</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Nordjylland</td>
+<td>April 2025</td>
+<td>One row per administration from March 2022, no dose for the components</td>
+<td>Take-down time, from April 2022 (end date not given)</td>
+</tr>
+<tr class="even">
+<td>Midtjylland</td>
+<td>October 2025</td>
+<td>A main row plus one row per component from February 2021, no component dose</td>
+<td>Start time, but the row is reported at take-down, from June 2019</td>
+</tr>
+<tr class="odd">
+<td>Syddanmark</td>
+<td>September 2025</td>
+<td>Not registered in the medication module</td>
+<td>Take-down time until autumn 2023, start time after</td>
+</tr>
+<tr class="even">
+<td>Hovedstaden, Sjælland</td>
+<td>No date in the declaration</td>
+<td>Not split into components</td>
+<td>Start time chosen by the user</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<p>What changes in your data at the move (<a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639178923683784980/datadeklaration-smr-v2-juni-2026.pdf">data declaration, sections 2.4 and 4.1</a>):</p>
+<ul>
+<li><strong>Rows that disappear.</strong> Guide 2.0 does not allow dose 0 (an administration that was planned but not given), future administrations or the patient’s own medicine. Nordjylland, Midtjylland and Syddanmark reported dose 0 before the move, Midtjylland reported dispensed medicine as administrations dated in the future from February 2021, and Nordjylland reported own medicine from May
+<ol start="2018" type="1">
+<li>Earlier periods therefore contain rows that later periods do not. Dropping rows with <code>V_ADM_DOSIS</code> 0 in every period removes the first of these differences, but not the other two.</li>
+</ol></li>
+<li><strong>A new administration key.</strong> Under 2.0 <code>K_ADM_ID</code> is a new synthetic key. SDS writes that it “Er ikke kompatibel, med nøglen i version 1.x.” Do not use it to link rows reported before and after a region’s move.</li>
+<li><strong>Deleted rows.</strong> A row that was reported and later deleted in the hospital system stays in SMR with <code>C_SLETTET = 1</code>. Rows that are not deleted have <code>C_SLETTET = 0</code>. If your delivery has the column, remove the deleted rows.</li>
+<li><strong>Dose units.</strong> Before 2.0 each region used its own unit list. In Hovedstaden and Sjælland the unit can be a rate or a concentration, such as mg/kg, mg/ml or microgram/kg/min, instead of an amount. Check the units in <code>V_ADM_DOSIS_ENHED</code> before you sum doses.</li>
+<li><strong>Infusions.</strong> The table above shows which time <code>D_ADM</code> holds for a continuous infusion. An infusion reported at take-down can fall in a later month than it started.</li>
+</ul>
+</section>
+<section id="atc-changes" class="level2">
+<h2 class="anchored" data-anchor-id="atc-changes">ATC codes change over time</h2>
+<p><code>C_ATC</code> is the Anatomical Therapeutic Chemical (ATC) code that was valid when the drug was given (<a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639178923683784980/datadeklaration-smr-v2-juni-2026.pdf">data declaration, section 4.1.22</a>), and WHO revises the ATC system every year. A drug can therefore have one code early in the register and another later. The monoclonal antibodies are an example: they were under <code>L01XC</code> and are now under <code>L01F</code> in <a href="https://atcddd.fhi.no/atc_ddd_index/?code=L01F">WHO’s ATC index</a>. A filter on the old code alone loses the later rows, and the drop looks like a break in the register. Look up whether the drugs in your study changed code during your study period, and filter on both the old and the new code.</p>
+</section>
+<section id="check" class="level2">
+<h2 class="anchored" data-anchor-id="check">Check your drugs before you use them</h2>
+<p>Plot the number of administrations per region and month for the drugs in your study, as the <a href="./understand-lpr.html#lpr3-spike">LPR page</a> does for the change in diagnoses around 2019-2020. A region where a drug is absent, or where the count jumps at a move to guide 2.0, tells you where the register cannot answer your question. The sketch below uses the declaration’s column names in lower case and the monoclonal antibodies as the example, under both their old and their new ATC code. <code>smr</code> is your opened SMR table, opened in the same way as <code>lmdb</code> in <a href="./medication.html#the-pattern">Extract the dispensings</a>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)   <span class="co"># rename_with, filter, select, collect, mutate, count</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2) <span class="co"># ggplot, geom_col, facet_wrap</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>smr_counts <span class="ot">&lt;-</span> smr <span class="sc">%&gt;%</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"^L01XC|^L01F"</span>, c_atc)) <span class="sc">%&gt;%</span>    <span class="co"># monoclonal antibodies: old code L01XC, current code L01F</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(k_region_id, d_adm, c_slettet) <span class="sc">%&gt;%</span>   <span class="co"># no c_slettet in your delivery: drop it here</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(c_slettet <span class="sc">==</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span>                  <span class="co"># ... and drop this line</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">month =</span> <span class="fu">as.Date</span>(<span class="fu">format</span>(<span class="fu">as.Date</span>(d_adm), <span class="st">"%Y-%m-01"</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(k_region_id, month)                   <span class="co"># administrations per region and month</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(smr_counts, <span class="fu">aes</span>(<span class="at">x =</span> month, <span class="at">y =</span> n)) <span class="sc">+</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>() <span class="sc">+</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> k_region_id, <span class="at">scales =</span> <span class="st">"free_y"</span>) <span class="co"># one panel per region</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A figure that leaves the research machine must be aggregated, as in <a href="./figures.html">Figures for publication</a>. Months with few administrations are small cells, see <a href="./export.html">Export</a>.</p>
+</section>
+<section id="see-also" class="level2">
+<h2 class="anchored" data-anchor-id="see-also">See also</h2>
+<ul>
+<li><a href="./medication.html">Medication (ATC)</a>: prescriptions dispensed at pharmacies (LMDB), and how to filter on ATC codes</li>
+<li><a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639178923683784980/datadeklaration-smr-v2-juni-2026.pdf">SDS’s data declaration for SMR, June 2026</a>: the source for the region-by-region details on this page</li>
+<li><a href="./export.html">Export</a>: small cells and output control</li>
+</ul>
+
+
+</section>
+
+<a onclick="window.scrollTo(0, 0); return false;" role="button" id="quarto-back-to-top"><i class="bi bi-arrow-up"></i> Back to top</a></main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/registerguide\.org");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+      window.quartoDecorateExternalLinks = function (root) {
+     var links = (root || window.document).querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+          if (!link.classList.contains('no-external-icon')) {
+          }
+        }
+      }
+      };
+      window.quartoDecorateExternalLinks(window.document);
+    // Esc closes the popup (WCAG 1.4.13) and focus leaving both trigger and
+    // popup closes it (WCAG 2.4.11); tippy handles neither for interactive popups.
+    const hideOnEscAndFocusOut = {
+      name: 'hideOnEscAndFocusOut',
+      defaultValue: true,
+      fn(instance) {
+        const dismiss = () => {
+          // A show scheduled by the trigger delay would otherwise reopen it
+          instance.clearDelayTimeouts();
+          instance.hide();
+        };
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape') {
+            return;
+          }
+          // Keep Esc from also reaching page handlers (e.g. reveal.js overview),
+          // except an open reveal.js slide menu, which Esc should close too.
+          // The menu handles keys only when its keyboard option is on.
+          const menuHandlesEsc = window.Reveal?.getPlugin?.('menu')?.isOpen() &&
+            window.Reveal.getConfig().menu?.keyboard !== false;
+          if (!menuHandlesEsc) {
+            event.stopPropagation();
+          }
+          if (instance.popper.contains(window.document.activeElement)) {
+            // Disabled while refocusing so the focus trigger does not reopen it
+            instance.disable();
+            instance.reference.focus();
+            instance.enable();
+          }
+          dismiss();
+        };
+        const onFocusOut = (event) => {
+          const target = event.relatedTarget;
+          if (target && !instance.reference.contains(target) &&
+              !instance.popper.contains(target)) {
+            dismiss();
+          }
+        };
+        // On the trigger too: a click trigger (code-annotations: select) has no
+        // blur handling. Attached for the instance's lifetime so leaving the
+        // trigger also cancels a show still pending on the trigger delay.
+        instance.reference.addEventListener('focusout', onFocusOut);
+        return {
+          onShow() {
+            window.document.addEventListener('keydown', onKeyDown, true);
+            instance.popper.addEventListener('focusout', onFocusOut);
+          },
+          onHide() {
+            window.document.removeEventListener('keydown', onKeyDown, true);
+            instance.popper.removeEventListener('focusout', onFocusOut);
+          },
+          onDestroy() {
+            instance.reference.removeEventListener('focusout', onFocusOut);
+          },
+        };
+      },
+    };
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+        plugins: [hideOnEscAndFocusOut],
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          // Each band is positioned against its own containing block, which is
+          // not the offsetParent of the lines, so place it from client rects.
+          const placeBand = (band, firstEl, lastEl, codeBlock) => {
+            const container = band.offsetParent;
+            if (container === null) {
+              return;
+            }
+            const containerRect = container.getBoundingClientRect();
+            // Reveal.js scales slides with a transform, so convert client
+            // pixels back to the CSS pixels of the container.
+            const scale = containerRect.height / container.offsetHeight || 1;
+            const firstRect = firstEl.getBoundingClientRect();
+            const lastRect = lastEl.getBoundingClientRect();
+            const top = (firstRect.top - containerRect.top) / scale - container.clientTop + container.scrollTop;
+            const height = (lastRect.bottom - firstRect.top) / scale;
+            band.style.top = top - 2 + "px";
+            band.style.height = height + 4 + "px";
+            if (codeBlock) {
+              // Without the copy button wrapper, the containing block is wider
+              // than the code block, so span the code block explicitly.
+              const blockRect = codeBlock.getBoundingClientRect();
+              band.style.left = (blockRect.left - containerRect.left) / scale - container.clientLeft + container.scrollLeft + "px";
+              band.style.width = blockRect.width / scale + "px";
+            }
+          };
+          if (lineIds.length > 0) {
+            const el = window.document.getElementById(lineIds[0]);
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const parent = el.parentElement.parentElement;
+            // cook up a div (if necessary) and position it
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            placeBand(div, el, lastEl, parent.closest("div.sourceCode") || parent);
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            placeBand(gutterDiv, el, lastEl);
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+  <script type="application/javascript">
+  window.quartoScrollableRegionsLabels = {"code":"Scrollable code","output":"Scrollable output"};
+  </script>
+<nav class="page-navigation" aria-label="Page">
+  <div class="nav-page nav-page-previous">
+      <a href="./medication.html" class="pagination-link" aria-label="Medication (ATC)">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Medication (ATC)</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./laboratory-results.html" class="pagination-link" aria-label="Laboratory results">
+        <span class="nav-page-text">Laboratory results</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">
+<p>Steno Diabetes Center Aarhus · Sara Schwartz · <a href="mailto:saras@clin.au.dk">saras@clin.au.dk</a></p>
+</div>   
+    <div class="nav-footer-center">
+<p>Visits are counted with <a href="https://www.goatcounter.com">GoatCounter</a>, without cookies.</p>
+<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/hospital-medication.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/hospital-medication.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
+    <div class="nav-footer-right">
+<p><a href="mailto:saras@clin.au.dk">Errors or suggestions?</a></p>
+</div>
+  </div>
+</footer>
+<!-- ============================================================
+     Feedback widget  ->  Cloudflare Worker + D1
+     Cookie-free. Submissions land privately in the D1 database.
+     Styling: custom.scss (#dsthelp-fb ...)
+     NOTE: FEEDBACK_ENDPOINT below must point at the Worker URL.
+     ============================================================ -->
+<div id="dsthelp-fb" data-state="closed">
+  <button type="button" id="dsthelp-fb-tab" aria-expanded="false" aria-controls="dsthelp-fb-panel">
+    <span id="dsthelp-fb-tab-label">Feedback</span>
+  </button>
+
+  <div id="dsthelp-fb-panel" role="dialog" aria-labelledby="dsthelp-fb-heading" hidden="">
+    <button type="button" id="dsthelp-fb-close" aria-label="Close">×</button>
+    <h2 id="dsthelp-fb-heading"></h2>
+    <p id="dsthelp-fb-intro"></p>
+
+    <form id="dsthelp-fb-form">
+      <label for="dsthelp-fb-message" id="dsthelp-fb-message-label"></label>
+      <textarea id="dsthelp-fb-message" name="message" rows="4" maxlength="4000" required=""></textarea>
+
+      <label for="dsthelp-fb-email">
+        <span id="dsthelp-fb-email-label"></span>
+        <span class="dsthelp-fb-opt" id="dsthelp-fb-email-opt"></span>
+      </label>
+      <input type="email" id="dsthelp-fb-email" name="email" autocomplete="email">
+
+      <button type="submit" id="dsthelp-fb-submit"></button>
+      <p id="dsthelp-fb-status" role="status" aria-live="polite"></p>
+    </form>
+
+    <p id="dsthelp-fb-note" class="dsthelp-fb-note"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  // >>> REPLACE with your Worker URL after `wrangler deploy` <<<
+  var FEEDBACK_ENDPOINT = "https://dsthelp-feedback.sarasschwartz.workers.dev";
+
+  var t = {
+    tab: "Feedback", heading: "Feedback on this page",
+    intro: "All input, big or small, is appreciated. It is anonymous unless you give your email, which is used only to reply.",
+    message: "Your feedback", email: "Email",
+    opt: "(optional - for a reply, or to hear when this page is updated)",
+    send: "Send", sending: "Sending…",
+    ok: "Thanks for your feedback.",
+    err: "Something went wrong. Please try again, or email saras@clin.au.dk.",
+    close: "Close",
+    note: "<strong>Seeing changes:</strong> after a page is updated, your browser may still show an old, cached copy. Hard-refresh to load the latest version: <kbd>Ctrl</kbd>+<kbd>F5</kbd> (Windows) or <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (Mac). If you leave your email, we'll let you know if/when this page is updated."
+  };
+
+  function $(id) { return document.getElementById(id); }
+  $("dsthelp-fb-tab-label").textContent = t.tab;
+  $("dsthelp-fb-heading").textContent = t.heading;
+  $("dsthelp-fb-intro").textContent = t.intro;
+  $("dsthelp-fb-message-label").textContent = t.message;
+  $("dsthelp-fb-email-label").textContent = t.email;
+  $("dsthelp-fb-email-opt").textContent = t.opt;
+  $("dsthelp-fb-note").innerHTML = t.note;
+  $("dsthelp-fb-submit").textContent = t.send;
+  $("dsthelp-fb-close").setAttribute("aria-label", t.close);
+
+  var root = $("dsthelp-fb"), tab = $("dsthelp-fb-tab"),
+      panel = $("dsthelp-fb-panel"), form = $("dsthelp-fb-form"),
+      status = $("dsthelp-fb-status"), submit = $("dsthelp-fb-submit");
+
+  // --- Placement ---
+  // Wide screens: docked and always open under the right-hand TOC.
+  // Narrow screens (Quarto hides the TOC): a floating tab you click to open.
+  var tocSidebar = document.getElementById("quarto-margin-sidebar");
+  var wide = window.matchMedia("(min-width: 992px)");
+
+  function dock() {
+    tocSidebar.appendChild(panel);        // place after the TOC in the right margin
+    panel.classList.add("docked");
+    panel.hidden = false;                 // always open
+    tab.style.display = "none";
+  }
+  function floatMode() {
+    root.appendChild(panel);
+    panel.classList.remove("docked");
+    tab.style.display = "";
+    panel.hidden = root.getAttribute("data-state") !== "open";
+  }
+  function place() {
+    if (wide.matches && tocSidebar) dock(); else floatMode();
+  }
+  place();
+  if (wide.addEventListener) wide.addEventListener("change", place);
+  else if (wide.addListener) wide.addListener(place); // older Safari
+
+  // The open/close tab only applies in the floating state
+  function open() {
+    root.setAttribute("data-state", "open"); panel.hidden = false;
+    tab.setAttribute("aria-expanded", "true"); $("dsthelp-fb-message").focus();
+  }
+  function close() {
+    root.setAttribute("data-state", "closed"); panel.hidden = true;
+    tab.setAttribute("aria-expanded", "false");
+  }
+  tab.addEventListener("click", function () {
+    root.getAttribute("data-state") === "open" ? close() : open();
+  });
+  $("dsthelp-fb-close").addEventListener("click", close);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !panel.classList.contains("docked") &&
+        root.getAttribute("data-state") === "open") close();
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    status.textContent = ""; status.className = "";
+    submit.disabled = true; status.textContent = t.sending;
+    fetch(FEEDBACK_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: form.message.value,
+        email: form.email.value,
+        page: location.pathname,
+        title: document.title
+      })
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      form.reset();
+      status.textContent = t.ok; status.className = "dsthelp-fb-ok";
+    }).catch(function () {
+      status.textContent = t.err; status.className = "dsthelp-fb-error";
+    }).finally(function () {
+      submit.disabled = false;
+    });
+  });
+})();
+</script>
+<!-- Auto-open a <details> fold-out when an in-page anchor inside it is navigated to,
+     so deep links (e.g. #konkurrerende-risici) still reveal collapsed content. -->
+<script>
+(function () {
+  function openTarget() {
+    if (!location.hash) return;
+    var id;
+    try { id = decodeURIComponent(location.hash.slice(1)); }
+    catch (e) { id = location.hash.slice(1); }
+    var el = document.getElementById(id);
+    if (!el || !el.closest) return;
+    var d = el.closest('details');
+    while (d) {
+      d.open = true;
+      d = d.parentElement ? d.parentElement.closest('details') : null;
+    }
+    if (el.scrollIntoView) el.scrollIntoView();
+  }
+  window.addEventListener('DOMContentLoaded', openTarget);
+  window.addEventListener('hashchange', openTarget);
+})();
+</script>
+
+<!-- Keyboard access to code and to collapsed callouts.
+     1. A code block whose lines are wider than the box scrolls sideways, but
+        only with a mouse or touch: the box cannot get keyboard focus, so a
+        keyboard user cannot read the end of a long line. tabindex="0" lets
+        them tab to it and scroll with the arrow keys.
+     2. Quarto makes the header of a collapsed callout clickable, but not
+        focusable, and labels it "Toggle callout", so a screen reader hears
+        that instead of the title. Here it becomes a button that Tab reaches
+        and Enter or Space opens, named by its own title. -->
+<script>
+(function () {
+  function keyboardAccess() {
+    document.querySelectorAll("div.sourceCode pre").forEach(function (pre) {
+      if (pre.scrollWidth > pre.clientWidth) pre.setAttribute("tabindex", "0");
+    });
+    document.querySelectorAll('.callout-header[data-bs-toggle="collapse"]').forEach(function (h) {
+      h.setAttribute("role", "button");
+      h.setAttribute("tabindex", "0");
+      h.removeAttribute("aria-label");
+      h.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); h.click(); }
+      });
+    });
+  }
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", keyboardAccess);
+  } else {
+    keyboardAccess();
+  }
+})();
+</script>
+
+
+
+
+<script src="site_libs/quarto-html/zenscroll-min.js"></script>
+</body></html>
