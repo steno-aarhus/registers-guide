@@ -49,7 +49,7 @@ const browser = {
 };
 
 // The result links in the order the page shows them, e.g. "joins.html#joins".
-// The page shows the 25 best, so a place further down counts as not found.
+// The page shows the 20 best, so a place further down counts as not found.
 function search(query) {
   elements["gs-q"].value = query;
   typed();

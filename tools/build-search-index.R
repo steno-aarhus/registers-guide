@@ -3,7 +3,7 @@
 # build-search-index.R - harvest the guide into a searchable index.
 #
 # Writes assets/search-index.json: one entry per section, with the page title,
-# the heading, the anchor to jump to, and the prose. The "Search the guide" page
+# the heading, the anchor to jump to, and the text. The "Search by meaning" page
 # fetches it and filters in the browser, so there is no server and no runtime
 # dependency on anything.
 #
@@ -125,6 +125,8 @@ heading_text <- function(heading) {
 # The identifiers inside code blocks are exactly what people search for:
 # "how do I set the fastreg path" is answered by a line of code, not by prose.
 # Keeping the whole block would flood the snippets, so keep only the names.
+# All of them: only the first 80 used to be kept, and a long block lost the
+# names further down (relationship = "many-to-many" in joins.qmd, for one).
 CODE_STOP <- c("library", "function", "return", "true", "false", "null", "for",
   "if", "else", "the", "and", "not", "your", "this", "that", "with", "from",
   "value", "values", "data", "name", "names", "list", "vector", "character",
@@ -137,20 +139,40 @@ code_terms <- function(lines) {
   tok <- unlist(regmatches(code, gregexpr("[A-Za-z][A-Za-z0-9_.]{2,}", code)))
   tok <- tolower(unique(tok))
   tok <- tok[!tok %in% CODE_STOP & nchar(tok) < 40]
-  paste(utils::head(tok, 80), collapse = " ")
+  paste(tok, collapse = " ")
 }
 
-# Strip what a reader is not searching for: front matter, code, raw html blocks,
-# and the div fences Quarto uses for callouts.
+# Keep what a reader can see on the page and drop the markup around it: code
+# blocks go (their names are kept separately by code_terms), everything else
+# stays as plain text.
 clean_prose <- function(lines) {
   fence <- grepl("^\\s*```", lines)
   lines <- lines[cumsum(fence) %% 2 == 0 & !fence]
-  lines <- lines[!grepl("^\\s*:::", lines)]
-  lines <- lines[!grepl("^\\s*<", lines)]
+  # A callout or fold-out opens with a line like
+  #   ::: {.callout-note collapse="true" title="Why 12 hours and not 8?"}
+  # The title is text the reader sees, and often the best description of what
+  # is inside, so keep it. The rest of the line is markup.
+  div <- grepl("^\\s*:::", lines)
+  has_title <- div & grepl('title="[^"]*"', lines)
+  lines[has_title] <- sub('.*title="([^"]*)".*', "\\1", lines[has_title])
+  lines[div & !has_title] <- ""
+  # Table rows: drop the ruler line (|---|---|), keep the words in the cells.
+  # The error-message tables on the troubleshooting page are nothing but
+  # table rows, and a pasted error message has to find them.
+  lines[grepl("^\\s*\\|[-:| ]+\\|\\s*$", lines)] <- ""
+  lines <- gsub("|", " ", lines, fixed = TRUE)
+  # HTML tags go, the text between them stays: <summary>Show the code</summary>
+  # is the visible label of a fold-out. A tag starts with a letter or "/", so
+  # "<= index_date" in running text is left alone.
+  lines <- gsub("</?[A-Za-z][^>]*>", " ", lines)
   lines <- gsub("\\{\\{< include [^>]*>\\}\\}", "", lines)
-  lines <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", lines)  # keep link text, drop url
-  lines <- gsub("`|\\*+|^\\s*[-*+]\\s+|^\\s*\\|.*$", " ", lines)
-  trimws(lines)
+  lines <- gsub("`|\\*+|^\\s*[-*+]\\s+", " ", lines)
+  # Join the lines before taking links apart: a link often breaks over two
+  # lines of source, and a line-by-line rule would leave its url in the text.
+  text <- paste(trimws(lines)[nzchar(trimws(lines))], collapse = " ")
+  text <- gsub("\\[([^]]*)\\]\\([^)]*\\)", "\\1", text)  # keep link text, drop url
+  text <- gsub("\\{[#.][^}]*\\}", " ", text)            # {#anchor} and {.class}
+  gsub(" +", " ", text)
 }
 
 # Harvest ----------------------------------------------------------------------
@@ -162,7 +184,10 @@ qmd <- list.files(ROOT, pattern = "\\.qmd$", recursive = TRUE, full.names = TRUE
 # "." (.quarto/), and it skips README.qmd, which is only built into README.md.
 rel_path <- sub(paste0("^", ROOT, "/"), "", qmd)
 not_a_page <- grepl("(^|/)[_.]", rel_path) | basename(rel_path) == "README.qmd"
-qmd <- qmd[!not_a_page]
+# Two real pages that are never the answer to a search: the "page not found"
+# page, and the search page itself.
+not_an_answer <- basename(rel_path) %in% c("404.qmd", "search.qmd")
+qmd <- qmd[!not_a_page & !not_an_answer]
 
 entries <- list()
 # method = "radix" sorts the same way on every machine. A plain sort() follows
@@ -225,7 +250,6 @@ for (path in sort(qmd, method = "radix")) {
     block <- lines[from:to]
     head_line <- if (i == 1 && !is_head[from]) "" else block[1]
     body <- clean_prose(if (nzchar(head_line)) block[-1] else block)
-    body <- paste(body[nzchar(body)], collapse = " ")
     ct <- code_terms(if (nzchar(head_line)) block[-1] else block)
     if (nchar(body) < 40 && nchar(ct) < 20) next
 
@@ -234,11 +258,11 @@ for (path in sort(qmd, method = "radix")) {
       title = title,
       heading = if (nzchar(head_line)) heading_text(head_line) else "",
       anchor = if (nzchar(head_line)) anchor_at(from) else "",
-      # Cut at a word boundary: a snippet ending in "sampl" reads as a typo,
-      # and the spell checker flags it as one.
-      text = if (nchar(body) <= 1200) body
-             else sub("\\s+\\S*$", "", substr(body, 1, 1200)),
-      code = code_terms(if (nzchar(head_line)) block[-1] else block)
+      # The whole section, not only its start. The text used to be cut at
+      # 1200 characters, and half the sections are longer than that, so
+      # whatever came after the cut could not be found.
+      text = body,
+      code = ct
     )
   }
 }
