@@ -86,7 +86,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-a00d3ed60521f4279dc66263b9683371.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-2c458bc0c34172ddcace88404c2b0f6b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -99,9 +99,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "/",
     "s"
   ],
-  "show-item-context": false,
+  "show-item-context": "parent",
   "language": {
-    "search-no-results-text": "No results. Try Search by meaning in the navbar - it understands synonyms and Danish.",
+    "search-no-results-text": "No results. Try Search by meaning in the top bar: it also looks for synonyms and Danish words.",
     "search-matching-documents-text": "matching documents",
     "search-copy-link-title": "Copy link to search",
     "search-hide-matches-text": "Hide additional matches",
@@ -142,7 +142,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./search.html" aria-current="page"> <i class="bi bi-lightbulb" role="img" aria-label="Search the guide by meaning, synonyms and Danish">
+    <a class="nav-link active" href="./search.html" aria-current="page"> <i class="bi bi-lightbulb" role="img">
 </i> 
 <span class="menu-text">Search by meaning</span></a>
   </li>  
@@ -642,19 +642,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Everything about getting registers into parquet and reading them with <a href="https://dp-next.github.io/fastreg/"><code>fastreg</code></a>, in the order most people need it:</p>
-<ol type="1">
-<li><strong><a href="#fastreg-paths">Point fastreg at your registers</a></strong> - one <code>options()</code> call at the top of each script. Every <code>read_register()</code> example in this guide assumes you have done this. If a colleague already converted the registers, this is the only section you need.</li>
-<li><strong><a href="#convert-sas-to-parquet">Convert SAS files to Parquet</a></strong> - when your project received <code>.sas7bdat</code> and nothing has been converted yet. Done once per register, usually by one person for the whole project.</li>
-<li><strong><a href="#when-read-register-fails">When <code>read_register()</code> cannot find the register</a></strong> - reading parquet that is not in fastreg’s layout.</li>
-<li><strong><a href="#duckdb-views">Several registers on one DuckDB connection</a></strong> - for heavy work across the whole population, where everything has to stay in the database until the result is small.</li>
-</ol>
-<p>Which file types you meet on the server, and what opens each one, is <a href="./file-formats.html">Phase 4 - File types and loading</a>.</p>
+<p>Use this page when you set up the reading of registers for a project. Most people need only the first section, <a href="#fastreg-paths">Point fastreg at your registers</a>: one <code>options()</code> call at the top of each script, which every <code>read_register()</code> example in this guide assumes. The later sections are for the person who converts SAS files to parquet (once per register, usually one person for the whole project), for registers that <code>read_register()</code> cannot find by name, and for heavy whole-population joins that must stay inside DuckDB. Which file types you meet on the server, and what opens each one, is <a href="./file-formats.html">Phase 4 - File types and loading</a>; the extraction pattern itself is <a href="./extraction-step-by-step.html">Phase 5</a>.</p>
 <section id="what-is-parquet" class="level2">
 <h2 class="anchored" data-anchor-id="what-is-parquet">What is parquet, and why use it?</h2>
-<p><strong>Parquet</strong> is a file format built for exactly the kind of work this guide does: a large table, read many times, usually filtered down to a few columns and a cohort’s worth of rows. Unlike SAS (<code>.sas7bdat</code>) or <code>.rds</code>, which store data row by row and load the whole file before you can use any of it, parquet lets you open a <em>connection</em> and read only what you actually ask for.</p>
-<p>Think of a supermarket. You can either buy the whole shop and sort through it at home, or send a shopping list and only have what is on the list delivered. A SAS or RDS file is buying the whole shop. Parquet is sending the list first - <code>filter()</code>, <code>select()</code> - and only paying for delivery (<code>collect()</code>) once you know exactly what you want. That is why a filtered, cohort-sized extract from a register with tens of millions of rows can come back in seconds, without ever loading the whole register into RAM. See <a href="./file-formats.html">Phase 4 - File types and loading</a> for the mechanics behind this (lazy vs.&nbsp;full loading).</p>
-<p>This is why almost every register on DST is worth converting to parquet once - the rest of this page shows how.</p>
+<p><strong>Parquet</strong> is a file format built for exactly the kind of work this guide does: a large table, read many times, usually filtered down to a few columns and a cohort’s worth of rows. A SAS file (<code>.sas7bdat</code>) or an <code>.rds</code> file has to be read in whole before you can use any of it; parquet lets you open a <em>connection</em> and read only what you actually ask for.</p>
+<p>That is why a filtered, cohort-sized extract from a register with tens of millions of rows can come back in seconds, without ever loading the whole register into RAM, and why almost every register on DST is worth converting to parquet once. The lazy pattern itself is explained in <a href="./extraction-step-by-step.html">Phase 5 - Extracting data step by step</a>.</p>
 </section>
 <section id="fastreg-paths" class="level2">
 <h2 class="anchored" data-anchor-id="fastreg-paths">Point fastreg at your registers</h2>
@@ -663,7 +655,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_workdata_dir =</span> <span class="st">"E:/workdata/[projectnumber]/cleaned-data/"</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_workdata_dir =</span> <span class="st">"E:/workdata/[projectnumber]/[your-parquet-folder]/"</span>,</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">fastreg.project_rawdata_dir =</span> <span class="st">"E:/rawdata/[projectnumber]/"</span></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>After that, <code>read_register("bef")</code> works by name, with no conversion and no path in each call.</p>
@@ -671,22 +663,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Two things that otherwise cost you time:</p>
 <ul>
 <li><strong>Write <code>E:/</code> with the colon</strong>: the DST server is Windows, also when you log in from a Mac. fastreg’s own guide shows <code>E</code> without the colon, but only because the example writes to a temporary folder with <code>fs::path_temp()</code>.</li>
-<li><strong>The folder does not have to be the innermost one</strong>: you can set the path to <code>cleaned-data/</code> even though it holds several subfolders (<code>parquet-registers/</code>, <code>parquet-external/</code>). <code>read_register()</code> searches further down for the register name.</li>
+<li><strong>The folder does not have to be the innermost one</strong>: you can set the path to a folder that holds several subfolders of parquet registers. <code>read_register()</code> searches further down for the register name.</li>
 </ul>
 </section>
 <section id="convert-sas-to-parquet" class="level2">
 <h2 class="anchored" data-anchor-id="convert-sas-to-parquet">Convert SAS files to Parquet</h2>
-<p>Most projects on DST receive registers as SAS files (<code>.sas7bdat</code>). Before you can use them with <code>open_dataset()</code> and lazy evaluation, they must be converted to Parquet <strong>once</strong>. After that you use them exactly like any other register.</p>
-<div class="callout callout-style-simple callout-important">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Relevant for most projects outside DARTER.</strong> If you are working on a project where the registers have not already been converted to parquet, this step is necessary before you can run extractions. Done once per register - after that the normal extraction pattern applies.</p>
-</div>
-</div>
-</div>
+<p>Most projects on DST receive registers as SAS files (<code>.sas7bdat</code>). Before you can use them with <code>open_dataset()</code> and lazy evaluation, they must be converted to Parquet <strong>once</strong>. After that you use them exactly like any other register. If your project’s registers are already converted, skip this section.</p>
 <details>
 <summary>
 Why Parquet is worth it (SAS vs Parquet)
@@ -753,7 +735,7 @@ If fastreg is not available on your project: convert manually with haven + arrow
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)    <span class="co"># %&gt;%, rename_with()</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>sas_file  <span class="ot">&lt;-</span> <span class="st">"E:/rawdata/[projectnumber]/rawdata/my_register.sas7bdat"</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>parq_path <span class="ot">&lt;-</span> <span class="st">"E:/workdata/[projectnumber]/cleaned-data/parquet-registers/my_register/"</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>parq_path <span class="ot">&lt;-</span> <span class="st">"E:/workdata/[projectnumber]/[your-parquet-folder]/my_register/"</span></span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Read the SAS file into R</span></span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">read_sas</span>(sas_file)            <span class="co"># reads the entire file into RAM - we call it "df", but you can use any name</span></span>
@@ -825,14 +807,14 @@ If fastreg is not available on your project: convert manually with haven + arrow
 </tr>
 </tbody>
 </table>
-<p>All three hand you a <strong>DuckDB table</strong> (a lazy <em>duckplyr</em> data frame - its <code>class()</code> starts with <code>"prudent_duckplyr_df"</code>), so the rest of your code is exactly the same whichever one you use.</p>
+<p>All three hand you a lazy <strong>DuckDB table</strong>, so the rest of your code is exactly the same whichever one you use. What kind of DuckDB table depends on the fastreg version: up to 0.14.2 (which includes the CRAN release, 0.14.1) it is a <code>tbl_duckdb_connection</code> made through arrow; from 0.14.3 (installed from <a href="https://github.com/dp-next/fastreg">GitHub</a>) it is a duckplyr data frame whose <code>class()</code> starts with <code>"prudent_duckplyr_df"</code>. Check yours with <code>packageVersion("fastreg")</code>.</p>
 <div class="callout callout-style-simple callout-important">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong><code>read_parquet_dataset()</code> does not use your <code>options()</code> path.</strong> Only <code>read_register()</code> looks names up under the folders you set. The two <code>read_parquet_*()</code> functions need the <strong>full path</strong>, including any subfolders below the folder you set. So if you set the path to <code>cleaned-data/</code>, you still have to write the whole way down: <code>"E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"</code>.</p>
+<p><strong><code>read_parquet_dataset()</code> does not use your <code>options()</code> path.</strong> Only <code>read_register()</code> looks names up under the folders you set. The two <code>read_parquet_*()</code> functions need the <strong>full path</strong>, including any subfolders below the folder you set. So if you set the path to a parent folder, you still have to write the whole way down: <code>"E:/workdata/[projectnumber]/[your-parquet-folder]/lmdb"</code>.</p>
 </div>
 </div>
 </div>
@@ -846,12 +828,12 @@ If fastreg is not available on your project: convert manually with haven + arrow
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. If the register is not on the list, point at the folder with the full path</span></span>
 <span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>lmdb <span class="ot">&lt;-</span> <span class="fu">read_parquet_dataset</span>(</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"E:/workdata/[projectnumber]/cleaned-data/parquet-external/lmdb"</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"E:/workdata/[projectnumber]/[your-parquet-folder]/lmdb"</span></span>
 <span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. If it is a single file rather than a folder, use read_parquet_file()</span></span>
 <span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>table <span class="ot">&lt;-</span> <span class="fu">read_parquet_file</span>(</span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"E:/workdata/[projectnumber]/cleaned-data/parquet-external/my_table.parquet"</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"E:/workdata/[projectnumber]/[your-parquet-folder]/my_table.parquet"</span></span>
 <span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="co"># From there the code is the same as after read_register()</span></span>
@@ -860,16 +842,6 @@ If fastreg is not available on your project: convert manually with haven + arrow
 <span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(eksd <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">"2010-01-01"</span>)) <span class="sc">%&gt;%</span></span>
 <span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd) <span class="sc">%&gt;%</span></span>
 <span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>On DARTER (project 708421)</strong> the remaining registers are being converted to fastreg format during <strong>August 2026</strong>. Until then a few registers may need <code>read_parquet_dataset()</code> even though they are listed with <code>read_register()</code> in <a href="./darter-register-paths-datastores.html">DARTER - Register paths and datastores</a>. After that, the name lookup works for all of them. <em>(Noted July 2026.)</em></p>
-</div>
-</div>
-</div>
 </section>
 <section id="duckdb-views" class="level2">
 <h2 class="anchored" data-anchor-id="duckdb-views">Several registers on one DuckDB connection</h2>
@@ -894,10 +866,10 @@ If fastreg is not available on your project: convert manually with haven + arrow
 <span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="co">#    *.parquet  = every file ending in .parquet</span></span>
 <span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="co">#    hive_partitioning = true reads the year from folder names like year=2015/</span></span>
 <span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"CREATE VIEW bef AS SELECT * FROM read_parquet(</span></span>
-<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/bef/**/*.parquet',</span></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/[your-parquet-folder]/bef/**/*.parquet',</span></span>
 <span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="st">  hive_partitioning = true)"</span>)</span>
 <span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"CREATE VIEW faik AS SELECT * FROM read_parquet(</span></span>
-<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/faik/**/*.parquet',</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/[your-parquet-folder]/faik/**/*.parquet',</span></span>
 <span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a><span class="st">  hive_partitioning = true)"</span>)</span>
 <span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Lazy dplyr tables - nothing is loaded into R yet</span></span>
@@ -911,7 +883,7 @@ If fastreg is not available on your project: convert manually with haven + arrow
 <p>Edit the paths to your own project. If a register sits in one flat folder with no year subfolders, use <code>'.../faik/*.parquet'</code> and leave out <code>hive_partitioning</code>.</p>
 <p><strong>Why this, and not <code>read_register()</code>, for these steps:</strong></p>
 <ul>
-<li><strong>Nothing is computed in R behind your back.</strong> <code>read_register()</code> hands you a <code>duckplyr</code> table. duckplyr uses the same DuckDB engine, but when it cannot translate a step it falls back to computing that step in R’s memory instead, with no warning. fastreg opens registers as “thrifty”, so for a large table that fallback stops with a materialization error rather than running in the database; for a smaller one the data quietly ends up in RAM. A <code>tbl()</code> on a plain DBI connection uses <code>dbplyr</code>, which only ever sends SQL to DuckDB, and <code>show_query()</code> shows you exactly what it sent.</li>
+<li><strong>Nothing is computed in R behind your back.</strong> From fastreg 0.14.3, <code>read_register()</code> hands you a <code>duckplyr</code> table. duckplyr uses the same DuckDB engine, but when it cannot translate a step it falls back to computing that step in R’s memory instead, with no warning. fastreg opens registers as “thrifty”, so for a large table that fallback stops with a materialization error rather than running in the database; for a smaller one the data quietly ends up in RAM. A <code>tbl()</code> on a plain DBI connection uses <code>dbplyr</code>, which only ever sends SQL to DuckDB, and <code>show_query()</code> shows you exactly what it sent.</li>
 <li><strong>Both registers on one connection.</strong> A join runs inside the database only when both sides live on the same connection. Two tables opened separately either fail with an error asking for <code>copy = TRUE</code>, or have to be collected into R first, which is exactly what a whole-population step cannot afford.</li>
 <li><strong>Exact quantiles.</strong> DuckDB computes <code>quantile()</code> exactly, interpolating the same way as R’s default. Arrow datasets queried directly give <em>approximate</em> quantiles (up to about 1% off in testing, with a warning), which is not good enough for cutpoints.</li>
 <li><strong>It can spill to disk.</strong> With <code>memory_limit</code> and <code>temp_directory</code> set, DuckDB writes intermediate results to disk instead of running out of RAM.</li>
@@ -1439,11 +1411,11 @@ If fastreg is not available on your project: convert manually with haven + arrow
      ============================================================ -->
 <div id="dsthelp-fb" data-state="closed">
   <button type="button" id="dsthelp-fb-tab" aria-expanded="false" aria-controls="dsthelp-fb-panel">
-    <span id="dsthelp-fb-tab-label">💬 Feedback</span>
+    <span id="dsthelp-fb-tab-label">Feedback</span>
   </button>
 
   <div id="dsthelp-fb-panel" role="dialog" aria-labelledby="dsthelp-fb-heading" hidden="">
-    <button type="button" id="dsthelp-fb-close" aria-label="Luk">×</button>
+    <button type="button" id="dsthelp-fb-close" aria-label="Close">×</button>
     <h2 id="dsthelp-fb-heading"></h2>
     <p id="dsthelp-fb-intro"></p>
 
@@ -1471,12 +1443,12 @@ If fastreg is not available on your project: convert manually with haven + arrow
   var FEEDBACK_ENDPOINT = "https://dsthelp-feedback.sarasschwartz.workers.dev";
 
   var t = {
-    tab: "💬 Feedback", heading: "Feedback on this page",
+    tab: "Feedback", heading: "Feedback on this page",
     intro: "All input, big or small, is appreciated. It is anonymous.",
     message: "Your feedback", email: "Email",
     opt: "(optional - for a reply, or to hear when this page is updated)",
     send: "Send", sending: "Sending…",
-    ok: "Thanks for your feedback! 🙌",
+    ok: "Thanks for your feedback.",
     err: "Something went wrong. Please try again, or email saras@clin.au.dk.",
     close: "Close",
     note: "<strong>Seeing changes:</strong> after a page is updated, your browser may still show an old, cached copy. Hard-refresh to load the latest version: <kbd>Ctrl</kbd>+<kbd>F5</kbd> (Windows) or <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (Mac). If you leave your email, we'll let you know if/when this page is updated."
@@ -1585,6 +1557,38 @@ If fastreg is not available on your project: convert manually with haven + arrow
   }
   window.addEventListener('DOMContentLoaded', openTarget);
   window.addEventListener('hashchange', openTarget);
+})();
+</script>
+
+<!-- Keyboard access to code and to collapsed callouts.
+     1. A code block whose lines are wider than the box scrolls sideways, but
+        only with a mouse or touch: the box cannot get keyboard focus, so a
+        keyboard user cannot read the end of a long line. tabindex="0" lets
+        them tab to it and scroll with the arrow keys.
+     2. Quarto makes the header of a collapsed callout clickable, but not
+        focusable, and labels it "Toggle callout", so a screen reader hears
+        that instead of the title. Here it becomes a button that Tab reaches
+        and Enter or Space opens, named by its own title. -->
+<script>
+(function () {
+  function keyboardAccess() {
+    document.querySelectorAll("div.sourceCode pre").forEach(function (pre) {
+      if (pre.scrollWidth > pre.clientWidth) pre.setAttribute("tabindex", "0");
+    });
+    document.querySelectorAll('.callout-header[data-bs-toggle="collapse"]').forEach(function (h) {
+      h.setAttribute("role", "button");
+      h.setAttribute("tabindex", "0");
+      h.removeAttribute("aria-label");
+      h.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); h.click(); }
+      });
+    });
+  }
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", keyboardAccess);
+  } else {
+    keyboardAccess();
+  }
 })();
 </script>
 

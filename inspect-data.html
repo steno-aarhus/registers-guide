@@ -86,7 +86,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="site_libs/quarto-html/quarto-syntax-highlighting-5de16f5e46225c21e2daa90d340bf64f.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-a00d3ed60521f4279dc66263b9683371.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-2c458bc0c34172ddcace88404c2b0f6b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -99,9 +99,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "/",
     "s"
   ],
-  "show-item-context": false,
+  "show-item-context": "parent",
   "language": {
-    "search-no-results-text": "No results. Try Search by meaning in the navbar - it understands synonyms and Danish.",
+    "search-no-results-text": "No results. Try Search by meaning in the top bar: it also looks for synonyms and Danish words.",
     "search-matching-documents-text": "matching documents",
     "search-copy-link-title": "Copy link to search",
     "search-hide-matches-text": "Hide additional matches",
@@ -142,7 +142,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll ms-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./search.html" aria-current="page"> <i class="bi bi-lightbulb" role="img" aria-label="Search the guide by meaning, synonyms and Danish">
+    <a class="nav-link active" href="./search.html" aria-current="page"> <i class="bi bi-lightbulb" role="img">
 </i> 
 <span class="menu-text">Search by meaning</span></a>
   </li>  
@@ -612,7 +612,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./file-formats.html">Get your data · 4-8</a></li><li class="breadcrumb-item"><a href="./inspect-data.html">7 - Inspect your data</a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title">Inspect and understand your data</h1>
-<p class="subtitle lead">The most important commands for seeing what you actually have</p>
+<p class="subtitle lead">Commands to check what an extract contains: columns and types, values, missing values, dates and register coverage</p>
 </div>
 
 <div>
@@ -640,8 +640,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>In Phase 6 you made your first extraction - with synthetic data from <code>fiktive</code>. Now you have data, and before you analyse it you need to understand what you have. It is only here that these commands make sense: they are tools for <em>looking at</em> a dataset, so they are meaningless without data to look at.</p>
-<p>This page shows the commands you will use again and again to inspect your extracts.</p>
+<p>Use this page every time you have pulled data into R and before you build anything on it: it collects the commands for checking what an extract actually contains. You need an extract to look at, so do <a href="./first-extraction.html">Phase 6 - First extraction</a> first. When you are done you know the size, column types, values, missing values and date ranges of your extract, and whether each register you use reaches the end of your follow-up.</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -673,7 +672,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Those four work on data that is already in R. On a <strong>lazy</strong> object - one you have opened but not yet <code>collect()</code>ed, called <code>bef</code> in the examples below - checking the column names is fiddlier than it looks, and both of the obvious ways can mislead you:</p>
 <ul>
 <li><code>names()</code> on a lazy DuckDB connection made with <code>to_duckdb()</code> returns the <em>connection’s</em> parts (<code>src</code>, <code>lazy_query</code>), not the table’s columns.</li>
-<li><code>colnames()</code> works on the DuckDB objects <code>read_register()</code> gives you, but on a lazy <strong>Arrow</strong> query that has been through <code>rename_with()</code> it can return an <strong>empty vector</strong> without any error - so columns that exist look missing. (Seen on arrow 23.0.1 outside DST; not yet confirmed on the server.)</li>
+<li><code>colnames()</code> works on the DuckDB objects <code>read_register()</code> gives you, but on a lazy <strong>Arrow</strong> query that has been through <code>rename_with()</code> it can return <code>NULL</code> without any error, so columns that exist look missing. (Seen with arrow 23.0.1; other arrow versions may behave differently.)</li>
 </ul>
 <p>The reliable version fetches the structure with zero rows:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(<span class="fu">collect</span>(<span class="fu">head</span>(bef, <span class="dv">0</span>))) <span class="co"># column names of a lazy object, nothing read</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -699,8 +698,8 @@ Example with simple data
 <p><code>class(bef_data)</code> tells you whether you have real data (<code>"data.frame"</code>/<code>"tbl_df"</code>) or still just an unsent query. You can see four different kinds of return value:</p>
 <ul>
 <li><code>"data.frame"</code> / <code>"tbl_df"</code> <em>without</em> <code>"prudent_duckplyr_df"</code> - data is in R. You can use all functions.</li>
-<li><code>"prudent_duckplyr_df"</code> (followed by <code>"duckplyr_df" "tbl_df" "tbl" "data.frame"</code>) - a lazy DuckDB table from <code>read_register()</code>. It says <code>"data.frame"</code>, but nothing is fetched yet. Missing <code>collect()</code>.</li>
-<li><code>"FileSystemDataset"</code> (from <code>open_dataset()</code>) or <code>"tbl_duckdb_connection"</code> (from <code>to_duckdb()</code>) - a lazy Arrow/DuckDB connection. Missing <code>collect()</code>.</li>
+<li><code>"prudent_duckplyr_df"</code> (followed by <code>"duckplyr_df" "tbl_df" "tbl" "data.frame"</code>) - a lazy DuckDB table from <code>read_parquet_duckdb()</code>, or from <code>read_register()</code> in fastreg 0.14.3 or newer. It says <code>"data.frame"</code>, but nothing is fetched yet. Missing <code>collect()</code>.</li>
+<li><code>"FileSystemDataset"</code> (from <code>open_dataset()</code>) or <code>"tbl_duckdb_connection"</code> (from <code>to_duckdb()</code>, or from <code>read_register()</code> in fastreg 0.14.2 or older) - a lazy Arrow/DuckDB connection. Missing <code>collect()</code>.</li>
 <li><code>"arrow_dplyr_query"</code> - an Arrow query with one or more piped steps (e.g. <code>filter()</code> or <code>select()</code>), but not yet executed. Missing <code>collect()</code>.</li>
 </ul>
 <div class="callout callout-style-simple callout-tip">
@@ -727,7 +726,7 @@ Example with simple data
 </div>
 <div class="callout-body-container">
 <p><strong>Two things must be in place before the commands in the rest of this section work</strong></p>
-<p><strong>1. Give your extraction a name.</strong> If you just write <code>open_dataset(...)</code> (or <code>read_register(...)</code> in DARTER) without storing it in an object, R only prints a quick preview and throws the result away - there is nothing to inspect afterwards. Assign it a name with <code>&lt;-</code> (see <a href="./r-intro.html#what-is-an-object">Phase 2 - What is an object?</a>) so you can reuse it.</p>
+<p><strong>1. Give your extraction a name.</strong> If you just write <code>open_dataset(...)</code> or <code>read_register(...)</code> without storing it in an object, R only prints a quick preview and throws the result away - there is nothing to inspect afterwards. Assign it a name with <code>&lt;-</code> (see <a href="./r-intro.html#what-is-an-object">Phase 2 - What is an object?</a>) so you can reuse it.</p>
 <p><strong>2. Pull the data into R with <code>collect()</code> first.</strong> Every command that uses <code>$</code> (e.g.&nbsp;<code>table(bef$koen)</code>, <code>unique()</code>, <code>summary()</code>, <code>min()/max()/median()</code>, <code>hist()</code>, <code>colSums(is.na())</code>) needs real data in R - <code>$</code> cannot extract a column from a lazy Arrow/DuckDB connection. Check with <code>class(bef)</code>: if it does not say <code>"data.frame"</code>/<code>"tbl_df"</code>, or it still says <code>"prudent_duckplyr_df"</code>, you are missing a <code>collect()</code>.</p>
 <p>You do <strong>not</strong> rewrite <code>read_register()</code>/<code>open_dataset()</code> to pull the data in - keep working with the object you already made. Reuse the name and store the result, usually under the same name, so <code>bef</code> is overwritten and is now real data. On a real register, always reduce it with <code>filter()</code>/<code>select()</code> first:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register()</span></span>
@@ -796,7 +795,7 @@ Example with simple data
 <ul>
 <li><strong>NA in a key variable</strong> (index date, pnr, outcome) is serious - these persons cannot be correctly included in the analysis, and you must decide whether to exclude them.</li>
 <li><strong>NA in a covariate</strong> (e.g.&nbsp;income) can often be handled - e.g.&nbsp;with a separate “unknown” category or <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8499698/">imputation</a>.</li>
-<li><strong>NA from a join</strong> usually means a person was not found in the right-hand dataset - e.g.&nbsp;no prescription record. Here <code>NA</code> is effectively a “no/none”, not an error.</li>
+<li><strong>NA from a join</strong> means the person was not found in the right-hand dataset. What that means depends on the register. In an event register (prescriptions, hospital contacts) no row usually means no event, so <code>NA</code> is effectively a “no”. In a status register (education, income, employment) no row means the information is unknown for that person, so <code>NA</code> is genuinely missing and must not be recoded to “none”.</li>
 </ul>
 <p>Always check <code>colSums(is.na(data))</code> immediately after an extraction or a join, so you detect unexpected gaps before they propagate silently through the analysis.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(bef_data) <span class="co"># min, max, median, mean and quartiles for all columns</span></span>
@@ -864,10 +863,12 @@ Example with simple data
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Rows per year of the event date: look for a year that is missing or much smaller</span></span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="fu">read_register</span>(<span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">event_year =</span> <span class="fu">year</span>(eksd)) <span class="sc">%&gt;%</span> <span class="co"># the year the event happened</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(event_year) <span class="sc">%&gt;%</span> <span class="co"># number of rows in each year</span></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(event_year) <span class="sc">%&gt;%</span> <span class="co"># oldest year first</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(eksd) <span class="sc">%&gt;%</span> <span class="co"># rows per date, counted in DuckDB: one row per day comes back</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">event_year =</span> <span class="fu">as.integer</span>(<span class="fu">format</span>(eksd, <span class="st">"%Y"</span>))) <span class="sc">%&gt;%</span> <span class="co"># the year the event happened, now in R</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(event_year, <span class="at">wt =</span> n) <span class="sc">%&gt;%</span> <span class="co"># add up the daily counts per year</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(event_year) <span class="co"># oldest year first</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The year is taken in R, after <code>collect()</code>, because the DuckDB backend that newer fastreg versions use cannot translate <code>year()</code> and stops with an error on a large register.</p>
 <p>It also helps to know when the parquet copy was made. If the folder has not changed in a long time, newer years are probably missing:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">file.info</span>(<span class="st">"path/to/parquet-registers/bef/"</span>)<span class="sc">$</span>mtime <span class="co"># replace with your project's path</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>If a register stops before your follow-up ends, either end follow-up at the register’s last date, or ask your data manager whether a newer delivery or the raw SAS files cover the missing years.</p>
@@ -1417,11 +1418,11 @@ More exploration: count, sort and quick plots
      ============================================================ -->
 <div id="dsthelp-fb" data-state="closed">
   <button type="button" id="dsthelp-fb-tab" aria-expanded="false" aria-controls="dsthelp-fb-panel">
-    <span id="dsthelp-fb-tab-label">💬 Feedback</span>
+    <span id="dsthelp-fb-tab-label">Feedback</span>
   </button>
 
   <div id="dsthelp-fb-panel" role="dialog" aria-labelledby="dsthelp-fb-heading" hidden="">
-    <button type="button" id="dsthelp-fb-close" aria-label="Luk">×</button>
+    <button type="button" id="dsthelp-fb-close" aria-label="Close">×</button>
     <h2 id="dsthelp-fb-heading"></h2>
     <p id="dsthelp-fb-intro"></p>
 
@@ -1449,12 +1450,12 @@ More exploration: count, sort and quick plots
   var FEEDBACK_ENDPOINT = "https://dsthelp-feedback.sarasschwartz.workers.dev";
 
   var t = {
-    tab: "💬 Feedback", heading: "Feedback on this page",
+    tab: "Feedback", heading: "Feedback on this page",
     intro: "All input, big or small, is appreciated. It is anonymous.",
     message: "Your feedback", email: "Email",
     opt: "(optional - for a reply, or to hear when this page is updated)",
     send: "Send", sending: "Sending…",
-    ok: "Thanks for your feedback! 🙌",
+    ok: "Thanks for your feedback.",
     err: "Something went wrong. Please try again, or email saras@clin.au.dk.",
     close: "Close",
     note: "<strong>Seeing changes:</strong> after a page is updated, your browser may still show an old, cached copy. Hard-refresh to load the latest version: <kbd>Ctrl</kbd>+<kbd>F5</kbd> (Windows) or <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> (Mac). If you leave your email, we'll let you know if/when this page is updated."
@@ -1563,6 +1564,38 @@ More exploration: count, sort and quick plots
   }
   window.addEventListener('DOMContentLoaded', openTarget);
   window.addEventListener('hashchange', openTarget);
+})();
+</script>
+
+<!-- Keyboard access to code and to collapsed callouts.
+     1. A code block whose lines are wider than the box scrolls sideways, but
+        only with a mouse or touch: the box cannot get keyboard focus, so a
+        keyboard user cannot read the end of a long line. tabindex="0" lets
+        them tab to it and scroll with the arrow keys.
+     2. Quarto makes the header of a collapsed callout clickable, but not
+        focusable, and labels it "Toggle callout", so a screen reader hears
+        that instead of the title. Here it becomes a button that Tab reaches
+        and Enter or Space opens, named by its own title. -->
+<script>
+(function () {
+  function keyboardAccess() {
+    document.querySelectorAll("div.sourceCode pre").forEach(function (pre) {
+      if (pre.scrollWidth > pre.clientWidth) pre.setAttribute("tabindex", "0");
+    });
+    document.querySelectorAll('.callout-header[data-bs-toggle="collapse"]').forEach(function (h) {
+      h.setAttribute("role", "button");
+      h.setAttribute("tabindex", "0");
+      h.removeAttribute("aria-label");
+      h.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); h.click(); }
+      });
+    });
+  }
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", keyboardAccess);
+  } else {
+    keyboardAccess();
+  }
 })();
 </script>
 
