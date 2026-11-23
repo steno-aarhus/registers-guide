@@ -1,24 +1,23 @@
 ---
 title: "Comparison cohort"
-subtitle: "Matched cohort study - theory and code flow for building a comparison group"
+subtitle: "Risk-set matching of unexposed comparison persons to your exposed, with heaven::exposureMatch() or a manual loop"
 date: last-modified
 pagetitle: "Matched comparison cohort in Danish registers"
 description: "Build a matched comparison cohort from Danish registers: risk-set matching on the index date with BEF data and heaven::exposureMatch() or a manual loop in R."
 ---
 
-This page continues from [Build your study
-population](build-study-population.qmd), where you identified your
-**exposed** and excluded prevalent cases (the object `exposed` with `pnr`,
-`index_date` and `exposed = 1`). This page shows the **matched** comparison
-group: people who are *not* exposed but resemble the exposed on the variables
-you match on, and who were at risk on the assigned index date.
+Use this page when your study compares exposed people with a matched group of
+unexposed people from the population. It comes after [Build your study
+population](build-study-population.qmd), where you identified the exposed and
+excluded prevalent cases (the object `exposed` with `pnr`, `index_date` and
+`exposed = 1`). Here you build the comparison group: people who are not exposed,
+resemble the exposed on the variables you match on, and were at risk on the
+index date they are assigned. When you are done you have `full_cohort.rds` with
+both groups, a matched-set id and the index date per row.
 
-::: {.callout-tip}
-**Not matching the group?** You can also use an **unmatched** comparison group
-and instead adjust for the confounders in the analysis. In that case, skip to
-the section [Without matching](#without-matching-an-unmatched-comparison-group)
-at the bottom of the page.
-:::
+If you would rather not match and instead adjust for confounders in the
+analysis, go to [Without matching](#without-matching-an-unmatched-comparison-group)
+near the end of the page.
 
 ::: {.callout-warning title="Structural guidance, not verified code"}
 The examples show the shape of each step. They have **not yet been run end to end
@@ -27,27 +26,28 @@ against your own delivery, and check the logic against your analysis plan.
 Confirm too that `heaven::exposureMatch()` is available on your project.
 :::
 
-## A little theory before you match
+## Risk-set sampling: who can be a comparison person {#a-little-theory-before-you-match}
 
-A comparison group gives you the **counterfactual** experience: what would have
+A comparison group gives you the counterfactual experience: what would have
 happened to the exposed had they not been exposed.
 
-**The most important rule:** a comparison person is **assigned the exposed
-person's index date** and must be **at risk on exactly that date** - alive,
-resident in Denmark, free of your outcome and meeting your criteria. This is the
-core of **risk-set (incidence-density) sampling**, and it is what prevents
-*immortal time bias* (assigning someone follow-up time during which they could
+The main rule: a comparison person is assigned the exposed person's index date
+and must be at risk on exactly that date: alive, resident in Denmark, free of
+your outcome and meeting your criteria. This is the core of **risk-set
+(incidence-density) sampling**, and it is what prevents immortal time bias
+(assigning someone follow-up time during which they could
 not possibly have had the outcome). A person can be a comparison person now and
-become exposed themselves later - that is correct (see *Crossover* below).
+become exposed themselves later; that is correct (see the crossover fold-out
+below).
 
 ### What "risk set" means, and why the index date decides everything
 
 **Study start vs. index date.** Study start is the common date the study begins
 to look at data (e.g. 1 January 2010) - the same for everyone. The index date is
 a person's *own* start of follow-up: for an exposed person it is the exposure
-date, and a comparison person is **assigned the exposed person's index date**. It
+date, and a comparison person is assigned the exposed person's index date. It
 therefore varies from one exposed person to the next, and each comparison person
-is judged on *exactly that date*. Requiring "at risk" on the index date rather
+is judged on exactly that date. Requiring "at risk" on the index date rather
 than at study start is what stops you including someone who had already died or
 emigrated by the time the exposed person was exposed.
 
@@ -55,7 +55,7 @@ emigrated by the time the exposed person was exposed.
 everyone still at risk right then - alive, outcome-free, under observation.
 Comparison persons are sampled from that set. An unexposed person stays in it
 until they themselves become exposed, then leaves it (and can become a case).
-Risk-set sampling captures that movement, because eligibility is judged **on**
+Risk-set sampling captures that movement, because eligibility is judged on
 the index date rather than once and for all.
 
 ![Risk-set sampling: on the case's index date (dashed line) comparison persons are sampled from those still at risk. A person who later becomes exposed can be a comparison person until their own exposure (crossover) and is then censored; someone who died or emigrated before index is not at risk.](images/risk_set_example.svg){fig-alt="Timeline with six people. A vertical dashed line marks the case's index date. People whose lifeline crosses the index date and are still alive form the risk set and can be sampled as comparison persons. One person later becomes exposed (crossover) and is then censored; another died or emigrated before index and is not at risk." width="100%"}
@@ -64,37 +64,37 @@ the index date rather than once and for all.
 
 Matching variables are typically sex and birth year, but can also be index
 date/calendar year, SES and municipality. Whether a person may be reused is
-decided here, below. Whether to match **at all** is the other decision, and it is
+decided below. Whether to match at all is the other decision, and it is
 a different route through the page - see [Without
 matching](#without-matching-an-unmatched-comparison-group) after the four steps.
 
 <details>
-<summary>**Crossover** - a comparison person who later becomes exposed</summary>
+<summary>Crossover: what to do with a comparison person who later becomes exposed</summary>
 
-In a risk-set design a future-exposed person is allowed to be a comparison person UNTIL their own exposure date. **So do NOT exclude everyone who ever becomes exposed** - that conditions on the future and can overestimate the effect (immortal-time / selection bias). Instead store a `crossover_date` = the date the person themselves becomes exposed, and decide how to handle it: censor at crossover, or let the person switch group.
+In a risk-set design a future-exposed person is allowed to be a comparison person until their own exposure date. So do not exclude everyone who ever becomes exposed: that conditions on the future and can overestimate the effect (immortal-time or selection bias). Instead store a `crossover_date` = the date the person themselves becomes exposed, and decide how to handle it: censor at crossover, or let the person switch group.
 
 Crossover is explained briefly here; the censoring itself is done when follow-up time is calculated, in [Link your extracts](joins.qmd#follow-up-time).
 
 </details>
 
 <details>
-<summary>**Choice of comparison group** - general population vs. active comparison</summary>
+<summary>General population or active comparison group: which to choose</summary>
 
 - **General population:** maximal contrast, but a risk of confounding by indication (the exposed differ systematically from the background population).
 - **Active comparison:** unexposed individuals WITH the same underlying indication (e.g. people with the same underlying disease but a different or no treatment). Reduces confounding by indication, but the group is smaller and may itself be selected, depending on how the indication is identified.
 
-Choose based on your research question; some studies report both. If you use **more than one** comparison group, they can share individuals - analyze each group separately against the same exposed, and do not pool them.
+Choose based on your research question; some studies report both. If you use more than one comparison group, they can share individuals - analyze each group separately against the same exposed, and do not pool them.
 
 </details>
 
 <details>
-<summary>**Matching variables and ratio** - match only on confounders</summary>
+<summary>Which variables to match on, and how many comparison persons per exposed</summary>
 
-Match only on what you want to adjust for by design (typically sex, age, calendar time). **Avoid over-matching** (matching on a mediator or on a consequence of the exposure itself). At best it just costs precision; at worst you risk introducing bias.
+Match only on what you want to adjust for by design (typically sex, age, calendar time). Avoid over-matching (matching on a mediator or on a consequence of the exposure itself). At best it just costs precision; at worst you risk introducing bias.
 
-Ratio (e.g. 1:5): more comparison persons give more precision, but with **diminishing returns** - each extra comparison person raises precision less and less, so at some point the gain is not worth the extra data. A large ratio + a narrow pool can also deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 4).
+Ratio (e.g. 1:5): more comparison persons give more precision, but with diminishing returns - each extra comparison person raises precision less and less, so at some point the gain is not worth the extra data. A large ratio + a narrow pool can also deplete the pool, so some exposed get fewer than the ratio. Measure and report how many (see Step 4).
 
-**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around **4-5 comparison persons per exposed** is commonly cited as capturing most of the statistical power (diminishing returns beyond that). Choose a higher ratio if the outcome is rare or the pool is plentiful.
+**How many per exposed/case?** Precision rises with the ratio, but the gain fades quickly: around 4-5 comparison persons per exposed is commonly cited as capturing most of the statistical power (diminishing returns beyond that). Choose a higher ratio if the outcome is rare or the pool is plentiful.
 
 </details>
 
@@ -104,15 +104,15 @@ Epidemiology*](https://pubmed.ncbi.nlm.nih.gov/30310326/).
 
 ### With or without replacement
 
-When you sample comparison persons, decide whether the **same person may be used
-more than once** - a choice that affects both the matching and the **analysis
-afterwards**. Decide BEFORE you match.
+When you sample comparison persons, decide whether the same person may be used
+more than once. The choice affects both the matching and the analysis
+afterwards, so decide it before you match.
 
 - **Default: sample with replacement (risk-set sampling).** A person can be
   matched to several exposed (and themselves become exposed/a case later). In
   [Heide-Jørgensen et al. 2018](https://pubmed.ncbi.nlm.nih.gov/30310326/),
   sampling with replacement did not bias the comparators' outcome risk, whereas
-  5:1 sampling **without** replacement biased it in older, high-risk cohorts,
+  5:1 sampling without replacement biased it in older, high-risk cohorts,
   and chronological sampling without replacement failed to fill the matching
   ratio. `exposureMatch()` and the manual loop below both sample with
   replacement by default.
@@ -122,15 +122,14 @@ afterwards**. Decide BEFORE you match.
   Step 4, and expect bias in older or high-risk cohorts.
 
 ::: {.callout-important}
-**With replacement, be careful in the analysis.** Standard models assume each
-row is an **independent** observation. When the same person appears several
-times (reuse or crossover), that does not hold - the rows are **correlated**,
-and the model "thinks" it has more independent information than it does. The
-result is **confidence intervals that are too narrow** (and p-values too small).
-The fix is **clustered (robust) standard errors**: you tell the model which rows
-belong to the same person (clustering on person id), so the uncertainty is
-computed correctly - or you use a model that handles it. This is an **analysis
-step** to remember; it is expanded in [Robust (clustered) standard
+**With replacement, use clustered standard errors in the analysis.** Standard
+models assume each row is an independent observation. When the same person
+appears several times (reuse or crossover), that does not hold: the rows are
+correlated, and the model treats them as more independent information than they
+are. The result is confidence intervals that are too narrow (and p-values too
+small). The fix is clustered (robust) standard errors: you tell the model which
+rows belong to the same person (clustering on person id), so the uncertainty is
+computed correctly, or you use a model that handles it. It is expanded in [Robust (clustered) standard
 errors](regression.qmd#clustered-standard-errors).
 :::
 
@@ -142,22 +141,21 @@ errors](regression.qmd#clustered-standard-errors).
   | `Epi::ccwc()`              | nested case-control sampling                               | risk-set sampling, see [Case-control](case-control.qmd)   |
   | manual loop                | full control                                               | with replacement by default (`WITHOUT_REPLACEMENT` switch)    |
 
-That a control can be used for several cases IS exactly **replacement** (the
-control is "returned to the pool" and can be drawn again for another case). In
-`heaven`'s current version there is no on/off argument for it; the function does
+That a control can be used for several cases is what replacement means (the
+control is "returned to the pool" and can be drawn again for another case).
+`heaven::exposureMatch()` has no argument to turn it off; the function does
 risk-set matching, where a not-yet-exposed person can be chosen as a control,
 and a future case can be a control until their own exposure (governed by
-`end.followup`). **Confirm the actual behaviour** with `heaven::matchReport()`,
+`end.followup`). Confirm the actual behaviour with `heaven::matchReport()`,
 which shows how often each control is used (and thus whether there really is
 replacement). Also confirm package names and arguments on your own project.
 
 ## Step 1 - Prepare the exposed for matching {.step-heading}
 
-*(Steps 1 and 2 - identify the exposed and exclude prevalent cases - are on the
-[landing page](build-study-population.qmd).)*
-
-Attach sex and birth date from BEF (needed if you want to match on age or birth
-year), **derive** the variables you need (e.g. age at index), and apply your
+Identifying the exposed and excluding prevalent cases are done on [Build your
+study population](build-study-population.qmd). Here you attach sex and birth
+date from BEF (needed if you want to match on age or birth year), derive the
+variables you need (e.g. age at index), and apply your
 inclusion criteria. The same criteria are applied to the pool in Step 2.
 
 **Deriving a variable.** A new column is computed from existing ones with
@@ -169,15 +167,12 @@ mutate(age_at_index = as.numeric(index_date - foed_dag) / 365.25)
 ```
 
 The same applies to other derived measures, e.g. `mutate(bmi = weight_kg /
-(height_m^2))`. Compute it **once** and reuse it, so the matching age and Table 1
+(height_m^2))`. Compute it once and reuse it, so the matching age and Table 1
 always agree - see [Link your extracts](joins.qmd#derived-variables-create-new-columns).
 
 `read_register()` requires fastreg set up with the path to your registers - see
 [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not convert
 them from SAS yourself.
-
-<details open>
-<summary>Show the code: prepare the exposed for matching</summary>
 
 ```r
 # Step 1: prepare the exposed for matching -------------------------------------
@@ -250,29 +245,26 @@ exposed <- exposed %>%
   filter(years_resident >= 5)                             # 5 years CONTINUOUS residence; see fold-out below
 cat("After inclusion criteria:", nrow(exposed),
     "| excluded:", n_before - nrow(exposed), "\n")
-# cat() just prints a readable line in the console; see the Function guide (15a) for cat() and nrow()
+# cat() just prints a readable line in the console; see the Function guide for cat() and nrow()
 
-stopifnot(n_distinct(exposed$pnr) == nrow(exposed))  # STOPS with an error if NOT one row per person (see 15a)
+stopifnot(n_distinct(exposed$pnr) == nrow(exposed))  # STOPS with an error if NOT one row per person
 ```
 
-</details>
-
 <details>
-<summary>How does the 5-year lookback work?</summary>
+<summary>How the 5-year residence requirement works, and why not the earliest BEF year</summary>
 
-The requirement is that the person has lived in Denmark **continuously** for at
+The requirement is that the person has lived in Denmark continuously for at
 least 5 years up to their index date:
 
 `years_resident >= 5`, where `resident_since` is the start of the current
 residence period.
 
-`resident_since` is the date of the latest **immigration** before index - or the
-date of birth, if the person never left. The **same** requirement is used on the
+`resident_since` is the date of the latest immigration before index, or the
+date of birth if the person never left. The same requirement is used on the
 exposed (Step 1) and on the pool at match time (Step 3), so both groups are
 treated identically.
 
-::: {.callout-important}
-**Why not just use the earliest BEF year?** Because BEF is snapshots and says
+**Why not use the earliest BEF year?** Because BEF is snapshots and says
 nothing about whether residence was continuous. Someone seen in BEF in 2005, but
 living abroad 2006-2012 and moving home in 2013, has an earliest BEF year of 2005
 and would satisfy a 5-year requirement at index in 2015 - even though they have
@@ -281,23 +273,23 @@ by `YEAR_FROM` and can therefore never look further back than your study window.
 The residence period from VNDS has neither problem. See [Phase 10 - the source
 population](build-study-population.qmd#step-1) for the rule and the six things
 to check before trusting it.
-:::
 
-And yes: `bef` is loaded lazily (`read_register()`), but `bef_py` is pulled into RAM with `collect()` - it is a concrete table we compute on, not a lazy filter.
+`bef` is loaded lazily (`read_register()`), but `bef_py` is pulled into RAM with `collect()` - it is a concrete table we compute on, not a lazy filter.
 
 </details>
 
 ## Step 2 - Build the comparison pool {.step-heading}
 
-Now we build the **pool** that the comparison group will be drawn from. A member
+Now you build the pool that the comparison group will be drawn from. A member
 must satisfy two things: (1) be in BEF in the relevant years (i.e. resident in
 Denmark), and (2) meet your inclusion and exclusion criteria. The criteria
 depend on dates from several registers (death, emigration, exposure, outcome),
-so we **join** different datasets together to assemble the match pool.
+so you join several tables to assemble the pool.
 
-**The focus now shifts from the exposed to the whole population.** In Steps 1-2
-you only pulled data for the PNRs you had identified as exposed. A comparison
-person, by contrast, can be *anyone* in the background population, so the
+**The focus now shifts from the exposed to the whole population.** On [Build
+your study population](build-study-population.qmd) the exposure definition gave
+you data for the exposed only. A comparison person can be anyone in the
+background population, so the
 variables that decide eligibility - demographics, death date, migration events,
 exposure date, outcome date, lookback - must be available for the whole
 population. That is why `bef_py`/`demographics` were pulled for everyone in Step
@@ -305,22 +297,21 @@ population. That is why `bef_py`/`demographics` were pulled for everyone in Step
 
 The time-varying criteria (alive, exposure-free and outcome-free ON the assigned
 index date) cannot be filtered out here - they are decided at match time in Step
-3: in Path A via `end_fu` (the date a person stops being eligible as a control),
-in Path B via the eligibility filters in the loop. So in this step we make sure
-the pool *carries all the dates* needed to apply them.
+3: in Route A via `end_fu` (the date a person stops being eligible as a control),
+in Route B via the eligibility filters in the loop. So in this step you make sure
+the pool carries all the dates needed to apply them.
 
-We build the pool **on top of `demographics` from Step 1** (the same BEF extract -
-we do not pull it again) and attach everything eligibility depends on: **death
-date**, **exposure date** and **outcome date** (so the outcome before the
+The pool is built on top of `demographics` from Step 1 (the same BEF extract,
+not pulled again), with everything eligibility depends on: death date, exposure
+date and outcome date (so the outcome before the
 assigned index date can be excluded for the comparison person, exactly as for
-the exposed in Step 1). Residence and lookback are instead decided from the
-**migration events** (`vnds_ev`) at match time, because the answer depends on
-the index date. The dates are extracted directly for the population using the
-same patterns as [9b: Extract from LPR](extract-from-lpr.qmd) (shown here as
-finished tables).
+the exposed). Residence and lookback are instead decided from the migration
+events (`vnds_ev`) at match time, because the answer depends on the index date.
+The dates are extracted for the whole population with the same patterns as
+[Extract from LPR](extract-from-lpr.qmd).
 
 ::: {.callout-important}
-**The comparison person must be exposure-free ON index - not "never exposed".**
+**The comparison person must be exposure-free on the index date, not "never exposed".**
 Attach each person's FIRST exposure date to the pool, and decide eligibility at
 match time with `exposure_date > index_date`. This automatically excludes an
 exposed person at their own index, but allows a future-exposed person to be a
@@ -329,12 +320,11 @@ then). Removing everyone who is ever exposed conditions on the future and
 introduces bias.
 :::
 
-<details>
-<summary>Show the code: extract the dates for the WHOLE population</summary>
+### Code: eligibility dates for the whole population {#code-eligibility-dates}
 
-Each date table ends up as **one row per person** (just the date eligibility depends on), so the pool join below keys on `pnr`.
+Each date table ends up as one row per person (just the date eligibility depends on), so the pool join below keys on `pnr`.
 
-**`diagnoses` and `exposure_raw` come from [Phase 10](build-study-population.qmd).** `diagnoses` is the table you built there in Step 3 with `get_lpr_diagnoses()`: every contact with an outcome code, for everyone in BEF and not only the exposed, with the columns `pnr`, `date_contact` and `icd3`. It is not a raw register: the diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, which is why [9b: Extract from LPR](extract-from-lpr.qmd) joins and combines them first. `exposure_raw` is built in 2.2 below from the procedure tables of Phase 10, Example A.
+`diagnoses` and `exposure_raw` come from [Phase 10](build-study-population.qmd). `diagnoses` is the table you built there in Step 3 with `get_lpr_diagnoses()`: every contact with an outcome code, for everyone in BEF and not only the exposed, with the columns `pnr`, `date_contact` and `icd3`. It is not a raw register: the diagnosis registers (`lpr_diag`, `lpr_a_diagnose`) have neither `pnr` nor a date, which is why [Extract from LPR](extract-from-lpr.qmd) joins and combines them first. `exposure_raw` is built in 2.2 below from the procedure tables of Phase 10, Example A.
 
 ```r
 # Extract eligibility dates for the WHOLE population ---------------------------
@@ -389,16 +379,13 @@ saveRDS(death,   "path/to/death_dates.rds")       # date of death
 saveRDS(vnds_ev, "path/to/migration_events.rds")  # ALL entries/exits (not one date per person)
 ```
 
-**Tip:** extract these dates ONCE for the whole population and reuse them for both the exposed and the pool - so you don't query the registers twice.
+Extract these dates once for the whole population and reuse them for both the exposed and the pool, so you do not query the registers twice.
 
-</details>
-
-<details>
-<summary>Show the code: build the pool</summary>
+### Code: build the pool {#code-build-the-pool}
 
 ```r
 # Build the comparison pool (demographics + the dates) -------------------------
-# death, outcome, exp_dt: extracted for the WHOLE population in the fold-out above
+# death, outcome, exp_dt: extracted for the WHOLE population in the block above
 # (or loaded with readRDS if you saved them). Each is one row per person.
 
 # The pool REUSES demographics from Step 1 (we do NOT pull BEF again) and adds the dates.
@@ -407,8 +394,8 @@ saveRDS(vnds_ev, "path/to/migration_events.rds")  # ALL entries/exits (not one d
 # per event, and which one applies depends on the index date - so they are looked
 # up at match time in Step 3, not here.
 
-# For censoring (Path A) we do need ONE exit date per person: the first exit
-# within the study window. See the warning about Path A below.
+# For censoring (Route A) we do need ONE exit date per person: the first exit
+# within the study window. See the warning about Route A below.
 first_exit <- vnds_ev %>%
   filter(indud_kode == "U", haend_dato >= as.Date(paste0(YEAR_FROM, "-01-01"))) %>%
   group_by(pnr) %>%
@@ -422,10 +409,8 @@ pool <- demographics %>%
 # Note: we do NOT remove all exposed - exposure-free status is decided ON index in Step 3.
 ```
 
-</details>
-
 ::: {.callout-important}
-**Exclusion happens BEFORE sampling - and on both groups.** This is not a
+**Exclusion happens before sampling, and on both groups.** This is not a
 separate step but a rule: all inclusion and exclusion criteria (age, residency,
 prevalent outcome) must be applied to BOTH the exposed and the pool, each
 relative to its own/assigned index date, BEFORE you sample. Excluding after
@@ -439,25 +424,24 @@ sampling.
 
 Always set a seed before sampling, so the matching is reproducible.
 
-**Route A and Route B do the same single step - pick one.** A package like
-`exposureMatch()` replaces ONLY the sampling loop. Everything else - prepare the
-exposed, build the pool, exclusions, assemble and validate - you do either way.
+Route A and Route B do the same single step; pick one. A package like
+`exposureMatch()` replaces only the sampling loop. Everything else (prepare the
+exposed, build the pool, exclusions, assemble and validate) you do either way.
 If you take Route A, skip the manual loop and the performance fold-out.
 
-**Route A - `heaven::exposureMatch()` (recommended for most).** It is built
-precisely for a comparison cohort: a case is a person who becomes exposed at
+### Route A: heaven::exposureMatch() {#route-a}
+
+Route A is the one to start with for most studies. `exposureMatch()` is built
+for a comparison cohort: a case is a person who becomes exposed at
 index, and a control is one who is *not yet* exposed at the case's index.
 (`incidenceMatch()` is the sibling for [case-control](case-control.qmd);
 `riskSetMatch()` is the internal engine under both.)
 
 First we combine the exposed and the pool into ONE table (`all_persons`) in the
 format `exposureMatch()` needs: an `event` indicator (1/0), a `case.index` date
-and an `end.followup` date. This is really **getting the match pool ready** -
-the actual sampling is only the function call afterwards. (The manual Route B
+and an `end.followup` date. This prepares the match pool; the sampling itself is
+only the function call afterwards. (The manual Route B
 uses `exposed` and `pool` directly and does not need this assembly.)
-
-<details>
-<summary>Show the code (Route A): match with exposureMatch()</summary>
 
 ```r
 # Step 3 (Route A): match with exposureMatch() ---------------------------------
@@ -547,37 +531,35 @@ cohort <- as_tibble(matched) %>%
   select(-exposure_date)                     # only needed to make crossover_date
 ```
 
-</details>
-
 ::: {.callout-warning}
-**Path A cannot model someone moving back.** `exposureMatch()` gives each person
-**one** `end_fu`, i.e. a single continuous risk interval. Someone who emigrates
+**Route A cannot model someone moving back.** `exposureMatch()` gives each person
+one `end_fu`, i.e. a single continuous risk interval. Someone who emigrates
 in 2008 and moves back in 2010 therefore leaves the risk set in 2008 and never
 re-enters, even though they were genuinely resident from 2010. The consequence
 is lost person-time, not a wrong inclusion, so the direction is conservative -
 but it is there.
 
 If return migration matters in your population (e.g. many migrants or long
-follow-up), use **Path B** below: the loop decides residence at each individual
+follow-up), use Route B below: the loop decides residence at each individual
 index date and therefore handles both exit and return correctly.
 :::
 
 **What can `exposureMatch()` handle itself?** A great deal: it matches exactly
 on `terms`, and via `case.index` + `end.followup` it handles the risk-set time
-dimension - who was still at risk at the case's index. **`end.followup`** is
-exactly the date a person stops being eligible as a control (death, emigration,
-**own exposure = crossover**, or outcome), so the function handles crossover and
+dimension - who was still at risk at the case's index. `end.followup` is
+the date a person stops being eligible as a control (death, emigration,
+own exposure, i.e. crossover, or outcome), so the function handles crossover and
 competing risks. Time-dependent comorbidities can be matched with `date.terms`.
 Only quite unusual criteria require the manual loop.
 
-**Argument vs. value.** In a function call, the argument's **name** is on the
+**Argument vs. value.** In a function call, the argument's name is on the
 left of `=` (fixed, defined by the function, cannot be changed), and the
-**value** you give it is on the right (usually the name of one of your columns,
+value you give it is on the right (usually the name of one of your columns,
 in quotes). E.g. `event = "event"`: the argument is called `event`, and we set
 it to our column `"event"`. Note the difference between `transmute(event = 1L)`
 (here we *create* a column called `event`) and `exposureMatch(event = "event")`
 (here we *point* the function's argument at that column). The arguments here:
-`ptid` = person id, `event` = 0/1 indicator, `terms` = matching variables (MUST
+`ptid` = person id, `event` = 0/1 indicator, `terms` = matching variables (must
 be factor/character; categorize e.g. age), `data` = the dataset, `n.controls` =
 controls per case, `case.index` = the case's index date, `end.followup`,
 `date.terms` (here the entry date) and `seed`. What an argument is, is explained in the [Function
@@ -594,19 +576,21 @@ arguments on your own project (argument names have varied between versions). The
 design choice behind matching is in [Phase
 1](plan-your-study.qmd#comparator-cohort).
 
+### Route B: manual risk-set loop {#route-b}
+
 <details>
-<summary>Route B - manual risk-set loop (full control over eligibility)</summary>
+<summary>Route B code, for caliper matching or criteria Route A cannot express</summary>
 
-It also shows what `exposureMatch()` does under the hood. The manual loop gives full control, but you handle every step yourself, so there are more places it can go wrong - so Route A is often a safe starting point. **When is Route B necessary?** When Route A cannot express what you need, e.g.:
+It also shows what `exposureMatch()` does under the hood. The manual loop gives full control, but you handle every step yourself, so there are more places it can go wrong; Route A is the safer starting point. Route B is needed when Route A cannot express what you need, e.g.:
 
-- **Interval / caliper matching.** `exposureMatch()` only matches *exactly* on fixed factor variables (e.g. same birth year). If you want to match within an **interval** around the case's value - e.g. birth year ±1, age ±2 years or BMI ±5 - that cannot be written as exact matching, so you have to loop yourself. (You can put e.g. age into groups and match exactly on the group in Route A; only a rolling ± around each case's value needs the loop.)
-- **Matching criteria computed relative to the case** beyond what `date.terms`/`duration.terms` cover.
-- **Custom sampling** (e.g. counter-matching or special replacement rules) or your own per-matched-set variables.
-- **The package is not available** on your project.
+- **Interval / caliper matching:** `exposureMatch()` only matches exactly on fixed factor variables (e.g. same birth year). If you want to match within an interval around the case's value - e.g. birth year ±1, age ±2 years or BMI ±5 - that cannot be written as exact matching, so you have to loop yourself. (You can put e.g. age into groups and match exactly on the group in Route A; only a rolling ± around each case's value needs the loop.)
+- **Matching criteria computed relative to the case:** criteria that `date.terms`/`duration.terms` cannot express.
+- **Custom sampling:** e.g. counter-matching or special replacement rules, or your own per-matched-set variables.
+- **The package is not available:** heaven is missing on your project.
 
 For standard register matching (sex, birth year, calendar time, alive/resident/outcome-free/exposure-free at index, comorbidity timing) Route A is enough.
 
-**Chronological order:** we sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. With replacement (the default) the order does not change who can be drawn; it only matters with `WITHOUT_REPLACEMENT = TRUE`, where the earliest exposed use up candidates first - which is why chronological sampling without replacement can fail to fill the ratio (Heide-Jørgensen et al. 2018).
+**Chronological order.** We sort the exposed by index date (`arrange(index_date)`), so the earliest-exposed person gets comparison persons first. This mirrors the real time sequence: each exposed person is matched against those who were at risk on exactly its index date. With replacement (the default) the order does not change who can be drawn; it only matters with `WITHOUT_REPLACEMENT = TRUE`, where the earliest exposed use up candidates first - which is why chronological sampling without replacement can fail to fill the ratio (Heide-Jørgensen et al. 2018).
 
 ```r
 # Step 3 (Route B): manual risk-set loop ---------------------------------------
@@ -661,9 +645,9 @@ comparison_group <- bind_rows(match_list)                # combine all matched s
 </details>
 
 <details>
-<summary>Performance: pre-split the pool (large datasets)</summary>
+<summary>Route B on a large pool: pre-split it by sex and birth year for speed</summary>
 
-With a pool of millions of rows it is expensive to filter the whole pool in every iteration (= one pass of the loop, i.e. one exposed person at a time). Pre-split it into a **named list** keyed by `sex + birth_year`, and pull only the neighbouring birth cohorts per iteration (birth year ±1). It is the same logic as the loop above, just faster.
+With a pool of millions of rows it is expensive to filter the whole pool in every iteration (= one pass of the loop, i.e. one exposed person at a time). Pre-split it into a named list keyed by `sex + birth_year`, and pull only the neighbouring birth cohorts per iteration (birth year ±1). It is the same logic as the loop above, just faster.
 
 ```r
 pool <- pool %>% mutate(pool_key = paste(sex, birth_year))   # build a key string per stratum
@@ -734,7 +718,7 @@ variables, anything measured relative to `index_date` - will then silently
 mix values across that person's different index dates: no error, no `NA`,
 just a value from the wrong window attached to the wrong row.
 
-**The fix:** give `cohort` a stable row id before you extract anything else,
+The fix: give `cohort` a stable row id before you extract anything else,
 and use it (or `pnr` + `index_date` together, as the complete recipe in [Link
 your extracts](joins.qmd) does) as the join key from here on, instead of `pnr`
 alone:
@@ -751,7 +735,7 @@ works through this pattern end to end - why a plain `pnr` join goes wrong and
 how to carry the id through every subsequent extraction - use it as a
 template regardless of which variable you are attaching.
 
-**If the `count(pnr)` check above printed 0** (no person drawn more than
+If the `count(pnr)` check above printed 0 (no person drawn more than
 once), none of this applies: `pnr` alone is a safe join key
 throughout the rest of the guide, and you can ignore this callout entirely.
 :::
@@ -763,7 +747,7 @@ extracts](joins.qmd#joins-link-two-tables).
 ::: {.callout-note}
 **Keep the matched-set id** (`match_id` in the manual loop; `exposureMatch()`
 calls it `case.id`). It tells you which comparison persons belong to which
-exposed person. This matters when the analysis must **respect the matching**:
+exposed person. This matters when the analysis must respect the matching:
 stratified or conditional analysis (e.g. stratified Cox by matched set, or
 conditional logistic regression in [case-control](case-control.qmd)), or at
 least clustered standard errors. Without `match_id` you cannot run a correct
@@ -772,8 +756,8 @@ matched analysis. See [Phase 13](analysis.qmd).
 
 ## Without matching: an unmatched comparison group
 
-A comparison group does not have to be matched. **Matching and adjustment are
-two ways to handle the same confounders:**
+A comparison group does not have to be matched. Matching and adjustment are
+two ways to handle the same confounders:
 
 - **Matching (design):** you balance the groups on e.g. sex, age and calendar
   year before you look at the outcome (that is what Step 3 does). The cost is
@@ -803,7 +787,7 @@ the design stage and is easy to communicate; adjustment retains all information
 and lets you study more variables. You can also combine the two (match on a few,
 adjust for the rest).
 
-## Before you trust the result - checklist
+## Checklist before you trust the matched cohort {#before-you-trust-the-result---checklist}
 
 Every one of these is something you cannot repair after the fact:
 
@@ -818,10 +802,11 @@ Every one of these is something you cannot repair after the fact:
 - **With replacement** (or crossover) → clustered standard errors in the analysis.
 - **Several comparison cohorts** can share individuals - analyze each separately, do not pool them.
 
-## What now?
+## Next step: extract outcomes and covariates for both groups {#what-now}
 
-You have `full_cohort.rds` - one row per person (per matched set, if drawn more than once) with `pnr` and `index_date` for
-**both groups** (exposed + comparison group). Use it in all subsequent
+You have `full_cohort.rds`: one row per person (per matched set, if drawn more
+than once) with `pnr` and `index_date` for both groups (exposed and comparison
+group). Use it in all subsequent
 extractions:
 
 ```r
@@ -829,13 +814,13 @@ cohort <- readRDS("path/to/full_cohort.rds")
 cohort_pnrs <- unique(cohort$pnr) # vector with all pnr's - both exposed and comparison persons
 ```
 
-`cohort_pnrs` thus contains the pnr's for **both exposed and comparison
-persons** - not just the exposed. Extraction of outcomes and covariates must
+`cohort_pnrs` thus contains the pnr's for both exposed and comparison
+persons, not just the exposed. Extraction of outcomes and covariates must
 cover the entire study population.
 
   | Extraction                                      | Phase                                                                          |
   | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-  | Outcomes (diagnoses, date of death, emigration) | [9b: Extract from LPR](extract-from-lpr.qmd), [Outcomes](outcomes.qmd) |
+  | Outcomes (diagnoses, date of death, emigration) | [Extract from LPR](extract-from-lpr.qmd), [Outcomes](outcomes.qmd) |
   | Covariates from BEF (age, sex)                  | [Phase 6](first-extraction.qmd)                                             |
   | Socioeconomic variables                         | [Socioeconomic variables](socioeconomic-variables.qmd)                     |
   | Comorbidity                                     | [Comorbidity](comorbidity.qmd)                                             |
@@ -849,7 +834,9 @@ cover the entire study population.
   is the outcome
 - [Phase 1 - Study preparation](plan-your-study.qmd): design choices behind
   cohort and matching
-- [Outcomes](outcomes.qmd): outcome dates, censoring and crossover
+- [Outcomes](outcomes.qmd): outcome dates and censoring
+- [Link your extracts](joins.qmd#follow-up-time): follow-up time, with
+  censoring at crossover
 - [Phase 12 - Assemble and prepare the dataset](data-manipulation.qmd):
   assemble all extracts into one dataset
 - [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*
