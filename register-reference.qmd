@@ -6,13 +6,21 @@ pagetitle: "Overview of Danish registers at DST"
 description: "Variable names for common Danish registers at Statistics Denmark (DST): BEF, DOD, DODSAARS, VNDS, LPR2, LPR3, SKS procedures, MFR, LMDB, UDDA, FAIK and AKM."
 ---
 
+Use this page to look up which register holds what, what its columns are called
+after `rename_with(tolower)`, and which of them most studies use. You need it
+when you plan your study and order data, and again when you write the
+extraction code. The registers are grouped by topic, with the most used first.
+To search every column in every register at once, use [Find a
+variable](find-a-variable.qmd); for quirks that give a silently wrong result,
+see [Pitfalls](dst-pitfalls.qmd).
+
 ::: {.callout-important}
 **A starting point, not an authority.** This page can be out of date or simply
 wrong, and your own delivery may differ from it. Verify against your files with
 `colnames()` (see [Phase 7 - Inspect your data](inspect-data.qmd)) before you
 rely on anything here. Found a mistake? [Open an
 issue](https://github.com/steno-aarhus/registers-guide/issues) or use the
-feedback box at the bottom - corrections are genuinely welcome.
+feedback box on this page. Corrections are welcome.
 :::
 
 <details>
@@ -39,9 +47,8 @@ ordered.
 
 </details>
 
-Key columns - the ones you actually use in the code - are marked in bold. Names
-apply after `rename_with(tolower)`. See [Pitfalls](dst-pitfalls.qmd) for the
-quirks of each register.
+Key columns, the ones you use in the code, are marked in bold. Names apply after
+`rename_with(tolower)`.
 
 <details>
 <summary>How to read the code examples: `read_register()` vs `open_dataset()`</summary>
@@ -56,12 +63,6 @@ path with your project's parquet folder. Everything else in the examples works
 the same either way.
 
 </details>
-
-::: {.callout-tip}
-**Looking for a particular variable?** [Find a variable](find-a-variable.qmd)
-searches every column in every register at once - the way to see how the same
-thing is named and coded differently from one register to the next.
-:::
 
 ## Where to look things up
 
@@ -373,11 +374,10 @@ LPR3 covers **both** somatic and psychiatric contacts in one table. Join:
 `lpr_a_kontakt` **LEFT JOIN** `lpr_a_diagnose` **ON** `dw_ek_kontakt`.
 
 The "a" in `lpr_a_diagnose` does **not** mean A-type diagnoses. DST describes
-the LPR_A tables, released in June 2025, as an "LPR analyse model" ([Nyt om
-grunddata, 2nd quarter
+the LPR_A tables, which replaced the LPR_F tables in June 2025, as an "LPR
+analyse model" ([Nyt om grunddata, 2nd quarter
 2025](https://www.dst.dk/da/TilSalg/data-til-forskning/nyt-og-meddelelser/2025/nyt-om-grunddata-2-kvartal-2025)).
-The
-table contains all types: A (main) and B (secondary), plus add-on codes (G,
+The table contains all types: A (main) and B (secondary), plus add-on codes (G,
 grundmorbus, is LPR2 only), so you still need to filter on `diag_kode_type`.
 
 ### lpr_a_kontakt - Contacts
@@ -485,13 +485,12 @@ only `recnum`, `d_odto` and `year`, which cannot tell one procedure from
 another. Run `colnames()` first.
 :::
 
-### Combination across the full period
+### SKS procedures from LPR2 and LPR3 in one table {#combination-across-the-full-period}
 
 <details>
-<summary>See the code example: combination across the full period</summary>
+<summary>Code: bind LPR2 and LPR3 procedures into one table with pnr and date</summary>
 
 ```r
-# Replace [projectnumber] with your own project number
 # With fastreg: read_register("registername") instead of open_dataset("path/to/registername/")
 
 # SKS from LPR2 (up to 2018)
@@ -529,400 +528,7 @@ surg_all <- bind_rows(surg_lpr2, surg_lpr3)
 
 </details>
 
-## 6. Other clinical registers
-
-These registers are used less often than those above and are **not**
-column-verified here - the descriptions give an overview, but look up the exact
-variable names in [DST's overview of registers and variable
-lists](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)
-and confirm against your own files with `colnames()`.
-
-### MFR - Medical Birth Register
-
-One row per birth, carrying both mother and child. The mother appears once per
-birth, so a mother of three has three rows; the register is keyed on the child
-through `cpr_barn`.
-
-::: {.callout-important}
-**Three eras, three different data models, not one register with minor
-revisions.** 1973-1996 was paper form reports; not an "MFR" table, but not
-undocumented either - DST's own **`ftbarn`**/**`ftforael`**/**`ftnaevn`**
-("Fertilitet - børn/forælder/Nævner") datasets cover **1973-2025** and
-explicitly incorporate MFR content (`ftbarn`'s weight/length columns are
-documented as matching MFR, alongside its own `MFR_OPLYSNING` column). These
-are demography datasets (parity, birth spacing, fertility-rate denominators),
-not a clinical birth-event table - see below. 1997-2018 is the wide DST
-table below (`mfr`), marked closed by DST with **no successor named on
-DST's own overview** - because the successor is delivered by
-**Sundhedsdatastyrelsen's Forskerservice**, not DST, the same pattern as
-`lpr_a_kontakt`. Nineteen of `mfr`'s own columns are flags backed by their
-own separate DST datasets, plus a full stillbirth detail table - see [MFR
-marker sub-cuts](#mfr-markers) and [`MFRDFOED`](#mfrdfoed) below. From 2019
-onwards the register was fully restructured into
-a main table (`Nyfoedte`) plus ten LPR3-style satellite tables per mother
-and child (`Barn_Forloeb`/`Kontakter`/`Diagnoser`/`Procedurer`/`Resultater`
-and the same five `Mor_*` tables) - see [`mfr_nyfoedte`](#mfr-nyfoedte)
-below. This replaces an earlier, incorrect version of this page's guidance,
-which guessed the split was simply `MFR_MOR_*`/`MFR_BARN_*` tables.
-
-The 2019+ population also differs from the two older eras: 1973-2018
-required the **mother** to have a Danish CPR-number, 2019+ does not. A study
-spanning this boundary is comparing two different populations, not only two
-table shapes.
-:::
-
-### FTBARN / FTFORAEL / FTNAEVN - the pre-1997 period {#ftbarn}
-
-Three separate DST datasets, not one register split three ways: `ftbarn`
-(one row per child), `ftforael` (one row per parent-child link, up to two
-per child), and `ftnaevn` (one row per person per year - the fertility-rate
-**denominator**, not a birth-event table at all). All three cover
-1973-2025, so they overlap with `mfr` and `mfr_nyfoedte` in time; use them
-for the years those two do not reach, 1973-1996.
-
-::: {.callout-warning}
-**DST's own variable-list pages for these three give a short Danish label
-for some columns and none at all for others - no value/code definitions
-anywhere.** Unlike `mfr_nyfoedte`, there is no `code_system` on any coded
-column here (`KOEN`, `LEVENDE_ELLER_DOEDFOEDT`, `CPRTYPE`, `MOR_FAR`, and
-more): inventing a lookup neither DST nor any other source confirms would
-be actively misleading. Confirm actual values with `count()`/`table()` on
-real data before writing code that filters or recodes on any of them.
-:::
-
-`ftforael`'s four parity/spacing variants
-(`DEMOGRAFISK_`/`ENKELT_`/`FAMILIE_`/`MEDICINSK_PARITET`, and the matching
-`_SPACING` columns) are not further defined by DST relative to each other or
-to the simpler `PARITET` column - see `ftforael.yaml`'s reader_note before
-picking one for an analysis.
-
-{{< include _generated/ftbarn-columns.md >}}
-
-{{< include _generated/ftforael-columns.md >}}
-
-{{< include _generated/ftnaevn-columns.md >}}
-
-`gestationsalder_dage` is in **days**, not weeks. `paritet` counts previous
-births, which is not the same as the number of children currently alive.
-
-{{< include _generated/mfr-columns.md >}}
-
-### MFRHJMFO - home births, 1997-2018 {#mfrhjmfo}
-
-Supplementary clinical detail for the home-birth subset of `mfr`, joined via
-`FK_MFR` - **not** a separate population: `mfr` already includes home
-births, flagged via its own `FOEDESTED` and `MARKOER_HJEMMEFOEDSEL_BEREGNET`
-columns. This is the DST-native counterpart to a data-management convention
-of splitting the 1997-2018 era into "home" and "not-home" deliveries.
-
-::: {.callout-warning}
-**DST's page gives no Danish label at all for any column here**, not even
-the partial labelling `ftbarn`/`ftforael`/`ftnaevn` have - the thinnest
-documentation of any register in this schema. Every reader_note on this
-register's columns is an informed guess from the variable name alone
-(Danish administrative/clinical vocabulary), not a sourced fact.
-:::
-
-{{< include _generated/mfrhjmfo-columns.md >}}
-
-### Nyfoedte - Medical Birth Register, 2019 onwards {#mfr-nyfoedte}
-
-The current MFR. One row per newborn, live-born or stillborn, in one table
-(for 1997-2018 DST delivers two datasets, see [`MFRDFOED`](#mfrdfoed)).
-Join `Barn_*` satellite tables via `DW_EK_Nyfoedt`, `Mor_*` satellite tables
-via `DW_EK_Foedsel` (see the ten satellite tables below). `Nyfoedte` itself
-already carries a curated subset of medical facts (diagnosis, weight, Apgar
-score, smoking status) that Sundhedsdatastyrelsen resolves from the
-underlying LPR3 contacts.
-
-::: {.callout-warning}
-**Numeric fields use -1 as "not stated", not `NA`.** `Vaegt_Barn`,
-`Laengde_Barn`, `Hovedomfang`, `Abdominalomfang`, `Placentavaegt`, `Paritet`,
-`Apgarscore` and `BMI_Mor` (as `-1.0`) all use this sentinel. A mean computed
-without recoding it first will be pulled sharply downward. Every stillbirth
-also gets `Apgarscore = 0` by definition, not `-1` - filter on
-`LevendefoedtDoedfoedt` before summarising Apgar scores.
-:::
-
-::: {.callout-tip}
-**Mother's smoking status (`Tobaksforbrug`) uses two SKS code families for
-the same nine categories.** `DUT*` before the LPR3 cutover (Feb/March 2019),
-`RGAB*` from it onwards - `DUT20` and `RGAB20` mean the same thing. See
-`tobaksforbrug.yaml` for the full mapping (resolved via the `sksr` package,
-since Sundhedsdatastyrelsen's own documentation names both prefixes but not
-the per-code labels).
-:::
-
-{{< include _generated/mfr_nyfoedte-columns.md >}}
-
-<details>
-<summary>The ten satellite tables (Barn_*/Mor_* diagnoses, procedures, contacts, course elements, results)</summary>
-
-Same idea as `lpr_a_kontakt`/`lpr_a_diagnose`/`lpr_a_procregistrering`, just
-scoped to birth-related contacts and split by child (`Barn_*`) vs mother
-(`Mor_*`). Join `Barn_*` tables to `Nyfoedte` via `DW_EK_Nyfoedt`, `Mor_*`
-tables via `DW_EK_Foedsel`.
-
-#### Barn_Forloeb / Mor_Forloeb - course elements
-
-{{< include _generated/mfr_barn_forloeb-columns.md >}}
-
-{{< include _generated/mfr_mor_forloeb-columns.md >}}
-
-#### Barn_Kontakter / Mor_Kontakter - contacts
-
-{{< include _generated/mfr_barn_kontakter-columns.md >}}
-
-{{< include _generated/mfr_mor_kontakter-columns.md >}}
-
-#### Barn_Diagnoser / Mor_Diagnoser - diagnoses
-
-{{< include _generated/mfr_barn_diagnoser-columns.md >}}
-
-{{< include _generated/mfr_mor_diagnoser-columns.md >}}
-
-#### Barn_Procedurer / Mor_Procedurer - procedures
-
-{{< include _generated/mfr_barn_procedurer-columns.md >}}
-
-{{< include _generated/mfr_mor_procedurer-columns.md >}}
-
-#### Barn_Resultater / Mor_Resultater - results
-
-::: {.callout-warning}
-**`ResultatVaerdi` is polymorphic.** Depending on `ResultatType`, it holds an
-SKS code, an integer, a boolean, a decimal, a datetime, or a text string.
-`Nyfoedte`'s own resolved columns (`Vaegt_Barn`, `Apgarscore`,
-`Tobaksforbrug`'s `RGAB*` half, and more) are all built from rows in these
-two tables. Branch on `ResultatType` before parsing `ResultatVaerdi`.
-:::
-
-{{< include _generated/mfr_barn_resultater-columns.md >}}
-
-{{< include _generated/mfr_mor_resultater-columns.md >}}
-
-</details>
-
-### MFR marker sub-cuts - the detail behind the flags {#mfr-markers}
-
-Nineteen of `mfr`'s own `MARKOER_*` columns above are flags only - the actual
-SKS-coded finding behind each one is published as its own separate DST
-dataset, joined back to `mfr` via `FK_MFR`. Confirmed against DST's full
-531-register order list (Bestillingsliste.xlsx) on 2026-09-12, the same
-"home births" relationship `MFRHJMFO` already has to `mfr` (see above).
-
-::: {.callout-warning}
-**DST publishes no labels or value definitions for any column in any of
-these 19 datasets.** Two carry a genuine extra measurement alongside the
-SKS code (`MFRBLODM`'s measured blood-loss amount, `MFRNVLAN`'s pH/base
-excess); the rest are three columns wide: the SKS code, its type, and the
-foreign key back to `mfr`.
-:::
-
-<details>
-<summary>All 19 marker sub-cuts</summary>
-
-| Dataset | Backs `mfr`'s flag | What it holds | Coverage |
-| --- | --- | --- | --- |
-| `MFRACCRE` | `markoer_accreta` | Placenta accreta | 1997-2018 |
-| `MFRAKMPL` | `markoer_andre_foedselskomplikati` | Other birth complications | 1997-2018 |
-| `MFRANAES` | `markoer_anaestesi_til_operation` | Anaesthesia for an operation | 2000-2018 |
-| `MFRBLODM` | `markoer_post_partum_bloedning` | Postpartum blood loss, with the measured amount | 2009-2018 |
-| `MFRBRIST` | `markoer_perineal_bristning` | Perineal tears | 1997-2018 |
-| `MFRCARDI` | `markoer_cardiomyopati` | Cardiomyopathy | 1997-2018 |
-| `MFRGKMPL` | `markoer_graviditetskomplikatio` | Pregnancy complications | 1997-2018 |
-| `MFRHAEMO` | `markoer_haemoperitoneum` | Haemoperitoneum | 1997-2018 |
-| `MFRIGANG` | `markoer_igangsaettelse` | Labour induction | 1997-2018 |
-| `MFRINFEK` | `markoer_infektioner` | Infections | 1997-2018 |
-| `MFRKJSNT` | `markoer_kejsersnit` | Caesarean section | 1997-2018 |
-| `MFRMEDSG` | `markoer_medicinske_sygdomme` | Medical conditions | 1997-2018 |
-| `MFRMISDA` | `markoer_b_misdannelse` | Congenital malformation | 1997-2018 |
-| `MFRNVLAN` | `markoer_navlesnorsblod_analyse` | Umbilical cord blood analysis, with pH/base excess | 2003-2018 |
-| `MFRRUPTU` | `markoer_ruptur` | Rupture (e.g. uterine) | 1997-2018 |
-| `MFRSMLIN` | `markoer_smertelindring` | Pain relief | 1999-2018 |
-| `MFRULTRA` | `markoer_ultralyd` | Ultrasound | 1999-2018 |
-| `MFRVESTM` | `markoer_vestimulation` | Labour stimulation (oxytocin) | 1999-2018 |
-| `MFRYVEND` | `markoer_ydre_vending` | External cephalic version | 1997-2018 |
-
-Every row joins to `mfr` via `FK_MFR`. Full column-by-column detail for each
-is in the schema (`schema/registers/mfraccre.yaml` etc.) and searchable on
-[Find a variable](find-a-variable.qmd); it is not repeated here as 19
-near-identical three-column tables.
-
-</details>
-
-### MFRDFOED - stillbirth detail, 1997-2018 {#mfrdfoed}
-
-For 1997-2018 DST delivers two datasets from the Medical Birth Register:
-`mfr`, which DST titles "Levendefødte fra det medicinske fødselsregister" (live
-births), and `mfrdfoed`, titled "Dødsfødsler fra det medicinske
-fødselsregister" (stillbirths) ([DST's register
-overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)).
-Both have a column `LEVENDE_ELLER_DOEDFOEDT`, for which DST gives no values,
-and `mfrdfoed` has the key `FK_MFR`, same as the marker sub-cuts above. DST's
-documentation does not say whether stillborn children also have rows in `mfr`,
-or whether every row in `mfrdfoed` has a matching row in `mfr`. Check both in
-your own delivery before you count births.
-
-::: {.callout-warning}
-**DST gives no label or value definition for any column here**, the same
-thinness as `MFRHJMFO`. Do not confuse this with `LPRMFRDF` ("Dødfødte ud
-fra LPR"), a separate DST register deriving stillbirth data from LPR rather
-than MFR - not modelled in this schema.
-:::
-
-{{< include _generated/mfrdfoed-columns.md >}}
-
-### The Cancer Register
-
-The gold standard for **incident cancer diagnoses** - more complete and precise
-for cancer than LPR diagnoses. Running since 1943, which makes it one of the
-longest continuous cancer registries anywhere. Use it for cancer as an outcome
-or an exclusion.
-
-::: {.callout-important}
-**It is not a DST register.** The Cancer Register is held by
-Sundhedsdatastyrelsen and does not appear in DST's register list at all: a
-project reaches it through Forskerservice, on a separate application. The person
-key is `k_cprnr`, not `pnr`, so rename before joining.
-
-**One row per tumour, not per person.** Somebody with two primary cancers has
-two rows, distinguished by `k_tumornr`. Deduplicating on the person alone
-collapses second primaries and undercounts incidence.
-:::
-
-{{< include _generated/cancer-columns.md >}}
-
-### Primary sector - sysi and sssy (Health Insurance Register) {#sysi-sssy}
-
-Contacts and services in the **primary sector** (general practice, practising
-specialists, physiotherapy etc.). As with LPR, the register is split over time:
-`sysi` covers the older years, `sssy` the newer. Join via `pnr`. Use it for e.g.
-GP/specialist contacts, screening or vaccinations billed in primary care. Key
-fields are named the same in both, but the two registers do not carry an
-identical column set, so verify with `colnames()`. They overlap in 2005: both
-report that year, so reading both without picking a source double-counts it.
-
-::: {.callout-note}
-**No validation studies of this register have ever been published.** Coverage
-is assumed to be high because registration is tied to the provider's
-reimbursement, but that is an inference, not a measured validity, and sysi/sssy
-record almost no clinical information to begin with. Treat diagnoses and
-reasons for contact with more caution than in registers that do have published
-validation studies. See Sahl Andersen et al. 2011, [The Danish National Health
-Service Register](https://doi.org/10.1177/1403494810394718), Scand J Public
-Health 39(Suppl 7):34-37.
-:::
-
-**`sysi` (1990-2005):**
-
-{{< include _generated/sysi-columns.md >}}
-
-**`sssy` (2005-2025):**
-
-{{< include _generated/sssy-columns.md >}}
-
-### Laboratory results - Laboratoriedatabasens Forskertabel {#lab-forsker}
-
-Laboratory and blood test results: HbA1c, lipids, creatinine. A **very large
-register**, so filter with arrow or duckplyr **before**
-you `collect()` into R.
-
-::: {.callout-important}
-**It is not a DST register.** This is Laboratoriedatabasens Forskertabel (LAB_F),
-held by Sundhedsdatastyrelsen and reached through Forskerservice. It is not in
-DST's register list. The exact table name can still differ by project: `lab_forsker`
-and `laboratorieproevesvar` are narrower cuts of the same delivery as
-`lab_dm_forsker` (fewer columns, some renamed - see the reader notes on the
-columns below for the exact differences), not separate registers. In the
-clinical epidemiology literature it is usually called RLRR, Register of
-Laboratory Results for Research (see e.g. [Arendt et al.
-2020](https://doi.org/10.2147/CLEP.S245060), Clinical Epidemiology 12:469-475).
-The columns are named in English: `patient_cpr`, `analysiscode`,
-`samplingdate`, `value`, `unit`. NPU is the *coding system* used in
-`analysiscode`, not a column name.
-
-::: {.callout-warning}
-**Sundhedsdatastyrelsen updated the laboratory delivery on 3 October 2025**
-([announcement
-→](https://sundhedsdatastyrelsen.dk/data-og-registre/forskerservice/om-forskerservice/nyheder-fra-forskerservice/2025/data_laboratoriedatabasen_031025)):
-"Det nye LAB erstatter den tidligere version af LAB." The announcement names
-four tables - `laboratorieproevesvar`, `Dimlaboratoriekoder`, `DimNPU` and
-`Proevesvar_optaelling` - but never mentions `lab_dm_forsker` by name, and does
-not say what happens to projects already using it. The official data
-dictionary this page and the schema are built from
-([PDF](https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf))
-is Version 4, dated 1 December 2023 - nearly two years *before* this
-announcement - and documents `lab_dm_forsker` only. So `lab_dm_forsker` is not
-a new "common data model" superseding the older tables; if anything the
-evidence points the other way, with `laboratorieproevesvar` being the one that
-just got new companion tables. Whether `lab_dm_forsker` is being retired, and
-what `laboratorieproevesvar`'s real columns are after the October 2025 change,
-is not resolved here - check the order sheet ("bestillingsark") on
-Sundhedsdatastyrelsen's site, or your own delivery, before relying on either
-name. If you have insights into this issue, please fell free to use the feedback box to the right.
-:::
-
-**`value` is text, not a number.** Alongside numeric results it holds a fixed
-set of words - `POSITIV`, `NEGATIV`, `IKKE PÅVIST`, `INGEN VÆKST` and the blood
-type codes. `as.numeric()` turns every one of them into `NA` without warning,
-which drops exactly the samples where something was found.
-
-**Coverage starts in 2008, not the 1990s**, and complete coverage arrives per
-laboratory between 2010 and 2016. Only NPU- and DNK-coded results reach the
-table, about 95 per cent; results with a laboratory's own local code are absent,
-as are patients who declined consent (Sundhedsdatastyrelsen's [documentation of
-the research
-table](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf)).
-See also [Laboratoriedatabasen
-→](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen).
-
-**Need data from before 2008?** [Arendt et al.
-2020](https://doi.org/10.2147/CLEP.S245060) describes a separate regional
-database, LABKA (held by Aarhus University Hospital's Department of Clinical
-Epidemiology, not DST or Forskerservice), with coverage back to 1997 in two
-regions. It is not documented on this page: neither Arendt et al. 2020 nor
-[Grann et al. 2011](https://doi.org/10.2147/CLEP.S17901), the original LABKA
-paper, gives literal column names, only prose descriptions of what the
-database holds, so there is nothing here to check a real delivery against.
-If you have LABKA access, contact the Department of Clinical Epidemiology
-directly for the actual variable list.
-:::
-
-How to extract a cohort from this table is on [Laboratory
-results](laboratory-results.qmd).
-
-### Healthcare costs (under development)
-
-::: {.callout-warning}
-**Under development - confirm everything in your own delivery.** This section
-describes cost sources at the register level. Exact table and column names and
-the available years **change from year to year** (the DRG rate system is updated
-annually) and are not verified here. Use it as a pointer, and clarify the
-specific files with your data manager.
-:::
-
-To compute **healthcare use/costs** per person, they are typically assembled
-from several sources:
-
-- **Somatic hospital contacts:** DRG-grouped rates from the Danish Health Data
-  Authority (DRG = inpatient, DAG = outpatient). Rates express average operating
-  expenses per DRG group and are computed annually - see [SDS DRG
-  rates](https://sundhedsdatastyrelsen.dk/data-og-registre/sundhedsoekonomi/drg/drg-takster).
-- **Psychiatric hospital contacts:** are **not** billed by DRG. The main
-  principle is a bed-day rate for inpatients and a visit rate for outpatients -
-  keep somatic and psychiatric separate.
-- **Primary sector** (general practice, specialists etc.): fees in `sysi`/`sssy`
-  (see the section above).
-- **Medication:** patient co-payment vs. reimbursement in
-  [LMDB](register-reference.qmd) (section 7).
-
-Availability of cost data varies (some years/sources are missing, e.g. more
-recent DRG years). The pattern is inspired by [the Plana-Ripoll group's code on
-OSF](https://osf.io/zhfyp/overview), but the variable names there are from a
-2022 delivery and should not be assumed current.
-
-## 7. LMDB - Prescription Register {#lmdb}
+## 6. LMDB - Prescription Register {#lmdb}
 
 Owned by the Danish Health Data Authority as the Prescription Register:
 [Lægemiddelstatistikregisteret →](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laegemiddelstatistikregisteret).
@@ -962,11 +568,11 @@ handle this.
 
 </details>
 
-## 8. Socioeconomic registers
+## 7. Socioeconomic registers
 
-All three registers are used for SEP extraction following SEPLINE guidelines
-(Hjorth et al. 2025). No single combined SEP variable is calculated - three
-separate dimensions.
+All three registers are used to measure socioeconomic position (SEP) following
+the SEPLINE guidelines (Hjorth et al. 2025): education, income and employment
+as three separate dimensions, not one combined SEP variable.
 
 ### UDDA - Education Register
 
@@ -1065,6 +671,402 @@ SEPLINE's main groups for `socio13` (Table 6, with the corrigendum):
 The recipe, with the subgroups, is in [Socioeconomic
 variables](socioeconomic-variables.qmd#employment).
 
+## 8. Other clinical registers: birth, cancer, primary care, laboratory, costs {#other-clinical-registers}
+
+These registers are used less often than those above and are **not**
+column-verified here - the descriptions give an overview, but look up the exact
+variable names in [DST's overview of registers and variable
+lists](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)
+and confirm against your own files with `colnames()`.
+
+### MFR - Medical Birth Register
+
+One row per birth, carrying both mother and child. The mother appears once per
+birth, so a mother of three has three rows; the register is keyed on the child
+through `cpr_barn`.
+
+::: {.callout-important}
+**Three eras, three different data models, not one register with minor
+revisions.** 1973-1996 was paper form reports; not an "MFR" table, but not
+undocumented either - DST's own **`ftbarn`**/**`ftforael`**/**`ftnaevn`**
+("Fertilitet - børn/forælder/Nævner") datasets cover **1973-2025** and
+explicitly incorporate MFR content (`ftbarn`'s weight/length columns are
+documented as matching MFR, alongside its own `MFR_OPLYSNING` column). These
+are demography datasets (parity, birth spacing, fertility-rate denominators),
+not a clinical birth-event table - see below. 1997-2018 is the wide DST
+table below (`mfr`), marked closed by DST with **no successor named on
+DST's own overview**, because the successor is delivered by
+Sundhedsdatastyrelsen's Forskerservice, not DST. Nineteen of `mfr`'s own columns are flags backed by their
+own separate DST datasets, plus a full stillbirth detail table - see [MFR
+marker sub-cuts](#mfr-markers) and [`MFRDFOED`](#mfrdfoed) below. From 2019
+onwards the register was fully restructured into
+a main table (`Nyfoedte`) plus ten LPR3-style satellite tables per mother
+and child (`Barn_Forloeb`/`Kontakter`/`Diagnoser`/`Procedurer`/`Resultater`
+and the same five `Mor_*` tables) - see [`mfr_nyfoedte`](#mfr-nyfoedte)
+below.
+
+The 2019+ population also differs from the two older eras: 1973-2018
+required the **mother** to have a Danish CPR-number, 2019+ does not. A study
+spanning this boundary is comparing two different populations, not only two
+table shapes.
+:::
+
+### FTBARN / FTFORAEL / FTNAEVN - the pre-1997 period {#ftbarn}
+
+Three separate DST datasets, not one register split three ways: `ftbarn`
+(one row per child), `ftforael` (one row per parent-child link, up to two
+per child), and `ftnaevn` (one row per person per year - the fertility-rate
+**denominator**, not a birth-event table at all). All three cover
+1973-2025, so they overlap with `mfr` and `mfr_nyfoedte` in time; use them
+for the years those two do not reach, 1973-1996.
+
+::: {.callout-warning}
+**DST's own variable-list pages for these three give a short Danish label
+for some columns and none at all for others - no value/code definitions
+anywhere.** Unlike `mfr_nyfoedte`, there is no `code_system` on any coded
+column here (`KOEN`, `LEVENDE_ELLER_DOEDFOEDT`, `CPRTYPE`, `MOR_FAR`, and
+more): inventing a lookup neither DST nor any other source confirms would
+be actively misleading. Confirm actual values with `count()`/`table()` on
+real data before writing code that filters or recodes on any of them.
+:::
+
+`ftforael`'s four parity/spacing variants
+(`DEMOGRAFISK_`/`ENKELT_`/`FAMILIE_`/`MEDICINSK_PARITET`, and the matching
+`_SPACING` columns) are not further defined by DST relative to each other or
+to the simpler `PARITET` column. Read the notes on these columns in [the
+schema file for
+`ftforael`](https://github.com/steno-aarhus/registers-guide/blob/main/schema/registers/ftforael.yaml)
+before you pick one for an analysis.
+
+{{< include _generated/ftbarn-columns.md >}}
+
+{{< include _generated/ftforael-columns.md >}}
+
+{{< include _generated/ftnaevn-columns.md >}}
+
+`gestationsalder_dage` is in **days**, not weeks. `paritet` counts previous
+births, which is not the same as the number of children currently alive.
+
+{{< include _generated/mfr-columns.md >}}
+
+### MFRHJMFO - home births, 1997-2018 {#mfrhjmfo}
+
+Supplementary clinical detail for the home-birth subset of `mfr`, joined via
+`FK_MFR` - **not** a separate population: `mfr` already includes home
+births, flagged via its own `FOEDESTED` and `MARKOER_HJEMMEFOEDSEL_BEREGNET`
+columns. This is the DST-native counterpart to a data-management convention
+of splitting the 1997-2018 era into "home" and "not-home" deliveries.
+
+::: {.callout-warning}
+**DST's page gives no Danish label at all for any column here**, not even
+the partial labelling `ftbarn`/`ftforael`/`ftnaevn` have - the thinnest
+documentation of any register in this schema. Every reader_note on this
+register's columns is an informed guess from the variable name alone
+(Danish administrative/clinical vocabulary), not a sourced fact.
+:::
+
+{{< include _generated/mfrhjmfo-columns.md >}}
+
+### Nyfoedte - Medical Birth Register, 2019 onwards {#mfr-nyfoedte}
+
+The current MFR. One row per newborn, live-born or stillborn, in one table
+(for 1997-2018 DST delivers two datasets, see [`MFRDFOED`](#mfrdfoed)).
+Join `Barn_*` satellite tables via `DW_EK_Nyfoedt`, `Mor_*` satellite tables
+via `DW_EK_Foedsel` (see the ten satellite tables below). `Nyfoedte` itself
+already carries a curated subset of medical facts (diagnosis, weight, Apgar
+score, smoking status) that Sundhedsdatastyrelsen resolves from the
+underlying LPR3 contacts.
+
+::: {.callout-warning}
+**Numeric fields use -1 as "not stated", not `NA`.** `Vaegt_Barn`,
+`Laengde_Barn`, `Hovedomfang`, `Abdominalomfang`, `Placentavaegt`, `Paritet`,
+`Apgarscore` and `BMI_Mor` (as `-1.0`) all use this sentinel. A mean computed
+without recoding it first will be pulled sharply downward. Every stillbirth
+also gets `Apgarscore = 0` by definition, not `-1` - filter on
+`LevendefoedtDoedfoedt` before summarising Apgar scores.
+:::
+
+::: {.callout-tip}
+**Mother's smoking status (`Tobaksforbrug`) uses two SKS code families for
+the same nine categories.** `DUT*` before the LPR3 cutover (Feb/March 2019),
+`RGAB*` from it onwards - `DUT20` and `RGAB20` mean the same thing. See [the
+schema file for
+`Tobaksforbrug`](https://github.com/steno-aarhus/registers-guide/blob/main/schema/code-systems/tobaksforbrug.yaml)
+for the full mapping (resolved via the `sksr` package,
+since Sundhedsdatastyrelsen's own documentation names both prefixes but not
+the per-code labels).
+:::
+
+{{< include _generated/mfr_nyfoedte-columns.md >}}
+
+<details>
+<summary>The ten satellite tables (Barn_*/Mor_* diagnoses, procedures, contacts, course elements, results)</summary>
+
+Same idea as `lpr_a_kontakt`/`lpr_a_diagnose`/`lpr_a_procregistrering`, just
+scoped to birth-related contacts and split by child (`Barn_*`) vs mother
+(`Mor_*`). Join `Barn_*` tables to `Nyfoedte` via `DW_EK_Nyfoedt`, `Mor_*`
+tables via `DW_EK_Foedsel`.
+
+#### Barn_Forloeb / Mor_Forloeb - course elements
+
+{{< include _generated/mfr_barn_forloeb-columns.md >}}
+
+{{< include _generated/mfr_mor_forloeb-columns.md >}}
+
+#### Barn_Kontakter / Mor_Kontakter - contacts
+
+{{< include _generated/mfr_barn_kontakter-columns.md >}}
+
+{{< include _generated/mfr_mor_kontakter-columns.md >}}
+
+#### Barn_Diagnoser / Mor_Diagnoser - diagnoses
+
+{{< include _generated/mfr_barn_diagnoser-columns.md >}}
+
+{{< include _generated/mfr_mor_diagnoser-columns.md >}}
+
+#### Barn_Procedurer / Mor_Procedurer - procedures
+
+{{< include _generated/mfr_barn_procedurer-columns.md >}}
+
+{{< include _generated/mfr_mor_procedurer-columns.md >}}
+
+#### Barn_Resultater / Mor_Resultater - results
+
+::: {.callout-warning}
+**`ResultatVaerdi` is polymorphic.** Depending on `ResultatType`, it holds an
+SKS code, an integer, a boolean, a decimal, a datetime, or a text string.
+`Nyfoedte`'s own resolved columns (`Vaegt_Barn`, `Apgarscore`,
+`Tobaksforbrug`'s `RGAB*` half, and more) are all built from rows in these
+two tables. Branch on `ResultatType` before parsing `ResultatVaerdi`.
+:::
+
+{{< include _generated/mfr_barn_resultater-columns.md >}}
+
+{{< include _generated/mfr_mor_resultater-columns.md >}}
+
+</details>
+
+### MFR marker sub-cuts - the detail behind the flags {#mfr-markers}
+
+Nineteen of `mfr`'s own `MARKOER_*` columns above are flags only - the actual
+SKS-coded finding behind each one is published as its own separate DST
+dataset, joined back to `mfr` via `FK_MFR`. Confirmed against DST's full
+531-register order list (Bestillingsliste.xlsx) on 2026-09-12, the same
+"home births" relationship `MFRHJMFO` already has to `mfr` (see above).
+
+::: {.callout-warning}
+**DST publishes no labels or value definitions for any column in any of
+these 19 datasets.** Two carry a genuine extra measurement alongside the
+SKS code (`MFRBLODM`'s measured blood-loss amount, `MFRNVLAN`'s pH/base
+excess); the rest are three columns wide: the SKS code, its type, and the
+foreign key back to `mfr`.
+:::
+
+<details>
+<summary>All 19 marker sub-cuts</summary>
+
+| Dataset | Backs `mfr`'s flag | What it holds | Coverage |
+| --- | --- | --- | --- |
+| `MFRACCRE` | `markoer_accreta` | Placenta accreta | 1997-2018 |
+| `MFRAKMPL` | `markoer_andre_foedselskomplikati` | Other birth complications | 1997-2018 |
+| `MFRANAES` | `markoer_anaestesi_til_operation` | Anaesthesia for an operation | 2000-2018 |
+| `MFRBLODM` | `markoer_post_partum_bloedning` | Postpartum blood loss, with the measured amount | 2009-2018 |
+| `MFRBRIST` | `markoer_perineal_bristning` | Perineal tears | 1997-2018 |
+| `MFRCARDI` | `markoer_cardiomyopati` | Cardiomyopathy | 1997-2018 |
+| `MFRGKMPL` | `markoer_graviditetskomplikatio` | Pregnancy complications | 1997-2018 |
+| `MFRHAEMO` | `markoer_haemoperitoneum` | Haemoperitoneum | 1997-2018 |
+| `MFRIGANG` | `markoer_igangsaettelse` | Labour induction | 1997-2018 |
+| `MFRINFEK` | `markoer_infektioner` | Infections | 1997-2018 |
+| `MFRKJSNT` | `markoer_kejsersnit` | Caesarean section | 1997-2018 |
+| `MFRMEDSG` | `markoer_medicinske_sygdomme` | Medical conditions | 1997-2018 |
+| `MFRMISDA` | `markoer_b_misdannelse` | Congenital malformation | 1997-2018 |
+| `MFRNVLAN` | `markoer_navlesnorsblod_analyse` | Umbilical cord blood analysis, with pH/base excess | 2003-2018 |
+| `MFRRUPTU` | `markoer_ruptur` | Rupture (e.g. uterine) | 1997-2018 |
+| `MFRSMLIN` | `markoer_smertelindring` | Pain relief | 1999-2018 |
+| `MFRULTRA` | `markoer_ultralyd` | Ultrasound | 1999-2018 |
+| `MFRVESTM` | `markoer_vestimulation` | Labour stimulation (oxytocin) | 1999-2018 |
+| `MFRYVEND` | `markoer_ydre_vending` | External cephalic version | 1997-2018 |
+
+Every row joins to `mfr` via `FK_MFR`. Full column-by-column detail for each
+is in [the schema](https://github.com/steno-aarhus/registers-guide/tree/main/schema/registers)
+(`mfraccre.yaml` and so on) and searchable on
+[Find a variable](find-a-variable.qmd); it is not repeated here as 19
+near-identical three-column tables.
+
+</details>
+
+### MFRDFOED - stillbirth detail, 1997-2018 {#mfrdfoed}
+
+For 1997-2018 DST delivers two datasets from the Medical Birth Register:
+`mfr`, which DST titles "Levendefødte fra det medicinske fødselsregister" (live
+births), and `mfrdfoed`, titled "Dødsfødsler fra det medicinske
+fødselsregister" (stillbirths) ([DST's register
+overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)).
+Both have a column `LEVENDE_ELLER_DOEDFOEDT`, for which DST gives no values,
+and `mfrdfoed` has the key `FK_MFR`, same as the marker sub-cuts above. DST's
+documentation does not say whether stillborn children also have rows in `mfr`,
+or whether every row in `mfrdfoed` has a matching row in `mfr`. Check both in
+your own delivery before you count births.
+
+::: {.callout-warning}
+**DST gives no label or value definition for any column here**, the same
+thinness as `MFRHJMFO`. Do not confuse this with `LPRMFRDF` ("Dødfødte ud
+fra LPR"), a separate DST register deriving stillbirth data from LPR rather
+than MFR - not modelled in this schema.
+:::
+
+{{< include _generated/mfrdfoed-columns.md >}}
+
+### The Cancer Register
+
+The gold standard for **incident cancer diagnoses** - more complete and precise
+for cancer than LPR diagnoses. Running since 1943, which makes it one of the
+longest continuous cancer registries anywhere. Use it for cancer as an outcome
+or an exclusion.
+
+::: {.callout-important}
+**It is not a DST register.** The Cancer Register is held by
+Sundhedsdatastyrelsen and does not appear in DST's register list at all: a
+project reaches it through Forskerservice, on a separate application. The person
+key is `k_cprnr`, not `pnr`, so rename before joining.
+
+**One row per tumour, not per person.** Somebody with two primary cancers has
+two rows, distinguished by `k_tumornr`. Deduplicating on the person alone
+collapses second primaries and undercounts incidence.
+:::
+
+{{< include _generated/cancer-columns.md >}}
+
+### Primary sector - sysi and sssy (Health Insurance Register) {#sysi-sssy}
+
+Contacts and services in the **primary sector** (general practice, practising
+specialists, physiotherapy etc.). As with LPR, the register is split over time:
+`sysi` covers the older years, `sssy` the newer. Join via `pnr`. Use it for e.g.
+GP/specialist contacts, screening or vaccinations billed in primary care. Key
+fields are named the same in both, but the two registers do not carry an
+identical column set, so verify with `colnames()`. They overlap in 2005: both
+report that year, so reading both without picking a source double-counts it.
+
+::: {.callout-note}
+**When the register was described in 2011, no validation studies had been
+reported.** Coverage is assumed to be high because registration is tied to the
+provider's reimbursement, but that is an inference, not a measured validity, and sysi/sssy
+record almost no clinical information to begin with. Treat diagnoses and
+reasons for contact with more caution than in registers that do have published
+validation studies. See Sahl Andersen et al. 2011, [The Danish National Health
+Service Register](https://doi.org/10.1177/1403494810394718), Scand J Public
+Health 39(Suppl 7):34-37.
+:::
+
+**`sysi` (1990-2005):**
+
+{{< include _generated/sysi-columns.md >}}
+
+**`sssy` (2005-2025):**
+
+{{< include _generated/sssy-columns.md >}}
+
+### Laboratory results - Laboratoriedatabasens Forskertabel {#lab-forsker}
+
+Laboratory and blood test results: HbA1c, lipids, creatinine. A **very large
+register**, so filter with arrow or duckplyr **before**
+you `collect()` into R.
+
+::: {.callout-important}
+**It is not a DST register.** This is Laboratoriedatabasens Forskertabel (LAB_F),
+held by Sundhedsdatastyrelsen and reached through Forskerservice. It is not in
+DST's register list. The exact table name can still differ by project: `lab_forsker`
+and `laboratorieproevesvar` are narrower cuts of the same delivery as
+`lab_dm_forsker` (fewer columns, some renamed - see the reader notes on the
+columns below for the exact differences), not separate registers. In the
+clinical epidemiology literature it is usually called RLRR, Register of
+Laboratory Results for Research (see e.g. [Arendt et al.
+2020](https://doi.org/10.2147/CLEP.S245060), Clinical Epidemiology 12:469-475).
+The columns are named in English: `patient_cpr`, `analysiscode`,
+`samplingdate`, `value`, `unit`. NPU is the *coding system* used in
+`analysiscode`, not a column name.
+:::
+
+::: {.callout-warning}
+**Sundhedsdatastyrelsen updated the laboratory delivery on 3 October 2025**
+([announcement
+→](https://sundhedsdatastyrelsen.dk/data-og-registre/forskerservice/om-forskerservice/nyheder-fra-forskerservice/2025/data_laboratoriedatabasen_031025)):
+"Det nye LAB erstatter den tidligere version af LAB." The announcement names
+four tables - `laboratorieproevesvar`, `Dimlaboratoriekoder`, `DimNPU` and
+`Proevesvar_optaelling` - but never mentions `lab_dm_forsker` by name, and does
+not say what happens to projects already using it. The official data
+dictionary this page and the schema are built from
+([PDF](https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf))
+is Version 4, dated 1 December 2023 - nearly two years *before* this
+announcement - and documents `lab_dm_forsker` only. So `lab_dm_forsker` is not
+a new "common data model" superseding the older tables; if anything the
+evidence points the other way, with `laboratorieproevesvar` being the one that
+just got new companion tables. Whether `lab_dm_forsker` is being retired, and
+what `laboratorieproevesvar`'s real columns are after the October 2025 change,
+is not resolved here - check the order sheet ("bestillingsark") on
+Sundhedsdatastyrelsen's site, or your own delivery, before relying on either
+name. If you know more about this, please use the feedback box on this page.
+:::
+
+**`value` is text, not a number.** Alongside numeric results it holds a fixed
+set of words - `POSITIV`, `NEGATIV`, `IKKE PÅVIST`, `INGEN VÆKST` and the blood
+type codes. `as.numeric()` turns every one of them into `NA` without warning,
+which drops exactly the samples where something was found.
+
+**Coverage starts in 2008, not the 1990s**, and complete coverage arrives per
+laboratory between 2010 and 2016. Only NPU- and DNK-coded results reach the
+table, about 95 per cent; results with a laboratory's own local code are absent,
+as are patients who declined consent (Sundhedsdatastyrelsen's [documentation of
+the research
+table](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf)).
+See also [Laboratoriedatabasen
+→](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen).
+
+**Need data from before 2008?** [Arendt et al.
+2020](https://doi.org/10.2147/CLEP.S245060) describes a separate regional
+database, LABKA (held by Aarhus University Hospital's Department of Clinical
+Epidemiology, not DST or Forskerservice), with coverage back to 1997 in two
+regions. It is not documented on this page: neither Arendt et al. 2020 nor
+[Grann et al. 2011](https://doi.org/10.2147/CLEP.S17901), the original LABKA
+paper, gives literal column names, only prose descriptions of what the
+database holds, so there is nothing here to check a real delivery against.
+If you have LABKA access, contact the Department of Clinical Epidemiology
+directly for the actual variable list.
+
+How to extract a cohort from this table is on [Laboratory
+results](laboratory-results.qmd).
+
+### Healthcare costs (under development)
+
+::: {.callout-warning}
+**Under development - confirm everything in your own delivery.** This section
+describes cost sources at the register level. Exact table and column names and
+the available years **change from year to year** (the DRG rate system is updated
+annually) and are not verified here. Use it as a pointer, and clarify the
+specific files with your data manager.
+:::
+
+To compute **healthcare use/costs** per person, they are typically assembled
+from several sources:
+
+- **Somatic hospital contacts:** DRG-grouped rates from the Danish Health Data
+  Authority (DRG = inpatient, DAG = outpatient). Rates express average operating
+  expenses per DRG group and are computed annually - see [SDS DRG
+  rates](https://sundhedsdatastyrelsen.dk/data-og-registre/sundhedsoekonomi/drg/drg-takster).
+- **Psychiatric hospital contacts:** are **not** billed by DRG. The main
+  principle is a bed-day rate for inpatients and a visit rate for outpatients -
+  keep somatic and psychiatric separate.
+- **Primary sector** (general practice, specialists etc.): fees in `sysi`/`sssy`
+  (see the section above).
+- **Medication:** patient co-payment vs. reimbursement in
+  [LMDB](#lmdb).
+
+Availability of cost data varies (some years/sources are missing, e.g. more
+recent DRG years). The pattern is inspired by [the Plana-Ripoll group's code on
+OSF](https://osf.io/zhfyp/overview), but the variable names there are from a
+2022 delivery and should not be assumed current.
+
 ## 9. Project-specific registers
 
 Many projects have access to registers beyond the standard list above - e.g.
@@ -1103,6 +1105,10 @@ validity. Cite the profile for each register you use.
   | LPR (National Patient Registry)                                       | Schmidt et al. 2015, *Clin Epidemiol* - [doi:10.2147/CLEP.S91125](https://doi.org/10.2147/CLEP.S91125)                            |
   | LMDB (Prescription Registry)                                          | Pottegård et al. 2017, *Int J Epidemiol* - [doi:10.1093/ije/dyw213](https://doi.org/10.1093/ije/dyw213)                           |
   | Cause of Death Register                                               | Helweg-Larsen 2011, *Scand J Public Health* - [doi:10.1177/1403494811399958](https://doi.org/10.1177/1403494811399958)            |
+  | Cancer Register                                                       | Gjerstorff 2011, *Scand J Public Health* - [doi:10.1177/1403494810393562](https://doi.org/10.1177/1403494810393562)               |
+  | MFR (Medical Birth Register)                                          | Bliddal et al. 2018, *Eur J Epidemiol* - [doi:10.1007/s10654-018-0356-1](https://doi.org/10.1007/s10654-018-0356-1)               |
+  | sysi/sssy (National Health Service Register)                          | Sahl Andersen et al. 2011, *Scand J Public Health* - [doi:10.1177/1403494810394718](https://doi.org/10.1177/1403494810394718)     |
+  | Laboratory results (overview of Danish laboratory databases)          | Arendt et al. 2020, *Clin Epidemiol* - [doi:10.2147/CLEP.S245060](https://doi.org/10.2147/CLEP.S245060)                           |
 
 **Reporting:** report observational studies following
 [STROBE](https://www.strobe-statement.org/checklists/). For register-based /

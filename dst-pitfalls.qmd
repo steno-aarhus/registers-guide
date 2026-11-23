@@ -1,41 +1,45 @@
 ---
 title: "DST pitfalls"
-subtitle: "13 errors that cost time and produce uninformative or no error messages"
+subtitle: "13 mistakes with DST registers that give a wrong result without a clear error message"
 date: last-modified
 pagetitle: "Pitfalls with Statistics Denmark (DST) data"
 description: "Common errors with Danish registers at Statistics Denmark (DST): DODSAARS ends in 2001, BEF is a status snapshot, date formats and immortal time bias."
 ---
 
-This page collects the errors that most frequently catch new users of DST
-registers. What they have in common: the error messages are either confusing, or
-there is no error message at all - the result is just silently wrong.
+Use this page as a checklist before you trust a result, and come back to it when
+a number looks too good or too small. It lists 13 mistakes that are easy to make
+with DST registers and hard to notice: most of them give no error message, and
+the result is just wrong. Each one says what goes wrong, how to check your own
+data, and what to do instead. If your code stopped with an error, go to
+[Troubleshooting](troubleshooting.qmd) instead.
 
 ## 1. Four death registers - `dodsaars` stops in 2001 {#death-registers}
 
-Four registers have confusingly similar names, and the one most people reach for
-first is the one that ends a quarter of a century ago:
+Four registers have similar names, and the one whose name looks like "the death
+register" ended in 2001:
 
-  | Register       | Full name            | Covers                 | Use it for                |
-  | -------------- | -------------------- | ---------------------- | ------------------------- |
-  | `dod`          | Døde i Danmark       | **1970-2025**, ongoing | **Censoring at death**    |
-  | `dodsaars`     | Dødsårssagsregistret | 1970-**2001** only     | Cause of death, to 2001   |
-  | `dodsaasg`     | Dødsårsagsregister   | **2002**-2022          | Cause of death, 2002-2022 |
-  | `dodsaarsager` | Dødsårsagsregister   | **2022**-2024          | Cause of death, 2022 on   |
+  | Register       | DST's name           | Covers             | Use it for                |
+  | -------------- | -------------------- | ------------------ | ------------------------- |
+  | `dod`          | Døde i Danmark       | 1970-2025, ongoing | Censoring at death        |
+  | `dodsaars`     | Dødsårssagsregistret | 1970-2001, closed  | Cause of death, to 2001   |
+  | `dodsaasg`     | Dødsårsagsregister   | 2002-2022, closed  | Cause of death, 2002-2022 |
+  | `dodsaarsager` | Dødsårsagsregister   | 2022-2024, ongoing | Cause of death, 2022 on   |
 
-Coverage is from [DST's own register
-overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html).
+Names (in DST's own spelling) and coverage are from [DST's register
+overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html),
+read in November 2026.
 
-Two separate things are going on. **The date of death** lives in `dod`, which
-covers the whole period on its own. **The cause of death** is split across the
-three others, each picking up where the last stopped, so a study spanning 1995 to
-2024 needs all three chained together and none of them alone will tell you it is
-incomplete.
+The date of death is in `dod`, which covers the whole period on its own. The
+cause of death is split across the three others, so a study spanning 1995 to
+2024 needs all three, and none of them alone will tell you it is incomplete.
+`dodsaasg` and `dodsaarsager` both cover 2022, so check that deaths in 2022 are
+not counted twice when you stack them.
 
 ::: {.callout-warning}
 **If you censor on `dodsaars`, everyone who died after 2001 looks alive.** There
 is no error and no warning. They stay in your risk set until the end of
 follow-up, so your survival curves are too good and your rates are too low. For a
-study running past 2001, which is nearly all of them, use **`dod`**.
+study running past 2001, use `dod`.
 :::
 
 ```r
@@ -55,26 +59,26 @@ death_person <- death %>%
 ::: {.callout-note}
 **Two things to check on your own project before you rely on this.**
 
-**Is `dod` in your delivery, and does it reach far enough back?** Your project
-received the years it ordered, not necessarily all of 1970-2025. Check with
-`read_register("dod") %>% summarise(min(doddato), max(doddato)) %>% collect()`.
+- **Is `dod` in your delivery, and does it reach far enough back?** Your project
+  received the years it ordered, not necessarily all of 1970-2025. Check with
+  `read_register("dod") %>% summarise(min(doddato), max(doddato)) %>% collect()`.
+- **Is it converted to parquet?** On some projects `dod` sits only as a raw SAS
+  file, so `read_register()` will not find it and you read it with
+  `haven::read_sas()` instead. Ask your data manager for the path.
 
-**Is it converted to parquet?** On some projects `dod` sits only as a raw SAS
-file, so `read_register()` will not find it and you read it with
-`haven::read_sas()` instead. Ask your data manager for the path.
-
-Only if `dod` turns out **not** to cover your early years do you need `dodsaars`
-as well, and then you stack the two and rename so the date columns match. Do not
-do it by default: on a full delivery both registers hold every death from 1970 to
-2001, so stacking them counts those deaths twice.
+Only if `dod` turns out not to cover your early years do you need `dodsaars` as
+well, and then you stack the two and rename so the date columns match. Do not do
+it by default: both registers cover 1970 to 2001, so stacking them can count
+those deaths twice.
 :::
 
 ## 2. RAM is shared - clean up after large extractions
 
-You are on a shared server with shared RAM. When the memory bar in RStudio turns
-red, everyone on the server experiences slowdowns - and **DST automatically
-kills processes** when RAM is close to full, so an oversized extraction can cost
-you your unsaved work.
+RAM (the server's working memory) is shared by everyone on the server. One
+oversized extraction slows the server for all users, and DST closes processes
+automatically when the memory is close to full ([DST's guide on reducing RAM
+use](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning),
+PDF in Danish), so it can also cost you your unsaved work.
 
 ```r
 # Filter early - never collect() first
@@ -90,25 +94,22 @@ result <- lmdb %>%
 
 # Free large objects when you are done with them
 rm(lmdb) # delete the lazy connection - it does not use much, but it is good practice
-gc() # return memory to the operating system
+gc() # free the memory of removed objects
 ```
 
 ::: {.callout-tip}
 To find out *which* object is filling the memory, see [Seeing your memory use
-from inside R](good-coding-practice.qmd#see-ram-in-r) - `gc()` for the session
-total and `object.size()` for the culprit. More practical habits (save often,
-partial loading, Task Manager) in [Mind your RAM in the shared
-environment](good-coding-practice.qmd#mind-your-ram), and
-DST's official advice in [DST guide: Reducing RAM use in the shared environment
-(PDF,
-Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=4500415120635&fo=0&ext=forskning).
+from inside R](good-coding-practice.qmd#see-ram-in-r): `gc()` for the session
+total and `object.size()` for the culprit. More habits (save often, partial
+loading, Task Manager) are in [Mind your RAM in the shared
+environment](good-coding-practice.qmd#mind-your-ram).
 :::
 
 ## 3. `rename_with(tolower)` must be called on each register {#tolower}
 
 Raw column names vary by register and year: `PNR`, `pnr`, `Pnr`, `V_CPR`. If you
-forget it, `semi_join(..., by = "pnr")` silently fails with "Column `pnr` not
-found" - even though the column is there.
+forget it, `semi_join(..., by = "pnr")` stops with "Column `pnr` not found",
+even though the column is there under another spelling.
 
 **The rule:** every `open_dataset()` or `read_register()` call ends with
 `%>% rename_with(tolower)` as the first step in your pipe. See [Extracting data
@@ -116,21 +117,21 @@ step by step](extraction-step-by-step.qmd) for explanation and example.
 
 ## 4. Date columns are not always in Date format {#4-date-columns-are-not-always-in-date-format}
 
-DST registers store dates in multiple formats - they look the same but behave
+Dates arrive in several formats. They look the same when printed but behave
 differently.
 
   | Format      | Example                 | What `class()` returns | What to do                                  |
   | ----------- | ----------------------- | ---------------------- | ------------------------------------------- |
   | Date        | `2020-05-15`            | `"Date"`               | Nothing - can be used directly              |
   | Character   | `"2020-05-15"`          | `"character"`          | `as.Date(column)`                           |
-  | Datetime    | `"2020-05-15 14:32:00"` | `"POSIXct"`            | `as.Date(column)` after `collect()`         |
+  | Datetime    | `"2020-05-15 14:32:00"` | `"POSIXct" "POSIXt"`   | `as.Date(column)` after `collect()`         |
   | SAS integer | `21990`                 | `"numeric"`            | `as.Date(column, origin = "1960-01-01")`    |
 
 **The rule:** always check `class()` on a date column before using it in
 calculations.
 
 ```r
-class(lpr_a_kontakt$kont_starttidspunkt) # "POSIXct" - datetime, not Date
+class(lpr_a_kontakt$kont_starttidspunkt) # "POSIXct" "POSIXt" - datetime, not Date
 # Fix - AFTER collect(), when the data are in R (see the warning below):
 mutate(date = as.Date(kont_starttidspunkt))
 
@@ -139,18 +140,20 @@ class(bef$foed_dag) # "Date" - can be used directly
 
 ::: {.callout-warning title="Filter a datetime column with a datetime, not a date"}
 A datetime and a date are two different types, and on a lazy table (before
-`collect()`) the engines do not reliably convert between them. Tested on
-`lpr_a_kontakt` on the DST server (fastreg 0.14.1, duckdb 2.0.0, arrow
-21.0.0.1, duckplyr 1.2.2):
+`collect()`) the engines do not reliably convert between them. What follows was
+measured on one DST project server, on `lpr_a_kontakt`, with fastreg 0.14.1,
+duckdb 2.0.0, arrow 21.0.0.1 and duckplyr 1.2.2. Other versions may behave
+differently, which is the reason to run the count check below on your own
+server:
 
 - `filter(as.Date(kont_starttidspunkt) >= as.Date("2023-01-01"))` on a table
-  from `read_parquet_dataset()` ran **without an error but returned 0 rows**,
-  although millions of rows match. Others have seen a `rapi` error from the
-  same pattern.
-- The same line on a table from `read_parquet_duckdb()` stops with
+  from `fastreg::read_parquet_dataset()` ran without an error but returned 0
+  rows, although millions of rows match. Others have seen a `rapi` error from
+  the same pattern.
+- The same line on a table from `duckplyr::read_parquet_duckdb()` stops with
   `This operation cannot be carried out by DuckDB`.
-- Comparing the column with a datetime **created before the pipe** gave the
-  same, correct count on both.
+- Comparing the column with a datetime created before the pipe gave the same,
+  correct count on both.
 
 ```r
 # Wrong on a lazy table - a date where the column is a datetime
@@ -162,23 +165,28 @@ cutoff <- as.POSIXct("2023-01-01", tz = "UTC")
 filter(kont_starttidspunkt >= cutoff)
 ```
 
-Convert to a plain date with `as.Date()` **after** `collect()`, when the data
-are in R. After any date filter, compare `count()` before and after to confirm
-that the filter did what you meant - a filter that keeps nothing, or
-everything, is the warning sign.
+Convert to a plain date with `as.Date()` after `collect()`, when the data are
+in R. After any date filter, compare `count()` before and after to confirm that
+the filter did what you meant: a filter that keeps nothing, or everything, is
+the warning sign.
+
+`as.Date()` on a datetime uses UTC unless you give it a `tz`. If the collected
+column carries another time zone (check `attr(x, "tzone")`), a contact just
+after midnight lands on the previous day; `as.Date(x, tz = "Europe/Copenhagen")`
+keeps the local date.
 :::
 
 ## 5. BEF is a status snapshot - not a live register
 
-BEF is a **status register**: it records the composition of the population at a
-given reference time - not continuously. DST classifies every register as one of
-four [reference types](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/registre-og-referencetyper): **Status** (a snapshot on one date, which is BEF),
-**Statusperiode** (population fixed on a date, values accumulated over a period),
-**Forløb** (rows with a start and an end date) and **Hændelse** (one row per
-event, with one date). Knowing which type you are holding tells you what a row
-actually means. DST's reference time is **ultimo**
-(typically 31 December for an annual snapshot). Since 2008, BEF is also
-delivered **quarterly** (March, June, September, December).
+BEF is a status register: it records the population on a reference date, not
+continuously. DST classifies every register as one of four [reference
+types](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/registre-og-referencetyper):
+Status (a snapshot on one date, which is BEF), Statusperiode (population fixed
+on a date, values accumulated over a period), Forløb (rows with a start and an
+end date) and Hændelse (one row per event, with one date). The type tells you
+what a row means. BEF's reference date is the last day of a quarter (31
+December for the annual file). Since 2008, BEF is also delivered quarterly
+(March, June, September, December).
 
 ::: {.callout-note}
 **`year == 2020` meaning 1 January 2020 is a project convention.** In many
@@ -198,7 +206,7 @@ depends on the convention above, so a filter on `year` cannot tell you who was
 alive on a given date.
 
 ```r
-# ERROR: do not use BEF to check "alive on a specific date"
+# WRONG: do not use BEF to check "alive on a specific date"
 bef_2020 <- bef %>%
   filter(year == 2020) # everyone alive and resident on that file's reference date
 # - including those who die after that date
@@ -221,23 +229,24 @@ bef_alive <- bef_2020 %>%
   filter(is.na(doddato) | doddato > index_date) # alive at index date
 ```
 
-## 6. The "a" in `lpr_a_diagnose` does not mean A-type diagnoses
+## 6. The "a" in `lpr_a_diagnose` does not mean A-type diagnoses {#lpr-a-not-a-diagnoses}
 
-The table is called `lpr_a_diagnose` - DST describes the LPR_A tables as an
-"LPR analyse model" in [its release note from June
+DST describes the LPR_A tables as an "LPR analyse model" in [its release note
+from June
 2025](https://www.dst.dk/da/TilSalg/data-til-forskning/nyt-og-meddelelser/2025/nyt-om-grunddata-2-kvartal-2025),
-which is the likely origin of the "a". It does **not** mean the table only contains
-A-type (action) diagnoses.
+which is the likely origin of the "a" in the table name. It does not mean that
+the table holds only A-diagnoses (aktionsdiagnose, the main diagnosis of a
+contact).
 
-LPR3 has two diagnosis types, and the table holds both: A (action diagnosis)
-and B (secondary diagnosis). G (underlying condition) is an LPR2 type and is not
-reported in LPR3. The six LPR2 types and their years are in [Understand
-LPR](understand-lpr.qmd#diagtype). You still need to filter on
-`diag_kode_type`:
+LPR3 has two diagnosis types, and the table holds both: A (aktionsdiagnose, main
+diagnosis) and B (bidiagnose, secondary diagnosis). G (grundmorbus, underlying
+condition) is an LPR2 type and is not reported in LPR3. The six LPR2 types and
+their years are in [Understand LPR](understand-lpr.qmd#diagtype). So you still
+choose the types yourself with a filter on `diag_kode_type`:
 
 ```r
 lpr_a_diagnose %>%
-  filter(diag_kode_type %in% c("A", "B")) %>% # still necessary
+  filter(diag_kode_type %in% c("A", "B")) %>% # state the types you want; do not assume the table is A only
   ...
 ```
 
@@ -246,7 +255,7 @@ lpr_a_diagnose %>%
 The same variable can have different coding in different registers - different
 type (numeric vs. character), different values, or both.
 
-**The worst case is ICD-10.** LPR stores it with a Danish `D` in front
+The case that costs most is ICD-10. LPR stores it with a Danish `D` in front
 (`DE119`), the cause-of-death registers and the cancer register store the plain
 WHO code (`E119`). A code list built for one matches nothing in the other, and
 the habit of stripping the D turns `E119` into `119`. See [ICD codes and the
@@ -267,9 +276,9 @@ class(register_b$koen)
 
 When filtering with a local R vector inside a lazy query, dplyr first looks for
 a *column* with that name; only if there is none does it copy in the values of
-your R object. Usually that just works - the trap is a **name clash**: if your
-local object has the same name as a column, the column wins and you get a wrong
-result or a confusing message.
+your R object. Usually that works. The trap is a name clash: if your local
+object has the same name as a column, the column wins and you get a wrong result
+or a confusing message.
 
 ```r
 # Example: a year list against bef (the principle applies to any local R vector)
@@ -283,45 +292,46 @@ bef %>% filter(year %in% !!year)
 ```
 
 ::: {.callout-note}
-`!!` is a recommended safeguard for **all** local R objects used inside `filter()`, `mutate()`
-etc. on lazy Arrow/DuckDB connections - typically code or year lists (`%in% !!codes`,
-`>= !!min_date`). If instead you filter on **pnr** against the whole cohort, use
-`semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)`: it takes a local table
-directly and needs no `!!`. See [Functions
-guide](function-guide.qmd#bang-bang-two-exclamation-marks) for full explanation.
+This guide puts `!!` in front of every local R object used inside `filter()`,
+`mutate()` etc. on a lazy Arrow or DuckDB table, typically code or year lists
+(`%in% !!codes`, `>= !!min_date`). To filter on `pnr` against the whole cohort,
+use `semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)` instead: it
+takes a local table directly and needs no `!!`. The full explanation is in
+[Functions: overview](function-guide.qmd#bang-bang-two-exclamation-marks).
 :::
 
-## 9. `nmi_count` ≠ `nmi`
+## 9. `nmi_count` is not `nmi` {#nmi-count}
 
-These two variables are **not** the same and are not interchangeable:
+If your dataset has both a Nordic Multimorbidity Index (NMI) score and a count
+of conditions, they are not the same variable and are not interchangeable:
 
-  | Variable    | What it is                                                                                                                                                                                                   | Source                  |
-  | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
-  | `nmi` | **Weighted** comorbidity score - Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 predictors with individual weights; lung cancer counts e.g. 19 points, type 2 diabetes counts 2. | See [NMI page](nmi.qmd) |
-  | `nmi_count` | Simple **count** of the number of chronic conditions a person has been diagnosed with                                                                                                                       | Calculated separately   |
+  | Variable    | What it is                                                                                                                                                                                                 | Source                  |
+  | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+  | `nmi`       | Weighted score that predicts mortality: the Nordic Multimorbidity Index (Kristensen et al., *Clin Epidemiol* 2022). 50 predictors with individual weights; lung cancer counts e.g. 19 points, type 2 diabetes 2. | See [NMI page](nmi.qmd) |
+  | `nmi_count` | Unweighted count of the number of conditions a person has been diagnosed with                                                                                                                              | Calculated separately   |
 
 If you use `nmi_count` in your regression model instead of `nmi`, you are
 adjusting for something different than you think - and you get no error message.
 
 ## 10. Immortal time bias - exposure defined using the future {#immortal-time-bias}
 
-No error message, no warning - just an effect estimate that looks too good.
 **Immortal time bias** arises when a person is given follow-up time during which
-they could not, by construction, have had the outcome. It is the classic
-register mistake, because register data let you define groups *retrospectively*,
-looking back at what eventually happened.
+they could not, by construction, have had the outcome. There is no error and no
+warning, only an effect estimate that looks too good. It is easy to do with
+register data, because you define the groups looking back at what eventually
+happened.
 
-**A concrete example.** Question: does bariatric surgery lower mortality in
-people with type 2 diabetes? You take everyone diagnosed with T2D in 2010, split
-them into a **surgery** group (had surgery at some point during follow-up) and a
-**no-surgery** group, and start counting follow-up for everyone at the
-*diagnosis* date.
+An example with made-up numbers. Question: does bariatric surgery lower
+mortality in people with type 2 diabetes (T2D)? You take everyone diagnosed with
+T2D in 2010, split them into a surgery group (had surgery at some point during
+follow-up) and a no-surgery group, and start counting follow-up for everyone at
+the diagnosis date.
 
-The trap: to land in the surgery group, a person had to **survive long enough to
-be operated**. Say the average wait from diagnosis to surgery is 2 years. Those
-2 years are *immortal*: anyone who died in that window never reached surgery and
-so fell into the no-surgery group instead. You have handed the surgery group \~2
-years of guaranteed-alive person-time and labelled it "surgery" time.
+To land in the surgery group, a person had to survive long enough to be
+operated. Say the average wait from diagnosis to surgery is 2 years. Those 2
+years are *immortal*: anyone who died in that window never reached surgery and
+so fell into the no-surgery group instead. The surgery group has been given
+about 2 years of guaranteed-alive person-time, labelled as surgery time.
 
   | Group                                           | Deaths | Person-years | Rate (per 1000 py) |
   | ----------------------------------------------- | ------ | ------------ | ------------------ |
@@ -330,14 +340,13 @@ years of guaranteed-alive person-time and labelled it "surgery" time.
   | Surgery (time correctly aligned)                | 24     | 8,000        | 3.0                |
   | No surgery (immortal time moved here)           | 51     | 17,000       | 3.0                |
 
-Correctly aligned, the 4,000 pre-surgery person-years count as *no-surgery*
-time, and the rates are identical (3.0) - surgery does nothing. But counting
-those 4,000 immortal person-years as surgery time drops its rate to 2.0, leaves
-the no-surgery rate at 3.9, and makes surgery look **49% protective** (rate
-ratio 0.51). The "effect" is an artefact of the misaligned
-time zero, not of surgery.
+Correctly aligned, the 4,000 pre-surgery person-years count as no-surgery time,
+and the rates are identical (3.0): surgery does nothing. Counting those 4,000
+immortal person-years as surgery time drops its rate to 2.0, leaves the
+no-surgery rate at 3.9, and makes surgery look 49% protective (rate ratio 0.51).
+The "effect" comes from the misaligned time zero, not from surgery.
 
-**The fix: align time zero.** Eligibility, exposure assignment and start of
+The fix is to align time zero: eligibility, exposure assignment and start of
 follow-up must coincide.
 
 - **Risk-set (incidence-density) matching:** start each person's follow-up at
@@ -347,30 +356,28 @@ follow-up must coincide.
   person-time until surgery, then *exposed* time after - never exposed time
   before they were exposed (see [Time-varying variables](time-varying.qmd)).
 
-Related: defining a *baseline covariate* from post-index information is the same
-error in disguise (e.g. the OSDC diabetes type, see [OSDC](osdc.qmd)). Whenever
+Defining a *baseline covariate* from post-index information is the same error
+(e.g. the OSDC diabetes type, see [OSDC](osdc.qmd)). Whenever
 a variable is built from the future, ask whether you are conditioning on the
 person having survived to see it. Background: [Hernán & Robins, *What If*,
 §3.6](https://miguelhernan.org/whatifbook) (target trial, time zero).
 
 ## 11. `year` is a folder name, not a date {#year-is-not-a-date}
 
-In a fastreg converted register (to parquet), `year` says which yearly file a row came from. Filtering
-on it is what makes a query against a billion rows finish in seconds - but it
-does **not** tell you when anything happened. `year == 2020` in BEF does not say
-which quarterly snapshot you have. When the timing matters, use the register's
-own date column (`hf_vfra` in UDDA, `d_inddto` in `lpr_adm`, `referencetid` in
-BEF). The two uses look identical in the code.
+In a register converted to parquet with fastreg, `year` says which yearly file a
+row came from. Filtering on it is fast, because only the files for those years
+are read, but it does not tell you when anything happened. `year == 2020` in BEF
+does not say which quarterly snapshot you have. When the timing matters, use the
+register's own date column (`hf_vfra` in UDDA, `d_inddto` in `lpr_adm`,
+`referencetid` in BEF). The two uses look identical in the code.
 
-**And it is only a year at all if the register arrived as one file per year.**
-Some registers arrive as a single file covering everything, and then every row
-carries the same `year` whatever its date. `dodsaars` spans 1970 to 2001 and
-says 2024 on every row. `lpr_a_kontakt` is worse, because it is the consolidated
-LPR_A table: one file holding every contact that ended in 2017 or later, so
-counting by `year`
-puts LPR1, LPR2, MiniPAS (records from private hospitals) and LPR3 contacts
-all in the same single year, and it looks as though four reporting systems
-ran at once.
+It is only a year at all if the register arrived as one file per year. Some
+registers arrive as a single file covering everything, and then every row
+carries the same `year` whatever its date. In the delivery this guide was
+written from, `dodsaars` spans 1970 to 2001 and says 2024 on every row, and
+`lpr_a_kontakt` is one file holding every contact that ended in 2017 or later,
+so counting by `year` puts LPR1, LPR2, MiniPAS (records from private hospitals)
+and LPR3 contacts in the same single year.
 
 Check with `count(year)` before you filter on it. One value means the column
 labels the delivery, not the data, and a year filter will return everything or
@@ -378,17 +385,15 @@ nothing. Use the register's own date column instead, `kont_starttidspunkt` in
 `lpr_a_kontakt`. It is per register: `lpr_diag` in the same delivery really is
 split by year and filters correctly.
 
-Why four systems end up in one file at all - and how to filter them out, not
-just the `year` column - is explained in [Understand
-LPR](understand-lpr.qmd#lpr-a-format).
-
-Full explanation: [Phase 4 - Reading a register that is split by
+Why four reporting systems end up in one file, and how to filter them, is
+explained in [Understand LPR](understand-lpr.qmd#lpr-a-format). How the `year`
+column is made is in [Phase 4 - Reading a register that is split by
 year](file-formats.qmd#year-column).
 
-## 12. DST's own published totals do not agree with each other
+## 12. Published totals for the same thing do not agree {#published-totals}
 
-DST and the Danish Health Data Authority publish more than one number for what
-sounds like the same thing, because the underlying population differs. For 2005,
+Official publications can give more than one number for what sounds like the
+same thing, because the underlying population differs. For 2005,
 *Hospital statistics 2005* reports 6,336,000 outpatient visits; the web-based
 *Health data* retrieval system reports 1,894,441 outpatient contacts for the
 same year, a difference of more than 3-fold. The first includes psychiatric
@@ -399,9 +404,9 @@ Register](https://doi.org/10.1177/1403494811401482), Scand J Public Health
 
 ::: {.callout-warning}
 **Do not use a published aggregate as ground truth for your own extraction
-without checking its exact population.** If your row count from
-`lpr_a_kontakt` does not match a number you found in a DST or Sundhedsdata-
-styrelsen publication, the mismatch may be the publication's population
+without checking its exact population.** If your row count from `lpr_a_kontakt`
+does not match a number you found in a DST or Sundhedsdatastyrelsen (Danish
+Health Data Authority) publication, the mismatch may be the publication's population
 definition (which wards, which hospital types, which patient type), not a bug
 in your code. Check what the publication actually counted before assuming your
 extraction is wrong.
@@ -430,10 +435,10 @@ lpr3_d <- lpr_a_diagnose %>%
 ```
 
 ::: {.callout-warning}
-**This filter is not free of its own problems.** Your own `lpr_adm`
-delivery's actual coverage can end earlier than DST's own LPR2 files do
-(31 March 2019), in which case the simple filter above silently drops real, unique
-contacts along with the duplicates. See [Extract from
+**The filter can drop real contacts.** Your own `lpr_adm` delivery can end
+earlier than DST's LPR2 files do (31 March 2019), in which case the simple
+filter above silently drops real, unique contacts along with the duplicates.
+See [Extract from
 LPR](extract-from-lpr.qmd#lpr3-filter-caveat) for how to check your own
 delivery's coverage before trusting it. On DARTER specifically, see [DARTER
 pitfalls, 3](darter-pitfalls.qmd#lpr3-lprindberetningssystem) for a worked
@@ -441,21 +446,23 @@ fix.
 :::
 
 ::: {.callout-note title="Check that `lprindberetningssystem` is in your delivery"}
-DST deliveries differ between projects, and `lprindberetningssystem` is not
-always included - a reader reported that it was missing from their
-`lpr_a_kontakt` while `lpr_a_diagnose` had it. Check both tables before you
-rely on the filter:
+Deliveries differ between projects, and `lprindberetningssystem` is not always
+included: it has been reported missing from `lpr_a_kontakt` in a delivery where
+`lpr_a_diagnose` had it. Check both tables before you rely on the filter:
 
 ```r
-"lprindberetningssystem" %in% colnames(lpr_a_kontakt)   # TRUE if the column is there
-"lprindberetningssystem" %in% colnames(lpr_a_diagnose)
+# head(0) %>% collect() fetches the column names with zero rows; colnames() on a
+# lazy Arrow table after rename_with() can come back empty
+"lprindberetningssystem" %in% names(lpr_a_kontakt %>% head(0) %>% collect())   # TRUE if the column is there
+"lprindberetningssystem" %in% names(lpr_a_diagnose %>% head(0) %>% collect())
 ```
 
 If it is missing, ask DST to add the variable to your delivery.
 :::
 
-## Something actually broke?
+## If the code stopped with an error {#something-actually-broke}
 
-Every pitfall above is a case where the code runs and the answer is quietly
-wrong. If instead you have a red error message, or a result that came back
-empty, that is [Troubleshooting](troubleshooting.qmd).
+Most pitfalls above are cases where the code runs and the answer is wrong. If
+you have a red error message, or a result that came back empty, go to
+[Troubleshooting](troubleshooting.qmd). To check a new delivery against several
+of these pitfalls at once, use [Check your delivery](delivery-check.qmd).
