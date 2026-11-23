@@ -23,7 +23,8 @@ study period needs and which filters to apply. The code is on the next page,
 **In short:** LPR changed format in 2019: use LPR2 (up to March 2019) and LPR3
 (after) and combine them. All ICD codes carry a `D` prefix you usually strip,
 and you choose diagnosis types (A/B for outcomes; G for baseline comorbidity
-exists only in 1995-2003).
+exists only in 1995-2003). LPR2 contacts that never closed are only in separate
+open-contact tables ([why](#lpr2-open-contacts)).
 :::
 
 
@@ -170,6 +171,80 @@ LPR3_F](https://sundhedsdatastyrelsen.dk/media/16364/Vejledning%20til%20LPR3_F.p
 if you have inherited a project that used it. LPR_A documentation is still
 incomplete.)*
 :::
+
+## Open contacts are in separate LPR2 tables {#lpr2-open-contacts}
+
+`lpr_adm` and `lpr_diag` hold **closed** contacts, filed by the year the contact
+ended: the 2016 file holds the contacts that ended in 2016, including ones that
+started years earlier. A contact that has not ended is kept in a separate set of
+tables with the same structure, the *uafsluttede* (open) contacts. DST delivers
+them as `UAF_ADM`, `UAF_DIAG`, `UAF_SKSOPR`, `UAF_SKSUBE` and a `UAF_` table for
+most of the other LPR2 tables ([DST's register
+overview](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)).
+
+The open tables are filed by the year the contact **started**, and the contact
+stays in them for every year it is open. Sundhedsdatastyrelsen's example: a
+contact that starts in 2014 and ends in 2016 is in the open tables for 2014 and
+2015, and in the regular tables for 2016 ([Sundhedsdatastyrelsen's LPR
+documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5),
+section "Datastruktur").
+
+The register holds open outpatient courses started from 1995 and open
+admissions from 2015 (same source, "Periode"). Some outpatient contacts run for
+a long time, for example a course where the patient comes back for regular
+check-ups, and some are only closed when the patient dies. An open contact has
+no discharge date, so `d_uddto` is empty ([Sundhedsdatastyrelsen's extraction
+guide](https://sundhedsdatastyrelsen.dk/Media/638675370025223404/Udtrek-Landspatientregisteret.pdf)).
+
+**What happened to open contacts when LPR2 stopped.** At the switch to LPR3 in
+February and March 2019, the public hospitals had to close each open LPR2
+contact, either for good or by closing it in LPR2 and opening it again in LPR3.
+A contact closed this way ended in 2019, so it is in `lpr_adm`. Not every
+contact was closed: Sundhedsdatastyrelsen counted just under 192,000 LPR2
+contacts still open on 26 September 2020 ([data quality report on the
+transition, 2 October
+2020](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/16445/Datakvalitetsrapport%20om%20LPR%202019%20_%20overgangen%20fra%20LPR2%20til%20LPR3.pdf),
+section 6.1.2). DST's `UAF_ADM2019` has about 167,000 rows ([DST's dataset
+list](https://www.dst.dk/extranet/ForskningVariabellister/Datasaetlister/UAF_ADM%20-%20Landspatientregistret%20uafsluttede%20kontakter%20-%20administrative%20oplysninger.html)).
+
+::: {.callout-important}
+**A contact that never closed is not in `lpr_adm` or `lpr_diag` at all.** It is
+only in the open tables. If you read only `lpr_adm` and `lpr_diag`, you miss its
+diagnoses. A first-diagnosis date can then come out too late, and a person who
+already had the disease can stay in the cohort when you exclude prevalent
+cases. Sundhedsdatastyrelsen gives three reasons contacts stayed open: some
+are so old that the hospitals' current IT systems cannot reach them, some were
+closed but then reported again by mistake without an end date, and for some
+the closing report failed (data quality report, section 6.1.2).
+:::
+
+**Stacking the tables counts a contact more than once.** A contact open for
+three years is in three yearly open tables, and once it ends it is also in
+`lpr_adm`. `recnum` does not tell you which rows are the same contact:
+Sundhedsdatastyrelsen states that it is unique only within one update of the
+register and can change or be reused. Its key for a contact is hospital,
+department, patient type, person, and the date, hour and minute the contact
+started (`c_sgh`, `c_afd`, `c_pattype`, `pnr`, `d_inddto`, `v_indtime`,
+`v_indminut`). That is also the key it tells you to use to find the same
+contacts again in a later extract (LPR documentation, "Enhed"; extraction
+guide, "Et levende register").
+
+The simplest way round this is to read only the **last year** of the open
+tables. Under the filing rule above, those are the contacts that were still
+open when DST's copy was made, and none of them is in an `lpr_adm` taken from
+the same copy. That is what the recipes in [Extract from
+LPR](extract-from-lpr.qmd#one-outcome) do. Before 2014, an open outpatient
+course could also carry provisional diagnoses (type `M`, see [Diagnosis
+types](#diagtype)), which an A and B filter leaves out.
+
+**Psychiatric LPR2 does not have this split.** Sundhedsdatastyrelsen keeps
+psychiatric contacts in tables that are not divided by year and hold both
+closed and open contacts ([LPR
+documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=5),
+"Datastruktur"), and DST delivers `PSYK_ADM` as one dataset ([DST's dataset
+list](https://www.dst.dk/extranet/ForskningVariabellister/Datasaetlister/PSYK_ADM%20-%20Landspatientregistret%20psykiatri%20-%20administrative%20oplysninger.html)).
+Open psychiatric contacts are therefore already in `t_psyk_adm`, with an empty
+`d_uddto`.
 
 ## ICD codes and the D-prefix
 
@@ -400,15 +475,29 @@ episode counts, or anything comparing volume before and after 2019: the same
 clinical course can turn into many more registrations, and the apparent
 "spike" is a registration artifact, not a real change in disease incidence.
 
-**Whether first/last-diagnosis-date outcomes are also affected is not yet
-resolved.** In principle, fragmentation alone should not change a "first
-diagnosis of X" date - the earliest matching row is still the earliest row,
-whether the underlying course produced one registration or ten. But that
-relies on every row still carrying its true original date across the
-transition, which is not confirmed. **Test this on your own data before
-relying on it**: check whether a first- or last-diagnosis date you compute
-shows any jump or shift around 2019-2020, the same way you check counts
-below.
+**For first- or last-diagnosis dates, part of the answer is documented.** In
+principle, fragmentation alone should not change a "first diagnosis of X" date -
+the earliest matching row is still the earliest row, whether the underlying
+course produced one registration or ten. For courses that ran across the
+transition, Sundhedsdatastyrelsen documents the following. About 27% of the 8.2
+million forløbselementer (course elements) that the public hospitals reported
+to LPR3 for 2019 are marked as transferred from LPR2. A transferred course
+element starts at the time of the transition, and the LPR2 contact it continues
+was closed at that time ([data quality report on the
+transition](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/16445/Datakvalitetsrapport%20om%20LPR%202019%20_%20overgangen%20fra%20LPR2%20til%20LPR3.pdf),
+section 6.1.2). So in LPR3 the course starts in 2019, and its earlier history
+is on the LPR2 contact, which ended in 2019 with discharge mode `c_udm` = `M`
+("afsluttet til LPR3", closed to LPR3) and is in `lpr_adm`. A
+first-diagnosis date taken across LPR2 and LPR3 comes from that LPR2 contact,
+as long as it is in your extract. Contacts that were never closed are a
+separate case, see [Open contacts](#lpr2-open-contacts).
+
+Sundhedsdatastyrelsen could link only about 58% of the transferred course
+elements back to an LPR2 contact (81% if the hour is left out of the match),
+and some course elements were marked as transferred without being so (same
+report). **Test this on your own data before relying on it**: check whether a
+first- or last-diagnosis date you compute shows any jump or shift around
+2019-2020, the same way you check counts below.
 :::
 
 The visible effect, for a count-based analysis, is a spike in the number of
