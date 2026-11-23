@@ -1,61 +1,76 @@
 ---
 title: "Medication (ATC)"
-subtitle: "Extract drug exposure from LMDB - filtered to your cohort"
+subtitle: "Turn dispensed prescriptions in LMDB into a first-dispensing date, a user flag or exposure time for your cohort"
 date: last-modified
 pagetitle: "Medication (ATC) from LMDB"
 description: "Extract drug exposure from LMDB, the Danish Prescription Register, in R: filter ATC codes for your cohort, define users, and tell products apart with vnr."
 ---
 
-Prescription medication lives in **LMDB** (the Prescription Register). The
-register has **one row per dispensed prescription**, so the same person can have
-hundreds of rows. The two columns you almost always use are:
+Use this page to extract dispensed prescriptions for your cohort and turn them
+into a variable: a first dispensing date, a user/non-user flag, or the raw
+material for exposure time. You need your cohort from [Phase
+10](build-study-population.qmd), and you end with an `.rds` file of
+dispensings, one row per fill, that the later steps on this page reduce to one
+row per person.
 
-- **`atc`:** the drug's ATC code (Anatomical Therapeutic Chemical), e.g.
-  `"A10BA02"` for metformin.
-- **`eksd`:** the dispensing date (when the prescription was collected) - use it
-  as the prescription date, just like `date_contact` in LPR.
+Prescriptions are in LMDB (Lægemiddeldatabasen). In the literature the same
+data are described as the Danish National Prescription Registry, the part of
+the Register of Medicinal Product Statistics that holds prescriptions filled
+by individuals at community pharmacies ([Pottegård et al.
+2017](https://doi.org/10.1093/ije/dyw213)). LMDB has one row per dispensed
+prescription, so one person can have hundreds of rows. The two columns you
+almost always use are:
 
-**LMDB starts in 1995, and is considered complete and valid from that year
-onward** ([Pottegård et al. 2017](https://doi.org/10.1093/ije/dyw213)). There
-is no medication history before that, so a lookback window that reaches
-further back is empty rather than negative - and "no prescriptions" will look
-like "not a user".
+- **`atc`:** the drug's ATC code (Anatomical Therapeutic Chemical
+  classification), for example `"A10BA02"` for metformin.
+- **`eksd`:** the dispensing date, the day the prescription was collected at
+  the pharmacy. Use it as the prescription date, in the same way as
+  `date_contact` in LPR (the National Patient Register).
 
-The full confirmed column list is in [Register
-reference](register-reference.qmd#lmdb).
+The full column list is in [Overview of registers](register-reference.qmd#lmdb).
 
-::: {.callout-note}
-**LMDB only covers prescriptions dispensed at community pharmacies.** Three
-things are therefore systematically missing: drugs given *during hospital
-admission*, drugs dispensed directly by hospitals (e.g. chemotherapy and
-immunosuppressants) and drugs for certain institutionalized people ([Pottegård
-et al. 2017](https://doi.org/10.1093/ije/dyw213)). If you need in-hospital
-medication, a newer *Hospital Medication Register* (Sygehusmedicinregisteret,
-data from 2018) exists, but it is still unvalidated, incomplete and accessed via
-the Danish Health Data Authority, not DST - use it with caution ([Rosenkrantz et
-al. 2024](https://doi.org/10.2147/CLEP.S487838)).
+## What LMDB covers, and what it does not {#coverage}
 
-**Over-the-counter medicine is not in LMDB either** ([Pottegård et al.
-2017](https://doi.org/10.1093/ije/dyw213)). For medicine that can be bought
-both with and without a prescription, LMDB only shows the prescribed part.
-:::
+LMDB starts in 1995, and the data are considered complete and valid from that
+year ([Pottegård et al. 2017](https://doi.org/10.1093/ije/dyw213)). There is no
+medication history before 1995, so a lookback window that reaches further back
+is empty for everyone, and "no prescriptions" will look like "not a user".
+
+LMDB only holds prescriptions dispensed at community pharmacies. The following
+are therefore missing ([Pottegård et al.
+2017](https://doi.org/10.1093/ije/dyw213)):
+
+- drugs given during hospital admission;
+- drugs supplied directly by hospitals or treatment centres (for example
+  chemotherapy, immunosuppressants and methadone for substance use);
+- drugs for certain institutionalised people (typically because of
+  psychiatric illness);
+- over-the-counter medicine. For a drug that can be bought both with and
+  without a prescription, LMDB only shows the prescribed part.
+
+For in-hospital medication there is a newer Hospital Medication Register
+(Sygehusmedicinregisteret) with data from May 2018. Its data quality has not
+yet been evaluated, and some clinical specialties are missing ([Rosenkrantz et
+al. 2024](https://doi.org/10.2147/CLEP.S487838)). It is held by the Danish
+Health Data Authority.
 
 ::: {.callout-warning}
-**Before 1996, a child's prescriptions are filed under the mother's `pnr`, not
-the child's.** Community pharmacies issued prescriptions for children under
-the mother's name until 1996, switching to the child's own name only after
-that ([Pottegård et al. 2017](https://doi.org/10.1093/ije/dyw213)). If your
-cohort includes children with drug exposure before 1996, filtering LMDB by the
-child's own `pnr` silently misses those prescriptions entirely - they are not
-missing, they are recorded under a different person's `pnr`.
+**Until 1996, a child's prescriptions were recorded under the mother, not the
+child.** Prescriptions for children were issued in the mother's name until
+1996, and in the child's own name after that ([Pottegård et al.
+2017](https://doi.org/10.1093/ije/dyw213)). If your cohort includes children
+with drug exposure in those years, filtering LMDB by the child's own `pnr`
+misses those prescriptions without any error: they are in the register, but
+under another person's `pnr`. The source gives no exact date in 1996, so the
+cautious choice is to treat a child's dispensings as reliable from 1997.
 :::
 
-## Exposure, outcome or covariate? Same extract
+## Exposure, outcome or covariate: one extract, different date filters {#roles}
 
-Medication can be all three. It is solved **exactly as for diagnoses** ([Extract
-from LPR](extract-from-lpr.qmd)): you make **one extract** of the
-dispensings, and the **role is decided by when `eksd` falls relative to
-`index_date`** - not by a separate page per role:
+Medication can be an exposure, a covariate or an outcome. As for diagnoses
+([Extract from LPR](extract-from-lpr.qmd)), you make one extract of the
+dispensings, and the role is decided by where `eksd` falls relative to
+`index_date`:
 
   | Role                                   | When                                          | What you do                                    | Page                                      |
   | -------------------------------------- | --------------------------------------------- | ---------------------------------------------- | ----------------------------------------- |
@@ -64,17 +79,19 @@ dispensings, and the **role is decided by when `eksd` falls relative to
   | **Outcome** (new treatment)            | `eksd > index_date`                           | First `eksd` after index                       | [Outcomes](outcomes.qmd)              |
   | **Time-varying** (on/off treatment)    | Changes during follow-up                      | Start/stop format                              | [Time-varying](time-varying.qmd)      |
 
-So you do not write three different medication extracts. You write one, and the
-**date filter relative to index** determines the role.
+If the first dispensing defines the index date, require a period before it
+with no dispensing of the drug (a washout). Otherwise people who have been on
+the drug for years enter as new users. LMDB starts in 1995, so nobody has a
+washout that reaches further back than that.
 
-## The pattern
+## Extract the dispensings for your cohort {#the-pattern}
 
-ATC codes have **no D-prefix** (unlike ICD in LPR, see [Understand
+ATC codes have no D-prefix (unlike ICD codes in LPR, see [Understand
 LPR](understand-lpr.qmd#icd-codes-and-the-d-prefix)), so you match directly
 on the start of the code. `read_register()` requires fastreg set up with the
-path to your registers - see [Phase
-4](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not convert them from
-SAS yourself:
+path to your registers, see [Parquet and
+fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not convert
+them from SAS yourself.
 
 ```r
 library(fastreg) # read_register()
@@ -100,21 +117,22 @@ saveRDS(medication_rx, "path/to/extract_medication_rx.rds") # keep all fills: th
 saveRDS(medication, "path/to/extract_medication.rds")
 ```
 
-`substr(atc, 1, 5) == "A10BJ"` matches the whole ATC level (all GLP-1
-analogues). For several groups at once, use [regex](extract-from-lpr.qmd) as
-in LPR: `grepl("^A10BJ|^A10BA", atc)`. The code-matching pattern (regex, `%in%`
-with a code list, `!!`) is explained in [Extract from
-LPR](extract-from-lpr.qmd) and [Function
-guide](function-guide.qmd#filter-conditions). Reducing to **one row per
-person** is explained in [Long ↔ wide format](long-wide.qmd) - here
+`substr(atc, 1, 5) == "A10BJ"` matches the whole ATC group (all GLP-1
+analogues; GLP-1 is glucagon-like peptide-1). For several groups at once, use a
+regular expression as in LPR: `grepl("^A10BJ|^A10BA", atc)`. Code matching
+(regex, `%in%` with a code list, `!!`) is explained in [Extract from
+LPR](extract-from-lpr.qmd) and [Functions:
+overview](function-guide.qmd#filter-conditions). Reducing to one row per
+person is explained in [Long ↔ wide format](long-wide.qmd). Here it is
 `slice(1)` for the first dispensing, but it could also be ever/never or a count
 in a window (see the role table above).
 
-## From dispensings to "is this person a user?" {#defining-users}
+## Define users: at least N dispensings within a window {#defining-users}
 
-One dispensing is weak evidence of treatment: people fill a prescription once and
-stop. A common definition is therefore **at least two dispensings within a
-window**, with the onset date being the date the definition is first met.
+One dispensing is weak evidence of treatment, because some people fill a
+prescription once and stop. A common definition is therefore at least two
+dispensings within a window, with the onset date being the date the definition
+is first met.
 
 ```r
 library(dplyr) # group_by, mutate, lag, filter, summarise
@@ -139,24 +157,23 @@ flag_users <- function(data, min_dispensings = 2, window_days = 365) {
 users <- flag_users(medication_rx, min_dispensings = 2, window_days = 365) # ALL fills, not the first-only table
 ```
 
-The two numbers are **your** choices, not standards - write them into your
-methods. One dispensing is enough for a drug taken once; a chronic treatment
-usually wants two or more.
-
-This is also how medication can enter a **comorbidity** definition: for
-conditions treated largely outside hospital, LMDB catches people LPR never sees.
-Whether to define a condition from diagnoses, prescriptions or both is a design
-decision - see [Comorbidity - diagnoses, prescriptions, or
-both?](comorbidity.qmd#diagnoses-prescriptions-or-both).
-
 ::: {.callout-warning}
-**`arrange()` before `lag()`, always.** `lag()` works on row order, not on dates.
-If the rows are not sorted by person and date, `gap_days` is computed against an
-arbitrary earlier row and the result is quietly wrong rather than an error.
+**Sort with `arrange()` before `lag()`.** `lag()` works on row order, not on
+dates. If the rows are not sorted by person and date, `gap_days` is computed
+against an arbitrary earlier row, and the result is wrong without any error.
 :::
 
+The two numbers are your choices, not standards, so write them into your
+methods. One dispensing can be enough for a drug taken once; for a chronic
+treatment two or more is the usual requirement.
+
+The same definition is how medication enters a comorbidity definition: for
+conditions treated largely outside hospital, LMDB catches people LPR never
+sees. Whether to define a condition from diagnoses, prescriptions or both is
+discussed on [Comorbidity](comorbidity.qmd#diagnoses-prescriptions-or-both).
+
 <details>
-<summary>If you need many ATC conditions at once (one LMDB pass)</summary>
+<summary>Many ATC conditions at once: `regmorbidity::mb_extract_medication_batch()`</summary>
 
 The recipe above is the one to keep for one drug, or a few. It opens LMDB with
 `read_register()`, filters, collects, and calls `flag_users()`. Use this
@@ -170,13 +187,13 @@ condition that shares the same `(min_prescriptions, window_days)` into one
 query, and only the onset rows come back to R. In the bundled code list, pain
 is 4 dispensings within 365 days. The other ATC conditions are 2 within 365
 days, so those are one query and pain is a second. Onset is the dispensing
-that meets the rule. This is not a score, and it is not a comorbidity index.
+that meets the rule. The package is on GitHub only and in development; it
+computes no score and is not a comorbidity index.
 
 On 26 September 2026 the 15 ATC conditions then in the bundled list (14 on the
 2-within-365 rule, plus pain) matched `mb_flag_users()` on the real LMDB at
-DST. The bundled list today has 16 conditions on the 2-within-365 rule, plus
-pain. The DST check covers those 15, not automatically a condition added
-later.
+DST. Conditions have been added to the list since. The DST check covers those
+15, not automatically a condition added later.
 
 Do not use `mb_extract_diagnosis_batch()` from this page. It has not been run
 on DST.
@@ -189,24 +206,25 @@ library(duckdb)
 library(dplyr)        # tbl, rename_with
 
 # A dbplyr lazy table on one plain DuckDB connection, as in
-# "Several registers on one DuckDB connection". Not read_register(),
-# and not duckplyr::read_parquet_duckdb(): those are duckplyr tables,
-# and this function's window step is written for dbplyr.
+# "Several registers on one DuckDB connection". This function's window
+# step is written for dbplyr. duckplyr::read_parquet_duckdb() gives a
+# duckplyr table, and so does read_register() from fastreg 0.14.3 on
+# (the CRAN version, 0.14.1, gives a dbplyr table). The plain connection
+# works whichever fastreg version you have.
 con <- dbConnect(duckdb())
 dbExecute(con, "CREATE VIEW lmdb AS SELECT * FROM read_parquet(
-  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lmdb/**/*.parquet',
+  'path/to/lmdb/**/*.parquet',
   hive_partitioning = true)")
 lmdb <- tbl(con, "lmdb") %>% rename_with(tolower)
 
 # from is required. Omitting it is an error, not "start at the beginning".
-# 1997-01-01 is the package's floor for the years when a child's
-# prescription was often filed under the mother's CPR. The warning higher
-# up on this page, citing Pottegård et al. 2017, is about before 1996.
-# Pass a later date if your own study starts later.
+# 1997-01-01 is what the package README recommends: children's prescriptions
+# were recorded under the mother until 1996 (see the warning higher up on
+# this page). Pass a later date if your own study starts later.
 rx <- mb_extract_medication_batch(
   lmdb,
   codes = mb_codelist(),          # or conditions = c("diabetes", "pain")
-  ids = cohort$pnr,               # the same cohort as the recipe above
+  ids = cohort_pnrs,              # the same cohort as the recipe above
   code_col = "atc",               # the full code, not atc2 or atc4
   date_col = "eksd",
   from = as.Date("1997-01-01"),
@@ -226,11 +244,11 @@ the files that were already there.
 
 ## Which ATC column? {#atc-columns}
 
-LMDB does not hold the ATC code once. It holds it **five times**, at five levels,
+LMDB does not hold the ATC code once. It holds it five times, at five levels,
 in five separate columns. DST's [variable list for
 LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html)
 labels them `ATC-kode detaljeret` and `ATC-niveau 1` to `ATC-niveau 4`. They are
-**cumulative**: each level repeats the levels above it and adds its own
+cumulative: each level repeats the levels above it and adds its own
 characters.
 
   | Column | ATC level | Characters | Example   | What it is              |
@@ -242,7 +260,7 @@ characters.
   | `atc`  | 5         | 7          | `C09AA05` | chemical substance      |
 
 The column names and their levels come from DST's variable list. The character
-counts are **not** stated there; they follow from the WHO standard, where level
+counts are not stated there; they follow from the WHO standard, where level
 2 is by definition the three-character code ([WHO Collaborating Centre for Drug
 Statistics Methodology](https://atcddd.fhi.no/atc/structure_and_principles/)).
 
@@ -255,7 +273,7 @@ empty result looks like a finding rather than a bug, and it is easy to write up
 as "no exposed patients" when the truth is that the filter could not fire.
 :::
 
-**So filter on `atc`, not on the level columns.** It is seven characters, it
+So filter on `atc`, not on the level columns. It is seven characters, it
 contains every level as a prefix, and `substr(atc, 1, 3)` gives you exactly what
 `atc2` holds. There is no case where a level column lets you filter something
 `atc` cannot:
@@ -275,14 +293,14 @@ is the right habit from LPR, where a code genuinely can turn up mid-string.
 
 ### Which way should you write the filter?
 
-There are two ways to keep the codes you want, and **the length of your codes
-decides which one to use**. ATC codes are not all the same length: `N02` is three
+There are two ways to keep the codes you want, and the length of your codes
+decides which one to use. ATC codes are not all the same length: `N02` is three
 characters, `A10BA` is five.
 
   | Your code list                       | Use             | Why                                    |
   | ------------------------------------ | --------------- | -------------------------------------- |
-  | All codes have the **same** length    | `substr()` + `%in%` | Faster, and easy to read               |
-  | Codes have **different** lengths      | `grepl()` with `^`  | Handles any length                     |
+  | All codes have the same length        | `substr()` + `%in%` | Faster, and easy to read               |
+  | Codes have different lengths          | `grepl()` with `^`  | Handles any length                     |
 
 **All codes the same length.** Cut `atc` down to that length, then check whether
 the result is on your list:
@@ -320,10 +338,9 @@ which is worth having when you fetch many drug groups at once, but a correct
 slow filter beats a fast broken one.
 :::
 
-::: {.callout-note}
-**Does it save memory to filter on `atc2` first?** No. It is a reasonable thing
-to wonder, since `atc2` is the short column, but the filter runs **before**
-anything is loaded: nothing reaches your memory until `collect()`, and what
+::: {.callout-note collapse="true" title="Does it save memory to filter on `atc2` first? (No)"}
+It is a reasonable thing to wonder, since `atc2` is the short column, but the
+filter runs before anything is loaded: nothing reaches your memory until `collect()`, and what
 lands there is the rows that survived, which are the same rows either way.
 `substr(atc, 1, 3)` gives you exactly what `atc2` contains, so the two are the
 same query.
@@ -337,10 +354,10 @@ matches nothing and returns no rows without an error, so it is worth doing in
 one step on `atc`.
 :::
 
-::: {.callout-note}
-**What the level columns are actually for: grouping, not filtering.** When you
-want a descriptive breakdown by therapeutic subgroup, `atc2` is a ready-made
-grouping column and saves you a `substr()`:
+### What the level columns are for: grouping {#atc-level-grouping}
+
+When you want a descriptive breakdown by therapeutic subgroup, `atc2` is a
+ready-made grouping column and saves you a `substr()`:
 
 ```r
 read_register("lmdb") %>% # the register itself: atc2 was not selected into medication_rx
@@ -348,9 +365,6 @@ read_register("lmdb") %>% # the register itself: atc2 was not selected into medi
   count(atc2, sort = TRUE) %>% # dispensings per therapeutic subgroup
   collect()
 ```
-
-That is the use case. Filtering is not.
-:::
 
 ::: {.callout-tip title="Check this on your own extract before you trust it"}
 Two minutes, and it settles both whether the columns exist and how they are
@@ -371,29 +385,26 @@ repeating the one before it. If instead you see isolated fragments (`09` in
 `atc2`), every `^`-anchored pattern in this section is wrong for your delivery
 and you should filter on `atc` only.
 
-Note that `names(lmdb)` will **not** answer this. On a lazy connection it
-returns the connection object's own parts (`src`, `lazy_query`), not the table's
-columns, so it looks as though the columns are missing. `colnames()` works on
-the DuckDB object `read_register()` returns; if you opened LMDB with
-`open_dataset()` instead, use `names(collect(head(lmdb, 0)))` - see [Phase 7 -
-The shape](inspect-data.qmd#the-shape).
+Note that `names(lmdb)` may not answer this. On a dbplyr table (what
+`read_register()` from CRAN fastreg 0.14.1 returns) it gives the object's own
+parts (`src`, `lazy_query`), not the table's columns, so it looks as though
+the columns are missing. `colnames()` works on the DuckDB object
+`read_register()` returns; if you opened LMDB with
+`open_dataset()` instead, use `names(collect(head(lmdb, 0)))` - see [Phase 7, Inspect your
+data](inspect-data.qmd#the-shape).
 :::
 
-::: {.callout-note}
-**`atc3` and `atc4` are not filled in for every product.** Not all preparations
+`atc3` and `atc4` are not filled in for every product. Not all preparations
 are classified to that depth, so do not assume the columns are complete. Count
 the blanks in your own extract before you build anything on them.
-:::
 
-## ATC is not enough: same substance, different product
+## Tell products apart when they share an ATC code: `vnr` and `indo` {#same-atc-different-product}
 
-ATC classifies by **active substance**, not by product or indication. Two brands
-with the same substance therefore get the **same ATC** - and cannot be told
-apart on `atc` alone:
-
-- **Ozempic** (semaglutide, type 2 diabetes) and **Wegovy** (semaglutide, weight
-  loss) both have **ATC `A10BJ06`**. Filter on ATC only, and you mix diabetes
-  treatment together with weight-loss treatment.
+ATC classifies by active substance, not by product or indication. Two brands
+with the same substance therefore get the same ATC code and cannot be told
+apart on `atc` alone. Ozempic (semaglutide, type 2 diabetes) and Wegovy
+(semaglutide, weight loss) both have `A10BJ06`: filter on ATC only, and you mix
+diabetes treatment with weight-loss treatment.
 
 Two columns separate them:
 
@@ -401,13 +412,13 @@ Two columns separate them:
   the only reliable way to isolate one specific product. The `vnr`-to-product
   lookup comes from the medicine taxonomy (KAT / Danish Health Data Authority);
   `name`/`packtext` hold the product text if you want to recognise it by eye.
-- **`indo` (indication code):** a *coded* indication (from the Medicinpriser
-  catalogue, LMS 25), not free text. The code is recorded **only** when the
+- **`indo` (indication code):** a coded indication (from the Medicinpriser
+  catalogue, LMS 25), not free text. The code is recorded only when the
   prescriber picks an indication from the drop-down menu in the electronic
-  prescription. **If the doctor types the indication as free text instead, it is
-  not transferred to the register** and `indo` is left blank. So it can in
-  principle separate the same substance across indications, but it is **often
-  empty**. Use `vnr` as the primary product key and `indo` as a supporting
+  prescription. If the doctor types the indication as free text instead, it is
+  not transferred to the register and `indo` is left blank. So it can in
+  principle separate the same substance across indications, but it is often
+  empty. Use `vnr` as the primary product key and `indo` as a supporting
   signal, not a clean filter.
 
 ```r
@@ -421,66 +432,88 @@ medication_rx %>%
   filter(vnr %in% !!ozempic_vnr) # keep only rows with a vnr from your list
 ```
 
-Keep the two names in the last line apart: **`vnr`** (on its own) is the
-register's *column* holding the varenummer - the product's ID, just as `pnr` is
-the person's ID. **`ozempic_vnr`** is your *own* R vector of the varenumbers you
+Keep the two names in the last line apart: `vnr` on its own is the register's
+column holding the varenummer, the product's ID, just as `pnr` is the person's
+ID. `ozempic_vnr` is your own R vector of the varenumbers you
 looked up for Ozempic; you choose the name yourself (same pattern as the code
 list in [Extracting data step by step](extraction-step-by-step.qmd)). `%in%`
 keeps the rows where `vnr` is found in your list, and `!!` sends your local list
 into the lazy query (explained in [Extract from LPR](extract-from-lpr.qmd)
-and [Function guide](function-guide.qmd#filter-conditions)).
+and [Functions: overview](function-guide.qmd#filter-conditions)).
 
 ::: {.callout-note}
-**Which `vnr` belongs to which product** depends on package and strength (one
+Which `vnr` belongs to which product depends on package and strength (one
 product has several varenumbers). Look them up in the medicine taxonomy for your
 exact study period rather than assuming, and document the list in your code. For
-`indo`, [Harbi & Pottegård 2024](https://pubmed.ncbi.nlm.nih.gov/37889961/)
+`indo`, [Harbi & Pottegård 2024](https://doi.org/10.1097/EDE.0000000000001666)
 found a recorded indication code on 82% of prescriptions (about 88% corrected)
-and almost 100% correct when present - but missingness is markedly higher before
+and almost 100% correct when present, but missingness is markedly higher before
 1 October 2017 (when electronic prescribing became mandatory) and varies by drug
 class (about 8% missing for systemic anti-infectives versus 28% for
-blood-related agents). 5.6-36% of codes are **nonspecific** (e.g. "for the
+blood-related agents). 5.6-36% of codes are nonspecific (e.g. "for the
 heart" for beta-blockers); whether a nonspecific code is usable depends on your
 question. The value set is the Danish Health Data Authority's [drug
 classification](https://sundhedsdatastyrelsen.dk/indberetning/klassifikationer/klassifikation-af-laegemidler)
-(Medicinpriser). As a side note: a *validly recorded* code does not mean the
-prescriber chose the *correct* indication - drop-down menus make wrong choices
+(Medicinpriser). A validly recorded code does not mean the
+prescriber chose the correct indication: drop-down menus make wrong choices
 easy, so the code is not necessarily the clinical truth.
 :::
 
+## From dispensings to exposure time: DDD, PDC and MPR {#exposure-time}
+
 ::: {.callout-warning}
 **A dispensing is not the same as intake.** `eksd` tells you the prescription
-was *collected at the pharmacy*, not that the patient took the drug, and
-certainly not for how long. For an exposure that lasts over time - treatment
-episodes, *grace periods* (the allowed gap between two prescriptions before a
-person counts as having stopped) and adherence measures such as **PDC**
-(*proportion of days covered*: the share of follow-up time covered by medicine)
-or **MPR** (*medication possession ratio*: amount dispensed divided by the
-length of the period) - you must build **exposure windows** from quantity and
-strength, not just count dispensings. The relevant LMDB fields are `apk` (number
-of packages), `packsize` (pack size, i.e. units per package) and `strnum` (the
-numeric strength; the unit is in `strunit`). Note that the dosage field itself
-(`doso`) is essentially empty (recorded for \~0.06% of prescriptions in the same
-validation), so dose must be derived from these package fields. Ready-made tools
-for this are in [`heaven`](packages-overview.qmd) (`medicinMacro()` for drug
-exposure windows from LMDB, and `hypertensionMedication()` if the exposure you
-need is antihypertensive treatment, which it defines from ATC codes for you). If
-your index date or exposure status depends on *future* medication, you get
-[immortal time bias](dst-pitfalls.qmd#immortal-time-bias): if you require a
-person to fill the prescription (or two prescriptions) *after* index to count as
-exposed, then by construction they survived until that date - and the "immortal"
-time between index and the first fill makes the exposure look artificially
-protective. Instead, start follow-up for the exposed at the *first* dispensing,
-or treat medication as a [time-varying](time-varying.qmd) exposure.
+was collected at the pharmacy, not that the patient took the drug, or for how
+long.
+:::
+
+For an exposure that lasts over time you need exposure windows built from the
+amount dispensed, not just a count of dispensings. That covers treatment
+episodes, grace periods (the gap allowed between two prescriptions before a
+person counts as having stopped) and adherence measures such as PDC
+(proportion of days covered: the share of follow-up time covered by medicine)
+and MPR (medication possession ratio: the amount dispensed divided by the
+length of the period).
+
+The LMDB columns for the amount are `apk` (number of packages), `packsize`
+(units per package) and `strnum` (the numeric strength; the unit is in
+`strunit`). `volume` is the number of defined daily doses (DDD) per package
+([Pottegård et al. 2017](https://doi.org/10.1093/ije/dyw213), table of
+variables). The DDD is the WHO's "assumed average maintenance dose per day for
+a drug used for its main indication in adults", a unit of measurement and not
+necessarily the dose your patients were prescribed ([WHO Collaborating Centre
+for Drug Statistics
+Methodology](https://atcddd.fhi.no/ddd/definition_and_general_considera/)). So
+`apk * volume` gives DDDs dispensed, which is a crude duration only if your
+patients take one DDD a day. DST's variable list has `voltypecode` and
+`voltypetxt` next to `volume` but no labels for them; look at the values in
+your own extract before you rely on `volume`. The dosage field `doso` is
+essentially empty (recorded for about 0.06% of prescriptions in the
+validation by Harbi & Pottegård), so dose must be derived from the package
+columns.
+
+Ready-made tools are in [`heaven`](packages-overview.qmd): `medicinMacro()`
+estimates prescription lengths and average doses from LMDB, and
+`hypertensionMedication()` defines hypertension from the use of at least two
+classes of antihypertensive drugs.
+
+::: {.callout-warning}
+**Exposure defined by future dispensings gives immortal time bias.** If you
+require a person to fill a prescription (or two) after index to count as
+exposed, then by construction they survived until that date, and the time
+between index and the fill makes the exposure look protective ([immortal time
+bias](dst-pitfalls.qmd#immortal-time-bias)). Start follow-up for the exposed at
+the first dispensing, or treat medication as a [time-varying](time-varying.qmd)
+exposure.
 :::
 
 ## See also
 
 - [Extract from LPR](extract-from-lpr.qmd): code matching in detail (regex,
-  code lists, `!!`) - same technique without the D-prefix
+  code lists, `!!`), the same technique without the D-prefix
 - [Outcomes](outcomes.qmd#where-does-your-codelist-come-from): where a
   codelist comes from (applies to ATC too)
-- [Register reference](register-reference.qmd#lmdb): all confirmed LMDB columns
+- [Overview of registers](register-reference.qmd#lmdb): all confirmed LMDB columns
 - [DST's variable list for
   LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html):
   DST's own column labels and period coverage. The [darter
@@ -489,8 +522,8 @@ or treat medication as a [time-varying](time-varying.qmd) exposure.
 - [Algorithms & special packages](packages-overview.qmd): `heaven` for exposure
   windows; OSDC and NMI already use ATC codes
 - [Time-varying variables](time-varying.qmd): on/off treatment over time
-- [Phase 12 - Assemble and prepare the dataset](data-manipulation.qmd): join
-  the medication extract onto the cohort
+- [Phase 12, Assemble and prepare the dataset](data-manipulation.qmd): the
+  next step, joining the medication extract onto the cohort
 - [RECORD-PE](https://www.equator-network.org/reporting-guidelines/record-pe/):
   reporting standard for pharmacoepidemiology on routinely collected data
   (extends STROBE/RECORD)
