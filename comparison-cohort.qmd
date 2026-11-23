@@ -394,18 +394,10 @@ Extract these dates once for the whole population and reuse them for both the ex
 # per event, and which one applies depends on the index date - so they are looked
 # up at match time in Step 3, not here.
 
-# For censoring (Route A) we do need ONE exit date per person: the first exit
-# within the study window. See the warning about Route A below.
-first_exit <- vnds_ev %>%
-  filter(indud_kode == "U", haend_dato >= as.Date(paste0(YEAR_FROM, "-01-01"))) %>%
-  group_by(pnr) %>%
-  summarise(first_exit = min(haend_dato), .groups = "drop")
-
 pool <- demographics %>%
   left_join(death,      by = "pnr") %>%           # date of death;     NA = no registered death
   left_join(outcome,    by = "pnr") %>%           # first outcome;     NA = never outcome
-  left_join(exp_dt,     by = "pnr") %>%           # first exposure;    NA = never exposed
-  left_join(first_exit, by = "pnr")               # first exit;        NA = never emigrated
+  left_join(exp_dt,     by = "pnr")               # first exposure;    NA = never exposed
 # Note: we do NOT remove all exposed - exposure-free status is decided ON index in Step 3.
 ```
 
@@ -439,8 +431,10 @@ index, and a control is one who is *not yet* exposed at the case's index.
 
 First we combine the exposed and the pool into ONE table (`all_persons`) in the
 format `exposureMatch()` needs: an `event` indicator (1/0), a `case.index` date
-and an `end.followup` date. This prepares the match pool; the sampling itself is
-only the function call afterwards. (The manual Route B
+and an `end.followup` date. `exposureMatch()` gives each row one continuous
+at-risk interval, so the table has one row per person and residence spell (a
+person who emigrated and came back has two rows). This prepares the match pool;
+the sampling itself is only the function call afterwards. (The manual Route B
 uses `exposed` and `pool` directly and does not need this assembly.)
 
 ```r
@@ -448,57 +442,70 @@ uses `exposed` and `pool` directly and does not need this assembly.)
 library(heaven)   # exposureMatch
 STUDY_END <- as.Date("2022-12-31")   # we choose: last day of the study
 
-# Entry: the date a person first meets the SAME criteria as the exposed in Step 1
-# (age >= 18 and 5 years continuous residence since the latest immigration, or
-# since birth if none). Passed as a date.term below, so a control must have
-# reached it before the case's index - otherwise someone who immigrates after the
-# index date (or is too young / too recently arrived) could be drawn.
-last_entry <- vnds_ev %>%
-  filter(indud_kode == "I") %>%
-  group_by(pnr) %>%
-  summarise(last_entry = max(haend_dato), .groups = "drop")   # latest immigration
-
-add_entry <- function(x) {
-  x %>%
-    left_join(last_entry, by = "pnr") %>%
-    mutate(eligible_from = pmax(foed_dag + ceiling(18 * 365.25),                        # age >= 18 (adapt)
-                                coalesce(last_entry, foed_dag) + ceiling(5 * 365.25)))  # 5 years residence
-}
-
-# Assemble ONE table with both exposed and pool. transmute() = like mutate(), but keeps
-# ONLY the columns we name here (the rest are dropped) - so the table is clean for matching.
-# exposureMatch() requires each pnr ONCE: the exposed enter only as cases (exposureMatch
-# still lets them be controls for earlier cases until their own index), so they are
-# removed from the pool with anti_join().
-all_persons <- bind_rows(
-  exposed %>% add_entry() %>% transmute(
-    pnr,                                           # person id (kept)
-    event      = 1L,                               # NEW column 'event' = 1: these are cases (exposed)
-    sex, birth_year,                               # matching variables (kept)
-    case_index = index_date,                       # NEW column: the case index = exposure date
-    end_fu     = STUDY_END,                        # NEW column: end of follow-up (optionally refine w. death/outcome)
-    eligible_from = pmin(eligible_from, index_date - 1)  # met in Step 1; strictly before index, as date.terms compare with <
-  ),
-  pool %>% anti_join(exposed, by = "pnr") %>% add_entry() %>% transmute(
-    pnr,
-    event      = 0L,                               # 'event' = 0: potential controls
-    sex, birth_year,
-    case_index = as.Date(NA),                      # controls have no event date (NA)
-    # end_fu for a control = the date they can no longer be selected as a control: the EARLIEST of
-    # death, first exit AFTER study start, own exposure (= crossover), outcome or
-    # study end. pmin = smallest/earliest.
-    end_fu     = pmin(death_date, first_exit, exposure_date,
-                      first_outcome_date, STUDY_END, na.rm = TRUE),  # na.rm: ignore missing dates
-    eligible_from                                  # entry date (see above)
-  )
+# Residence spells: ONE row per period of residence in Denmark. A spell starts at
+# birth or at an immigration and ends at the person's next migration event (NA = no
+# later event). This is the residence rule from Step 1 written as intervals: on any
+# index date, the spell a person is in started at their latest immigration before
+# that date, or at birth if they have no event before it. exposureMatch() allows only
+# one at-risk interval per row, so a person who left and came back gets one row per
+# spell, and is at risk again from their return.
+# join_by(closest()) needs dplyr 1.1.0 or newer.
+spells <- bind_rows(
+  demographics %>% select(pnr, spell_start = foed_dag),                            # from birth
+  vnds_ev %>% filter(indud_kode == "I") %>% select(pnr, spell_start = haend_dato)  # from each immigration
 ) %>%
+  left_join(vnds_ev %>% select(pnr, spell_end = haend_dato),
+            join_by(pnr, closest(spell_start < spell_end))) %>%   # the next migration event after the start
+  left_join(demographics %>% select(pnr, foed_dag), by = "pnr") %>%
+  mutate(
+    spell_id = paste(pnr, spell_start),            # one id per row (exposureMatch needs a unique id)
+    # Entry: the date the person first meets the SAME criteria as the exposed in Step 1
+    # within this spell (age >= 18 and 5 years continuous residence). Passed as a
+    # date.term below, so a control must have reached it before the case's index.
+    eligible_from = pmax(foed_dag + ceiling(18 * 365.25),     # age >= 18 (adapt)
+                         spell_start + ceiling(5 * 365.25))   # 5 years residence in this spell
+  ) %>%
+  select(pnr, spell_id, spell_start, spell_end, eligible_from)
+
+# Assemble ONE table with one row per person and spell, for the exposed and the pool alike.
+# transmute() = like mutate(), but keeps ONLY the columns we name here (the rest are
+# dropped) - so the table is clean for matching.
+all_persons <- pool %>%
+  inner_join(spells, by = "pnr", relationship = "one-to-many") %>%
+  left_join(exposed %>% select(pnr, index_date), by = "pnr") %>%   # NA for the never-exposed
+  mutate(
+    # event = 1 only on the exposed person's spell that contains the index date (resident
+    # ON index, as in Step 1). Their earlier spells stay in as event = 0, so they can be
+    # controls for earlier cases while they lived here.
+    event = as.integer(!is.na(index_date) & spell_start <= index_date &
+                         (is.na(spell_end) | spell_end > index_date))
+  ) %>%
+  transmute(
+    spell_id,                                      # row id for exposureMatch (one per spell)
+    pnr,                                           # person id (kept)
+    event,                                         # 1 = case (exposed), 0 = potential control
+    sex, birth_year,                               # matching variables (kept)
+    case_index = if_else(event == 1L, index_date, as.Date(NA)),  # the case index = exposure date; NA for controls
+    # end_fu = the date this row can no longer be selected as a control: the EARLIEST of the
+    # end of the spell (emigration), death, own exposure (= crossover), outcome or study end.
+    # pmin = smallest/earliest. A case row stops at the case's own index (exposureMatch does that).
+    end_fu     = pmin(spell_end, death_date, exposure_date,
+                      first_outcome_date, STUDY_END, na.rm = TRUE),  # na.rm: ignore missing dates
+    eligible_from = if_else(event == 1L,
+                            pmin(eligible_from, index_date - 1),     # met in Step 1; strictly before index, as date.terms compare with <
+                            eligible_from)
+  ) %>%
+  filter(event == 1L | eligible_from < end_fu) %>%  # drop spells in which the person is never at risk
   mutate(sex = as.factor(sex), birth_year = as.factor(birth_year))  # 'terms' MUST be factor/character
+
+# Every exposed person must have exactly one case row (the spell that contains the index date)
+stopifnot(sum(all_persons$event) == nrow(exposed))
 
 # The matching itself: call exposureMatch() ------------------------------------
 # In the call below: the name LEFT of = is the function's ARGUMENT (fixed, defined by exposureMatch);
 # the value on the RIGHT is what WE set it to (usually the name of a column in 'all_persons', in quotes).
 matched <- exposureMatch(
-  ptid         = "pnr",                  # argument 'ptid'  <- the person-id column (must be unique)
+  ptid         = "spell_id",             # argument 'ptid'  <- the row-id column (must be unique)
   event        = "event",                # argument 'event' <- the column that is 1 for case, 0 for control
   terms        = c("sex", "birth_year"), # argument 'terms' <- columns to match exactly on
   data         = all_persons,            # argument 'data'  <- the dataset itself (not in quotes)
@@ -531,17 +538,17 @@ cohort <- as_tibble(matched) %>%
   select(-exposure_date)                     # only needed to make crossover_date
 ```
 
-::: {.callout-warning}
-**Route A cannot model someone moving back.** `exposureMatch()` gives each person
-one `end_fu`, i.e. a single continuous risk interval. Someone who emigrates
-in 2008 and moves back in 2010 therefore leaves the risk set in 2008 and never
-re-enters, even though they were genuinely resident from 2010. The consequence
-is lost person-time, not a wrong inclusion, so the direction is conservative -
-but it is there.
-
-If return migration matters in your population (e.g. many migrants or long
-follow-up), use Route B below: the loop decides residence at each individual
-index date and therefore handles both exit and return correctly.
+::: {.callout-note}
+**Why one row per residence spell.** `exposureMatch()` gives each row one
+`end_fu`, i.e. a single continuous risk interval. With one row per person, someone
+who emigrates in 2008 and moves back in 2010 would leave the risk set in 2008 and
+never re-enter. With one row per spell they are at risk until 2008 and again once
+they meet the 5-year residence requirement after their return (from 2015), which
+is the same rule Step 1 and Route B apply on each index date. Each row also ends
+at death, so nobody can be drawn for an index date after they died or emigrated,
+including people who become exposed later. The residence rule itself is the one
+from Step 1, with the limits described in [Phase 10 - the source
+population](build-study-population.qmd#step-1).
 :::
 
 **What can `exposureMatch()` handle itself?** A great deal: it matches exactly
@@ -559,7 +566,7 @@ in quotes). E.g. `event = "event"`: the argument is called `event`, and we set
 it to our column `"event"`. Note the difference between `transmute(event = 1L)`
 (here we *create* a column called `event`) and `exposureMatch(event = "event")`
 (here we *point* the function's argument at that column). The arguments here:
-`ptid` = person id, `event` = 0/1 indicator, `terms` = matching variables (must
+`ptid` = row id (here one per person and residence spell), `event` = 0/1 indicator, `terms` = matching variables (must
 be factor/character; categorize e.g. age), `data` = the dataset, `n.controls` =
 controls per case, `case.index` = the case's index date, `end.followup`,
 `date.terms` (here the entry date) and `seed`. What an argument is, is explained in the [Function
