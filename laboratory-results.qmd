@@ -1,16 +1,20 @@
 ---
 title: "Laboratory results"
-subtitle: "Extract one row per result - filtered to your cohort"
+subtitle: "Extract laboratory results for your cohort from the national laboratory table, one row per result"
 date: last-modified
 pagetitle: "Laboratory results (LAB_F / RLRR)"
 description: "Extract laboratory results from LAB_F (RLRR) for your cohort in R: which cut to use, filtering before collect(), coverage from 2008, text values."
 ---
 
-This page extracts laboratory results for the people in your cohort: one row
-per result, filtered to the cohort before `collect()`. The column dictionary
-is [Laboratoriedatabasens Forskertabel](register-reference.qmd#lab-forsker).
+Use this page when a laboratory value is part of your study: an exposure,
+a covariate at baseline or an outcome (for example HbA1c or creatinine). You
+need your cohort from [Phase 10](build-study-population.qmd) and the list of
+analysis codes you want. You end with an `.rds` file of results for your
+cohort, one row per result, filtered to the cohort before `collect()`. The
+column dictionary is [Laboratoriedatabasens
+Forskertabel](register-reference.qmd#lab-forsker).
 
-## Not a DST register, and not LPR
+## What the laboratory table is: LAB_F, not DST, not LPR {#not-a-dst-register-and-not-lpr}
 
 **LAB_F** (Laboratoriedatabasens Forskertabel) is delivered by
 Sundhedsdatastyrelsen (SDS) through Forskerservice. In the clinical
@@ -19,9 +23,9 @@ Results for Research). It is not on DST's register list.
 
 It is not LPR. LPR is hospital contacts. This table is one row per laboratory
 result. It is very large, so `semi_join()` and
-`filter()` have to run **before** `collect()`.
+`filter()` have to run before `collect()`.
 
-## One delivery, several names
+## One delivery, several table names {#one-delivery-several-names}
 
 `lab_dm_forsker`, `lab_forsker` and `laboratorieproevesvar` are cuts of the
 same delivery, not separate registers. Using more than one double-counts.
@@ -36,39 +40,47 @@ sent.
 
 - **`lab_dm_forsker`:** person column `patient_cpr`, result column `value`.
 - **`lab_forsker`:** a narrower cut of the same delivery (fewer columns).
-- **`laboratorieproevesvar`:** the narrow cut used on DARTER. The person
-  column is `cprnummer` and the result column is `samplevalue`, not
-  `patient_cpr` and `value`. The schema describes this cut as four columns and
-  names those two renames. It does not name the other two, so this page does
-  not guess them. The DARTER example also keeps `analysiscode` and
-  `samplingdate` ([pitfall 4](darter-pitfalls.qmd#laboratory)).
+- **`laboratorieproevesvar`:** a narrow cut seen in at least one project
+  delivery. The person column is `cprnummer` and the result column is
+  `samplevalue`, not `patient_cpr` and `value`. The guide's schema describes
+  this cut as four columns and names those two. It does not name the other
+  two; check them with `colnames()` on your own file.
 
-## The October 2025 delivery is unresolved
+## The October 2025 delivery: table names may change {#the-october-2025-delivery-is-unresolved}
 
 ::: {.callout-warning}
 **Sundhedsdatastyrelsen updated the laboratory delivery on 3 October 2025**
 ([announcement
 →](https://sundhedsdatastyrelsen.dk/data-og-registre/forskerservice/om-forskerservice/nyheder-fra-forskerservice/2025/data_laboratoriedatabasen_031025)):
-"Det nye LAB erstatter den tidligere version af LAB." The announcement names
+"Det nye LAB erstatter den tidligere version af LAB" (the new LAB replaces
+the earlier version of LAB). The announcement names
 four tables, `laboratorieproevesvar`, `Dimlaboratoriekoder`, `DimNPU` and
 `Proevesvar_optaelling`, but never mentions `lab_dm_forsker` by name, and does
 not say what happens to projects already using it. The official data
-dictionary this page and the schema are built from
+dictionary the guide is built from
 ([PDF](https://sundhedsdatastyrelsen.dk/Media/638651043236441510/Dokumentation%20af%20Labdatabasens%20Forskertabel.pdf))
 is Version 4, dated 1 December 2023, nearly two years *before* that
-announcement, and it documents `lab_dm_forsker` only. So `lab_dm_forsker` is
-not a new common data model superseding the older tables. Whether
+announcement, and it documents `lab_dm_forsker` only. Whether
 `lab_dm_forsker` is being retired, and what `laboratorieproevesvar`'s columns
-are after the October 2025 change, is not resolved here. Check the order
+are after the October 2025 change, we do not know. Check the order
 sheet ("bestillingsark") on Sundhedsdatastyrelsen's site, or your own
 delivery, before relying on either name.
 :::
 
-## The pattern
+## Extract lab results for your cohort {#the-pattern}
 
-`read_register()` requires fastreg set up with the path to your registers - see
-[Phase 4](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not
-convert them from SAS yourself. The register name below is the
+You choose the analysis codes. Laboratory tests are coded in NPU
+(Nomenclature for Properties and Units), a terminology maintained by IFCC and
+IUPAC and used for laboratory results in Denmark, Norway and Sweden ([NPU
+leaflet, IUPAC
+2019](https://iupac.org/wp-content/uploads/2020/03/NPUterminologi2019_Leaflet.pdf)).
+Look up the codes for your tests at
+[npu-terminology.org](https://www.npu-terminology.org), and write the list
+and its source into your code.
+
+`read_register()` requires fastreg set up with the path to your registers, see
+[Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you
+did not convert them from SAS yourself. The register name below is the
 `lab_dm_forsker` cut. If your file is `laboratorieproevesvar`, rename
 `cprnummer` to `pnr` and keep `samplevalue` instead of `value`.
 
@@ -79,7 +91,7 @@ library(dplyr)
 
 cohort_pnrs <- unique(readRDS("path/to/full_cohort.rds")$pnr) # your cohort from Phase 10
 
-# You choose the codes. This page does not ship a list.
+# Your own list of codes: look them up, the guide gives none.
 # NPU and DNK codes both sit in analysiscode. There is no column called npu.
 npu_codes <- c("REPLACE_WITH_YOUR_CODE")
 
@@ -112,8 +124,8 @@ before generating. That option downloads and caches a public IFCC code list.
 `FIKTIVE_LABTERM` (or `options(fiktive.labterm)`) is the other route: a
 LabTerm or IFCC file you already have, not a download. Without one of those,
 `fiktive` does not invent NPU codes. Do not take column names from `fiktive`'s
-`labka` generator. That is a different database, and this page does not
-document its columns.
+`labka` generator. That is a different database (LABKA, see
+[Coverage](#coverage)).
 
 ```r
 # remotes::install_github("sara-schwartz/fiktive")
@@ -137,7 +149,7 @@ tables <- generate_registers(
 # on tables$lab_dm_forsker instead of read_register().
 ```
 
-## What reaches the table
+## Which results reach the table {#what-reaches-the-table}
 
 NPU is not its own column. It sits inside `analysiscode`, together with Danish
 DNK codes. Only those coded results reach the table, about 95 per cent. A
@@ -147,7 +159,7 @@ with.
 Patients who declined consent are absent from the table. That absence is not a
 coded value, so there is no code to filter on.
 
-## Coverage
+## Coverage: from 2008, complete per laboratory by 2010-2016 {#coverage}
 
 Coverage starts in 2008, not the 1990s. Complete coverage arrives per
 laboratory between 2010 and 2016. The start year, the table of periods per
@@ -157,18 +169,29 @@ table](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638651043236441510/D
 See also [Laboratoriedatabasen
 →](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen).
 
-For years before 2008, projects used the separate regional database LABKA, and
-neither [Arendt et al. 2020](https://doi.org/10.2147/CLEP.S245060) nor [Grann
-et al. 2011](https://doi.org/10.2147/CLEP.S17901) gives literal column names,
-so this page lists none.
+For years before 2008, projects used the separate regional database LABKA
+([Arendt et al. 2020](https://doi.org/10.2147/CLEP.S245060); [Grann et al.
+2011](https://doi.org/10.2147/CLEP.S17901)). Neither paper gives literal
+column names, so the guide gives none.
 
-## `value` is text
+## Results are text: convert `value` with care {#value-is-text}
 
-**`value` is text, not a number.** Alongside numeric results the reference
+`value` is text, not a number. Alongside numeric results the reference
 section lists `POSITIV`, `NEGATIV`, `IKKE PÅVIST`, `INGEN VÆKST` and the
 blood-type codes. `as.numeric()` turns every one of them into `NA` without
-warning, which drops exactly the samples where something was found. On
-`laboratorieproevesvar` the same column is called `samplevalue`.
+warning, which drops exactly the samples where something was found. The same
+would happen to any result written with a sign, such as `<5`. On `laboratorieproevesvar` the same column is called `samplevalue`.
+
+Before you convert, list the values that are not plain numbers, and decide
+what each should become:
+
+```r
+library(dplyr) # filter, count
+
+lab %>%
+  filter(is.na(suppressWarnings(as.numeric(value)))) %>% # everything as.numeric() would turn into NA
+  count(analysiscode, value, sort = TRUE)
+```
 
 ::: {.callout-warning}
 **Do not compare a numeric result across laboratories, or across time, without
@@ -179,8 +202,9 @@ time. Keep `unit` in the extract.
 
 ## See also
 
-- [Register reference: Laboratoriedatabasens
+- [Overview of registers: Laboratoriedatabasens
   Forskertabel](register-reference.qmd#lab-forsker): the column dictionary
-- [Phase 10 - Build your study population](build-study-population.qmd): the
+- [Phase 10, Build your study population](build-study-population.qmd): the
   cohort you filter to
-- [DARTER pitfall 4](darter-pitfalls.qmd#laboratory): the `cprnummer` / `samplevalue` extract
+- [Phase 12, Assemble and prepare the dataset](data-manipulation.qmd): the
+  next step, joining the extract onto the cohort
