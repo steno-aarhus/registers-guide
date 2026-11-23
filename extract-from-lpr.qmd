@@ -564,7 +564,8 @@ library(arrow)   # open_dataset - fallback without fastreg
 library(dplyr)
 
 # Function: get_lpr_diagnoses() - reusable LPR extract -------------------------
-get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "B")) {
+get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "B"),
+                              open_contacts = TRUE) {
   # Arguments:
   #   pnr_vector : your cohort's pnr, e.g. unique(cohort$pnr)
   #   icd_codes  : optional vector of ICD codes to pull, e.g. c("E11", "I50") or your
@@ -572,6 +573,8 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   #                ("E11" -> all E11x) and 4-char ("I700") work.
   #                Default NULL = pull ALL diagnoses (run once, save, filter locally).
   #   diagtypes  : "A"=action, "B"=secondary, "G"=grundmorbus (LPR2 only)
+  #   open_contacts : TRUE = also read LPR2's open contacts (uaf_adm, uaf_diag).
+  #                Set FALSE if your delivery does not have those tables.
   # read_register (fastreg) reads each register by name - without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/<register>/") %>% rename_with(tolower)
 
   # keep_codes() applies the icd_codes filter to EACH of the four register queries
@@ -587,10 +590,12 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
   # Open registers
   lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts
   lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatic diagnoses
-  uaf_adm   <- read_register("uaf_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts still open
-  uaf_diag  <- read_register("uaf_diag")  %>% rename_with(tolower)   # their diagnoses
-  uaf_last_year <- uaf_adm %>% summarise(last_year = max(year, na.rm = TRUE)) %>%
-    collect() %>% pull(last_year)                                     # last year of the open tables
+  if (open_contacts) {
+    uaf_adm  <- read_register("uaf_adm")  %>% rename_with(tolower)   # LPR2 somatic contacts still open
+    uaf_diag <- read_register("uaf_diag") %>% rename_with(tolower)   # their diagnoses
+    uaf_last_year <- uaf_adm %>% summarise(last_year = max(year, na.rm = TRUE)) %>%
+      collect() %>% pull(last_year)                                   # last year of the open tables
+  }
   # Some deliveries rename the psychiatric keys (v_cpr, k_recnum, v_recnum).
   # any_of() renames them if they are there and does nothing if they are not.
   psyk_adm  <- read_register("t_psyk_adm")  %>% rename_with(tolower) %>%
@@ -614,20 +619,24 @@ get_lpr_diagnoses <- function(pnr_vector, icd_codes = NULL, diagtypes = c("A", "
     collect() %>%
     mutate(icd3 = substr(c_diag, 2, 4))                       # strip D-prefix
 
-  # LPR2 somatic, contacts that never closed: last year of the open tables only
-  lpr2_open_dx <- uaf_adm %>%
-    filter(year == !!uaf_last_year) %>%
-    semi_join(tibble(pnr = pnr_vector), by = "pnr", copy = TRUE) %>%
-    select(pnr, recnum, date_contact = d_inddto) %>%
-    inner_join(
-      uaf_diag %>%
-        filter(year == !!uaf_last_year, c_diagtype %in% !!diagtypes) %>%
-        select(recnum, c_diag, c_diagtype),
-      by = "recnum"
-    ) %>%
-    keep_codes() %>% # filter to icd_codes (before collect)
-    collect() %>%
-    mutate(icd3 = substr(c_diag, 2, 4))
+  # LPR2 somatic, contacts that never closed: last year of the open tables only.
+  # NULL when open_contacts = FALSE; bind_rows() below skips a NULL.
+  lpr2_open_dx <- NULL
+  if (open_contacts) {
+    lpr2_open_dx <- uaf_adm %>%
+      filter(year == !!uaf_last_year) %>%
+      semi_join(tibble(pnr = pnr_vector), by = "pnr", copy = TRUE) %>%
+      select(pnr, recnum, date_contact = d_inddto) %>%
+      inner_join(
+        uaf_diag %>%
+          filter(year == !!uaf_last_year, c_diagtype %in% !!diagtypes) %>%
+          select(recnum, c_diag, c_diagtype),
+        by = "recnum"
+      ) %>%
+      keep_codes() %>% # filter to icd_codes (before collect)
+      collect() %>%
+      mutate(icd3 = substr(c_diag, 2, 4))
+  }
 
   # LPR2 psychiatric
   lpr2_psyk_dx <- psyk_adm %>%
