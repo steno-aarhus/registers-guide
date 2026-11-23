@@ -1,22 +1,22 @@
 <!-- Generated from schema/registers/uddf.yaml by tools/build-schema-tables.R. Do not edit by hand. -->
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| **`pnr`** | character | join key | Personal identifier | 2025 to 2025 |
-| `hfaudd` | character | code | Highest completed education | 2025 to 2025 |
-| `hf_vfra` | date | date | Date the education was reached | 2025 to 2025 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| **`pnr`** | character | join key | Personal identifier |
+| `hfaudd` | character | code | Highest completed education |
+| `hf_vfra` | date | date | Date the education was reached |
 
 <details>
 <summary>All other columns (6)</summary>
 
-| Column | Type | Role | Label | Years |
-| --- | --- | --- | --- | --- |
-| `cprtjek` | character | value | CPR check | 2025 to 2025 |
-| `cprtype` | character | value | CPR type | 2025 to 2025 |
-| `hf_kilde` | character | code | Source of the education record | 2025 to 2025 |
-| `hf_vtil` | date | date | Date the education stops being the highest | 2025 to 2025 |
-| `instnr` | character | code | Institution number | 2025 to 2025 |
-| `version` | character | value | Version | 2025 to 2025 |
+| Column | Type | Role | Label |
+| --- | --- | --- | --- |
+| `cprtjek` | character | value | CPR check |
+| `cprtype` | character | value | CPR type |
+| `hf_kilde` | character | code | Source of the education record |
+| `hf_vtil` | date | date | Date the education stops being the highest |
+| `instnr` | character | code | Institution number |
+| `version` | character | value | Version |
 
 - **`hf_kilde`:** Same variable and value set as hf_kilde in UDDA, see there for the source priorities and the codes for imputed immigrant education.
 
