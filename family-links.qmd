@@ -27,6 +27,11 @@ parents only" (Pedersen et al. 2006). Statistics Denmark (DST) is more careful
 still: "Parent child relations in CPR is an administrative relations, which
 cannot necessarily be sided be legal or biological parent-child relations"
 (DST, documentation of the *Relatives* statistics, accuracy and reliability).
+The Medical Birth Register records a different relation: "parents in the MBR
+are the (assumed) biological parents, whereas the parents registered in the
+Danish Civil Registration System are the legal parents and thus not
+necessarily equivalent to the former (unless a paternity trial has been
+resolved)" (Bliddal et al. 2018). See [The mother at birth](#mfr).
 
 **A missing id means no link is registered.** It does not mean the parent is
 unknown to the family. See the coverage table below.
@@ -120,6 +125,57 @@ you go on, and report how many children each analysis loses on that account. A
 different rule, such as the most frequent value or the latest snapshot, is
 equally valid if you state it. What matters is that the rule is the same for
 every child.
+
+### The mother at birth: the Medical Birth Register {#mfr}
+
+BEF holds the parents CPR has now. The Medical Birth Register (MFR) holds, for
+each birth in Denmark, the (assumed) biological parents (Bliddal et al. 2018).
+Sundhedsdatastyrelsen takes the link between mother and child from CPR
+("udtræk fra CPR som giver den fornødne kobling mellem mor og barn", [register
+declaration](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638650989716795161/Registerdeklaration%20for%20foedselsregisteret.pdf),
+section 0.7), and Bliddal et al. describe the identification of the mother for
+linkage as "virtually complete and ... of very high validity".
+
+MFR is the better source of the mother when:
+
+- the child may have been adopted, because BEF then holds the adoptive parents;
+- the child was stillborn or died soon after birth. MFR has every birth, live
+  or stillborn (register declaration, section 1.1), and a child who died
+  before the next BEF snapshot is in no snapshot at all;
+- you need twins and other multiple births, which MFR records
+  (`barnsnummer_flerfoldsfoedsel`).
+
+  | Births         | Table          | Child            | Mother           | Father           |
+  | -------------- | -------------- | ---------------- | ---------------- | ---------------- |
+  | 1997-2018      | `mfr`          | `cpr_barn`       | `cpr_moder`      | `cpr_fader`      |
+  | 2019 and later | `mfr_nyfoedte` | `CPRnummer_Barn` | `CPRnummer_Mor`  | `CPRnummer_Far`  |
+
+DST has no MFR table for births from 1973 to 1996. For those years FTBARN's
+`mor1`, the first mother registered in CPR, is the nearest equivalent (see
+[Adoption](#adoption)).
+
+Two limits:
+
+- **Births in Denmark only, and until 2018 only to mothers with a Danish CPR
+  number** (register declaration, section 1.2). From 2019 a birth counts even
+  if the mother has no Danish CPR number, so check `ErCPRnummerGyldigt_Mor`
+  before you join on the mother's number.
+- **The declaration says where the mother's link comes from, not the
+  father's.** Compare `cpr_fader` with `far_id` in BEF before you rely on it.
+
+```r
+# The parents at birth from MFR (births 1997-2018), beside BEF's -------------
+mfr_parents <- read_register("mfr") %>%
+  rename_with(tolower) %>%
+  select(pnr = cpr_barn, mor_mfr = cpr_moder, far_mfr = cpr_fader) %>%
+  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>%
+  collect()
+
+# How often is BEF's mother not the mother at birth?
+parents %>%
+  inner_join(mfr_parents, by = "pnr") %>%
+  count(same_mother = mor_id == mor_mfr)
+```
 
 ## Step 2 - Siblings {#siblings}
 
@@ -257,8 +313,8 @@ anything about.
 
 ## What to write in your methods {#methods}
 
-- The source of the link (BEF `mor_id` and `far_id`, and FTBARN if you use it)
-  and the rule for choosing between snapshots.
+- The source of the link (BEF `mor_id` and `far_id`, MFR for the parents at
+  birth, FTBARN if you use it) and the rule for choosing between snapshots.
 - That the link is the legal, administrative relation in CPR.
 - The birth cohorts you include and the share with a missing parent link, by
   birth year, and how immigrants were handled.
@@ -277,6 +333,10 @@ anything about.
   Database](https://ncrr.au.dk/fileadmin/The_Family_Relations_Database_2013_10.pdf)",
   National Centre for Register-based Research, 2013 - complete links from 1960,
   considered correct from 1969.
+- Bliddal M, Broe A, Pottegård A, Olsen J, Langhoff-Roos J. "The Danish
+  Medical Birth Register", *Eur J Epidemiol* 2018;33:27-36,
+  [doi:10.1007/s10654-018-0356-1](https://doi.org/10.1007/s10654-018-0356-1) -
+  what the register holds, and why its parents differ from those in CPR.
 - DST, [Relatives: accuracy and
   reliability](https://www.dst.dk/en/Statistik/dokumentation/documentationofstatistics/relatives/accuracy-and-reliability).
 - DST, variable documentation for the fertility database:
