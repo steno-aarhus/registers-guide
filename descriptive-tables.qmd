@@ -5,11 +5,12 @@ date: last-modified
 description: "Build a Table 1 of baseline characteristics with gtsummary in R, add a crude incidence rate per 1000 person-years, and export it to Excel, Word or CSV."
 ---
 
-A **"Table 1"** describes your study population: age, sex and other baseline
+A **Table 1** describes your study population: age, sex and other baseline
 variables, usually split by exposure. It is almost always the first table in a
-register-based paper. Here we use the
-[`gtsummary`](https://www.danieldsjoberg.com/gtsummary/) package, which builds a
-publication-ready table in a few lines.
+register-based paper. This page builds one from the analysis-ready dataset with
+the [`gtsummary`](https://www.danieldsjoberg.com/gtsummary/) package, adds a
+crude incidence rate per group, and writes the table to a file you can take
+through output control.
 
 *Paths and variable names in the examples are generic - replace them with your own.*
 `gtsummary` - and `huxtable`, if you want to export to Excel - must be installed
@@ -17,7 +18,7 @@ in your R environment on DST; if they are not, contact your data manager.
 
 ## Starting point
 
-You start from your **analysis-ready dataset** with one row per person ([Phase
+You start from your analysis-ready dataset with one row per person ([Phase
 12](data-manipulation.qmd)), or one row per person and index date if your
 comparison group was matched with replacement.
 
@@ -28,7 +29,7 @@ library(gtsummary) # tbl_summary() + export functions
 df <- readRDS("path/to/analysis.rds") # analysis-ready dataset, one row per person (per person and index date if matched with replacement)
 ```
 
-## Example
+## Build the table with `tbl_summary()` {#example}
 
 `tbl_summary()` summarises the variables you point it at. With `by =` you split
 the table into columns by a group (e.g. exposure).
@@ -55,7 +56,7 @@ table1 # print the table (display it)
 ```
 
 <details>
-<summary>More detail</summary>
+<summary>How `tbl_summary()` picks the statistics, and what each argument does</summary>
 
 - **`tbl_summary()` detects the variable type itself** from the column's contents and picks a suitable statistic:
   - factor and character variables - and numeric variables with **fewer than 10 unique values** - become *categorical* and are shown as `{n} ({p}%)` (count and percentage);
@@ -83,7 +84,7 @@ table1 %>%           # take the already-built table ...
 
 ## Crude incidence rate (per 1000 person-years) {#crude-rate}
 
-Register papers often report the **crude incidence rate** per exposure group
+Register papers often report the crude incidence rate per exposure group
 alongside Table 1: the number of events divided by the total follow-up time
 (person-years), scaled to per 1000 person-years. It needs `outcome` (1 = event, 0 =
 censored) and `followup_years` from your analysis-ready dataset (built in [Phase
@@ -99,15 +100,27 @@ df %>%
   )
 ```
 
-This is a **descriptive** rate with no adjustment, and counts as aggregated
-output (check for small cells before export). To compare the groups with control
-for confounding, that belongs to [regression](regression.qmd) and
-[time-to-event](time-to-event.qmd), where a Cox model gives a hazard ratio.
+This is a descriptive rate with no adjustment. The number of events is a cell
+like any other, so check it against the small-cell rule before export. To
+compare the groups with control for confounding, see [Rates and rate ratios
+(Poisson)](rates-poisson.qmd) for an adjusted rate ratio or
+[Time-to-event](time-to-event.qmd), where a Cox model gives a hazard ratio.
 
 ## Export the table (for output control)
 
-Anything leaving DST must go through output control. A table like this is
-aggregated, but always check for **small cells** before exporting.
+Anything leaving DST must go through output control, and the rules are on
+[Phase 14 - Export and repatriation](export.qmd). Before you write the file,
+check three things in the table:
+
+- **Small cells.** Every count, including the "Missing" row, must be at or
+  above your project's threshold (3 or 5).
+- **Hidden numbers.** If you hide a count, the Overall column and the N in the
+  header can give it back. See [a hidden number must not be possible to work
+  out](export.qmd#back-calculation).
+- **Median and quartiles.** DST allows percentiles only when they cannot point
+  to a person. In a large group that is not a problem; in a small subgroup,
+  report mean (SD) or leave the row out. See [min, max, median and
+  percentiles](export.qmd#min-max-median).
 
 ```r
 # To Excel: as_hux_xlsx() requires the huxtable package to be INSTALLED
@@ -115,7 +128,9 @@ aggregated, but always check for **small cells** before exporting.
 table1 %>% as_hux_xlsx(file = "table1.xlsx") # write the table to a .xlsx file
 
 # To Word: requires the flextable package installed
-table1 %>% as_flex_table() # gives a flextable object for a Word document
+table1 %>%
+  as_flex_table() %>% # convert to a flextable object ...
+  flextable::save_as_docx(path = "table1.docx") # ... and write it to a .docx file
 
 # Works ALWAYS without extra packages (base R): turn the table into a data frame and save as CSV
 table1 %>%
