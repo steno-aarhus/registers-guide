@@ -1,225 +1,199 @@
 ---
 title: >-
   OSDC - Open Source Diabetes Classifier
-subtitle: "Diabetes type classification in Danish register data"
+subtitle: "Find the people with type 1 or type 2 diabetes in the Danish registers, with an inclusion date, using the osdc R package"
 date: last-modified
-description: "OSDC classifies everyone in Denmark as type 1, type 2 or no diabetes from LPR, LMDB and lab data. Use the pre-computed file on DARTER or run the osdc R package."
+description: "OSDC finds the people in the Danish registers with type 1 or type 2 diabetes from BEF, LPR, LMDB, the health insurance registers and lab data. Run the osdc R package, or use a pre-computed population if your project has one."
 ---
 
-OSDC is an open source algorithm that classifies everyone in Denmark as having
-type 1 diabetes (T1D), type 2 diabetes (T2D) or no diabetes, based on data in
-the national registers.
+Use this page when diabetes is part of your study: as an exposure, an
+inclusion or exclusion criterion, or a covariate, and especially when you
+need to tell type 1 from type 2 diabetes, which diagnosis codes in LPR (the
+National Patient Register) alone do not do reliably. OSDC is an open source
+algorithm, published as the R package `osdc`, that classifies diabetes from
+diagnoses, prescriptions, podiatrist services and HbA1c results. You need
+access to five registers (listed [below](#registers-osdc-needs)). You end with
+one row per person with diabetes, their type and the date they enter the
+diabetes population.
 
 **Article:** [doi:10.2147/CLEP.S407019](https://doi.org/10.2147/CLEP.S407019)
 **Documentation and code:**
 [steno-aarhus.github.io/osdc](https://steno-aarhus.github.io/osdc/)
 
-## What does OSDC give you?
+The package README says that minor changes have been made to the algorithm
+since the validated version in the article, and that more are expected; the
+changes are listed in the repository.
 
-A pre-computed population with:
+## What OSDC gives you {#what-does-osdc-give-you}
 
-- **Diabetes type:** T1D, T2D or no diabetes
-- **Inclusion date:** when the person enters the diabetes population ("raw"
-  and "stable" versions) - not a date of disease onset, and no age at onset
+`classify_diabetes()` returns one row per person classified as having
+diabetes, with five columns. People without diabetes are not in the output:
+"no diabetes" means "not in the table".
 
-The classification is based on a combination of diagnosis codes (LPR),
-medication information (LMDB) and laboratory results.
+  | Column                      | Contents                                                             |
+  | --------------------------- | -------------------------------------------------------------------- |
+  | `pnr`                       | Personal identifier                                                  |
+  | `raw_inclusion_date`        | The date of the person's second inclusion event (inclusion requires two) |
+  | `stable_inclusion_date`     | The same date, but `NA` if it falls before 1 January 1998            |
+  | `has_t1d`                   | `TRUE`/`FALSE`: type 1 diabetes                                      |
+  | `has_t2d`                   | `TRUE`/`FALSE`, defined as `!has_t1d`, so the two are complements    |
 
-## When is it used?
-
-- To **define a diabetes population** as an exposure or inclusion criterion
-- To **exclude** diabetes patients from a control group
-- To **classify type** - LPR alone is not sufficient to reliably distinguish T1D
-  from T2D
-
-## How to use OSDC
-
-### DARTER - project 708421 (pre-computed file)
-
-On DARTER the OSDC classification is already computed and ready to use (in
-several formats). You do not need to run the algorithm yourself.
-
-::: {.callout-important}
-**New 2024 population - use this going forward** The osdc package has been
-updated and cleared by CRAN, and a new diabetes population has been generated on
-DARTER incorporating the latest data. It is valid for inclusions **until the end
-of 2024** and is intended to be used **instead of** the previous population file -
-not combined with it. The previous files remain unchanged for backward
-compatibility and reproducibility.
-
-The table is available in several formats:
-
-- **Parquet:** `E:/workdata/708421/cleaned-data/parquet-external/osdc/2024` - on
-  DARTER you can load it directly with `read_register("osdc")`
-- **`.csv`, `.rds` or `.dta`:**
-  `E:/workdata/708421/cleaned-data/diabetes_register_pop/2024`
-
-::::: {.callout-warning}
-The path and the filename `osdc` (and `read_register("osdc")`) are
-**DARTER-specific** (project 708421). On other projects the file is named
-differently and lives elsewhere.
-:::::
-
-The output format differs slightly from the old population. See the description
-of the output variables - in particular the difference between **"raw"** and
-**"stable"** inclusion dates (whether the inclusion date falls in a period with
-sufficient inclusion-event data to be reliable) - in the [design
-vignette](https://steno-aarhus.github.io/osdc/articles/design.html#classify_diabetes).
-:::
-
-```r
-# New 2024 population on DARTER - read_register resolves the path automatically:
-library(fastreg)
-dm_pop <- read_register("osdc")
-```
-
-`classify_diabetes()` returns five columns:
-
-  | Column                    | Contents                                                             |
-  | ------------------------- | -------------------------------------------------------------------- |
-  | **`pnr`**                 | Personal identifier                                                  |
-  | **`raw_inclusion_date`**  | The person's **second** inclusion event - inclusion requires two     |
-  | **`stable_inclusion_date`** | The same date, but `NA` if it falls before 1 January 1998           |
-  | **`has_t1d`**             | `TRUE`/`FALSE` - type 1 diabetes                                     |
-  | **`has_t2d`**             | `TRUE`/`FALSE`, defined as `!has_t1d`, so the two are complements    |
+The inclusion events are HbA1c of 48 mmol/mol or more, a hospital diagnosis of
+diabetes, a diabetes-specific podiatrist service and a purchase of
+glucose-lowering drugs. The dates are inclusion dates, the date a person
+enters the diabetes population, not a date of disease onset, and there is no
+age at onset.
 
 ::: {.callout-warning}
-**Choosing between the two dates is a study decision, not a formality.** The
-stable date is blank before 1998, because the underlying data is not considered
-reliable that far back (the cutoff is one year after obstetric codes became
-usable for excluding gestational diabetes). Filter on
-`stable_inclusion_date` and every case included before 1998 silently leaves your
-cohort. Use `raw_inclusion_date` and you keep them, at the cost of dates from a
-period the algorithm's authors flag as uncertain. Decide which, and say which in
-your methods section.
+**Choosing between the two dates is a study decision.** Before 1998 the
+register data may not be good enough to tell new (incident) cases from
+existing (prevalent) ones, so `stable_inclusion_date` is blank for inclusions
+before then. The 1998 default is one year after pregnancy data in LPR became
+usable for dropping purchases related to gestational diabetes. Filter on
+`stable_inclusion_date` and every case included before 1998 leaves your
+cohort without an error. Use `raw_inclusion_date` and you keep them, at the
+cost of dates the package's authors flag as uncertain. Decide which, and say
+which in your methods section. The cutoff is an argument,
+`stable_inclusion_start_date`, if your LPR and LMDB data start later than
+1997.
 :::
 
-There is no `age_at_onset` and no `do_dm` any more, and the language has changed
-with the columns: these are **inclusion** dates, the date a person enters the
-diabetes population, not a date of disease onset.
+## Run osdc on your project {#run-osdc}
 
-<details>
-<summary>Previous population (up to 2022) - for reproducibility only</summary>
-
-The old file has a different output format than the 2024 population (the variable names below apply only to the old file).
-
-```r
-dm_pop <- readRDS("E:/workdata/708421/cleaned-data/diabetes-register-pop/dm_population_1977_2022.rds")
-
-names(dm_pop)
-# [1] "PNR"           "diabetes_type"  "do_dm"          "age_at_onset"
-
-library(dplyr)
-dm_pop <- dm_pop %>% rename(pnr = PNR)   # rename PNR to lowercase pnr
-
-# diabetes_type: 1 = T1D, 2 = T2D  |  do_dm: onset date
-
-# Example: filter to T1D patients
-t1d <- dm_pop %>%
-  filter(diabetes_type == 1) %>%
-  select(pnr, diabetes_type, do_dm) %>%
-  rename(date_diabetes = do_dm)
-```
-
-</details>
-
-### Other projects - run the algorithm yourself
-
-If your OSDC classification has not been pre-computed, you need to run the
-algorithm yourself.
-
-`osdc` is a **CRAN package** that can be installed on DST. It must be
-**installed first** and then loaded:
+`osdc` is on CRAN. Install it, then load it:
 
 ```r
 install.packages("osdc")
 library("osdc")
 ```
 
-On the DST server, `install.packages("osdc")` also updates the necessary
-dependencies, which matters because the pre-installed packages may be outdated.
+`install.packages()` installs dependencies that are missing, but it does not
+update ones that are already installed; R's own help advises running
+`update.packages()` first. The pre-installed packages on DST may be old, so if
+`library("osdc")` stops with a version error, update the package it names.
+
+`classify_diabetes()` takes one argument per register (`lpr`, `hsr`,
+`lab_forsker`, `bef`, `lmdb`). Each must be a DuckDB table covering all the
+years you have, for example a connection to your parquet files. LPR must
+first be combined into one table, and so must the two health insurance
+registers, with `join_registers()`. The getting-started guide,
+[steno-aarhus.github.io/osdc/articles/osdc.html](https://steno-aarhus.github.io/osdc/articles/osdc.html),
+walks through this step by step.
 
 ::: {.callout-note}
-**Availability across projects** The package is confirmed available on
-**DARTER** (project 708421). It is likely available on other projects too, but
-this has not been verified - check yourself with
-`"osdc" %in% rownames(available.packages())` on your own server (the package is
-not pre-installed, so `available.packages()` shows whether it can be installed).
-If a package is missing, you can **contact DST**, who can install requested
-packages for you.
+**Is `osdc` available on your project?** It is confirmed on DARTER (project
+708421). It is likely available on other projects too, but this has not been
+verified. Check with `"osdc" %in% rownames(available.packages())` on your own
+server (the package is not pre-installed, so `available.packages()` shows
+whether it can be installed). If it is missing, you can ask DST to install it.
 :::
 
-See documentation and code on GitHub:
-[steno-aarhus/osdc](https://github.com/steno-aarhus/osdc/tree/dd83510a6f1f62a12d0f978219dbfe9c9cc77f24)
-and the getting-started guide at
-[steno-aarhus.github.io/osdc/articles/osdc.html](https://steno-aarhus.github.io/osdc/articles/osdc.html).
+## The registers osdc needs {#registers-osdc-needs}
 
-## Coverage and limitations
-
-- The DARTER dataset has a cohort built with osdc; the new 2024 population is
-  valid for inclusions **until the end of 2024**
-- Classifies **everyone** in Denmark - not just your cohort
-- Uses BEF, LPR, LMDB, `sysi`/`sssy` and laboratory results
-  (`lab_forsker`/`laboratorieproevesvar_`) - requires access to all five:
-  `classify_diabetes()` has one argument for each ([osdc design
-  vignette](https://steno-aarhus.github.io/osdc/articles/design.html))
+`classify_diabetes()` uses BEF, LPR, LMDB, the health insurance registers
+(`sysi`/`sssy`) and laboratory results, and needs all five: it has one
+argument for each ([osdc design
+vignette](https://steno-aarhus.github.io/osdc/articles/design.html)).
 
 ::: {.callout-warning}
-**Missing one of the five in Data Safari/Datavinduet?** Two different reasons,
-two different fixes:
+**Missing one of the five?** Two different reasons, two different fixes:
 
-- **`sysi`/`sssy`** is a normal DST register. If it is missing, your *project*
-  has not requested it, not that it does not exist - ask your project to add
-  it.
-- **The laboratory register is not a DST register.** It belongs to
-  Sundhedsdatastyrelsen (`lab_forsker`/`lab_dm_forsker`/
-  `laboratorieproevesvar_` are all the same underlying source) and is reached
-  through a separate Forskerservice application, so it never appears in DST's
-  own overview. See [Laboratory
-  results](register-reference.qmd#lab-forsker) for what it actually is and how
-  it is reached.
+- **`sysi`/`sssy`:** these are ordinary DST registers. If they are missing,
+  your project has not requested them; ask for them to be added.
+- **Laboratory results:** these are not a DST register. They come from the
+  Danish Health Data Authority (Sundhedsdatastyrelsen) through a separate
+  Forskerservice application, so they never appear in DST's own overview.
+  See [Laboratory results](laboratory-results.qmd) for the table names and
+  how the data are reached.
 :::
 
-::: {.callout-note}
-**Which diabetes drugs count as events?** Not all glucose-lowering drugs (ATC
-`A10`) count as inclusion events in the algorithm:
+::: {.callout-note collapse="true" title="Which glucose-lowering drugs count as inclusion events?"}
+Not every purchase of a glucose-lowering drug (ATC `A10`) counts:
 
-- **ALL GLP1-RAs are excluded** as events, because this drug class is used
-  extensively for weight loss among individuals without diabetes.
-- For **SGLT2 inhibitors**, the pure **dapagliflozin and empagliflozin**
-  preparations are also not included as events (recommended in Danish guidelines
-  for heart and kidney failure among individuals without diabetes).
-- **Combination preparations** of GLP1-RAs or SGLT2 inhibitors together with
-  other glucose-lowering drugs, by contrast, **do** count as events.
+- All GLP-1 receptor agonists (GLP-1 is glucagon-like peptide-1) are dropped,
+  because this drug class is used extensively for weight loss in people
+  without diabetes.
+- Dapagliflozin and empagliflozin, two SGLT-2 inhibitors (sodium-glucose
+  co-transporter 2), are dropped when bought on their own, because Danish
+  guidelines recommend them for heart and kidney failure in people without
+  diabetes.
+- Combination drugs with a GLP-1 receptor agonist or an SGLT-2 inhibitor
+  together with another glucose-lowering drug do count.
+- Purchases during pregnancy are dropped, and so is metformin bought by women
+  under 40 or with a polycystic ovary syndrome indication code.
 
-See the exact logic in the algorithm vignette:
-[steno-aarhus.github.io/osdc/articles/algorithm.html](https://steno-aarhus.github.io/osdc/articles/algorithm.html) -
-or the code directly on GitHub:
-[steno-aarhus/osdc](https://github.com/steno-aarhus/osdc/tree/dd83510a6f1f62a12d0f978219dbfe9c9cc77f24).
+The exact logic is in the [algorithm
+vignette](https://steno-aarhus.github.io/osdc/articles/algorithm.html) and the
+[code on GitHub](https://github.com/steno-aarhus/osdc).
 :::
+
+## The type is decided with data from after your index date {#type-uses-future-data}
 
 ::: {.callout-warning}
-**OSDC's type classification conditions on the future - be careful with the
-pre-computed population** The pre-computed OSDC population can assign a person's
-diabetes **type** based on events that occur **after** your index/inclusion
-date. T1D vs. T2D is determined partly from insulin purchase patterns over time,
-so the type can depend on information that did not yet exist on your index date.
-If you use the type as a baseline variable, you are effectively **conditioning
-on the future** (immortal time bias).
+**Run on all years, the type classification uses information from after
+your index date.** Type 1 versus type 2 is decided from the person's whole
+record: the share of diagnoses that are type 1, and insulin purchase
+patterns. A person's type can therefore depend on events that had not
+happened on your index date. If you use the type as a baseline variable, you
+classify people with information from the future (look-ahead
+misclassification). This applies to a pre-computed population too, since it
+is run on all years.
 
-**Workaround:** run the algorithm **yourself** and filter the input registers to
-only data **before your index date**, so `classify_diabetes()` only sees
-pre-index information. Then the type classification is not contaminated by
-future events.
-
-A guide to running the algorithm yourself - and to modifying it, e.g. if you
-want to include GLP1-RAs as events - is **in progress**. Note that if you modify
-the algorithm, the **published validation no longer applies**.
+To avoid it, run `classify_diabetes()` yourself on register data filtered to
+before your index date, so the classification only sees pre-index
+information. If you change the algorithm itself, for example to count GLP-1
+receptor agonists, the published validation no longer applies.
 :::
 
-See the full methodology in the article and documentation site.
+## On DARTER: a pre-computed population {#darter-pre-computed}
 
-## Next steps
+::: {.callout-note collapse="true" title="DARTER (project 708421): where the pre-computed files are, and the old population"}
+On DARTER the OSDC classification is already computed, so you do not need to
+run the algorithm yourself unless the look-ahead problem above matters for
+your study. The path and the name `osdc` (and `read_register("osdc")`) are
+DARTER-specific; on other projects the file is named differently and lives
+elsewhere.
 
-- **Comorbidity adjustment?** → [Comorbidity](comorbidity.qmd)
-- **Ready to export?** → [Phase 14 - Export and repatriation](export.qmd)
+The 2024 population was generated, on the latest data, after the package was
+updated and released on CRAN. It is valid for inclusions until the end of 2024 and replaces
+the previous population file: use one or the other, never both. The previous
+files are kept for reproducibility.
+
+- **Parquet:** `E:/workdata/708421/cleaned-data/parquet-external/osdc/2024`,
+  which `read_register("osdc")` finds on DARTER
+- **`.csv`, `.rds` or `.dta`:**
+  `E:/workdata/708421/cleaned-data/diabetes_register_pop/2024`
+
+```r
+library(fastreg) # read_register()
+dm_pop <- read_register("osdc") # the 2024 population; DARTER only
+```
+
+**The previous population (up to 2022), for reproducibility only.** It has a
+different output format; the column names below apply only to the old file.
+
+```r
+library(dplyr) # rename, filter, select
+
+dm_pop <- readRDS("E:/workdata/708421/cleaned-data/diabetes-register-pop/dm_population_1977_2022.rds")
+
+names(dm_pop)
+# [1] "PNR"           "diabetes_type"  "do_dm"          "age_at_onset"
+
+dm_pop <- dm_pop %>% rename(pnr = PNR) # lower-case pnr, as everywhere else
+
+# diabetes_type: 1 = T1D, 2 = T2D  |  do_dm: the date in the old file
+
+t1d <- dm_pop %>%
+  filter(diabetes_type == 1) %>% # type 1 only
+  select(pnr, diabetes_type, do_dm) %>%
+  rename(date_diabetes = do_dm)
+```
+:::
+
+## Next step
+
+Diabetes status is one variable among the others you extract in [Phase
+11](extract-variables.qmd). When you have them all, join them onto the
+cohort in [Phase 12, Assemble and prepare the
+dataset](data-manipulation.qmd).
