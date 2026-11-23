@@ -466,7 +466,7 @@ df <- df %>%
 
 ```r
 mutate(icd3 = substr(c_diag, 2, 4)) # new column: ICD code without D-prefix, 3 characters
-mutate(birth_year = lubridate::year(foed_dag)) # birth year from date of birth
+mutate(birth_year = lubridate::year(foed_dag)) # birth year from date of birth (after collect(), see year() below)
 ```
 
 ### `transmute(new_column = expression)`
@@ -727,7 +727,7 @@ how many rows share each combination of values.
 `summarise()` yourself.
 
 ```r
-all_dx %>%
+all_dx %>% # already collected into R, so year() is safe here (see year() below)
   mutate(contact_year = year(date_contact)) %>%
   count(contact_year) %>% # one row per year, with n = number of contacts
   arrange(contact_year)
@@ -1043,6 +1043,11 @@ dmy("15/03/2021") # day-month-year -> 2021-03-15  (as.Date() gives 0015-03-20)
 year(surgery_date) # 2021-03-15 -> 2021
 ```
 
+Use it after `collect()`, on data that is in R. On a lazy table the database
+has to translate `year()`, and depending on your fastreg version and backend
+that can stop with an error. If you need years before `collect()`, count or
+filter on the date column itself, and take the year in R afterwards.
+
 ### `difftime(date1, date2, units = "days")`
 
 **What it does:** calculates the difference between two dates.
@@ -1166,6 +1171,7 @@ fine but the answer is wrong," see [DST pitfalls](dst-pitfalls.qmd).
 ```r
 class(my_object)
 # "tbl_df" "data.frame"        -> data is in R's memory
+# "duckplyr_df" "tbl_df" ...   -> duckplyr frame (newer fastreg): looks like a tibble, but may still be lazy
 # "tbl_duckdb_connection"      -> lazy DuckDB query, not yet fetched
 # "arrow_dplyr_query"          -> lazy Arrow query, not yet fetched
 # "FileSystemDataset" ...      -> Arrow dataset straight from open_dataset()
