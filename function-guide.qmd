@@ -6,12 +6,12 @@ pagetitle: "R functions: overview for register data"
 description: "Plain-language guide to the R functions used on register data: dplyr filter, mutate, joins and group_by, pivots, lazy queries with arrow, dates and text."
 ---
 
-*Know the function name? Use **Ctrl+F** (Windows) or **Cmd+F** (Mac) and search
-directly on the page.*
-
-**This is the data-handling toolkit** (extract → clean → reshape → prepare).
-Statistical models - `glm`, `coxph`, `lm` ... - are explained in [Phase
-13](analysis.qmd) where they're used.
+Use this page to look up what a function in the guide's code does, when you meet
+it in an example and are not sure what it does or why it is there. It covers the
+functions for handling data (extract, clean, reshape, prepare), each with a
+plain explanation and a short example. Statistical models (`glm`, `coxph`, `lm`)
+are explained in [Phase 13 - Analysis](analysis.qmd), where they are used. If you
+know the function name, search the page with Ctrl+F (Windows) or Cmd+F (Mac).
 
 ::: {.callout-note title="Jump directly to"}
   | Topic                             | Section                                                                       |
@@ -138,7 +138,7 @@ it chains steps together so you can read the code from top to bottom like a
 recipe.
 
 ::: {.callout-note}
-**`%>%` and `|>` are the same - just two different ways of writing the pipe.**
+**`%>%` and `|>` do the same job: two ways of writing the pipe.**
 
 `%>%` comes from the `magrittr` package and is available via `library(dplyr)`.
 `|>` is a built-in version introduced in R 4.1 - it requires no package.
@@ -188,10 +188,10 @@ bef <- open_dataset(
   rename_with(tolower) # standardise column names to lowercase
 ```
 
-The confirmed paths for your project are in [Overview of
-registers](register-reference.qmd).
+Replace the path with your own project's parquet folder; ask your data manager
+if you do not know it.
 
-#### Local (fiktive)
+#### Local synthetic data (fiktive)
 
 ```r
 bef <- open_dataset("synth_data/bef/") %>% rename_with(tolower) # path to locally saved synthetic register
@@ -328,8 +328,8 @@ fixes it in one second: all names become consistent.
 bef <- open_dataset("path/to/bef") %>% rename_with(tolower) # all columns become lowercase: pnr, koen, foed_dag, ...
 ```
 
-**Important:** always call it on the same line as `open_dataset()` (or
-`read_register()` in DARTER). If you forget it, `semi_join(..., by = "pnr")`
+**Important:** always call it right after `open_dataset()` or
+`read_register()`. If you forget it, `semi_join(..., by = "pnr")`
 will fail because the column might be called `PNR`.
 
 ### `rename(new_name = old_name)`
@@ -563,9 +563,8 @@ you built the columns yourself with a shared prefix (`dx_`, `rx_`).
 Used in two places:
 
 1. **NMI score** (Nordic Multimorbidity Index): sums the product of 0/1 flag
-   columns and their individual weights → one weighted comorbidity score per
-   person. A patient with cardiovascular disease and cancer scores higher than a
-   patient with two milder conditions.
+   columns and their individual weights → one weighted score per person, built
+   to predict mortality.
 2. **Multimorbidity count**: sums all 0/1 flags → simple count of the number of
    conditions per person.
 
@@ -602,7 +601,7 @@ Used in two places:
 *and* woman", add parentheses: `filter((alder > 50 | alder < 18) & koen == 2)`.
 
 ```r
-filter(c_diagtype %in% c("A", "B")) # only action and secondary diagnoses
+filter(c_diagtype %in% c("A", "B")) # only main (A) and secondary (B) diagnoses
 filter(date_contact >= surgery_date) # only post-operative contacts
 filter(icd3 == "S72") # only hip fracture codes
 ```
@@ -658,8 +657,8 @@ person IDs.
 
 ### `slice(n)`
 
-**What it does:** keeps only the nth row within each group (used after
-`group_by()`).
+**What it does:** keeps only the nth row, within each group if the data are
+grouped with `group_by()`.
 
 ```r
 group_by(pnr) %>% # group per person
@@ -720,8 +719,8 @@ group_by(pnr) %>% # group per person
 
 ### `count(col1, col2)`
 
-**What it does:** shorthand for `group_by(col1, col2) %>% summarise(n = n())`
-- how many rows share each combination of values.
+**What it does:** shorthand for `group_by(col1, col2) %>% summarise(n = n())`:
+how many rows share each combination of values.
 
 **Analogy:** You want to know how many contacts fall in each calendar year.
 `count(year)` gives you that table directly, without writing `group_by()` and
@@ -809,18 +808,13 @@ That is the difference from `filter(pnr %in% !!cohort_pnrs)`, where the vector
 sits directly in the condition and `!!` is what injects it. Use `semi_join` to
 filter a register down to the cohort.
 
-**Add `copy = TRUE` - it is cheap insurance, not just a fix for an error you
-already hit.** `y` (your local tibble) and the left table (the register) can
-come from different connections - e.g. if `read_register()` routes through a
-database engine like DuckDB rather than plain Arrow, which depends on your
-fastreg version and setup. dplyr will not silently join across two different
-sources: `copy = TRUE` is your explicit permission to copy the small local
-table into that source so the join can run there. Without it, the join errors
-outright rather than giving a wrong answer - but that also means code that
-works fine on your own machine can fail the first time someone runs it
-against a different backend. Harmless to add even when it turns out not to be
-needed, which is why every `semi_join()` example in this guide now includes
-it by default.
+**Add `copy = TRUE`.** Your local tibble lives in R, and the register lives in
+DuckDB (from `read_register()`) or Arrow (from `open_dataset()`). dplyr will not
+join across two different sources on its own: `copy = TRUE` gives it permission
+to copy the small local table into the register's source so the join can run
+there. Without it, the join stops with an error. It does no harm when both
+tables are already in R, which is why every `semi_join()` example in this guide
+includes it.
 
 ### `left_join(y, by = "key")`
 
@@ -864,8 +858,7 @@ format](long-wide.qmd).
 
 **Analogy:** Imagine a patient with five weigh-in visits - all in the same
 column with five rows. `pivot_wider()` transforms it into one single row with
-five columns: `weight_3mo`, `weight_6mo`, `weight_12mo`, etc. Used in extraction
-of weight and insulin outcomes.
+five columns: `weight_3mo`, `weight_6mo`, `weight_12mo`, etc.
 
 ### `pivot_longer(cols, names_to, values_to)`
 
@@ -996,8 +989,8 @@ columns at once. `grepl("^C34", icd4)` finds all 4-digit codes starting with
 grepl("^C34", icd4) # TRUE for "C340", "C341", "C342", etc.
 ```
 
-Used e.g. to match ICD codes against diagnosis patterns in comorbidity measures
-such as NMI (Nordic Multimorbidity Index).
+Used e.g. to match ICD codes against diagnosis patterns in indices such as NMI
+(Nordic Multimorbidity Index).
 
 ### `str_detect(x, pattern)` <small>- `stringr`</small>
 
@@ -1032,13 +1025,14 @@ as.Date(kont_starttidspunkt) # "2021-03-15 14:32:00" -> 2021-03-15 (after collec
 ### `ymd(x)` / `dmy(x)` (from `lubridate`)
 
 **What it does:** reads dates that are *not* in ISO form (`"2021-03-15"`).
-`as.Date()` assumes ISO and returns `NA` on e.g. `"15/03/2021"` or
-`"15-03-2021"`; the forgiving lubridate parsers infer the order from the name
-(`ymd` = year-month-day, `dmy` = day-month-year, `mdy` = month-day-year).
+Without a `format`, `as.Date()` expects the year first, and it does not stop on
+a day-first date: `as.Date("15/03/2021")` silently gives `0015-03-20`. The
+lubridate parsers take the order from the name (`ymd` = year-month-day, `dmy` =
+day-month-year, `mdy` = month-day-year).
 
 ```r
 ymd("2021-03-15") # year-month-day -> 2021-03-15
-dmy("15/03/2021") # day-month-year -> 2021-03-15  (as.Date would return NA)
+dmy("15/03/2021") # day-month-year -> 2021-03-15  (as.Date() gives 0015-03-20)
 ```
 
 ### `year(date)` (from `lubridate`)
@@ -1226,11 +1220,13 @@ person-year rows in the source data.
 
 ### `gc()`
 
-**What it does:** releases unused memory back to the operating system.
+**What it does:** runs R's garbage collection, which frees the memory of objects
+you have removed. R's help (`?gc`) says this "may prompt R to return memory to
+the operating system", so the memory use you see does not always drop.
 
 ```r
 rm(large_register) # remove the object from R
-gc() # release the memory
+gc() # free its memory
 ```
 
 Use it after you are done with large registers - you share RAM with everyone
@@ -1245,9 +1241,9 @@ on all registers these packages work against.
   | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `fastreg`   | `convert()`, `read_register()` - SAS → parquet, then read registers by name. `list_parquet_datasets()`, `read_parquet_dataset()`, `read_parquet_file()` when the name lookup does not work *(CRAN)* |
   | `dplyr`     | `%>%`, `filter`, `select`, `mutate`, `left_join`, `group_by`, `arrange`, etc.                                                                                                                       |
-  | `tidyr`     | `pivot_wider()` - reshaping from long to wide format                                                                                                                                                |
+  | `tidyr`     | `pivot_wider()`, `pivot_longer()`, `replace_na()` - reshaping and filling in missing values                                                                                                         |
   | `lubridate` | `year()`, `ymd()`, date calculations (`as.Date()` is base R)                                                                                                                                        |
-  | `arrow`     | `read_parquet()`, `write_parquet()` - parquet file handling                                                                                                                                         |
+  | `arrow`     | `open_dataset()`, `read_parquet()`, `write_parquet()` - parquet file handling                                                                                                                       |
   | `haven`     | `read_sas()` - reading SAS data files                                                                                                                                                               |
 
 ::: {.callout-tip title="Further information"}
