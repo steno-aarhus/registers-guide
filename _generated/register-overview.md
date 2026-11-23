@@ -28,6 +28,8 @@
 | [SYSI](https://www.dst.dk/extranet/ForskningVariabellister/SYSI%20-%20Sygesikring%20%286-cifret%29.html) | `"sysi"` | `pnr` | 1990 to 2005 | `ydernr`, `speciale`, `ydlant` |
 | [T_PSYK_ADM](https://www.dst.dk/extranet/ForskningVariabellister/PSYK_ADM%20-%20Landspatientregistret%20psykiatri%20-%20administrative%20oplysninger.html) | `"t_psyk_adm"` | `recnum` | 1995 to 2019 | `pnr`, `c_pattype`, `c_adiag` |
 | [T_PSYK_DIAG](https://www.dst.dk/extranet/ForskningVariabellister/PSYK_DIAG%20-%20Landspatientregistret%20psykiatri%20-%20diagnoser.html) | `"t_psyk_diag"` | `recnum` | 1995 to 2019 | `c_diag`, `c_diagtype`, `c_tildiag` |
+| [UAF_ADM](https://www.dst.dk/extranet/ForskningVariabellister/UAF_ADM%20-%20Landspatientregistret%20uafsluttede%20kontakter%20-%20administrative%20oplysninger.html) | `"uaf_adm"` | `recnum` | 1996 to 2019 | `pnr`, `d_inddto`, `d_uddto` |
+| [UAF_DIAG](https://www.dst.dk/extranet/ForskningVariabellister/UAF_DIAG%20-%20Landspatientregistret%20uafsluttede%20kontakter%20-%20diagnoser.html) | `"uaf_diag"` | `recnum` | 1996 to 2019 | `c_diag`, `c_diagtype`, `year` |
 | [UDDA](https://www.dst.dk/extranet/ForskningVariabellister/UDDA%20-%20Uddannelser%20%28BUE%29.html) | `"udda"` | `pnr` | 1980-12 to 2025-09 | `hfaudd`, `udd`, `hf_vfra` |
 | [VNDS](https://www.dst.dk/extranet/ForskningVariabellister/VNDS%20-%20Historiske%20vandringer.html) | `"vnds"` | `pnr` | 1973 to 2024 | `indud_kode`, `haend_dato`, `indud_land` |
 | [VNDS_HIST](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_HIST%20-%20Historiske%20vandringer%20fra%201973%20til%202004.html) | `"vnds_hist"` | `pnr` | 1973 to 2004 | `indud_kode`, `haend_dato`, `indud_land` |
