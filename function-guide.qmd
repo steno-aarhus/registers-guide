@@ -445,10 +445,15 @@ df <- df %>%
       # case_when: several conditions; the FIRST true one wins
       bmi < 25 ~ "Normal",
       bmi < 30 ~ "Overweight",
-      TRUE ~ "Obesity" # TRUE = "everything else"
+      bmi >= 30 ~ "Obesity" # a missing bmi matches none of the conditions and stays NA
     )
   )
 ```
+
+Note that `TRUE ~ "Obesity"` as the last line would also catch every row where
+`bmi` is `NA` (a missing height or weight), because `NA < 25` is neither true
+nor false. Use `TRUE ~` for a catch-all such as "Unknown", not for a real
+category.
 
 ::: {.callout-warning}
 **Check the units first.** BMI = weight (kg) / height (m)². If height is in
@@ -666,11 +671,29 @@ group_by(pnr) %>% # group per person
   slice(1) # keeps the newest record per person
 ```
 
-**`slice_max(column, n = 1)`** and **`slice_sample(n = 1)`** do the same job as
-`arrange() %>% slice()` above, without a separate `arrange()` step:
-`slice_max(date_contact, n = 1)` keeps the row with the latest date per group
-directly; `slice_sample(n = 200)` picks a random sample of rows instead (used
-for a practice cohort, not for choosing a real one).
+`slice()` only works on data that are already in R. On a lazy table (before
+`collect()`) it stops with the error "`slice()` is not supported on database
+backends". Before `collect()`, use `slice_min()` or `slice_max()` with
+`with_ties = FALSE` instead (see below).
+
+**`slice_max(column, n = 1)`** and **`slice_sample(n = 1)`** do a similar job
+without a separate `arrange()` step: `slice_max(date_contact, n = 1)` keeps the
+row with the latest date per group; `slice_sample(n = 200)` picks a random
+sample of rows instead (used for a practice cohort, not for choosing a real
+one).
+
+`slice_max()` and `slice_min()` keep **ties** by default, so a person with two
+contacts on the same latest date gets two rows. Add `with_ties = FALSE` to get
+exactly one row per group:
+
+```r
+group_by(pnr) %>%
+  slice_max(date_contact, n = 1, with_ties = FALSE) # one row per person, also if dates tie
+```
+
+When dates tie, the row that is kept is arbitrary. If the result must be
+reproducible, break the tie on a second column after `collect()`, for example
+`arrange(desc(date_contact), recnum) %>% slice(1)` within `group_by(pnr)`.
 
 ## Groups and aggregation {#groups-and-aggregation}
 
@@ -687,7 +710,7 @@ time.
 ```r
 group_by(pnr) %>% # group per person
   arrange(date_contact) %>% # oldest date first
-  slice(1) %>% # earliest contact per person
+  slice(1) %>% # earliest contact per person (after collect(), see slice())
   ungroup() # remove the grouping afterwards
 ```
 
