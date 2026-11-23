@@ -1,22 +1,26 @@
 ---
 title: "Build your study population"
-subtitle: "Identify your cases/exposed - then choose your study design"
+subtitle: "Define who could enter the study, find the exposed or cases, give each an index date and exclude prevalent cases"
 date: last-modified
 pagetitle: "Build a study population from DST registers"
 description: "Define the source population with BEF and VNDS, find exposed or cases via LPR diagnoses or SKS codes, exclude prevalent cases and draw a STROBE flow diagram."
 ---
 
-The later phases - extract variables ([Phase 11](extract-variables.qmd)),
-assemble the dataset ([Phase 12](data-manipulation.qmd)) and analysis ([Phase
-13](analysis.qmd)) - assume you already have a **cohort**: a table with `pnr`
-and `index_date` per person. This page shows how to identify your study
-population: identify your **cases/exposed**, give each one an **index date**, and
-exclude those who already had the outcome. What you do after that depends on your
-study design, and that choice is laid out at the [end of this
+Use this page to build your study population, once you know which registers
+your study needs and before you extract any covariates. You decide who could
+have entered the study at all (the source population), find the exposed people
+or cases, give each of them an index date, and exclude those who already had the
+outcome. When you are done you have a cohort: a table with `pnr` and
+`index_date` per person, which every later phase builds on ([Phase
+11](extract-variables.qmd) to [Phase 13](analysis.qmd)).
+
+Finding exposed people or cases in hospital data uses the LPR extraction pattern
+from [Extract from LPR](extract-from-lpr.qmd), so read that page first. What you
+do after this page depends on your study design, see [the end of this
 page](#what-now-choose-your-design).
 
 <details>
-<summary>**What is index date?**</summary>
+<summary>What is an index date?</summary>
 
 **Index date** is the point in time that marks the start of follow-up for a given person.
 
@@ -35,24 +39,24 @@ against your own delivery, and check the logic against your analysis plan.
 
 ## Step 1 - Define the source population {#step-1 .step-heading}
 
-Before you look for the exposed, you need to answer: **who could have entered
-the study at all?** That is the source population, and it is decided by two
-things - your data delivery and a residence criterion.
+Before you look for the exposed, decide who could have entered the study at
+all. That is the source population, and two things decide it: your data
+delivery and a residence criterion.
 
 ::: {.callout-important}
 **Your data delivery sets the outer limit.** DST only delivers data on the
 population your project is approved for. If your delivery is "persons in BEF
 2005-2024", then a person who only lived in Denmark in 2003 does not exist in
 your extract at all - and no code can pull them in. Check your project guide
-first. The registers below can make the **timing** of residence precise within
+first. The registers below can make the timing of residence precise within
 your delivery, but they cannot add people to it.
 :::
 
 ### BEF alone cannot decide residence
 
-BEF is a **snapshot**: one picture per reference time point (quarterly since
+BEF (the population register) is a snapshot: one picture per reference time point (quarterly since
 2008, yearly before that - see [Overview of registers](register-reference.qmd)).
-That means BEF gets it wrong in **both** directions:
+That means BEF gets it wrong in both directions:
 
 - **Too many included:** the person is in that year's snapshot, but had
   emigrated or died by your index date.
@@ -60,27 +64,26 @@ That means BEF gets it wrong in **both** directions:
   genuinely resident on the index date. That happens if they had emigrated at
   the time of the snapshot and moved home later the same year.
 
-You can filter your way out of the first error. **You cannot filter your way out
-of the second** - a filter can only remove people from the pool BEF already
-found, never add the ones missing from it. So residence has to be decided on
+You can filter your way out of the first error, but not out of the second: a
+filter can only remove people from the pool BEF already found, never add the
+ones missing from it. So residence has to be decided on
 events, not on snapshots.
 
 ### Use BEF and VNDS together
 
-You need **both** registers, and it is worth understanding why:
+You need both registers, plus the death register:
 
-- **BEF** gives you the *population and demographics*: who exists, date of birth
-  and sex. Use **all** snapshots in your study window combined (the union), not
-  one year at a time.
-- **VNDS** gives you the *events*: immigrations and emigrations with dates. VNDS
-  holds **only** migration events, so a person born in Denmark who never left
-  has **no rows at all** in VNDS. Absence of events is the normal case, not an
-  error.
-- **DOD** gives the date of death, applied on top.
+- **BEF:** the population and demographics: who exists, date of birth and sex.
+  Use all snapshots in your study window combined (the union), not one year at a
+  time.
+- **VNDS (migrations):** the events: immigrations and emigrations with dates.
+  VNDS holds only migration events, so a person born in Denmark who never left
+  has no rows in VNDS. Absence of events is the normal case, not an error.
+- **DOD (deaths):** the date of death, applied on top.
 
-The rule is therefore a default with exceptions: **resident since birth, unless
-VNDS says otherwise.** For each person, find the latest VNDS event **before**
-the index date:
+The rule is therefore a default with exceptions: resident since birth, unless
+VNDS says otherwise. For each person, find the latest VNDS event before the
+index date:
 
   | Latest event before index | Resident at index? | Residence period starts |
   | ------------------------- | ------------------ | ----------------------- |
@@ -88,7 +91,7 @@ the index date:
   | `"U"` (emigration)        | No                 | -                       |
   | no events                 | Yes                | the date of birth       |
 
-That start date is what you measure a **continuous** residence requirement from
+That start date is what you measure a continuous residence requirement from
 (e.g. "at least 5 years in Denmark before index"). It is not the same as the
 earliest year the person appears in BEF: someone seen in BEF in 2005, but living
 abroad 2006-2012 and moving home in 2013, has only two years of continuous
@@ -100,13 +103,13 @@ residence at an index date in 2015.
 - **The event codes:** run `count(indud_kode)` on your own VNDS. The guide uses
   `"I"` and `"U"`, but confirm the values in your delivery.
 - **Immigration before 1971:** CPR only has complete immigration and emigration
-  data from **1971** (see [Further information](#further-information)). A person
+  data from 1971 (see [Further information](#further-information)). A person
   born abroad who immigrated before that has no events, and the rule above
   wrongly counts them as resident since birth.
-- **Greenland** is a status of its own in CPR, not the same as emigration. Find
+- **Greenland:** a status of its own in CPR, not the same as emigration. Find
   out how moves there appear in your delivery.
-- **Disappeared people** (whose address is unknown to the authorities) leave the
-  population without an emigration event in VNDS, because DST counts them
+- **Disappeared people:** people whose address is unknown to the authorities
+  leave the population without an emigration event in VNDS, because DST counts them
   separately from emigrations ([DST's documentation of the population
   figures](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen)),
   so the rule above counts them as resident; they drop out of BEF, which is
@@ -117,25 +120,23 @@ residence at an index date in 2015.
   five years of lookback if the registers cover those five years too.
 :::
 
-::: {.callout-note title="Municipality codes: a second way to establish residence"}
-**Municipality codes can also be used to assess residence in Denmark.** CPR
+::: {.callout-note collapse="true" title="Another way: residence from the CPR address history"}
+Municipality codes can also be used to assess residence in Denmark. CPR
 keeps a running residence history: one period per address, with municipality
 code and dates. With it you can look residence up directly (was there a period
 spanning the index date?) instead of deriving it from BEF snapshots and VNDS
 events. CPR has complete information on municipality of residence in Denmark
-from **1971** and full address from **1977**; Greenland is a separate series
+from 1971 and full address from 1977; Greenland is a separate series
 from May 1972. The residence history says nothing about whether the person is
 alive, so the date of death still has to be fetched separately. See [Further
 information](#further-information) for the source.
 
-**Note - do not read the gaps uncritically.** A gap in the
-residence history can be either a genuine stay abroad or a missing
+Do not read the gaps uncritically. A gap in the residence history can be either a genuine stay abroad or a missing
 registration, and the history alone cannot tell you which. Count how many
 people in your own cohort have a gap before you decide how to treat them.
 :::
 
-<details>
-<summary>Show the code: the source population at study start</summary>
+### Code: the source population at study start
 
 ```r
 # Step 1: the source population at study start (BEF + VNDS) --------------------
@@ -183,12 +184,10 @@ source_population <- bef %>%
   collect()   # only now is data pulled into RAM
 ```
 
-</details>
-
 ::: {.callout-note}
-**Does each person have their own index date?** Then exactly the same rule
-applies, but it has to be used where the date exists - not here. The index date
-is not a property of the person:
+**Does each person have their own index date?** Then the same rule applies,
+but it has to be used where the date exists, not here. The index date is not a
+property of the person:
 
 - **The exposed** get their index date in Step 2 (the exposure date). Residence
   is therefore decided for them when you prepare the exposed on [Comparison
@@ -199,24 +198,22 @@ is not a property of the person:
   index date) at match time on [Comparison cohort](comparison-cohort.qmd), never
   once and for all.
 
-In short: the source population here is at **person level**, while eligibility
-at index is at **pair level** (person + date).
+So the source population here is at person level, while eligibility at index is
+at the level of person and date.
 :::
 
 ## Step 2 - Identify the exposed (or cases) {.step-heading}
 
-You scan the register that defines your exposure. **You do not yet have a
-`cohort_pnrs` list - you query the entire register** and filter on the exposure
-criterion.
-
-**The exposure can be defined in many ways:**
+You scan the register that defines your exposure. You do not have a
+`cohort_pnrs` list yet, so you query the entire register and filter on the
+exposure criterion. The exposure can be defined in several ways:
 
   | Type                             | Example                         | Register                                                   |
   | -------------------------------- | ------------------------------- | ---------------------------------------------------------- |
   | Surgery / procedure (SKS code)   | Bariatric surgery KJDF10/KJDF11 | `lpr_sksopr` (LPR2), `lpr_a_procregistrering` (LPR3)        |
   | Hospital diagnosis (ICD code)    | Type 2 diabetes E11             | `lpr_diag` + `lpr_adm`, `lpr_a_diagnose` + `lpr_a_kontakt` |
   | Medication exposure (ATC code)   | Metformin A10BA02               | LMDB                                                       |
-  | Clinical measurement / biomarker | BMI > 35, HbA1c > 75 mmol/mol   | Project-specific data / OSDC / DBSO                        |
+  | Clinical measurement / biomarker | BMI > 35, HbA1c > 75 mmol/mol   | Laboratory results (HbA1c), clinical quality databases or project-specific data (BMI) |
 
 Register names may vary on your project - see [Overview of
 registers](register-reference.qmd).
@@ -226,9 +223,9 @@ your registers - see [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-t
 you did not convert them from SAS yourself.
 
 <details>
-<summary>Example A: SKS codes (surgery/procedure)</summary>
+<summary>Example A: exposure defined by a surgery or procedure (SKS codes)</summary>
 
-`lpr_sksopr` holds the procedure code (`c_opr`) + `recnum`, but **not** `pnr` or date; those live in `lpr_adm`. So you join the two on `recnum` to get person + date + procedure together - exactly the same pattern as diagnoses (contact + diagnosis register), see [Understand LPR](understand-lpr.qmd).
+`lpr_sksopr` holds the procedure code (`c_opr`) and `recnum`, but not `pnr` or date; those are in `lpr_adm`. So you join the two on `recnum` to get person, date and procedure together, the same pattern as for diagnoses, see [Understand LPR](understand-lpr.qmd#contact-and-diagnosis-tables).
 
 ```r
 # Step 2A: identify the exposed via SKS codes ----------------------------------
@@ -293,7 +290,7 @@ cohort](comparison-cohort.qmd) and saved as `cohort` - and it is `cohort`, not
 </details>
 
 <details>
-<summary>Example B: ICD diagnosis as exposure criterion</summary>
+<summary>Example B: exposure defined by a hospital diagnosis (ICD-10 codes)</summary>
 
 ```r
 # Step 2B: identify the exposed via ICD diagnosis ------------------------------
@@ -322,35 +319,32 @@ exposed <- lpr_adm %>%
 ```
 
 ::: {.callout-note}
-This example pulls from **LPR2** only. Always consider which registers your outcome/exposure needs - **LPR2** (possibly + **psychiatry**) and **LPR3** - and combine them as in [9b: Extract from LPR](extract-from-lpr.qmd). If you leave out a register, you miss the cases that only appear there.
+This example pulls from LPR2 only. Decide which registers your exposure needs (LPR2, possibly the psychiatric LPR2 tables, and LPR3) and combine them as in [Extract from LPR](extract-from-lpr.qmd). If you leave out a register, you miss the cases that only appear there.
 :::
 
 </details>
 
 ## Step 3 - Exclude prevalent cases {.step-heading}
 
-People who already had **your outcome** before the index date must be excluded -
-otherwise they count as new cases even though they are not. Convention used
-throughout this guide: a diagnosis **on or before** the index date is prevalent
-(`<=`), and only one **after** it is an outcome (`>`). This applies to
-**all designs**, including a prevalence study without a comparison group, so it
+People who already had your outcome before the index date must be excluded,
+otherwise they count as new cases even though they are not. The convention used
+throughout this guide: a diagnosis on or before the index date is prevalent
+(`<=`), and only one after it is an outcome (`>`). This applies to all designs,
+including a prevalence study without a comparison group, so it
 belongs here where you build the exposed cohort.
 
 Count how many drop out at each exclusion step, so you can describe the
-attrition and later draw a **STROBE flow diagram** (also called a participant or
+attrition and later draw a STROBE flow diagram (also called a participant or
 attrition diagram; see the [STROBE
 checklist](https://www.strobe-statement.org/checklists/)). The generic
 N-counting template is in [Phase 6](first-extraction.qmd).
 
-**Helper function for excluding prevalent cases**
+### Code: exclude prevalent cases with a function
 
 If the same check is needed more than once (e.g. also on a comparison group
 later, see [Comparison cohort](comparison-cohort.qmd)), wrap the logic in a
 function so the two checks do not drift apart. See [Good coding
 practice](good-coding-practice.qmd).
-
-<details>
-<summary>Show the code: exclude prevalent cases</summary>
 
 ```r
 # Step 3: exclude prevalent cases ----------------------------------------------
@@ -405,35 +399,31 @@ cat("After prevalence exclusion:", nrow(exposed),
 stopifnot(n_distinct(exposed$pnr) == nrow(exposed))   # check: one row per person
 ```
 
-</details>
-
 **Planning a comparison cohort?** Extract the outcome (and exposure) dates for
-the **whole population** here rather than just for the exposed, and reuse them:
+the whole population here rather than just for the exposed, and reuse them:
 restricted to the exposed as above, and later for the comparison pool (see
 [Comparison cohort](comparison-cohort.qmd)). Filtering the diagnosis codes
 returns everyone with the diagnosis anyway, so it saves a second query against
 the registers.
 
 **If that comparison group is matched with replacement, know what
-`distinct(pnr) %>% pull(pnr)` actually excludes.** `prior_outcome_pnrs()`
-correctly checks each row against *that row's own* `index_date` (the
-`inner_join` before the filter), but the final `distinct(pnr)` collapses the
-result to a plain list of people - so `filter(!pnr %in% prevalent)` at line
-369 drops **every** row for that `pnr`, not just the one instance where they
-had a prevalent outcome. If the same person is matched to a different case
+`distinct(pnr) %>% pull(pnr)` excludes.** `prior_outcome_pnrs()` checks each
+row against that row's own `index_date` (the `inner_join` before the filter),
+but the final `distinct(pnr)` collapses the result to a plain list of people,
+so `filter(!pnr %in% prevalent)` drops every row for that `pnr`, not just the
+one where they had a prevalent outcome. If the same person is matched to a different case
 with an earlier `index_date`, where they did not yet have the outcome, that
-instance gets excluded too. That may be exactly the conservative rule you
-want - but decide it on purpose. See [comparison cohort's callout on
-it](comparison-cohort.qmd#step-4---assemble-validate-and-save) for the
+instance gets excluded too. That may be the conservative rule you want, but
+decide it on purpose. See [the callout on repeated `pnr` on Comparison
+cohort](comparison-cohort.qmd#step-4---assemble-validate-and-save) for the
 general repeated-`pnr` problem this is one version of.
 
 ## Participant flow diagram (STROBE)
 
-The N counts you made in Step 2 and Step 3 come together in a **STROBE flow
-diagram**: a figure showing how many people were in from the start, how many
+The N counts you made in Step 2 and Step 3 come together in a STROBE flow
+diagram: a figure showing how many people were in from the start, how many
 were excluded at each step and why, and how many ended up in the study
-population. It is expected in almost every observational study. The diagram
-below also shows **where the data comes from** at each step (the numbers are
+population. The diagram below also shows where the data comes from at each step (the numbers are
 simulated).
 
 ```{mermaid}
@@ -442,7 +432,7 @@ flowchart TD
     B["Step 2: filter on exposure codes<br>exposed with pnr + index_date<br>n = 12,300"]:::step
     E1["Excluded in Step 3:<br>prevalent outcome before index<br>(from LPR diagnoses)<br>n = 1,150"]:::excl
     C["Exposed cohort<br>n = 11,150"]:::step
-    F["Optional (Phase 10a):<br>+ matched comparison cohort"]:::optional
+    F["Optional:<br>+ matched comparison cohort"]:::optional
     D["Final study population<br>pnr + index_date<br>(→ Phase 11)"]:::result
 
     A --> B
@@ -462,16 +452,16 @@ flowchart TD
 How each step maps to the data:
 
 - **Source registers:** the whole population's LPR data (you have no cohort list
-  yet). LPR2 and LPR3 are opened lazily with `read_register()` - see Step 2
+  yet). LPR2 and LPR3 are opened lazily with `read_register()`, see Step 2
   above.
 - **Step 2:** you filter on your exposure codes and attach `pnr` + `index_date`.
   The result is `exposed`.
-- **Step 3 (exclusion):** prevalent cases - people with the outcome before their
-  index date - are found in the LPR diagnoses and removed. That is the
+- **Step 3 (exclusion):** prevalent cases (people with the outcome before their
+  index date) are found in the LPR diagnoses and removed. That is the
   `n_before - nrow(exposed)` shown in the exclusion box.
 - **Final study population:** `pnr` + `index_date` per person, ready for [Phase
   11 - Extract variables](extract-variables.qmd). If you build a comparison
-  cohort, [Phase 10a](comparison-cohort.qmd) is inserted before the last
+  cohort, [Comparison cohort](comparison-cohort.qmd) comes before the last
   step.
 
 ::: {.callout-warning}
@@ -481,18 +471,17 @@ before the diagram leaves DST is in [Phase 14 - A hidden number must not be
 possible to work out](export.qmd#back-calculation).
 :::
 
-## What now - choose your design {#what-now-choose-your-design}
+## Next step depends on your design {#what-now-choose-your-design}
 
 - **Prevalence study / cohort without a comparison group:** after this page you
   are done: you have your study population with an index date. Continue to
   [Phase 11 - Extract variables](extract-variables.qmd) and [Phase 12 -
   Assemble and prepare the dataset](data-manipulation.qmd).
-- **Cohort study with a comparison cohort:** after this page continue to →
-  [Comparison cohort](comparison-cohort.qmd), where you build a match pool
+- **Cohort study with a comparison cohort:** continue to [Comparison
+  cohort](comparison-cohort.qmd), where you build a match pool
   and risk-set match a comparison group.
-- **(Nested) case-control:** after this page continue to →
-  [Case-control](case-control.qmd), where your "exposed" group above is
-  instead your **cases**, and you sample controls who were at risk when the case
+- **(Nested) case-control:** continue to [Case-control](case-control.qmd),
+  where your "exposed" group above is instead your cases, and you sample controls who were at risk when the case
   had the outcome.
 - **Self-controlled or family-based design:** the person, or the family, is
   their own control - see [Self-controlled and family-based
@@ -504,7 +493,7 @@ possible to work out](export.qmd#back-calculation).
   Møller JØ, Mortensen PB. "[The Danish Civil Registration System. A cohort of
   eight million
   persons](https://content.ugeskriftet.dk/sites/default/files/scientific_article_files/2018-10/dmb3816.pdf)",
-  *Dan Med Bull* 2006;53(4):441-9 - documents what CPR contains and how far back
+  *Dan Med Bull* 2006;53(4):441-9. Documents what CPR contains and how far back
   it reaches: immigrations and emigrations plus municipality of residence from
   1971, Greenland from May 1972, and full address from 1977.
 
