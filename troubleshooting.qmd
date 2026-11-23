@@ -6,12 +6,13 @@ pagetitle: "Troubleshooting R errors on DST"
 description: "Fix R errors in DST register work: six first steps, a stuck console, common read_register, DuckDB and Arrow errors, zero-row results, and where to ask for help."
 ---
 
-This page is for when something has already gone wrong: a red error message, or
-a result that came back empty.
-
-If your code runs fine but you suspect the *answer* is wrong, that is the other
-page: [DST pitfalls](dst-pitfalls.qmd) collects the traps that produce a
-plausible-looking result and never say a word.
+Use this page when something has already gone wrong: a red error message, a
+console that will not respond, or a result that came back empty. Start with the
+six steps, then look your message up in the two error tables, and if you are
+still stuck, the last section says where to ask without breaking DST's rules.
+If your code runs fine but you suspect the *answer* is wrong, use [DST
+pitfalls](dst-pitfalls.qmd) instead: it collects the traps that produce a
+plausible-looking result without any error.
 
 ## Start here: six steps {#six-steps}
 
@@ -20,11 +21,15 @@ Before you go looking in the code, do this in order:
 1. **Read the error message:** which line is mentioned? Which object name
    appears?
 2. **Run `class(object)`:** is it data (`"data.frame"`) or still a connection
-   (`"prudent_duckplyr_df"` from `read_register()` - even though it also says
-   `"data.frame"` - or `"arrow_dplyr_query"`, `"tbl_duckdb_connection"`)? See [Phase 5 - do you have data or just a
-   connection?](extraction-step-by-step.qmd)
-3. **Run `names(object)`:** is the column named exactly what you think? A single
-   letter or difference in capitalisation is enough to fail.
+   (`"prudent_duckplyr_df"`, which also says `"data.frame"`, or
+   `"tbl_duckdb_connection"` or `"arrow_dplyr_query"`)? See [Phase 5 - do you
+   have data or just a
+   connection?](extraction-step-by-step.qmd#check-do-you-have-data-or-just-a-connection)
+3. **Check the column names:** is the column named exactly what you think? A
+   single letter or difference in capitalisation is enough to fail. Use
+   `names(object)` on data in R; on a lazy object use
+   `names(collect(head(object, 0)))`, because `names()` and `colnames()` can
+   mislead there (see [Inspect your data](inspect-data.qmd#the-shape)).
 4. **Isolate the failing line:** run it alone and see what happens.
 5. **Restart the R session** (Ctrl/Cmd+Shift+F10) and run from the top. This
    clears stale objects left behind by earlier runs, which is a surprisingly
@@ -116,7 +121,7 @@ These are the ones you meet in a DST workflow rather than in R generally:
   | `non-numeric argument to binary operator`        | Date column is `character`, not `Date`                         | `mutate(date = as.Date(date))` - see [pitfall 4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) |
   | `rapi_execute` / `rapi_prepare` error, or a date filter that returns 0 rows | `rapi` only means that DuckDB could not run the query - the real cause is in the rest of the message. A common cause: a datetime column (e.g. `kont_starttidspunkt`) is converted with `as.Date()` or compared with a date inside `filter()` before `collect()` | Create the cut-off as a datetime before the pipe, `cutoff <- as.POSIXct("2023-01-01", tz = "UTC")`, then `filter(kont_starttidspunkt >= cutoff)` - see [pitfall 4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) |
   | `Error in filter.default(...)`                  | Filtering on a lazy object without `%>%`                       | Switch to `%>%` - see [the pipe](function-guide.qmd#the-pipe)                                   |
-  | `Can't join ... due to incompatible types`       | Join on columns of different type (e.g. numeric vs. character) on data in R (dplyr). A lazy Arrow/DuckDB join may instead give the engine's own type error | Use `mutate(pnr = as.character(pnr))` on both sides to match types                                            |
+  | `Can't join ... due to incompatible types`       | Join on columns of different type (e.g. numeric vs. character) on data in R (dplyr) or on a duckplyr table. Arrow gives its own `Incompatible data types` error. A DuckDB table opened through dbplyr gives no error at all, see [No error, but zero rows](#zero-rows) | Use `mutate(pnr = as.character(pnr))` on both sides to match types                                            |
   | `object of type 'closure' is not subsettable`    | The object you meant was never created (or is misspelt), so R found the built-in *function* of that name (e.g. `data`, `df`, `c`) | Create the object first / check its name. Unique object names (not `data`, `df`, `c`) make this error easier to spot |
 
 ::: {.callout-note}
@@ -136,11 +141,16 @@ a finding: "no patients were exposed". Two ways to produce it:
   so `grepl("N02A", atc2)` compares four characters against three and matches
   nothing. See [Medication (ATC)](medication.qmd#atc-columns).
 - **A type mismatch in a join or filter:** a join on a character `pnr` and a
-  numeric one usually *fails* (see the table above), but converting one side can
-  still leave values that never meet - a code stored as a number loses its
-  leading zero (`0001` becomes `1`), so it no longer matches the text `"0001"`,
-  the same way a format table joined on the wrong type does (see [Format
-  tables](formatting-tables.qmd#education-level)).
+  numeric one fails in dplyr, duckplyr and arrow (see the table above). A
+  DuckDB table opened through dbplyr (`to_duckdb()`, `read_register()` in
+  fastreg 0.14.2 or older, or a `tbl()` on a DBI connection) runs the join
+  without an error: DuckDB turns the text into a number, so `"0101"` matches
+  `101`. That can match too much as well as too little. And converting one side
+  yourself can leave values that never meet: a code stored as a number loses
+  its leading zero (`0001` becomes `1`), so it no longer matches the text
+  `"0001"`, the same way a format table joined on the wrong type does (see
+  [Format tables](formatting-tables.qmd#education-level)). Make the key types
+  match before every join.
 
 So treat an empty result as a **bug until proven otherwise**. Count the rows
 before and after the filter, and check that the values you filter on actually
@@ -158,16 +168,17 @@ have found it.
 
 ## Where to ask {#where-to-ask}
 
-Follow this order. AI is at the bottom for a good reason.
+Follow this order. AI is at the bottom because it is the easiest place to get
+a confident wrong answer.
 
   | #   | Where                              | When                                                                                                |
   | --- | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-  | 1   | **Colleague or supervisor**        | Ask first - they know your data and workflow                                                        |
-  | 2   | **Google**                         | Search for the error message including `Error:`                                                     |
-  | 3   | **Stack Overflow**                 | The world's largest collection of coding questions and answers                                      |
-  | 4   | **Zheers R Coding Café**           | [r-coding-cafe.zheer.dk](https://r-coding-cafe.zheer.dk/) - register-data specific                  |
-  | 5   | **Official package documentation** | Search the package name + "documentation"                                                           |
-  | 6   | **AI (Claude, ChatGPT)**           | Good for code problems, but easy to believe wrong answers - use only when you understand the answer |
+  | 1   | Colleague or supervisor            | Ask first - they know your data and workflow                                                        |
+  | 2   | Google                             | Search for the error message including `Error:`                                                     |
+  | 3   | Stack Overflow                     | The world's largest collection of coding questions and answers                                      |
+  | 4   | Zheer's R Coding Café              | [r-coding-cafe.zheer.dk](https://r-coding-cafe.zheer.dk/) - register-data specific                  |
+  | 5   | Official package documentation     | Search the package name + "documentation"                                                           |
+  | 6   | AI (Claude, ChatGPT)               | Good for code problems, but easy to believe wrong answers - use only when you understand the answer |
 
 Two ready-made references worth bookmarking: [Common
 errors](https://www.epirhandbook.com/en/new_pages/errors.html) and [Getting
@@ -175,17 +186,19 @@ help](https://www.epirhandbook.com/en/new_pages/help.html), both in The
 Epidemiologist R Handbook.
 
 ::: {.callout-important}
-**On DST there is an extra rule: no data in the question.** Not a value, not a
-row, not a pasted error message that happens to contain one. This applies to
-colleagues, to DST support and to any AI tool. When you need to show the
-problem, build a small fake dataset that reproduces it.
+**On DST there is an extra rule: no data in the question.** DST's rules say
+that when you describe your dataset or a problem, you always use made-up
+examples. Not a value, not a row, not a pasted error message that happens to
+contain one. This applies to written questions to colleagues, to DST support
+and to any AI tool. When you need to show the problem, build a small fake
+dataset that reproduces it. (Showing your screen is a different rule: you may
+show it to people approved for the data you work with, see [Log in to
+DST](log-in-dst.qmd#the-rules-you-sign-up-to-in-short).)
 :::
 
-::: {.callout-warning}
-**Avoid AI as your first stop if you are new.** AI can generate
-plausible-sounding code that does not work - or works but gives wrong results.
-Use it as a supplement to your own understanding, not as a substitute.
-:::
+If you are new to R, do not make AI your first stop. It can write
+plausible-looking code that does not run, or that runs and gives a wrong
+result; use it next to your own understanding, not instead of it.
 
 <details>
 <summary>How to ask a good help question (minimal reproducible example)</summary>
@@ -231,7 +244,7 @@ AI is good at explaining error messages and suggesting solutions - but you need 
 > "I get `Error: Column 'pnr' not found` when I run this code with dplyr and arrow on DST. I am using `read_register()` (fastreg). What is wrong?"
 > ```r
 > bef <- read_register("bef")
-> bef %>% filter(pnr == "001")   # error here
+> bef %>% select(pnr, koen)   # error here
 > ```
 
 **Ask for explanation, not just a fix:**
