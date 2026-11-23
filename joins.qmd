@@ -8,18 +8,20 @@ pagetitle: "Link your extracts: joins and follow-up time"
 description: "Join register extracts on pnr in R with left_join() and filter joins, validate the join, use bind_rows(), and calculate follow-up time and the event variable."
 ---
 
-Your extracts from [Phase 6](first-extraction.qmd), [Extract from
-LPR](extract-from-lpr.qmd) and [Phase 11](extract-variables.qmd) are
-stored as separate RDS files. Once each extract is down to **one row per
-person** ([Long ↔ wide format](long-wide.qmd)), you join them on `pnr` into
-one analysis-ready dataset. Finally, you calculate follow-up time and the event
-variable.
+Use this page to turn your cohort and your separate extracts into the one
+analysis-ready dataset that every analysis page starts from. Your extracts from
+[Phase 6](first-extraction.qmd), [Extract from LPR](extract-from-lpr.qmd) and
+[Phase 11](extract-variables.qmd) are stored as separate RDS files. Once each
+extract is down to one row per person ([Long ↔ wide format](long-wide.qmd)),
+you join them onto the cohort, check the joins, and calculate follow-up time and
+the event variable. When you are done you have `analysis.rds`.
 
 *Paths and variable names in the examples are generic - replace them with your own.*
 
 ::: {.callout-important}
 **First get each extract down to one row per person.** `left_join()` only
-behaves predictably when both tables have **one row per `pnr`**. Many register
+behaves predictably when the table you join on has **one row per key**
+(`pnr`, or `pnr` + `index_date`). Many register
 extracts have multiple rows per person (long format). Reduce them to one row per
 person with `group_by() + slice()` or `pivot_wider()` - explained in [Long ↔
 wide format](long-wide.qmd). This page assumes your extracts are already in
@@ -157,13 +159,16 @@ finished person-level extracts onto the cohort), `pnr` alone is enough - there
 is no extra dimension to keep track of.
 
 ::: {.callout-warning}
-**Do not assume "one row per person per year" - check it.** BEF on DARTER does
-contain duplicate `(pnr, year)` rows, and adding the year as a key does not save
-you from those: a person with two 2018 rows still doubles. Count first, and
-reduce to one row per person per year if you find any.
+**Do not assume "one row per person per year" - check it.** A BEF delivery can
+contain duplicate `(pnr, year)` rows (the delivery this guide was written from
+did), and adding the year as a key does not save you from those: a person with
+two 2018 rows still doubles. Count first, and reduce to one row per person per
+year if you find any.
 
 ```r
 # Are there duplicates? n > 1 means the same person appears twice in one year.
+# bef is the lazy register here (read_register("bef")): the counting runs in the
+# database, and collect() fetches only the final number into R.
 bef %>%
   count(pnr, year) %>%
   filter(n > 1) %>%
@@ -248,10 +253,10 @@ one. `left_join()` - when you want to **attach a new variable** (outcome, date
 of death, age) to your cohort table.
 :::
 
-<details>
-<summary>Practical examples: join date of death and emigration to the cohort</summary>
+## Attach date of death and emigration {#death-emigration}
 
-`read_register()` requires fastreg set up with the path to your registers - see
+Death and emigration end follow-up, so the follow-up calculation below needs
+both dates on the cohort. `read_register()` requires fastreg set up with the path to your registers - see
 [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not convert them
 from SAS yourself.
 
@@ -321,7 +326,24 @@ emigration date depends on the index date, so it is keyed on `pnr` **and**
 `index_date`: a person who was drawn as a comparison person on two different
 dates then gets the right exit for each of them.
 
-</details>
+## Attach covariates measured at index {#attach-covariates}
+
+Socioeconomic position and the NMI score are measured relative to the index
+date, so they are joined on `pnr` + `index_date`. `distinct()` makes sure each
+extract has one row per key before the join.
+
+```r
+ses_data <- readRDS("path/to/extract_ses.rds") %>%    # education_cat, occupation_cat, income_cat
+  distinct(pnr, index_date, .keep_all = TRUE)
+nmi_data <- readRDS("path/to/extract_nmi.rds") %>%    # NMI score - see nmi.qmd
+  distinct(pnr, index_date, .keep_all = TRUE)
+
+n_before <- nrow(cohort)
+cohort <- cohort %>%
+  left_join(ses_data, by = c("pnr", "index_date")) %>%
+  left_join(nmi_data, by = c("pnr", "index_date"))
+stopifnot(nrow(cohort) == n_before)   # a join that multiplied rows stops here
+```
 
 ## Derived variables: create new columns {#derived-variables-create-new-columns}
 
@@ -335,15 +357,15 @@ library(dplyr) # mutate, if_else, case_when
 cohort <- cohort %>%
   mutate(
     # Age at index: days between two dates / 365.25 (a year is 365.25 days, leap years)
-    age_at_index = as.numeric(index_date - foed_dag) / 365.25,
+    age = as.numeric(index_date - foed_dag) / 365.25,
 
-    # BMI from height (m) and weight (kg)
-    bmi = weight_kg / (height_m^2),
+    # The same pattern for any formula, e.g. BMI if you have height (m) and weight (kg):
+    # bmi = weight_kg / (height_m^2),
 
     # Categorise a continuous variable into groups
     age_group = case_when(
-      age_at_index < 50 ~ "<50",
-      age_at_index < 65 ~ "50-64",
+      age < 50 ~ "<50",
+      age < 65 ~ "50-64",
       TRUE ~ "65+" # everything else (here: 65 and over)
     )
   )
@@ -367,8 +389,8 @@ follow-up ends) and an **event variable** (did they experience the outcome?).
 
 The censoring date is the *earliest* of: event date, date of death, emigration
 date, the date a comparison person becomes exposed themselves (crossover) and
-end of study period. `death_date` and `emigration_date` were joined on in the
-practical examples above; the outcome date is joined on first here.
+end of study period. `death_date` and `emigration_date` were joined on
+[above](#death-emigration); the outcome date is joined on first here.
 
 ```r
 # Calculate follow-up time and event variable ----------------------------------
@@ -481,9 +503,9 @@ cohort_final <- cohort %>%
     followup_years,
     outcome,
     status_code, # from the competing-risks block above
-    age, # age, nmi and the three _cat columns are added in the
-    sex, # complete recipe below (steps 4 and 5)
-    nmi,
+    age, # from Derived variables above
+    sex,
+    nmi, # nmi and the three _cat columns: from Attach covariates above
     occupation_cat,
     education_cat,
     income_cat
