@@ -8,14 +8,20 @@ pagetitle: "Logistic and linear regression in R"
 description: "Logistic, linear and conditional logistic regression (clogit) in R for register data: interaction, splines, reading output and cluster-robust standard errors."
 ---
 
-Regression examines the relationship between an **outcome** and one or more
-**explanatory variables** (your exposure plus covariates), and is how you
-**adjust for confounding** in the analysis.
+Use this page when you have the analysis-ready dataset ([Phase
+12](data-manipulation.qmd)) and want an adjusted estimate for an outcome without
+follow-up time: logistic regression for a binary outcome, linear regression for
+a continuous one, and conditional logistic regression for a matched case-control
+study. It also covers interaction, splines, how to read the output, and robust
+standard errors when the same person is in the data more than once. If your
+outcome is time to an event, go to [Time-to-event](time-to-event.qmd) or
+[Rates and rate ratios (Poisson)](rates-poisson.qmd) instead.
 
-The outcome is also called the **dependent** variable and the explanatory
-variables the **independent** ones. With **one** explanatory variable it is a
-*simple* regression; with **several**, a *multiple* regression. Explanatory
-variables can be either continuous (e.g. age) or categorical (e.g. sex).
+Regression relates an outcome to one or more explanatory variables (your
+exposure plus covariates), and is how you adjust for confounding in the
+analysis. The outcome is also called the *dependent* variable and the
+explanatory variables the *independent* ones. Explanatory variables can be
+continuous (e.g. age) or categorical (e.g. sex).
 
 - **Linear regression** (`lm`): when the outcome is **continuous** (e.g. BMI or
   blood pressure). Gives differences in means.
@@ -79,6 +85,11 @@ linearly related to the **log-odds**. If linearity does not hold, you can let
 the variable enter as a smooth curve instead of a straight line - see
 [Non-linear relationships (splines)](#splines) below.
 
+Logistic regression ignores time. In a cohort where people are followed for
+different lengths of time, or are censored by death or emigration before they
+could have the outcome, use [Cox](time-to-event.qmd) or
+[Poisson](rates-poisson.qmd) regression instead.
+
 ## Linear regression (continuous outcome)
 
 ```r
@@ -107,13 +118,20 @@ library(survival) # clogit()
 clogit(
   case ~ exposure + age + sex + strata(match_id), # strata() = the matched set
   data = cc
-) %>% # cc = your case-control dataset (from Phase 10b)
+) %>% # cc = your case-control dataset (from the Case-control page)
   tbl_regression(exponentiate = TRUE) # -> odds ratios
 ```
 
 - `strata(match_id)` tells the model which rows belong to the same matched set
   (`case.id` from `incidenceMatch()` or `Set` from `Epi::ccwc()`).
 - `case` = 1 for a case, 0 for a control.
+- What the odds ratio estimates depends on how the controls were sampled. With
+  risk-set (incidence-density) sampling, where each case's controls are drawn
+  from those still at risk on the case's date, the matched odds ratio estimates
+  the incidence rate ratio (hazard ratio), and no rare-disease assumption is
+  needed (Greenland & Thomas 1982,
+  [doi:10.1093/oxfordjournals.aje.a113439](https://doi.org/10.1093/oxfordjournals.aje.a113439)).
+  Report it as an odds ratio, but interpret it as a rate ratio.
 
 **Assumptions:** as for logistic regression (continuous variables linear with
 the log-odds; the matched sets independent of one another). The matching itself
@@ -144,29 +162,26 @@ model %>%
   clear evidence** that the effect differs between the groups - which is not
   the same as showing it is equal (interaction tests have low power), so report
   the stratum-specific estimates regardless. If it differs clearly from 1, the
-  **effect depends on sex**, and you should then report **group-specific**
+  effect (on the odds ratio scale) depends on sex, and you should then report group-specific
   estimates (e.g. by running the model separately for each sex, or with
   `emmeans` / `marginaleffects`).
 
-::: {.callout-note}
-**Multiplicative vs. additive scale.** A product term tests interaction on the
-**multiplicative** (ratio) scale: does the exposure change the *odds ratio*
-differently between groups? At the public-health level the **additive** scale
-(differences in absolute risk) is often more relevant, and it is measured with
-**RERI** (relative excess risk due to interaction). The two scales can give
-different answers, so be explicit about which you report. See [Further
-information](#read-more-regression).
-:::
+A product term tests interaction on the multiplicative (ratio) scale: does the
+exposure change the odds ratio differently between groups? For public health
+the additive scale (differences in absolute risk) is often more relevant, and
+it is measured with RERI (relative excess risk due to interaction). The two
+scales can give different answers, so be explicit about which you report. See
+[Further information](#read-more-regression).
 
 ::: {.callout-warning}
 **A subgroup analysis is not an interaction test.** Running the model separately
 in two groups and seeing that one is "significant" and the other is not does
-**not** show that the effects differ. Only the interaction term (or a formal
-test of it) settles whether the difference is real.
+not show that the effects differ. To compare the two effects you test the
+interaction term (or compare the two estimates formally).
 :::
 
 <details>
-<summary>Why not? (click)</summary>
+<summary>Why "significant in one group, not in the other" shows no difference</summary>
 
 Two reasons:
 
@@ -185,9 +200,9 @@ The point estimate is the same (1.5); only the precision differs, because the wo
 ## Non-linear relationships (splines) {#splines}
 
 By default, the models above assume a continuous variable is related to the
-outcome in a **straight line** (on the model's scale): each extra year of age
-changes the risk by the same amount, whether you go from 30 to 31 or from 70 to
-71. That often fits poorly - the risk of many outcomes rises only slowly at
+outcome in a **straight line** on the model's scale: in logistic regression each
+extra year of age changes the log-odds by the same amount (multiplies the odds by
+the same factor), whether you go from 30 to 31 or from 70 to 71. That often fits poorly - the risk of many outcomes rises only slowly at
 young ages and steeply later. That is a **curve**, not a straight line.
 
 A **spline** lets the variable enter as a **smooth curve** instead of a straight
@@ -231,11 +246,13 @@ interval** and a **p-value**:
   below 1 = lower). For **linear** regression the estimate is instead a
   difference in means, where **0** means no difference. Example: OR = 1.5 → 50%
   higher odds; OR = 0.8 → 20% lower.
-- **The 95% confidence interval** is the range the true effect can plausibly lie
-  in: narrow = precise, wide = much uncertainty. For a ratio: if the interval
-  **crosses 1**, the effect is not statistically significant at the 5% level.
-- **The p-value** is the probability of seeing an effect at least as large as
-  yours *if there were truly none*. A small p (typically < 0.05) argues against
+- **The 95% confidence interval** shows the effect sizes that are compatible
+  with your data, given the model: an interval built this way covers the true
+  value in 95% of repeated studies. Narrow = precise, wide = much uncertainty.
+  For a ratio: if the interval includes 1, the effect is not statistically
+  significant at the 5% level.
+- **The p-value** is the probability of seeing an effect at least as extreme as
+  yours *if there were truly none* (and the model is right). A small p (typically < 0.05) argues against
   "no effect", but does **not** tell you how large or important the effect is -
   the estimate and confidence interval do. In very large register datasets even
   tiny, unimportant differences often become "significant", so always look at
@@ -251,10 +268,9 @@ confounding. If you need a marginal (population-average) effect, standardization
 or IPTW gives one - see [IP weighting](weighting-iptw.qmd).
 :::
 
-<details id="clustered-standard-errors">
-<summary>**Advanced:** robust (clustered) standard errors - skip if each person appears only once</summary>
+## Robust (clustered) standard errors {#clustered-standard-errors}
 
-When the same person appears **several times** in the dataset - e.g. if the comparison cohort is matched **with replacement**, or a comparison person later becomes exposed (crossover, see [Comparison cohort](comparison-cohort.qmd)) - the rows are not independent. If you ignore this, the confidence intervals come out too narrow. The fix is **clustered (robust) standard errors**: a way of computing the uncertainty that accounts for rows from the same person being linked. (If each person appears only once, you don't need this.)
+When the same person appears several times in the dataset - e.g. if the comparison cohort is matched **with replacement**, or a comparison person later becomes exposed (crossover, see [Comparison cohort](comparison-cohort.qmd)) - the rows are not independent. If you ignore this, the confidence intervals come out too narrow. The fix is **clustered (robust) standard errors**: a way of computing the uncertainty that accounts for rows from the same person being linked. If each person appears only once, you do not need this.
 
 ```r
 library(sandwich)                        # vcovCL(): "sandwich" estimator of the variance
@@ -269,14 +285,12 @@ coeftest(model,                          # show the coefficients ...
 - `vcovCL(model, cluster = ~ pnr)` is the cluster-robust covariance matrix (clustered on `pnr`). "Sandwich" only refers to the shape of the formula - the point is that it does not assume independent rows.
 - For a Cox model you do it with the `cluster` argument in `coxph()` instead (see [Time-to-event](time-to-event.qmd)).
 
-</details>
-
 <details>
-<summary>**Advanced:** mixed models - when each group should have its own level</summary>
+<summary>Mixed models: when each cluster should have its own baseline level</summary>
 
 A **cluster** is a group of **rows** that belong together and are therefore more alike than two random rows - a group of *rows*, not necessarily of people. It can be **several rows from the same person** (e.g. repeated measurements over time), all patients at the **same hospital**, or **siblings** in the same family. So a person is a cluster only if they appear in several rows; if you have exactly one row per person, there is no person cluster. Rows in the same cluster are correlated because they share something, and that breaks the assumption of independent rows. You have two choices:
 
-- **Cluster-robust standard errors** (the fold-out above): keep your model, but correct the confidence intervals so they account for the correlation. The effect estimate is **unchanged**; you still get **one overall effect**.
+- **Cluster-robust standard errors** (the section above): keep your model, but correct the confidence intervals so they account for the correlation. The effect estimate is **unchanged**; you still get **one overall effect**.
 - **Mixed model (random effects):** let each cluster have **its own baseline level** in the model (a *random intercept*) - e.g. each hospital gets its own baseline risk, instead of the model pretending all hospitals are the same. (To "model the cluster" means exactly that: building the groups' differences into the model instead of ignoring them.) "Mixed" = it mixes **fixed effects** (the usual coefficients, the same for everyone, e.g. the exposure effect) with **random effects** (the variation between clusters).
 
 Choose a **mixed model** when the clustering structure is itself of interest, when you have **repeated measurements** or **many small clusters**, or when you want to separate variation *within* and *between* clusters. In R: [`lme4`](https://CRAN.R-project.org/package=lme4) (`glmer()`/`lmer()`), and [`coxme`](https://CRAN.R-project.org/package=coxme) for a Cox model. A thorough treatment is beyond this page.
@@ -302,7 +316,7 @@ On interaction / effect modification:
 On non-linear relationships (splines):
 
 - Harrell, *Regression Modeling Strategies*, and [the `rms`
-  package](https://CRAN.R-project.org/package=rms) - the standard reference on
+  package](https://CRAN.R-project.org/package=rms) - a standard reference on
   flexible modelling with splines.
 
 On mediation (when you want to split an effect into a **direct** part and an

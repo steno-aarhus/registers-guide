@@ -8,9 +8,9 @@ pagetitle: "Long to wide format in R for register data"
 description: "Reshape Danish register extracts in R to one row per person: long vs wide format, group_by() with slice(), and tidyr pivot_wider() and pivot_longer() examples."
 ---
 
-Before you can link your extracts together ([Link your
-extracts](joins.qmd)), each extract needs to be in **wide format with one
-row per person**. The registers you extract from are almost always in *long
+Use this page when an extract has many rows per person and you need it down to
+one row per person before you join it onto the cohort ([Link your
+extracts](joins.qmd)). The registers you extract from are almost always in *long
 format* with many rows per person. This page explains the difference and shows
 the two ways you reshape an extract: `group_by() + slice()` and `pivot_wider()`
 / `pivot_longer()`.
@@ -66,8 +66,8 @@ The key choice is *what you want out* of the long register:
   | **One representative value** per person (newest snapshot, first event, earliest date) | `group_by() + slice()` | One row per person, same columns                  |
   | **Several time points side by side** as separate columns                              | `pivot_wider()`        | One row per person, one new column per time point |
 
-In register-based research, `group_by() + slice()` is by far the most common
-choice - you usually just want "the newest" or "the first" value per person. You
+In register-based research `group_by() + slice()` is usually the one you need:
+you want "the newest" or "the first" value per person. You
 use `pivot_wider()` when you explicitly want to compare several time points.
 
 ## `group_by()` + `slice()` - one representative row
@@ -85,7 +85,11 @@ bef_one_per_person <- bef %>%
   ungroup() # IMPORTANT: release grouping when done
 ```
 
-::: {.callout-important}
+For baseline covariates you usually want the snapshot that applied at the index
+date, not the newest one: join on the index date and keep only snapshots on or
+before it before you take the first row.
+
+::: {.callout-warning}
 **Always remember `ungroup()`.** `group_by()` puts a "grouped_df" tag on your
 data.frame, which *all* subsequent operations inherit. That means:
 
@@ -119,14 +123,18 @@ first_hip_fracture <- cohort %>% # the cohort has pnr + index_date
 # Do NOT just take the first exit ever: a person may have left and come back, and
 # an exit before index censors nothing. Whether the person was resident at index
 # is decided in Phase 10 (source population).
+# Group by pnr AND index_date: with a comparison group matched with replacement
+# the same person has one row per index date, and each needs its own first exit.
 first_emigration <- cohort %>% # the cohort has pnr + index_date
-  left_join(vnds, by = "pnr") %>% # vnds is a table in R here (the cohort's rows, fetched with collect())
+  distinct(pnr, index_date) %>% # one row per person and index date
+  left_join(vnds, by = "pnr", relationship = "many-to-many") %>% # vnds is a table in R here (the cohort's rows, fetched with collect())
   filter(indud_kode == "U", haend_dato > index_date) %>% # only exits after index
-  group_by(pnr) %>%
+  group_by(pnr, index_date) %>%
   arrange(haend_dato) %>%
   slice(1) %>%
   ungroup() %>%
-  select(pnr, emigration_date = haend_dato)
+  select(pnr, index_date, emigration_date = haend_dato)
+# -> ready for join: cohort %>% left_join(first_emigration, by = c("pnr", "index_date"))
 ```
 
 ## Pivots - switch between long and wide

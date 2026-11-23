@@ -8,10 +8,14 @@ pagetitle: "Time-to-event: survival analysis in R"
 description: "Survival analysis in R: Kaplan-Meier curves, Cox regression, checking proportional hazards, and competing risks with cause-specific Cox and Fine-Gray."
 ---
 
-Time-to-event analysis (survival analysis) looks at the **time until an event**
-and handles the fact that not everyone reaches the event during follow-up
-(censoring). It is the typical framework for a cohort study with an outcome over
-time.
+Use this page when your cohort is built and you want to analyse the time until
+the outcome: Kaplan-Meier curves, a Cox model for the hazard ratio, the check of
+proportional hazards, and what to do when death (or another event) can come
+first. Time-to-event analysis (survival analysis) handles the fact that not
+everyone reaches the event during follow-up (censoring). You need the
+analysis-ready dataset with follow-up time and event status from [Phase
+12](joins.qmd#follow-up-time); when you are done you have curves and estimates
+to take through [output control](export.qmd).
 
 *Paths and variable names in the examples are generic - replace them with your own.*
 `survival`, `survminer` and `tidycmprsk` must be installed in your R environment
@@ -73,9 +77,18 @@ i.e. they get the outcome more often):
 ![Kaplan-Meier curves with simulated data. `ggsurvplot()` typically also adds a risk table below the figure.](images/km_example.png)
 
 ::: {.callout-warning}
-Kaplan-Meier can **overestimate the risk** if a competing event (typically
-death) can preclude your outcome - see [Competing risks](#competing-risks)
-below.
+## Before you export a Kaplan-Meier curve
+
+The curve and its risk table are output like any table. Each step in the curve
+is one or a few events, and each number at risk is a table cell, so check them
+against the small-cell rule (3 or 5, see [Export](export.qmd#figures-and-curves)).
+In the tail of the curve, where few people are left, this usually fails: one way
+out is to cut the x-axis (`xlim =` in `ggsurvplot()`) where the number at risk
+falls below your threshold.
+
+One minus the Kaplan-Meier curve also overestimates the risk when a competing
+event (typically death) can preclude your outcome: see [Competing
+risks](#competing-risks) below.
 :::
 
 ## Cox regression (hazard ratio)
@@ -93,16 +106,17 @@ cox %>% # pass the model on to a clean table
   tbl_regression(exponentiate = TRUE) # exponentiate = TRUE -> hazard ratios
 ```
 
-A hazard ratio reads like an OR/RR: **1 = no difference**, above 1 = higher
-rate, below 1 = lower. See [Reading your
+A hazard ratio is a ratio of rates (hazards) over follow-up: 1 = no difference,
+above 1 = higher rate in the exposed, below 1 = lower. It is not a ratio of
+risks. See [Reading your
 result](regression.qmd#read-the-output).
 
 **The difference with replacement.** If the comparison cohort is matched **with
 replacement** (or there is crossover), the same person appears several times and
-the rows are not independent. Then you add **one single argument** -
-`cluster = pnr` - to exactly the same model. It does **not** change the hazard
-ratio estimate (the HR is the same); it only corrects the **standard errors and
-confidence intervals**, which would otherwise be artificially narrow. Same idea
+the rows are not independent. Then you add one argument, `cluster = pnr`, to
+exactly the same model. It does not change the hazard ratio estimate; it
+replaces the standard errors with robust (sandwich) standard errors that allow
+for the repeated person, so the confidence intervals are no longer too narrow. Same idea
 as in [Regression](regression.qmd#clustered-standard-errors).
 
 ```r
@@ -151,17 +165,21 @@ coxph(Surv(age, age_at_exit, outcome) ~ exposure + sex, data = df) # age is the 
 
 ## Check the assumption: proportional hazards
 
-The Cox model assumes **proportional hazards** (PH): that a variable's effect is
-constant over time. If it does not hold, the single hazard ratio is misleading.
-Always check it with `cox.zph()`, which is based on *Schoenfeld residuals* (in
-short, a measure of whether the effect "drifts" over time).
+The Cox model assumes **proportional hazards** (PH): that the hazard ratio is
+constant over follow-up. If it is not, a single hazard ratio does not describe
+an effect that changes over time. Check it with `cox.zph()`, which is based on
+the scaled Schoenfeld residuals (in short, whether the effect drifts over time).
 
 ```r
 ph <- cox.zph(cox) # formal PH test per variable + global
-print(ph) # small p-value = sign the assumption is VIOLATED
+print(ph) # small p-value = evidence against proportional hazards
 plot(ph) # residual curve per variable; a sloping curve
 #   indicates a non-proportional hazard
 ```
+
+With register-sized data the test has the power to flag even a tiny departure,
+so a small p-value alone says little. Judge the plot: how much the curve slopes,
+and whether that changes what you would conclude.
 
 <details>
 <summary>What to do if the assumption is violated</summary>
@@ -175,18 +193,18 @@ A third alternative is to **drop the hazard ratio** and use **RMST** (*restricte
 ## Competing risks {#competing-risks}
 
 ::: {.callout-warning}
-If another event can **preclude** your outcome (classically: **death**, before
-the outcome can occur), it is a *competing risk*. A plain Kaplan-Meier then
-**overestimates** the risk, because it treats those who died as merely censored.
-This is the rule rather than the exception in register cohorts with older people
-or long follow-up.
+If another event can preclude your outcome (classically death, before the
+outcome can occur), it is a *competing risk*. One minus the Kaplan-Meier curve
+then overestimates the risk, because it treats those who died as if they were
+merely censored and could still get the outcome later. In register cohorts with
+older people or long follow-up this is common.
 :::
 
-The idea is simple: each person ends up in one of three places, and only the
-**first** thing that happens counts - (1) they never reach an event during
-follow-up (*censored*), (2) they get your **outcome**, or (3) they are hit by
-the **competing event** (e.g. death). Someone who dies first can never reach the
-outcome, and the analysis must reflect that.
+Each person ends up in one of three places, and only the first thing that
+happens counts: (1) they never reach an event during follow-up (*censored*), (2)
+they get your outcome, or (3) they have the competing event (e.g. death).
+Someone who dies first can never reach the outcome, and the analysis must
+reflect that.
 
 ### 1. Set up the data
 
@@ -243,17 +261,17 @@ cuminc(
 
 ### 3. Regression: pick the model to match your question
 
-Cox can absolutely be used - you just need to know which of two questions you
-are asking:
+There are two regression models, and they answer different questions:
 
-- **Etiology (the rate of the outcome):** run an **ordinary Cox**, but
-  **censor** the competing event. You do that by setting the event to
-  `status == "outcome"`: both censored and dead people then become "no event".
-  This is the *cause-specific* hazard.
-- **Absolute/cumulative risk:** use **Fine-Gray** (`crr`), where the dead
-  **stay** in the risk set. `crr` by default models the first event type after
-  "censored" (here "outcome") and treats the rest ("death") as competing. This
-  is the *subdistribution* hazard.
+- **The rate of the outcome among those still alive and event-free:** run an
+  ordinary Cox model and censor the competing event. You do that by setting the
+  event to `status == "outcome"`: both censored and dead people then become "no
+  event". This is the *cause-specific* hazard, the usual choice for an
+  etiological question.
+- **The cumulative incidence (absolute risk) of the outcome:** use
+  **Fine-Gray** (`crr`), where the dead stay in the risk set. `crr` by default
+  models the first event type after "censored" (here "outcome") and treats the
+  rest ("death") as competing. This is the *subdistribution* hazard.
 
 ```r
 # Etiology - cause-specific Cox: status == "outcome" turns death (and censored) into "no event"
@@ -268,10 +286,15 @@ crr(Surv(time_days, status) ~ exposure + age + sex, data = df) %>%
   tbl_regression(exponentiate = TRUE) # -> subdistribution hazard ratio
 ```
 
+Neither hazard ratio is a risk ratio. The subdistribution hazard ratio tells
+you the direction in which the exposure shifts the cumulative incidence (if the
+model fits), but not by how much; for the absolute risk, report the cumulative incidence (CIF) at
+fixed time points, for example at 1 and 5 years.
+
 <details>
 <summary>Rule of thumb: which one do I pick?</summary>
 
-If you want to **describe or predict risk** (e.g. "what is the 5-year risk of the outcome?"), use CIF + Fine-Gray. If you want to understand a **causal relationship** (e.g. "does the exposure raise the rate of the outcome?"), use the cause-specific Cox. Many studies report both.
+If you want to describe or predict risk (e.g. "what is the 5-year risk of the outcome?"), use the CIF and Fine-Gray. If you want to know whether the exposure changes the rate of the outcome in those still at risk, use the cause-specific Cox. Many studies report both.
 
 </details>
 
