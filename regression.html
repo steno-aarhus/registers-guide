@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-19">
+<meta name="dcterms.date" content="2026-11-23">
 <meta name="description" content="Logistic, linear and conditional logistic regression (clogit) in R for register data: interaction, splines, reading output and cluster-robust standard errors.">
 
 <title>Logistic and linear regression in R – Register Guide</title>
@@ -603,6 +603,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#interaction-effect-modification" id="toc-interaction-effect-modification" class="nav-link" data-scroll-target="#interaction-effect-modification">Interaction (effect modification)</a></li>
   <li><a href="#splines" id="toc-splines" class="nav-link" data-scroll-target="#splines">Non-linear relationships (splines)</a></li>
   <li><a href="#read-the-output" id="toc-read-the-output" class="nav-link" data-scroll-target="#read-the-output">Reading your result</a></li>
+  <li><a href="#clustered-standard-errors" id="toc-clustered-standard-errors" class="nav-link" data-scroll-target="#clustered-standard-errors">Robust (clustered) standard errors</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/regression.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/regression.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
@@ -628,7 +629,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2026</p>
+      <p class="date">November 23, 2026</p>
     </div>
   </div>
   
@@ -640,8 +641,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Regression examines the relationship between an <strong>outcome</strong> and one or more <strong>explanatory variables</strong> (your exposure plus covariates), and is how you <strong>adjust for confounding</strong> in the analysis.</p>
-<p>The outcome is also called the <strong>dependent</strong> variable and the explanatory variables the <strong>independent</strong> ones. With <strong>one</strong> explanatory variable it is a <em>simple</em> regression; with <strong>several</strong>, a <em>multiple</em> regression. Explanatory variables can be either continuous (e.g.&nbsp;age) or categorical (e.g.&nbsp;sex).</p>
+<p>Use this page when you have the analysis-ready dataset (<a href="./data-manipulation.html">Phase 12</a>) and want an adjusted estimate for an outcome without follow-up time: logistic regression for a binary outcome, linear regression for a continuous one, and conditional logistic regression for a matched case-control study. It also covers interaction, splines, how to read the output, and robust standard errors when the same person is in the data more than once. If your outcome is time to an event, go to <a href="./time-to-event.html">Time-to-event</a> or <a href="./rates-poisson.html">Rates and rate ratios (Poisson)</a> instead.</p>
+<p>Regression relates an outcome to one or more explanatory variables (your exposure plus covariates), and is how you adjust for confounding in the analysis. The outcome is also called the <em>dependent</em> variable and the explanatory variables the <em>independent</em> ones. Explanatory variables can be continuous (e.g.&nbsp;age) or categorical (e.g.&nbsp;sex).</p>
 <ul>
 <li><strong>Linear regression</strong> (<code>lm</code>): when the outcome is <strong>continuous</strong> (e.g.&nbsp;BMI or blood pressure). Gives differences in means.</li>
 <li><strong>Logistic regression</strong> (<code>glm</code> with <code>family = binomial</code>): when the outcome is <strong>binary</strong> (yes/no, e.g.&nbsp;whether a person got a diagnosis). Gives <strong>odds ratios</strong>.</li>
@@ -673,6 +674,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>exponentiate = TRUE</code> shows <strong>odds ratios</strong> (OR) instead of log-odds coefficients.</li>
 </ul>
 <p><strong>Assumptions:</strong> the observations are independent (one row per person - otherwise use robust standard errors, see below), and continuous variables are linearly related to the <strong>log-odds</strong>. If linearity does not hold, you can let the variable enter as a smooth curve instead of a straight line - see <a href="#splines">Non-linear relationships (splines)</a> below.</p>
+<p>Logistic regression ignores time. In a cohort where people are followed for different lengths of time, or are censored by death or emigration before they could have the outcome, use <a href="./time-to-event.html">Cox</a> or <a href="./rates-poisson.html">Poisson</a> regression instead.</p>
 </section>
 <section id="linear-regression-continuous-outcome" class="level2">
 <h2 class="anchored" data-anchor-id="linear-regression-continuous-outcome">Linear regression (continuous outcome)</h2>
@@ -690,11 +692,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">clogit</span>(</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  case <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex <span class="sc">+</span> <span class="fu">strata</span>(match_id), <span class="co"># strata() = the matched set</span></span>
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> cc</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="co"># cc = your case-control dataset (from Phase 10b)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="co"># cc = your case-control dataset (from the Case-control page)</span></span>
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; odds ratios</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <ul>
 <li><code>strata(match_id)</code> tells the model which rows belong to the same matched set (<code>case.id</code> from <code>incidenceMatch()</code> or <code>Set</code> from <code>Epi::ccwc()</code>).</li>
 <li><code>case</code> = 1 for a case, 0 for a control.</li>
+<li>What the odds ratio estimates depends on how the controls were sampled. With risk-set (incidence-density) sampling, where each case’s controls are drawn from those still at risk on the case’s date, the matched odds ratio estimates the incidence rate ratio (hazard ratio), and no rare-disease assumption is needed (Greenland &amp; Thomas 1982, <a href="https://doi.org/10.1093/oxfordjournals.aje.a113439">doi:10.1093/oxfordjournals.aje.a113439</a>). Report it as an odds ratio, but interpret it as a rate ratio.</li>
 </ul>
 <p><strong>Assumptions:</strong> as for logistic regression (continuous variables linear with the log-odds; the matched sets independent of one another). The matching itself is handled by <code>strata()</code>.</p>
 </section>
@@ -712,31 +715,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># OR for each term, including the interaction term</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <ul>
 <li><code>exposure * sex</code> means “both variables plus their interplay”. It is the <strong>interaction term</strong> <code>exposure:sex</code> that you read off.</li>
-<li>If the interaction term’s OR sits close to 1 (and p is large), you have <strong>no clear evidence</strong> that the effect differs between the groups - which is not the same as showing it is equal (interaction tests have low power), so report the stratum-specific estimates regardless. If it differs clearly from 1, the <strong>effect depends on sex</strong>, and you should then report <strong>group-specific</strong> estimates (e.g.&nbsp;by running the model separately for each sex, or with <code>emmeans</code> / <code>marginaleffects</code>).</li>
+<li>If the interaction term’s OR sits close to 1 (and p is large), you have <strong>no clear evidence</strong> that the effect differs between the groups - which is not the same as showing it is equal (interaction tests have low power), so report the stratum-specific estimates regardless. If it differs clearly from 1, the effect (on the odds ratio scale) depends on sex, and you should then report group-specific estimates (e.g.&nbsp;by running the model separately for each sex, or with <code>emmeans</code> / <code>marginaleffects</code>).</li>
 </ul>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Multiplicative vs.&nbsp;additive scale.</strong> A product term tests interaction on the <strong>multiplicative</strong> (ratio) scale: does the exposure change the <em>odds ratio</em> differently between groups? At the public-health level the <strong>additive</strong> scale (differences in absolute risk) is often more relevant, and it is measured with <strong>RERI</strong> (relative excess risk due to interaction). The two scales can give different answers, so be explicit about which you report. See <a href="#read-more-regression">Further information</a>.</p>
-</div>
-</div>
-</div>
+<p>A product term tests interaction on the multiplicative (ratio) scale: does the exposure change the odds ratio differently between groups? For public health the additive scale (differences in absolute risk) is often more relevant, and it is measured with RERI (relative excess risk due to interaction). The two scales can give different answers, so be explicit about which you report. See <a href="#read-more-regression">Further information</a>.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>A subgroup analysis is not an interaction test.</strong> Running the model separately in two groups and seeing that one is “significant” and the other is not does <strong>not</strong> show that the effects differ. Only the interaction term (or a formal test of it) settles whether the difference is real.</p>
+<p><strong>A subgroup analysis is not an interaction test.</strong> Running the model separately in two groups and seeing that one is “significant” and the other is not does not show that the effects differ. To compare the two effects you test the interaction term (or compare the two estimates formally).</p>
 </div>
 </div>
 </div>
 <details>
 <summary>
-Why not? (click)
+Why “significant in one group, not in the other” shows no difference
 </summary>
 <p>Two reasons:</p>
 <ol type="1">
@@ -753,7 +747,7 @@ Why not? (click)
 </section>
 <section id="splines" class="level2">
 <h2 class="anchored" data-anchor-id="splines">Non-linear relationships (splines)</h2>
-<p>By default, the models above assume a continuous variable is related to the outcome in a <strong>straight line</strong> (on the model’s scale): each extra year of age changes the risk by the same amount, whether you go from 30 to 31 or from 70 to 71. That often fits poorly - the risk of many outcomes rises only slowly at young ages and steeply later. That is a <strong>curve</strong>, not a straight line.</p>
+<p>By default, the models above assume a continuous variable is related to the outcome in a <strong>straight line</strong> on the model’s scale: in logistic regression each extra year of age changes the log-odds by the same amount (multiplies the odds by the same factor), whether you go from 30 to 31 or from 70 to 71. That often fits poorly - the risk of many outcomes rises only slowly at young ages and steeply later. That is a <strong>curve</strong>, not a straight line.</p>
 <p>A <strong>spline</strong> lets the variable enter as a <strong>smooth curve</strong> instead of a straight line, so the model finds the shape itself. You only decide how bendy the curve may be (via the number of <em>degrees of freedom</em> - how many “bends” the curve may have).</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(splines) <span class="co"># ns() = "natural spline" (a smooth curve)</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -774,8 +768,8 @@ Why not? (click)
 <p>For each variable the regression table gives an <strong>estimate</strong>, a <strong>confidence interval</strong> and a <strong>p-value</strong>:</p>
 <ul>
 <li><strong>The estimate</strong> is the effect measure. For logistic regression it is an <strong>odds ratio (OR)</strong>, for log-binomial a <strong>relative risk (RR)</strong>, and for Cox (<a href="./time-to-event.html">Time-to-event</a>) a <strong>hazard ratio (HR)</strong> - all are <em>ratios</em>, where <strong>1 means no difference</strong> (above 1 = higher odds/risk/rate, below 1 = lower). For <strong>linear</strong> regression the estimate is instead a difference in means, where <strong>0</strong> means no difference. Example: OR = 1.5 → 50% higher odds; OR = 0.8 → 20% lower.</li>
-<li><strong>The 95% confidence interval</strong> is the range the true effect can plausibly lie in: narrow = precise, wide = much uncertainty. For a ratio: if the interval <strong>crosses 1</strong>, the effect is not statistically significant at the 5% level.</li>
-<li><strong>The p-value</strong> is the probability of seeing an effect at least as large as yours <em>if there were truly none</em>. A small p (typically &lt; 0.05) argues against “no effect”, but does <strong>not</strong> tell you how large or important the effect is - the estimate and confidence interval do. In very large register datasets even tiny, unimportant differences often become “significant”, so always look at the <strong>size</strong> (the estimate), not just p.</li>
+<li><strong>The 95% confidence interval</strong> shows the effect sizes that are compatible with your data, given the model: an interval built this way covers the true value in 95% of repeated studies. Narrow = precise, wide = much uncertainty. For a ratio: if the interval includes 1, the effect is not statistically significant at the 5% level.</li>
+<li><strong>The p-value</strong> is the probability of seeing an effect at least as extreme as yours <em>if there were truly none</em> (and the model is right). A small p (typically &lt; 0.05) argues against “no effect”, but does <strong>not</strong> tell you how large or important the effect is - the estimate and confidence interval do. In very large register datasets even tiny, unimportant differences often become “significant”, so always look at the <strong>size</strong> (the estimate), not just p.</li>
 </ul>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
@@ -787,11 +781,10 @@ Why not? (click)
 </div>
 </div>
 </div>
-<details id="clustered-standard-errors">
-<summary>
-<strong>Advanced:</strong> robust (clustered) standard errors - skip if each person appears only once
-</summary>
-<p>When the same person appears <strong>several times</strong> in the dataset - e.g.&nbsp;if the comparison cohort is matched <strong>with replacement</strong>, or a comparison person later becomes exposed (crossover, see <a href="./comparison-cohort.html">Comparison cohort</a>) - the rows are not independent. If you ignore this, the confidence intervals come out too narrow. The fix is <strong>clustered (robust) standard errors</strong>: a way of computing the uncertainty that accounts for rows from the same person being linked. (If each person appears only once, you don’t need this.)</p>
+</section>
+<section id="clustered-standard-errors" class="level2">
+<h2 class="anchored" data-anchor-id="clustered-standard-errors">Robust (clustered) standard errors</h2>
+<p>When the same person appears several times in the dataset - e.g.&nbsp;if the comparison cohort is matched <strong>with replacement</strong>, or a comparison person later becomes exposed (crossover, see <a href="./comparison-cohort.html">Comparison cohort</a>) - the rows are not independent. If you ignore this, the confidence intervals come out too narrow. The fix is <strong>clustered (robust) standard errors</strong>: a way of computing the uncertainty that accounts for rows from the same person being linked. If each person appears only once, you do not need this.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sandwich)                        <span class="co"># vcovCL(): "sandwich" estimator of the variance</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(lmtest)                          <span class="co"># coeftest(): test the coefficients with a chosen variance</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -803,14 +796,13 @@ Why not? (click)
 <li><code>vcovCL(model, cluster = ~ pnr)</code> is the cluster-robust covariance matrix (clustered on <code>pnr</code>). “Sandwich” only refers to the shape of the formula - the point is that it does not assume independent rows.</li>
 <li>For a Cox model you do it with the <code>cluster</code> argument in <code>coxph()</code> instead (see <a href="./time-to-event.html">Time-to-event</a>).</li>
 </ul>
-</details>
 <details>
 <summary>
-<strong>Advanced:</strong> mixed models - when each group should have its own level
+Mixed models: when each cluster should have its own baseline level
 </summary>
 <p>A <strong>cluster</strong> is a group of <strong>rows</strong> that belong together and are therefore more alike than two random rows - a group of <em>rows</em>, not necessarily of people. It can be <strong>several rows from the same person</strong> (e.g.&nbsp;repeated measurements over time), all patients at the <strong>same hospital</strong>, or <strong>siblings</strong> in the same family. So a person is a cluster only if they appear in several rows; if you have exactly one row per person, there is no person cluster. Rows in the same cluster are correlated because they share something, and that breaks the assumption of independent rows. You have two choices:</p>
 <ul>
-<li><strong>Cluster-robust standard errors</strong> (the fold-out above): keep your model, but correct the confidence intervals so they account for the correlation. The effect estimate is <strong>unchanged</strong>; you still get <strong>one overall effect</strong>.</li>
+<li><strong>Cluster-robust standard errors</strong> (the section above): keep your model, but correct the confidence intervals so they account for the correlation. The effect estimate is <strong>unchanged</strong>; you still get <strong>one overall effect</strong>.</li>
 <li><strong>Mixed model (random effects):</strong> let each cluster have <strong>its own baseline level</strong> in the model (a <em>random intercept</em>) - e.g.&nbsp;each hospital gets its own baseline risk, instead of the model pretending all hospitals are the same. (To “model the cluster” means exactly that: building the groups’ differences into the model instead of ignoring them.) “Mixed” = it mixes <strong>fixed effects</strong> (the usual coefficients, the same for everyone, e.g.&nbsp;the exposure effect) with <strong>random effects</strong> (the variation between clusters).</li>
 </ul>
 <p>Choose a <strong>mixed model</strong> when the clustering structure is itself of interest, when you have <strong>repeated measurements</strong> or <strong>many small clusters</strong>, or when you want to separate variation <em>within</em> and <em>between</em> clusters. In R: <a href="https://CRAN.R-project.org/package=lme4"><code>lme4</code></a> (<code>glmer()</code>/<code>lmer()</code>), and <a href="https://CRAN.R-project.org/package=coxme"><code>coxme</code></a> for a Cox model. A thorough treatment is beyond this page.</p>
@@ -837,7 +829,7 @@ Why not? (click)
 </ul>
 <p>On non-linear relationships (splines):</p>
 <ul>
-<li>Harrell, <em>Regression Modeling Strategies</em>, and <a href="https://CRAN.R-project.org/package=rms">the <code>rms</code> package</a> - the standard reference on flexible modelling with splines.</li>
+<li>Harrell, <em>Regression Modeling Strategies</em>, and <a href="https://CRAN.R-project.org/package=rms">the <code>rms</code> package</a> - a standard reference on flexible modelling with splines.</li>
 </ul>
 <p>On mediation (when you want to split an effect into a <strong>direct</strong> part and an <strong>indirect</strong> part that goes through an intermediate variable):</p>
 <ul>

@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-19">
+<meta name="dcterms.date" content="2026-11-23">
 <meta name="description" content="Extract drug exposure from LMDB, the Danish Prescription Register, in R: filter ATC codes for your cohort, define users, and tell products apart with vnr.">
 
 <title>Medication (ATC) from LMDB – Register Guide</title>
@@ -596,14 +596,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#exposure-outcome-or-covariate-same-extract" id="toc-exposure-outcome-or-covariate-same-extract" class="nav-link active" data-scroll-target="#exposure-outcome-or-covariate-same-extract">Exposure, outcome or covariate? Same extract</a></li>
-  <li><a href="#the-pattern" id="toc-the-pattern" class="nav-link" data-scroll-target="#the-pattern">The pattern</a></li>
-  <li><a href="#defining-users" id="toc-defining-users" class="nav-link" data-scroll-target="#defining-users">From dispensings to “is this person a user?”</a></li>
+  <li><a href="#coverage" id="toc-coverage" class="nav-link active" data-scroll-target="#coverage">What LMDB covers, and what it does not</a></li>
+  <li><a href="#roles" id="toc-roles" class="nav-link" data-scroll-target="#roles">Exposure, outcome or covariate: one extract, different date filters</a></li>
+  <li><a href="#the-pattern" id="toc-the-pattern" class="nav-link" data-scroll-target="#the-pattern">Extract the dispensings for your cohort</a></li>
+  <li><a href="#defining-users" id="toc-defining-users" class="nav-link" data-scroll-target="#defining-users">Define users: at least N dispensings within a window</a></li>
   <li><a href="#atc-columns" id="toc-atc-columns" class="nav-link" data-scroll-target="#atc-columns">Which ATC column?</a>
   <ul class="collapse">
   <li><a href="#which-way-should-you-write-the-filter" id="toc-which-way-should-you-write-the-filter" class="nav-link" data-scroll-target="#which-way-should-you-write-the-filter">Which way should you write the filter?</a></li>
+  <li><a href="#atc-level-grouping" id="toc-atc-level-grouping" class="nav-link" data-scroll-target="#atc-level-grouping">What the level columns are for: grouping</a></li>
   </ul></li>
-  <li><a href="#atc-is-not-enough-same-substance-different-product" id="toc-atc-is-not-enough-same-substance-different-product" class="nav-link" data-scroll-target="#atc-is-not-enough-same-substance-different-product">ATC is not enough: same substance, different product</a></li>
+  <li><a href="#same-atc-different-product" id="toc-same-atc-different-product" class="nav-link" data-scroll-target="#same-atc-different-product">Tell products apart when they share an ATC code: <code>vnr</code> and <code>indo</code></a></li>
+  <li><a href="#exposure-time" id="toc-exposure-time" class="nav-link" data-scroll-target="#exposure-time">From dispensings to exposure time: DDD, PDC and MPR</a></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/medication.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/medication.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -614,7 +617,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./extract-variables.html">Variables and dataset · 11-12</a></li><li class="breadcrumb-item"><a href="./extract-variables.html">11 - Extract variables</a></li><li class="breadcrumb-item"><a href="./medication.html">Medication (ATC)</a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title">Medication (ATC)</h1>
-<p class="subtitle lead">Extract drug exposure from LMDB - filtered to your cohort</p>
+<p class="subtitle lead">Turn dispensed prescriptions in LMDB into a first-dispensing date, a user flag or exposure time for your cohort</p>
 </div>
 
 <div>
@@ -630,7 +633,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2026</p>
+      <p class="date">November 23, 2026</p>
     </div>
   </div>
   
@@ -642,37 +645,38 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Prescription medication lives in <strong>LMDB</strong> (the Prescription Register). The register has <strong>one row per dispensed prescription</strong>, so the same person can have hundreds of rows. The two columns you almost always use are:</p>
+<p>Use this page to extract dispensed prescriptions for your cohort and turn them into a variable: a first dispensing date, a user/non-user flag, or the raw material for exposure time. You need your cohort from <a href="./build-study-population.html">Phase 10</a>, and you end with an <code>.rds</code> file of dispensings, one row per fill, that the later steps on this page reduce to one row per person.</p>
+<p>Prescriptions are in LMDB (Lægemiddeldatabasen). In the literature the same data are described as the Danish National Prescription Registry, the part of the Register of Medicinal Product Statistics that holds prescriptions filled by individuals at community pharmacies (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al. 2017</a>). LMDB has one row per dispensed prescription, so one person can have hundreds of rows. The two columns you almost always use are:</p>
 <ul>
-<li><strong><code>atc</code>:</strong> the drug’s ATC code (Anatomical Therapeutic Chemical), e.g. <code>"A10BA02"</code> for metformin.</li>
-<li><strong><code>eksd</code>:</strong> the dispensing date (when the prescription was collected) - use it as the prescription date, just like <code>date_contact</code> in LPR.</li>
+<li><strong><code>atc</code>:</strong> the drug’s ATC code (Anatomical Therapeutic Chemical classification), for example <code>"A10BA02"</code> for metformin.</li>
+<li><strong><code>eksd</code>:</strong> the dispensing date, the day the prescription was collected at the pharmacy. Use it as the prescription date, in the same way as <code>date_contact</code> in LPR (the National Patient Register).</li>
 </ul>
-<p><strong>LMDB starts in 1995, and is considered complete and valid from that year onward</strong> (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al.&nbsp;2017</a>). There is no medication history before that, so a lookback window that reaches further back is empty rather than negative - and “no prescriptions” will look like “not a user”.</p>
-<p>The full confirmed column list is in <a href="./register-reference.html#lmdb">Register reference</a>.</p>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>LMDB only covers prescriptions dispensed at community pharmacies.</strong> Three things are therefore systematically missing: drugs given <em>during hospital admission</em>, drugs dispensed directly by hospitals (e.g.&nbsp;chemotherapy and immunosuppressants) and drugs for certain institutionalized people (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al.&nbsp;2017</a>). If you need in-hospital medication, a newer <em>Hospital Medication Register</em> (Sygehusmedicinregisteret, data from 2018) exists, but it is still unvalidated, incomplete and accessed via the Danish Health Data Authority, not DST - use it with caution (<a href="https://doi.org/10.2147/CLEP.S487838">Rosenkrantz et al.&nbsp;2024</a>).</p>
-<p><strong>Over-the-counter medicine is not in LMDB either</strong> (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al. 2017</a>). For medicine that can be bought both with and without a prescription, LMDB only shows the prescribed part.</p>
-</div>
-</div>
-</div>
+<p>The full column list is in <a href="./register-reference.html#lmdb">Overview of registers</a>.</p>
+<section id="coverage" class="level2">
+<h2 class="anchored" data-anchor-id="coverage">What LMDB covers, and what it does not</h2>
+<p>LMDB starts in 1995, and the data are considered complete and valid from that year (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al.&nbsp;2017</a>). There is no medication history before 1995, so a lookback window that reaches further back is empty for everyone, and “no prescriptions” will look like “not a user”.</p>
+<p>LMDB only holds prescriptions dispensed at community pharmacies. The following are therefore missing (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al. 2017</a>):</p>
+<ul>
+<li>drugs given during hospital admission;</li>
+<li>drugs supplied directly by hospitals or treatment centres (for example chemotherapy, immunosuppressants and methadone for substance use);</li>
+<li>drugs for certain institutionalised people (typically because of psychiatric illness);</li>
+<li>over-the-counter medicine. For a drug that can be bought both with and without a prescription, LMDB only shows the prescribed part.</li>
+</ul>
+<p>For in-hospital medication there is a newer Hospital Medication Register (Sygehusmedicinregisteret) with data from May 2018. Its data quality has not yet been evaluated, and some clinical specialties are missing (<a href="https://doi.org/10.2147/CLEP.S487838">Rosenkrantz et al.&nbsp;2024</a>). It is held by the Danish Health Data Authority.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Before 1996, a child’s prescriptions are filed under the mother’s <code>pnr</code>, not the child’s.</strong> Community pharmacies issued prescriptions for children under the mother’s name until 1996, switching to the child’s own name only after that (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al.&nbsp;2017</a>). If your cohort includes children with drug exposure before 1996, filtering LMDB by the child’s own <code>pnr</code> silently misses those prescriptions entirely - they are not missing, they are recorded under a different person’s <code>pnr</code>.</p>
+<p><strong>Until 1996, a child’s prescriptions were recorded under the mother, not the child.</strong> Prescriptions for children were issued in the mother’s name until 1996, and in the child’s own name after that (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al. 2017</a>). If your cohort includes children with drug exposure in those years, filtering LMDB by the child’s own <code>pnr</code> misses those prescriptions without any error: they are in the register, but under another person’s <code>pnr</code>. The source gives no exact date in 1996, so the cautious choice is to treat a child’s dispensings as reliable from 1997.</p>
 </div>
 </div>
 </div>
-<section id="exposure-outcome-or-covariate-same-extract" class="level2">
-<h2 class="anchored" data-anchor-id="exposure-outcome-or-covariate-same-extract">Exposure, outcome or covariate? Same extract</h2>
-<p>Medication can be all three. It is solved <strong>exactly as for diagnoses</strong> (<a href="./extract-from-lpr.html">Extract from LPR</a>): you make <strong>one extract</strong> of the dispensings, and the <strong>role is decided by when <code>eksd</code> falls relative to <code>index_date</code></strong> - not by a separate page per role:</p>
+</section>
+<section id="roles" class="level2">
+<h2 class="anchored" data-anchor-id="roles">Exposure, outcome or covariate: one extract, different date filters</h2>
+<p>Medication can be an exposure, a covariate or an outcome. As for diagnoses (<a href="./extract-from-lpr.html">Extract from LPR</a>), you make one extract of the dispensings, and the role is decided by where <code>eksd</code> falls relative to <code>index_date</code>:</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -709,11 +713,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>So you do not write three different medication extracts. You write one, and the <strong>date filter relative to index</strong> determines the role.</p>
+<p>If the first dispensing defines the index date, require a period before it with no dispensing of the drug (a washout). Otherwise people who have been on the drug for years enter as new users. LMDB starts in 1995, so nobody has a washout that reaches further back than that.</p>
 </section>
 <section id="the-pattern" class="level2">
-<h2 class="anchored" data-anchor-id="the-pattern">The pattern</h2>
-<p>ATC codes have <strong>no D-prefix</strong> (unlike ICD in LPR, see <a href="./understand-lpr.html#icd-codes-and-the-d-prefix">Understand LPR</a>), so you match directly on the start of the code. <code>read_register()</code> requires fastreg set up with the path to your registers - see <a href="./parquet-and-fastreg.html#convert-sas-to-parquet">Phase 4</a> if you did not convert them from SAS yourself:</p>
+<h2 class="anchored" data-anchor-id="the-pattern">Extract the dispensings for your cohort</h2>
+<p>ATC codes have no D-prefix (unlike ICD codes in LPR, see <a href="./understand-lpr.html#icd-codes-and-the-d-prefix">Understand LPR</a>), so you match directly on the start of the code. <code>read_register()</code> requires fastreg set up with the path to your registers, see <a href="./parquet-and-fastreg.html#convert-sas-to-parquet">Parquet and fastreg</a> if you did not convert them from SAS yourself.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register()</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(arrow) <span class="co"># open_dataset() - fallback without fastreg</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
@@ -735,11 +739,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication_rx, <span class="st">"path/to/extract_medication_rx.rds"</span>) <span class="co"># keep all fills: the user definition below needs them</span></span>
 <span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication, <span class="st">"path/to/extract_medication.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>substr(atc, 1, 5) == "A10BJ"</code> matches the whole ATC level (all GLP-1 analogues). For several groups at once, use <a href="./extract-from-lpr.html">regex</a> as in LPR: <code>grepl("^A10BJ|^A10BA", atc)</code>. The code-matching pattern (regex, <code>%in%</code> with a code list, <code>!!</code>) is explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Function guide</a>. Reducing to <strong>one row per person</strong> is explained in <a href="./long-wide.html">Long ↔︎ wide format</a> - here <code>slice(1)</code> for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).</p>
+<p><code>substr(atc, 1, 5) == "A10BJ"</code> matches the whole ATC group (all GLP-1 analogues; GLP-1 is glucagon-like peptide-1). For several groups at once, use a regular expression as in LPR: <code>grepl("^A10BJ|^A10BA", atc)</code>. Code matching (regex, <code>%in%</code> with a code list, <code>!!</code>) is explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Functions: overview</a>. Reducing to one row per person is explained in <a href="./long-wide.html">Long ↔︎ wide format</a>. Here it is <code>slice(1)</code> for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).</p>
 </section>
 <section id="defining-users" class="level2">
-<h2 class="anchored" data-anchor-id="defining-users">From dispensings to “is this person a user?”</h2>
-<p>One dispensing is weak evidence of treatment: people fill a prescription once and stop. A common definition is therefore <strong>at least two dispensings within a window</strong>, with the onset date being the date the definition is first met.</p>
+<h2 class="anchored" data-anchor-id="defining-users">Define users: at least N dispensings within a window</h2>
+<p>One dispensing is weak evidence of treatment, because some people fill a prescription once and stop. A common definition is therefore at least two dispensings within a window, with the onset date being the date the definition is first met.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># group_by, mutate, lag, filter, summarise</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Does the person have `min_dispensings` fills inside `window_days`?</span></span>
@@ -760,25 +764,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>users <span class="ot">&lt;-</span> <span class="fu">flag_users</span>(medication_rx, <span class="at">min_dispensings =</span> <span class="dv">2</span>, <span class="at">window_days =</span> <span class="dv">365</span>) <span class="co"># ALL fills, not the first-only table</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The two numbers are <strong>your</strong> choices, not standards - write them into your methods. One dispensing is enough for a drug taken once; a chronic treatment usually wants two or more.</p>
-<p>This is also how medication can enter a <strong>comorbidity</strong> definition: for conditions treated largely outside hospital, LMDB catches people LPR never sees. Whether to define a condition from diagnoses, prescriptions or both is a design decision - see <a href="./comorbidity.html#diagnoses-prescriptions-or-both">Comorbidity - diagnoses, prescriptions, or both?</a>.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong><code>arrange()</code> before <code>lag()</code>, always.</strong> <code>lag()</code> works on row order, not on dates. If the rows are not sorted by person and date, <code>gap_days</code> is computed against an arbitrary earlier row and the result is quietly wrong rather than an error.</p>
+<p><strong>Sort with <code>arrange()</code> before <code>lag()</code>.</strong> <code>lag()</code> works on row order, not on dates. If the rows are not sorted by person and date, <code>gap_days</code> is computed against an arbitrary earlier row, and the result is wrong without any error.</p>
 </div>
 </div>
 </div>
+<p>The two numbers are your choices, not standards, so write them into your methods. One dispensing can be enough for a drug taken once; for a chronic treatment two or more is the usual requirement.</p>
+<p>The same definition is how medication enters a comorbidity definition: for conditions treated largely outside hospital, LMDB catches people LPR never sees. Whether to define a condition from diagnoses, prescriptions or both is discussed on <a href="./comorbidity.html#diagnoses-prescriptions-or-both">Comorbidity</a>.</p>
 <details>
 <summary>
-If you need many ATC conditions at once (one LMDB pass)
+Many ATC conditions at once: <code>regmorbidity::mb_extract_medication_batch()</code>
 </summary>
 <p>The recipe above is the one to keep for one drug, or a few. It opens LMDB with <code>read_register()</code>, filters, collects, and calls <code>flag_users()</code>. Use this fold-out only when you need many ATC conditions, each with its own “N dispensings within a window” rule. Doing that with the recipe above scans LMDB once per condition.</p>
-<p><code>mb_extract_medication_batch()</code> in <a href="https://github.com/sara-schwartz/regmorbidity"><code>regmorbidity</code></a> puts every condition that shares the same <code>(min_prescriptions, window_days)</code> into one query, and only the onset rows come back to R. In the bundled code list, pain is 4 dispensings within 365 days. The other ATC conditions are 2 within 365 days, so those are one query and pain is a second. Onset is the dispensing that meets the rule. This is not a score, and it is not a comorbidity index.</p>
-<p>On 26 September 2026 the 15 ATC conditions then in the bundled list (14 on the 2-within-365 rule, plus pain) matched <code>mb_flag_users()</code> on the real LMDB at DST. The bundled list today has 16 conditions on the 2-within-365 rule, plus pain. The DST check covers those 15, not automatically a condition added later.</p>
+<p><code>mb_extract_medication_batch()</code> in <a href="https://github.com/sara-schwartz/regmorbidity"><code>regmorbidity</code></a> puts every condition that shares the same <code>(min_prescriptions, window_days)</code> into one query, and only the onset rows come back to R. In the bundled code list, pain is 4 dispensings within 365 days. The other ATC conditions are 2 within 365 days, so those are one query and pain is a second. Onset is the dispensing that meets the rule. The package is on GitHub only and in development; it computes no score and is not a comorbidity index.</p>
+<p>On 26 September 2026 the 15 ATC conditions then in the bundled list (14 on the 2-within-365 rule, plus pain) matched <code>mb_flag_users()</code> on the real LMDB at DST. Conditions have been added to the list since. The DST check covers those 15, not automatically a condition added later.</p>
 <p>Do not use <code>mb_extract_diagnosis_batch()</code> from this page. It has not been run on DST.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># remotes::install_github("sara-schwartz/regmorbidity")</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(regmorbidity) <span class="co"># mb_extract_medication_batch(), mb_codelist()</span></span>
@@ -787,36 +791,37 @@ If you need many ATC conditions at once (one LMDB pass)
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)        <span class="co"># tbl, rename_with</span></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># A dbplyr lazy table on one plain DuckDB connection, as in</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># "Several registers on one DuckDB connection". Not read_register(),</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co"># and not duckplyr::read_parquet_duckdb(): those are duckplyr tables,</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># and this function's window step is written for dbplyr.</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">duckdb</span>())</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"CREATE VIEW lmdb AS SELECT * FROM read_parquet(</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="st">  'E:/workdata/[projectnumber]/cleaned-data/parquet-registers/lmdb/**/*.parquet',</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="st">  hive_partitioning = true)"</span>)</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>lmdb <span class="ot">&lt;-</span> <span class="fu">tbl</span>(con, <span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower)</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># from is required. Omitting it is an error, not "start at the beginning".</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co"># 1997-01-01 is the package's floor for the years when a child's</span></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co"># prescription was often filed under the mother's CPR. The warning higher</span></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co"># up on this page, citing Pottegård et al. 2017, is about before 1996.</span></span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Pass a later date if your own study starts later.</span></span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>rx <span class="ot">&lt;-</span> <span class="fu">mb_extract_medication_batch</span>(</span>
-<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>  lmdb,</span>
-<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">codes =</span> <span class="fu">mb_codelist</span>(),          <span class="co"># or conditions = c("diabetes", "pain")</span></span>
-<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">ids =</span> cohort<span class="sc">$</span>pnr,               <span class="co"># the same cohort as the recipe above</span></span>
-<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">code_col =</span> <span class="st">"atc"</span>,               <span class="co"># the full code, not atc2 or atc4</span></span>
-<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">date_col =</span> <span class="st">"eksd"</span>,</span>
-<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">from =</span> <span class="fu">as.Date</span>(<span class="st">"1997-01-01"</span>),</span>
-<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">outdir =</span> <span class="st">"path/to/medication-conditions"</span></span>
-<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># "Several registers on one DuckDB connection". This function's window</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co"># step is written for dbplyr. duckplyr::read_parquet_duckdb() gives a</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># duckplyr table, and so does read_register() from fastreg 0.14.3 on</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co"># (the CRAN version, 0.14.1, gives a dbplyr table). The plain connection</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># works whichever fastreg version you have.</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>con <span class="ot">&lt;-</span> <span class="fu">dbConnect</span>(<span class="fu">duckdb</span>())</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="fu">dbExecute</span>(con, <span class="st">"CREATE VIEW lmdb AS SELECT * FROM read_parquet(</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="st">  'path/to/lmdb/**/*.parquet',</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="st">  hive_partitioning = true)"</span>)</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>lmdb <span class="ot">&lt;-</span> <span class="fu">tbl</span>(con, <span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower)</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="co"># from is required. Omitting it is an error, not "start at the beginning".</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co"># 1997-01-01 is what the package README recommends: children's prescriptions</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co"># were recorded under the mother until 1996 (see the warning higher up on</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co"># this page). Pass a later date if your own study starts later.</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>rx <span class="ot">&lt;-</span> <span class="fu">mb_extract_medication_batch</span>(</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>  lmdb,</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">codes =</span> <span class="fu">mb_codelist</span>(),          <span class="co"># or conditions = c("diabetes", "pain")</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">ids =</span> cohort_pnrs,              <span class="co"># the same cohort as the recipe above</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">code_col =</span> <span class="st">"atc"</span>,               <span class="co"># the full code, not atc2 or atc4</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">date_col =</span> <span class="st">"eksd"</span>,</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">from =</span> <span class="fu">as.Date</span>(<span class="st">"1997-01-01"</span>),</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>  <span class="at">outdir =</span> <span class="st">"path/to/medication-conditions"</span></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>code_col</code> has to be <code>atc</code>. The shorter columns (<code>atc1</code> to <code>atc4</code>) do not hold the full code the list is matched against.</p>
 <p>The result is one <code>.rds</code> per condition in <code>outdir</code>. Resume skips a rule-batch only when every condition in that batch already has a file. If one file in the batch is missing, the whole batch runs again and overwrites the files that were already there.</p>
 </details>
 </section>
 <section id="atc-columns" class="level2">
 <h2 class="anchored" data-anchor-id="atc-columns">Which ATC column?</h2>
-<p>LMDB does not hold the ATC code once. It holds it <strong>five times</strong>, at five levels, in five separate columns. DST’s <a href="https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html">variable list for LMDB</a> labels them <code>ATC-kode detaljeret</code> and <code>ATC-niveau 1</code> to <code>ATC-niveau 4</code>. They are <strong>cumulative</strong>: each level repeats the levels above it and adds its own characters.</p>
+<p>LMDB does not hold the ATC code once. It holds it five times, at five levels, in five separate columns. DST’s <a href="https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html">variable list for LMDB</a> labels them <code>ATC-kode detaljeret</code> and <code>ATC-niveau 1</code> to <code>ATC-niveau 4</code>. They are cumulative: each level repeats the levels above it and adds its own characters.</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 10%">
@@ -872,7 +877,7 @@ If you need many ATC conditions at once (one LMDB pass)
 </tr>
 </tbody>
 </table>
-<p>The column names and their levels come from DST’s variable list. The character counts are <strong>not</strong> stated there; they follow from the WHO standard, where level 2 is by definition the three-character code (<a href="https://atcddd.fhi.no/atc/structure_and_principles/">WHO Collaborating Centre for Drug Statistics Methodology</a>).</p>
+<p>The column names and their levels come from DST’s variable list. The character counts are not stated there; they follow from the WHO standard, where level 2 is by definition the three-character code (<a href="https://atcddd.fhi.no/atc/structure_and_principles/">WHO Collaborating Centre for Drug Statistics Methodology</a>).</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -883,7 +888,7 @@ If you need many ATC conditions at once (one LMDB pass)
 </div>
 </div>
 </div>
-<p><strong>So filter on <code>atc</code>, not on the level columns.</strong> It is seven characters, it contains every level as a prefix, and <code>substr(atc, 1, 3)</code> gives you exactly what <code>atc2</code> holds. There is no case where a level column lets you filter something <code>atc</code> cannot:</p>
+<p>So filter on <code>atc</code>, not on the level columns. It is seven characters, it contains every level as a prefix, and <code>substr(atc, 1, 3)</code> gives you exactly what <code>atc2</code> holds. There is no case where a level column lets you filter something <code>atc</code> cannot:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, select, collect</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Ischaemic heart disease treatment, defined as organic nitrates (C01DA):</span></span>
@@ -894,7 +899,7 @@ If you need many ATC conditions at once (one LMDB pass)
 <p>Use <code>^</code> to anchor the pattern at the start of the code. It costs nothing and it is the right habit from LPR, where a code genuinely can turn up mid-string.</p>
 <section id="which-way-should-you-write-the-filter" class="level3">
 <h3 class="anchored" data-anchor-id="which-way-should-you-write-the-filter">Which way should you write the filter?</h3>
-<p>There are two ways to keep the codes you want, and <strong>the length of your codes decides which one to use</strong>. ATC codes are not all the same length: <code>N02</code> is three characters, <code>A10BA</code> is five.</p>
+<p>There are two ways to keep the codes you want, and the length of your codes decides which one to use. ATC codes are not all the same length: <code>N02</code> is three characters, <code>A10BA</code> is five.</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 40%">
@@ -910,12 +915,12 @@ If you need many ATC conditions at once (one LMDB pass)
 </thead>
 <tbody>
 <tr class="odd">
-<td>All codes have the <strong>same</strong> length</td>
+<td>All codes have the same length</td>
 <td><code>substr()</code> + <code>%in%</code></td>
 <td>Faster, and easy to read</td>
 </tr>
 <tr class="even">
-<td>Codes have <strong>different</strong> lengths</td>
+<td>Codes have different lengths</td>
 <td><code>grepl()</code> with <code>^</code></td>
 <td>Handles any length</td>
 </tr>
@@ -947,32 +952,31 @@ If you need many ATC conditions at once (one LMDB pass)
 </div>
 </div>
 </div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
+<div class="callout callout-style-simple callout-note callout-titled">
+<div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="false" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-body-container">
-<p><strong>Does it save memory to filter on <code>atc2</code> first?</strong> No.&nbsp;It is a reasonable thing to wonder, since <code>atc2</code> is the short column, but the filter runs <strong>before</strong> anything is loaded: nothing reaches your memory until <code>collect()</code>, and what lands there is the rows that survived, which are the same rows either way. <code>substr(atc, 1, 3)</code> gives you exactly what <code>atc2</code> contains, so the two are the same query.</p>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Does it save memory to filter on <code>atc2</code> first? (No)
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse">
+<div class="callout-body-container callout-body">
+<p>It is a reasonable thing to wonder, since <code>atc2</code> is the short column, but the filter runs before anything is loaded: nothing reaches your memory until <code>collect()</code>, and what lands there is the rows that survived, which are the same rows either way. <code>substr(atc, 1, 3)</code> gives you exactly what <code>atc2</code> contains, so the two are the same query.</p>
 <p>There is a practical catch as well. Comorbidity definitions often need more than three characters (<code>A10BA</code> rather than <code>A10</code>), and <code>atc2</code> cannot narrow that far. You would filter on <code>atc2</code>, then bring in <code>atc</code> afterwards to get down to the codes you actually wanted: two steps for a result one step gives you. And if a code longer than three characters is compared against <code>atc2</code> on its own, it matches nothing and returns no rows without an error, so it is worth doing in one step on <code>atc</code>.</p>
 </div>
 </div>
 </div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>What the level columns are actually for: grouping, not filtering.</strong> When you want a descriptive breakdown by therapeutic subgroup, <code>atc2</code> is a ready-made grouping column and saves you a <code>substr()</code>:</p>
+</section>
+<section id="atc-level-grouping" class="level3">
+<h3 class="anchored" data-anchor-id="atc-level-grouping">What the level columns are for: grouping</h3>
+<p>When you want a descriptive breakdown by therapeutic subgroup, <code>atc2</code> is a ready-made grouping column and saves you a <code>substr()</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">read_register</span>(<span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span> <span class="co"># the register itself: atc2 was not selected into medication_rx</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(atc2, <span class="at">sort =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># dispensings per therapeutic subgroup</span></span>
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>That is the use case. Filtering is not.</p>
-</div>
-</div>
-</div>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -992,31 +996,19 @@ If you need many ATC conditions at once (one LMDB pass)
 <span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">20</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Expect <code>C</code> / <code>C09</code> / <code>C09A</code> / <code>C09AA</code> / <code>C09AA05</code> across a row: each column repeating the one before it. If instead you see isolated fragments (<code>09</code> in <code>atc2</code>), every <code>^</code>-anchored pattern in this section is wrong for your delivery and you should filter on <code>atc</code> only.</p>
-<p>Note that <code>names(lmdb)</code> will <strong>not</strong> answer this. On a lazy connection it returns the connection object’s own parts (<code>src</code>, <code>lazy_query</code>), not the table’s columns, so it looks as though the columns are missing. <code>colnames()</code> works on the DuckDB object <code>read_register()</code> returns; if you opened LMDB with <code>open_dataset()</code> instead, use <code>names(collect(head(lmdb, 0)))</code> - see <a href="./inspect-data.html#the-shape">Phase 7 - The shape</a>.</p>
+<p>Note that <code>names(lmdb)</code> may not answer this. On a dbplyr table (what <code>read_register()</code> from CRAN fastreg 0.14.1 returns) it gives the object’s own parts (<code>src</code>, <code>lazy_query</code>), not the table’s columns, so it looks as though the columns are missing. <code>colnames()</code> works on the DuckDB object <code>read_register()</code> returns; if you opened LMDB with <code>open_dataset()</code> instead, use <code>names(collect(head(lmdb, 0)))</code> - see <a href="./inspect-data.html#the-shape">Phase 7, Inspect your data</a>.</p>
 </div>
 </div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong><code>atc3</code> and <code>atc4</code> are not filled in for every product.</strong> Not all preparations are classified to that depth, so do not assume the columns are complete. Count the blanks in your own extract before you build anything on them.</p>
-</div>
-</div>
-</div>
+<p><code>atc3</code> and <code>atc4</code> are not filled in for every product. Not all preparations are classified to that depth, so do not assume the columns are complete. Count the blanks in your own extract before you build anything on them.</p>
 </section>
 </section>
-<section id="atc-is-not-enough-same-substance-different-product" class="level2">
-<h2 class="anchored" data-anchor-id="atc-is-not-enough-same-substance-different-product">ATC is not enough: same substance, different product</h2>
-<p>ATC classifies by <strong>active substance</strong>, not by product or indication. Two brands with the same substance therefore get the <strong>same ATC</strong> - and cannot be told apart on <code>atc</code> alone:</p>
-<ul>
-<li><strong>Ozempic</strong> (semaglutide, type 2 diabetes) and <strong>Wegovy</strong> (semaglutide, weight loss) both have <strong>ATC <code>A10BJ06</code></strong>. Filter on ATC only, and you mix diabetes treatment together with weight-loss treatment.</li>
-</ul>
+<section id="same-atc-different-product" class="level2">
+<h2 class="anchored" data-anchor-id="same-atc-different-product">Tell products apart when they share an ATC code: <code>vnr</code> and <code>indo</code></h2>
+<p>ATC classifies by active substance, not by product or indication. Two brands with the same substance therefore get the same ATC code and cannot be told apart on <code>atc</code> alone. Ozempic (semaglutide, type 2 diabetes) and Wegovy (semaglutide, weight loss) both have <code>A10BJ06</code>: filter on ATC only, and you mix diabetes treatment with weight-loss treatment.</p>
 <p>Two columns separate them:</p>
 <ul>
 <li><strong><code>vnr</code> (varenummer):</strong> the unique key to the actual product (package). It is the only reliable way to isolate one specific product. The <code>vnr</code>-to-product lookup comes from the medicine taxonomy (KAT / Danish Health Data Authority); <code>name</code>/<code>packtext</code> hold the product text if you want to recognise it by eye.</li>
-<li><strong><code>indo</code> (indication code):</strong> a <em>coded</em> indication (from the Medicinpriser catalogue, LMS 25), not free text. The code is recorded <strong>only</strong> when the prescriber picks an indication from the drop-down menu in the electronic prescription. <strong>If the doctor types the indication as free text instead, it is not transferred to the register</strong> and <code>indo</code> is left blank. So it can in principle separate the same substance across indications, but it is <strong>often empty</strong>. Use <code>vnr</code> as the primary product key and <code>indo</code> as a supporting signal, not a clean filter.</li>
+<li><strong><code>indo</code> (indication code):</strong> a coded indication (from the Medicinpriser catalogue, LMS 25), not free text. The code is recorded only when the prescriber picks an indication from the drop-down menu in the electronic prescription. If the doctor types the indication as free text instead, it is not transferred to the register and <code>indo</code> is left blank. So it can in principle separate the same substance across indications, but it is often empty. Use <code>vnr</code> as the primary product key and <code>indo</code> as a supporting signal, not a clean filter.</li>
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Build your own list of the varenumbers that belong to the product</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co">#    (look them up in the medicine taxonomy - one product has several varenumbers):</span></span>
@@ -1026,24 +1018,40 @@ If you need many ATC conditions at once (one LMDB pass)
 <span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>medication_rx <span class="sc">%&gt;%</span></span>
 <span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(atc <span class="sc">==</span> <span class="st">"A10BJ06"</span>) <span class="sc">%&gt;%</span> <span class="co"># semaglutide (Ozempic AND Wegovy)</span></span>
 <span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(vnr <span class="sc">%in%</span> <span class="sc">!!</span>ozempic_vnr) <span class="co"># keep only rows with a vnr from your list</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Keep the two names in the last line apart: <strong><code>vnr</code></strong> (on its own) is the register’s <em>column</em> holding the varenummer - the product’s ID, just as <code>pnr</code> is the person’s ID. <strong><code>ozempic_vnr</code></strong> is your <em>own</em> R vector of the varenumbers you looked up for Ozempic; you choose the name yourself (same pattern as the code list in <a href="./extraction-step-by-step.html">Extracting data step by step</a>). <code>%in%</code> keeps the rows where <code>vnr</code> is found in your list, and <code>!!</code> sends your local list into the lazy query (explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Function guide</a>).</p>
+<p>Keep the two names in the last line apart: <code>vnr</code> on its own is the register’s column holding the varenummer, the product’s ID, just as <code>pnr</code> is the person’s ID. <code>ozempic_vnr</code> is your own R vector of the varenumbers you looked up for Ozempic; you choose the name yourself (same pattern as the code list in <a href="./extraction-step-by-step.html">Extracting data step by step</a>). <code>%in%</code> keeps the rows where <code>vnr</code> is found in your list, and <code>!!</code> sends your local list into the lazy query (explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Functions: overview</a>).</p>
 <div class="callout callout-style-simple callout-note">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Which <code>vnr</code> belongs to which product</strong> depends on package and strength (one product has several varenumbers). Look them up in the medicine taxonomy for your exact study period rather than assuming, and document the list in your code. For <code>indo</code>, <a href="https://pubmed.ncbi.nlm.nih.gov/37889961/">Harbi &amp; Pottegård 2024</a> found a recorded indication code on 82% of prescriptions (about 88% corrected) and almost 100% correct when present - but missingness is markedly higher before 1 October 2017 (when electronic prescribing became mandatory) and varies by drug class (about 8% missing for systemic anti-infectives versus 28% for blood-related agents). 5.6-36% of codes are <strong>nonspecific</strong> (e.g.&nbsp;“for the heart” for beta-blockers); whether a nonspecific code is usable depends on your question. The value set is the Danish Health Data Authority’s <a href="https://sundhedsdatastyrelsen.dk/indberetning/klassifikationer/klassifikation-af-laegemidler">drug classification</a> (Medicinpriser). As a side note: a <em>validly recorded</em> code does not mean the prescriber chose the <em>correct</em> indication - drop-down menus make wrong choices easy, so the code is not necessarily the clinical truth.</p>
+<p>Which <code>vnr</code> belongs to which product depends on package and strength (one product has several varenumbers). Look them up in the medicine taxonomy for your exact study period rather than assuming, and document the list in your code. For <code>indo</code>, <a href="https://doi.org/10.1097/EDE.0000000000001666">Harbi &amp; Pottegård 2024</a> found a recorded indication code on 82% of prescriptions (about 88% corrected) and almost 100% correct when present, but missingness is markedly higher before 1 October 2017 (when electronic prescribing became mandatory) and varies by drug class (about 8% missing for systemic anti-infectives versus 28% for blood-related agents). 5.6-36% of codes are nonspecific (e.g.&nbsp;“for the heart” for beta-blockers); whether a nonspecific code is usable depends on your question. The value set is the Danish Health Data Authority’s <a href="https://sundhedsdatastyrelsen.dk/indberetning/klassifikationer/klassifikation-af-laegemidler">drug classification</a> (Medicinpriser). A validly recorded code does not mean the prescriber chose the correct indication: drop-down menus make wrong choices easy, so the code is not necessarily the clinical truth.</p>
 </div>
 </div>
 </div>
+</section>
+<section id="exposure-time" class="level2">
+<h2 class="anchored" data-anchor-id="exposure-time">From dispensings to exposure time: DDD, PDC and MPR</h2>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>A dispensing is not the same as intake.</strong> <code>eksd</code> tells you the prescription was <em>collected at the pharmacy</em>, not that the patient took the drug, and certainly not for how long. For an exposure that lasts over time - treatment episodes, <em>grace periods</em> (the allowed gap between two prescriptions before a person counts as having stopped) and adherence measures such as <strong>PDC</strong> (<em>proportion of days covered</em>: the share of follow-up time covered by medicine) or <strong>MPR</strong> (<em>medication possession ratio</em>: amount dispensed divided by the length of the period) - you must build <strong>exposure windows</strong> from quantity and strength, not just count dispensings. The relevant LMDB fields are <code>apk</code> (number of packages), <code>packsize</code> (pack size, i.e.&nbsp;units per package) and <code>strnum</code> (the numeric strength; the unit is in <code>strunit</code>). Note that the dosage field itself (<code>doso</code>) is essentially empty (recorded for ~0.06% of prescriptions in the same validation), so dose must be derived from these package fields. Ready-made tools for this are in <a href="./packages-overview.html"><code>heaven</code></a> (<code>medicinMacro()</code> for drug exposure windows from LMDB, and <code>hypertensionMedication()</code> if the exposure you need is antihypertensive treatment, which it defines from ATC codes for you). If your index date or exposure status depends on <em>future</em> medication, you get <a href="./dst-pitfalls.html#immortal-time-bias">immortal time bias</a>: if you require a person to fill the prescription (or two prescriptions) <em>after</em> index to count as exposed, then by construction they survived until that date - and the “immortal” time between index and the first fill makes the exposure look artificially protective. Instead, start follow-up for the exposed at the <em>first</em> dispensing, or treat medication as a <a href="./time-varying.html">time-varying</a> exposure.</p>
+<p><strong>A dispensing is not the same as intake.</strong> <code>eksd</code> tells you the prescription was collected at the pharmacy, not that the patient took the drug, or for how long.</p>
+</div>
+</div>
+</div>
+<p>For an exposure that lasts over time you need exposure windows built from the amount dispensed, not just a count of dispensings. That covers treatment episodes, grace periods (the gap allowed between two prescriptions before a person counts as having stopped) and adherence measures such as PDC (proportion of days covered: the share of follow-up time covered by medicine) and MPR (medication possession ratio: the amount dispensed divided by the length of the period).</p>
+<p>The LMDB columns for the amount are <code>apk</code> (number of packages), <code>packsize</code> (units per package) and <code>strnum</code> (the numeric strength; the unit is in <code>strunit</code>). <code>volume</code> is the number of defined daily doses (DDD) per package (<a href="https://doi.org/10.1093/ije/dyw213">Pottegård et al.&nbsp;2017</a>, table of variables). The DDD is the WHO’s “assumed average maintenance dose per day for a drug used for its main indication in adults”, a unit of measurement and not necessarily the dose your patients were prescribed (<a href="https://atcddd.fhi.no/ddd/definition_and_general_considera/">WHO Collaborating Centre for Drug Statistics Methodology</a>). So <code>apk * volume</code> gives DDDs dispensed, which is a crude duration only if your patients take one DDD a day. DST’s variable list has <code>voltypecode</code> and <code>voltypetxt</code> next to <code>volume</code> but no labels for them; look at the values in your own extract before you rely on <code>volume</code>. The dosage field <code>doso</code> is essentially empty (recorded for about 0.06% of prescriptions in the validation by Harbi &amp; Pottegård), so dose must be derived from the package columns.</p>
+<p>Ready-made tools are in <a href="./packages-overview.html"><code>heaven</code></a>: <code>medicinMacro()</code> estimates prescription lengths and average doses from LMDB, and <code>hypertensionMedication()</code> defines hypertension from the use of at least two classes of antihypertensive drugs.</p>
+<div class="callout callout-style-simple callout-warning">
+<div class="callout-body d-flex">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-body-container">
+<p><strong>Exposure defined by future dispensings gives immortal time bias.</strong> If you require a person to fill a prescription (or two) after index to count as exposed, then by construction they survived until that date, and the time between index and the fill makes the exposure look protective (<a href="./dst-pitfalls.html#immortal-time-bias">immortal time bias</a>). Start follow-up for the exposed at the first dispensing, or treat medication as a <a href="./time-varying.html">time-varying</a> exposure.</p>
 </div>
 </div>
 </div>
@@ -1051,13 +1059,13 @@ If you need many ATC conditions at once (one LMDB pass)
 <section id="see-also" class="level2">
 <h2 class="anchored" data-anchor-id="see-also">See also</h2>
 <ul>
-<li><a href="./extract-from-lpr.html">Extract from LPR</a>: code matching in detail (regex, code lists, <code>!!</code>) - same technique without the D-prefix</li>
+<li><a href="./extract-from-lpr.html">Extract from LPR</a>: code matching in detail (regex, code lists, <code>!!</code>), the same technique without the D-prefix</li>
 <li><a href="./outcomes.html#where-does-your-codelist-come-from">Outcomes</a>: where a codelist comes from (applies to ATC too)</li>
-<li><a href="./register-reference.html#lmdb">Register reference</a>: all confirmed LMDB columns</li>
+<li><a href="./register-reference.html#lmdb">Overview of registers</a>: all confirmed LMDB columns</li>
 <li><a href="https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html">DST’s variable list for LMDB</a>: DST’s own column labels and period coverage. The <a href="https://steno-aarhus.github.io/darter-project/">darter project</a> has the same lookup for Danish registers in a searchable form</li>
 <li><a href="./packages-overview.html">Algorithms &amp; special packages</a>: <code>heaven</code> for exposure windows; OSDC and NMI already use ATC codes</li>
 <li><a href="./time-varying.html">Time-varying variables</a>: on/off treatment over time</li>
-<li><a href="./data-manipulation.html">Phase 12 - Assemble and prepare the dataset</a>: join the medication extract onto the cohort</li>
+<li><a href="./data-manipulation.html">Phase 12, Assemble and prepare the dataset</a>: the next step, joining the medication extract onto the cohort</li>
 <li><a href="https://www.equator-network.org/reporting-guidelines/record-pe/">RECORD-PE</a>: reporting standard for pharmacoepidemiology on routinely collected data (extends STROBE/RECORD)</li>
 </ul>
 

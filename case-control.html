@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-19">
+<meta name="dcterms.date" content="2026-11-23">
 <meta name="description" content="Sample controls for a nested case-control study in Danish registers with incidence-density sampling, using heaven::incidenceMatch() or Epi::ccwc() in R.">
 
 <title>Nested case-control in Danish registers – Register Guide</title>
@@ -599,8 +599,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#the-principle-incidence-density-sampling" id="toc-the-principle-incidence-density-sampling" class="nav-link active" data-scroll-target="#the-principle-incidence-density-sampling">The principle: incidence-density sampling</a></li>
   <li><a href="#step-1---build-the-dataset-for-matching" id="toc-step-1---build-the-dataset-for-matching" class="nav-link" data-scroll-target="#step-1---build-the-dataset-for-matching">Step 1 - Build the dataset for matching</a></li>
   <li><a href="#step-2---sample-controls" id="toc-step-2---sample-controls" class="nav-link" data-scroll-target="#step-2---sample-controls">Step 2 - Sample controls</a></li>
-  <li><a href="#analysis-brief" id="toc-analysis-brief" class="nav-link" data-scroll-target="#analysis-brief">Analysis (brief)</a></li>
-  <li><a href="#what-now" id="toc-what-now" class="nav-link" data-scroll-target="#what-now">What now?</a></li>
+  <li><a href="#analysis-conditional-logistic-regression" id="toc-analysis-conditional-logistic-regression" class="nav-link" data-scroll-target="#analysis-conditional-logistic-regression">Analysis: conditional logistic regression</a></li>
+  <li><a href="#what-now" id="toc-what-now" class="nav-link" data-scroll-target="#what-now">Next step: extract exposure and covariates</a></li>
   <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also">See also</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/case-control.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/case-control.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -611,7 +611,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./understand-lpr.html">Build the study · 9-10</a></li><li class="breadcrumb-item"><a href="./build-study-population.html">10 - Build your study population</a></li><li class="breadcrumb-item"><a href="./case-control.html">Case-control</a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title">Case-control</h1>
-<p class="subtitle lead">Nested case-control - sample controls for your cases</p>
+<p class="subtitle lead">Sample risk-set controls for your cases with heaven::incidenceMatch() or Epi::ccwc()</p>
 </div>
 
 <div>
@@ -627,7 +627,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2026</p>
+      <p class="date">November 23, 2026</p>
     </div>
   </div>
   
@@ -639,7 +639,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>This page continues from <a href="./build-study-population.html">Build your study population</a>. In a <strong>nested case-control study</strong>, your group from the landing page is instead your <strong>cases</strong> (those who developed the outcome), and their <strong>index date is the outcome date</strong>. For each case you sample a number of <strong>controls</strong>: people without the outcome who were at risk exactly when the case had the outcome.</p>
+<p>Use this page when your study is a nested case-control study inside the register population. It comes after <a href="./build-study-population.html">Build your study population</a>, and it reuses the person table built on <a href="./comparison-cohort.html">Comparison cohort</a>, so you need Steps 1 and 2 there even though you will not match a comparison cohort. The group you identified is here your cases (those who developed the outcome), and their index date is the outcome date. For each case you sample controls: people without the outcome who were at risk exactly when the case had the outcome. When you are done you have a matched dataset of cases and controls with a matched-set id.</p>
+<p>Case-control is especially efficient when the outcome is rare, or when a covariate is expensive to extract for the whole cohort. The design choice between cohort and case-control is in <a href="./plan-your-study.html#study-type">Phase 1 - what type of study</a>.</p>
 <div class="callout callout-style-simple callout-warning callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -653,43 +654,28 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>The examples show the shape of each step. They have <strong>not yet been run end to end on real register data</strong>, so treat them as a starting point: check the column names against your own delivery, and check the logic against your analysis plan. Confirm too that <code>heaven::incidenceMatch()</code> and <code>Epi::ccwc()</code> are available on your project.</p>
 </div>
 </div>
-<div class="callout callout-style-simple callout-note">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>Cohort or case-control?</strong> Both designs can answer the same question; case-control is especially efficient when the outcome is rare, or when a covariate is expensive to extract for the whole cohort. See <a href="./plan-your-study.html#study-type">Phase 1 - what type of study</a> for the design choice.</p>
-</div>
-</div>
-</div>
 <details>
 <summary>
-<strong>Case-control vs.&nbsp;nested case-control</strong> - what is the difference?
+Classic case-control vs.&nbsp;nested case-control: what is the difference?
 </summary>
 <ul>
 <li><strong>Classic case-control:</strong> you find cases (with the outcome) and select controls (without the outcome) from the population, often without a defined cohort with follow-up behind it. Exposure is typically ascertained retrospectively (e.g.&nbsp;interview) - vulnerable to recall and selection bias, and choosing controls is hard.</li>
-<li><strong>Nested case-control:</strong> the case-control study sits <em>inside</em> a defined <strong>cohort</strong> (e.g.&nbsp;a registry cohort followed over time). Cases are those who develop the outcome during follow-up; controls are sampled from those who were at risk (outcome-free) exactly when the case had the outcome (risk-set / incidence-density sampling). Exposure comes from registry data collected <em>before</em> the outcome → less recall bias.</li>
+<li><strong>Nested case-control:</strong> the case-control study sits inside a defined cohort (e.g.&nbsp;a registry cohort followed over time). Cases are those who develop the outcome during follow-up; controls are sampled from those who were at risk (outcome-free) exactly when the case had the outcome (risk-set / incidence-density sampling). Exposure comes from registry data collected <em>before</em> the outcome → less recall bias.</li>
 </ul>
-<p>In register research at DST you almost always do the <strong>nested</strong> variant: the cohort already exists in the registers. Advantages: exposure is measured beforehand, and the odds ratio from incidence-density sampling estimates the rate/hazard ratio without a rare-outcome assumption. That is what this page shows.</p>
+<p>In register research at DST you almost always do the nested variant: the cohort already exists in the registers. Advantages: exposure is measured beforehand, and the odds ratio from incidence-density sampling estimates the rate/hazard ratio without a rare-outcome assumption. That is what this page shows.</p>
 </details>
 <section id="the-principle-incidence-density-sampling" class="level2">
 <h2 class="anchored" data-anchor-id="the-principle-incidence-density-sampling">The principle: incidence-density sampling</h2>
-<p>Controls are selected by <strong>risk-set / incidence-density sampling</strong>: for each case you draw controls who, on the case’s index date (= the outcome date), (1) have not yet developed the outcome and (2) meet the inclusion criteria. A person can be a control for one case and <em>later</em> become a case themselves - that is correct in this design (and is exactly what the risk set captures).</p>
-<p>It is the <strong>same mechanic</strong> as the matching in <a href="./comparison-cohort.html">Comparison cohort</a> - only the “event” has changed: here it is the <em>outcome</em> (case), not an exposure. So this page also reuses the person table from there.</p>
+<p>Controls are selected by risk-set (incidence-density) sampling: for each case you draw controls who, on the case’s index date (= the outcome date), (1) have not yet developed the outcome and (2) meet the inclusion criteria. A person can be a control for one case and later become a case themselves. That is correct in this design: excluding people who later become cases from the controls biases the estimate (<a href="https://doi.org/10.2307/2530744">Lubin and Gail 1984</a>).</p>
+<p>It is the same mechanic as the matching in <a href="./comparison-cohort.html">Comparison cohort</a> - only the “event” has changed: here it is the outcome (case), not an exposure. So this page also reuses the person table from there.</p>
 </section>
 <section id="step-1---build-the-dataset-for-matching" class="level2 step-heading">
 <h2 class="step-heading anchored" data-anchor-id="step-1---build-the-dataset-for-matching">Step 1 - Build the dataset for matching</h2>
-<p><em>(Steps 1 and 2 - identify cases and exclude prevalent cases - are on the <a href="./build-study-population.html">landing page</a>.)</em></p>
-<p>You need one row per person with matching variables and the dates eligibility depends on. Reuse the <strong><code>pool</code> from <a href="./comparison-cohort.html#step-2---build-the-comparison-pool">Comparison cohort, Step 2</a></strong> (demographics + death date + first exit + first outcome date) and the migration events <code>vnds_ev</code> from Step 1 there, for the entry (residence) date. For case-control, though:</p>
+<p>Identifying cases and excluding prevalent cases are done on <a href="./build-study-population.html">Build your study population</a>. Here you need one row per person with matching variables and the dates eligibility depends on. Reuse the <code>pool</code> from <a href="./comparison-cohort.html#step-2---build-the-comparison-pool">Comparison cohort, Step 2</a> (demographics + death date + first exit + first outcome date) and the migration events <code>vnds_ev</code> from Step 1 there, for the entry (residence) date. For case-control, though:</p>
 <ul>
-<li><strong>Exposure is not an eligibility criterion here</strong> (unlike the comparison cohort, where a control must be <em>exposure-free</em> at index). In case-control, exposure is exactly what you <strong>study</strong>: you measure it for both cases and controls <em>afterwards</em> and do not use it to decide who can be a control. A control just needs to be outcome-free (and meet your other criteria) at the case’s index.</li>
-<li>You need to know <strong>who is a case</strong> (developed the outcome) and <strong>when</strong> (outcome date = index).</li>
+<li><strong>Exposure is not an eligibility criterion here:</strong> unlike the comparison cohort, where a control must be exposure-free at index. In case-control, exposure is what you study: you measure it for both cases and controls afterwards and do not use it to decide who can be a control. A control just needs to be outcome-free (and meet your other criteria) at the case’s index.</li>
+<li><strong>Who is a case, and when:</strong> the outcome date is the index date.</li>
 </ul>
-<details>
-<summary>
-Show the code: build the dataset for matching
-</summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: build the dataset for matching ---------------------------------------</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># 'pool' = one row per person from Comparison cohort, Step 2 (pnr, foed_dag, sex, birth_year,</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">#          death_date, first_outcome_date, first_exit); 'vnds_ev' = all migration events</span></span>
@@ -720,16 +706,11 @@ Show the code: build the dataset for matching
 <span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">end_fu     =</span> <span class="fu">pmin</span>(death_date, first_exit, first_outcome_date, STUDY_END, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
 <span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(entry <span class="sc">&lt;</span> end_fu)                           <span class="co"># never at risk (e.g. outcome before entry) -&gt; neither case nor control</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
 </section>
 <section id="step-2---sample-controls" class="level2 step-heading">
 <h2 class="step-heading anchored" data-anchor-id="step-2---sample-controls">Step 2 - Sample controls</h2>
 <p>Two routes. Both do incidence-density sampling; pick one.</p>
-<p><strong>Route A - <code>heaven::incidenceMatch()</code></strong> (sibling of <code>exposureMatch()</code> from <a href="./comparison-cohort.html">Comparison cohort</a>, but the “event” is the outcome).</p>
-<details>
-<summary>
-Show the code (Route A): sample with incidenceMatch()
-</summary>
+<p><strong>Route A: <code>heaven::incidenceMatch()</code>.</strong> The sibling of <code>exposureMatch()</code> from <a href="./comparison-cohort.html">Comparison cohort</a>, but the “event” is the outcome.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2 (Route A): sample with incidenceMatch() -------------------------------</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(heaven)   <span class="co"># incidenceMatch</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
@@ -747,11 +728,10 @@ Show the code (Route A): sample with incidenceMatch()
 <span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Output: data.table with 'case.id' identifying each matched set (1 case + its controls)</span></span>
 <span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co"># dplyr functions work on it as it is; as_tibble(matched) turns it into a tibble</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-</details>
-<p><strong>Route B - <code>Epi::ccwc()</code></strong> (simple risk-set sampling from entry and exit times; not counter-matching). Confirm arguments with <code>?Epi::ccwc</code>.</p>
+<p><strong>Route B: <code>Epi::ccwc()</code>.</strong> Simple risk-set sampling from entry and exit times; not counter-matching). Confirm arguments with <code>?Epi::ccwc</code>.</p>
 <details>
 <summary>
-Show the code (Route B): sample with Epi::ccwc()
+Route B code: sample with Epi::ccwc() instead of heaven
 </summary>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2 (Route B): sample with Epi::ccwc() ------------------------------------</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(Epi)   <span class="co"># ccwc - case-control within cohort</span></span>
@@ -778,17 +758,17 @@ Show the code (Route B): sample with Epi::ccwc()
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Same rules as in <a href="./comparison-cohort.html">Comparison cohort</a>:</strong> apply inclusion/exclusion criteria BEFORE sampling and to everyone (cases + pool); set a <code>seed</code>; and decide on <a href="./comparison-cohort.html#with-or-without-replacement">with/without replacement</a> (controls can typically be used for several cases) - which must be handled in the analysis. <code>incidenceMatch()</code> itself handles the risk-set time dimension via <code>case.index</code> + <code>end.followup</code>.</p>
+<p><strong>Same rules as in <a href="./comparison-cohort.html">Comparison cohort</a>:</strong> apply inclusion and exclusion criteria before sampling and to everyone (cases and pool), and set a <code>seed</code>. A control can be drawn for several cases, and a person can be a control before becoming a case; both follow from sampling from the risk set, so do not remove them. <code>incidenceMatch()</code> itself handles the risk-set time dimension via <code>case.index</code> + <code>end.followup</code>.</p>
 </div>
 </div>
 </div>
 </section>
-<section id="analysis-brief" class="level2">
-<h2 class="anchored" data-anchor-id="analysis-brief">Analysis (brief)</h2>
-<p>The analysis itself belongs to <a href="./regression.html">Regression</a> (Phase 13) - here only briefly, so you know where this leads. Matched case-control data <strong>can</strong> be analyzed with <strong>conditional logistic regression</strong> (<code>survival::clogit()</code> with a <code>strata()</code> term per matched set), so the matching is respected; the odds ratio from an incidence-density design estimates the rate/hazard ratio. This is the standard approach for matched case-control studies. Before the analysis you attach exposure and covariates to the matched persons (from <a href="./extract-variables.html">Phase 11</a>/<a href="./data-manipulation.html">Phase 12</a>). The matched-set id is called <code>case.id</code> (Route A) or <code>Set</code> (Route B).</p>
+<section id="analysis-conditional-logistic-regression" class="level2">
+<h2 class="anchored" data-anchor-id="analysis-conditional-logistic-regression">Analysis: conditional logistic regression</h2>
+<p>The analysis itself belongs to <a href="./regression.html">Regression</a> (Phase 13); here only briefly, so you know where this leads. Matched case-control data can be analysed with conditional logistic regression (<code>survival::clogit()</code> with a <code>strata()</code> term per matched set), so the matching is respected; the odds ratio from an incidence-density design estimates the rate/hazard ratio. This is the standard approach for matched case-control studies. Before the analysis you attach exposure and covariates to the matched persons (from <a href="./extract-variables.html">Phase 11</a>/<a href="./data-manipulation.html">Phase 12</a>). Measure exposure in a window defined relative to each matched set’s index date (the case’s outcome date), the same window for the case and its controls. The matched-set id is called <code>case.id</code> (Route A) or <code>Set</code> (Route B).</p>
 </section>
 <section id="what-now" class="level2">
-<h2 class="anchored" data-anchor-id="what-now">What now?</h2>
+<h2 class="anchored" data-anchor-id="what-now">Next step: extract exposure and covariates</h2>
 <p>You have a matched dataset (cases + controls) with a matched-set id (<code>case.id</code> or <code>Set</code>). Use <code>pnr</code> to extract exposure and covariates for everyone in the dataset:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>cc_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(matched<span class="sc">$</span>pnr) <span class="co"># all pnr's (cases + controls) for the other extractions</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <table class="caption-top table">
@@ -804,8 +784,8 @@ Show the code (Route B): sample with Epi::ccwc()
 <td><a href="./extract-variables.html">Phase 11</a></td>
 </tr>
 <tr class="even">
-<td>Comorbidity (NMI)</td>
-<td><a href="./nmi.html">NMI</a></td>
+<td>Comorbidity</td>
+<td><a href="./comorbidity.html">Comorbidity</a></td>
 </tr>
 <tr class="odd">
 <td>Assemble into one analysis dataset</td>

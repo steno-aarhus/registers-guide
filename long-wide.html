@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-19">
+<meta name="dcterms.date" content="2026-11-23">
 <meta name="description" content="Reshape Danish register extracts in R to one row per person: long vs wide format, group_by() with slice(), and tidyr pivot_wider() and pivot_longer() examples.">
 
 <title>Long to wide format in R for register data – Register Guide</title>
@@ -632,7 +632,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2026</p>
+      <p class="date">November 23, 2026</p>
     </div>
   </div>
   
@@ -644,7 +644,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Before you can link your extracts together (<a href="./joins.html">Link your extracts</a>), each extract needs to be in <strong>wide format with one row per person</strong>. The registers you extract from are almost always in <em>long format</em> with many rows per person. This page explains the difference and shows the two ways you reshape an extract: <code>group_by() + slice()</code> and <code>pivot_wider()</code> / <code>pivot_longer()</code>.</p>
+<p>Use this page when an extract has many rows per person and you need it down to one row per person before you join it onto the cohort (<a href="./joins.html">Link your extracts</a>). The registers you extract from are almost always in <em>long format</em> with many rows per person. This page explains the difference and shows the two ways you reshape an extract: <code>group_by() + slice()</code> and <code>pivot_wider()</code> / <code>pivot_longer()</code>.</p>
 <p><em>Paths and variable names in the examples are generic - replace them with your own.</em></p>
 <section id="wide-vs.-long-format" class="level2">
 <h2 class="anchored" data-anchor-id="wide-vs.-long-format">Wide vs.&nbsp;long format</h2>
@@ -794,7 +794,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>In register-based research, <code>group_by() + slice()</code> is by far the most common choice - you usually just want “the newest” or “the first” value per person. You use <code>pivot_wider()</code> when you explicitly want to compare several time points.</p>
+<p>In register-based research <code>group_by() + slice()</code> is usually the one you need: you want “the newest” or “the first” value per person. You use <code>pivot_wider()</code> when you explicitly want to compare several time points.</p>
 </section>
 <section id="group_by-slice---one-representative-row" class="level2">
 <h2 class="anchored" data-anchor-id="group_by-slice---one-representative-row"><code>group_by()</code> + <code>slice()</code> - one representative row</h2>
@@ -806,7 +806,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(year)) <span class="sc">%&gt;%</span> <span class="co"># sort within group: newest year first (desc = descending)</span></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span> <span class="co"># take only the first row per group - i.e. the newest year</span></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="co"># IMPORTANT: release grouping when done</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="callout callout-style-simple callout-important">
+<p>For baseline covariates you usually want the snapshot that applied at the index date, not the newest one: join on the index date and keep only snapshots on or before it before you take the first row.</p>
+<div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
@@ -838,14 +839,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Do NOT just take the first exit ever: a person may have left and come back, and</span></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co"># an exit before index censors nothing. Whether the person was resident at index</span></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># is decided in Phase 10 (source population).</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>first_emigration <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span> <span class="co"># the cohort has pnr + index_date</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span> <span class="co"># vnds is a table in R here (the cohort's rows, fetched with collect())</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(indud_kode <span class="sc">==</span> <span class="st">"U"</span>, haend_dato <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span> <span class="co"># only exits after index</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(haend_dato) <span class="sc">%&gt;%</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, <span class="at">emigration_date =</span> haend_dato)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Group by pnr AND index_date: with a comparison group matched with replacement</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># the same person has one row per index date, and each needs its own first exit.</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>first_emigration <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span> <span class="co"># the cohort has pnr + index_date</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(pnr, index_date) <span class="sc">%&gt;%</span> <span class="co"># one row per person and index date</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(vnds, <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">relationship =</span> <span class="st">"many-to-many"</span>) <span class="sc">%&gt;%</span> <span class="co"># vnds is a table in R here (the cohort's rows, fetched with collect())</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(indud_kode <span class="sc">==</span> <span class="st">"U"</span>, haend_dato <span class="sc">&gt;</span> index_date) <span class="sc">%&gt;%</span> <span class="co"># only exits after index</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr, index_date) <span class="sc">%&gt;%</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(haend_dato) <span class="sc">%&gt;%</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, index_date, <span class="at">emigration_date =</span> haend_dato)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co"># -&gt; ready for join: cohort %&gt;% left_join(first_emigration, by = c("pnr", "index_date"))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="pivots---switch-between-long-and-wide" class="level2">
 <h2 class="anchored" data-anchor-id="pivots---switch-between-long-and-wide">Pivots - switch between long and wide</h2>

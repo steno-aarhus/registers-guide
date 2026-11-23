@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-19">
+<meta name="dcterms.date" content="2026-11-23">
 <meta name="description" content="Inspect missing values in register data with naniar, then handle them in R with complete-case analysis or multiple imputation using the mice package.">
 
 <title>Missing data in register studies (R) – Register Guide</title>
@@ -602,6 +602,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#how-does-it-find-the-values" id="toc-how-does-it-find-the-values" class="nav-link" data-scroll-target="#how-does-it-find-the-values">How does it find the values?</a></li>
   <li><a href="#when-can-you-use-it" id="toc-when-can-you-use-it" class="nav-link" data-scroll-target="#when-can-you-use-it">When can you use it?</a></li>
+  <li><a href="#how-much-missing-is-okay" id="toc-how-much-missing-is-okay" class="nav-link" data-scroll-target="#how-much-missing-is-okay">How much missing is okay?</a></li>
   </ul></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/steno-aarhus/registers-guide/edit/main/missing-data.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/blob/main/missing-data.qmd" class="toc-action"><i class="bi empty"></i>View source</a></li><li><a href="https://github.com/steno-aarhus/registers-guide/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -628,7 +629,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2026</p>
+      <p class="date">November 23, 2026</p>
     </div>
   </div>
   
@@ -640,7 +641,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Register data almost always have missing values. Some are <strong>structural</strong> (a variable was not collected in all years) - that is not random, so think about <em>why</em> a value is missing before you handle it. Two common approaches: use only complete rows (complete-case), or <strong>multiple imputation</strong>.</p>
+<p>Use this page when your analysis-ready dataset (<a href="./data-manipulation.html">Phase 12</a>) has missing values in covariates, exposure or outcome, before you fit the analysis model. It shows how to see where values are missing and how to run the two common approaches: complete-case analysis and multiple imputation with <code>mice</code>. When you are done you have either a complete-case dataset or a pooled estimate from imputed data.</p>
+<p>Register data almost always have missing values. Some are <strong>structural</strong> (a variable was not collected in all years) - that is not random, so think about <em>why</em> a value is missing before you handle it.</p>
 <p><em>Paths and variable names in the examples are generic - replace them with your own.</em> <code>naniar</code> and <code>mice</code> must be installed in your R environment on DST.</p>
 <div class="callout callout-style-simple callout-warning callout-titled">
 <div class="callout-header d-flex align-content-center">
@@ -699,7 +701,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="co"># many as the percentage of rows with at least one gap (if e.g. 30% of rows are</span></span>
 <span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co"># incomplete =&gt; set m around 30). Today 20-50 is typical; more m =&gt; more stable, but</span></span>
 <span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># slower.</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>imp <span class="ot">&lt;-</span> <span class="fu">mice</span>(df_imp, <span class="at">m =</span> <span class="dv">20</span>, <span class="at">seed =</span> <span class="dv">123</span>) <span class="co"># seed = fixed number =&gt; reproducible (same idea as matching, see 10a)</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>imp <span class="ot">&lt;-</span> <span class="fu">mice</span>(df_imp, <span class="at">m =</span> <span class="dv">20</span>, <span class="at">seed =</span> <span class="dv">123</span>) <span class="co"># seed = fixed number =&gt; reproducible (same idea as in matching)</span></span>
 <span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: run YOUR analysis on each completed dataset --------------------------</span></span>
 <span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Here YOU choose the ANALYSIS model (your research question): which variables go in is</span></span>
@@ -722,9 +724,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>mice rests on the <strong>MAR</strong> assumption (<em>missing at random</em>). MAR does not mean the gaps are pure chance. It means that the <em>reason</em> a value is missing lies in something you <strong>have</strong> measured, not in the missing value itself.</p>
 <p>Analogy: suppose older patients more often skip a question. As long as you have age recorded, this is no problem - within each age group, those missing the answer resemble those who answered, and mice can fill in from the observed ones. The gap is due to age (which you have), not the missing answer itself. The assumption cannot be tested in the data, only judged on substantive grounds.</p>
 <ul>
-<li><strong>Missing covariates:</strong> the classic use. Here, include the <strong>outcome</strong> in the imputation model. It sounds backwards, but it is necessary: leave the outcome out and you pull the covariate-outcome association artificially toward null. Including the outcome adds no extra assumption, it simply respects the association you will later estimate.</li>
-<li><strong>Missing exposure:</strong> here it is more uncertain. In principle exposure can be imputed like any other variable, but it is more fragile, and whether it is defensible at all depends heavily on the situation and on how well the exposure can be predicted from the other data. Seek specific guidance before doing it.</li>
-<li><strong>Missing outcome:</strong> here imputation gains least. If you impute <em>only</em> the outcome from the same variables already in the analysis model, you typically end up with the same result as complete-case. A real gain requires extra auxiliary variables that predict the outcome. An alternative is <strong>inverse probability weighting</strong> (IPCW), see <a href="./weighting-iptw.html">IP weighting</a>.</li>
+<li><p><strong>Missing covariates:</strong> the classic use. Here, include the <strong>outcome</strong> in the imputation model. It sounds backwards, but it is necessary: leave the outcome out and you pull the covariate-outcome association artificially toward null. Including the outcome adds no extra assumption, it simply respects the association you will later estimate. If the analysis is a Cox model, the “outcome” in the imputation model is the event indicator plus the Nelson-Aalen estimate of the cumulative hazard, not the raw follow-up time (White &amp; Royston 2009, <a href="https://doi.org/10.1002/sim.3618">doi:10.1002/sim.3618</a>). <code>mice::nelsonaalen()</code> computes it:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival) <span class="co"># coxph(), Surv()</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>df<span class="sc">$</span>cumhaz <span class="ot">&lt;-</span> <span class="fu">nelsonaalen</span>(df, time_days, outcome) <span class="co"># cumulative hazard at each person's follow-up time</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>df_imp <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> <span class="fu">select</span>(outcome, cumhaz, time_days, exposure, age, sex, education_cat, income_cat)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>pred <span class="ot">&lt;-</span> <span class="fu">make.predictorMatrix</span>(df_imp) <span class="co"># who predicts whom in the imputation model</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>pred[, <span class="st">"time_days"</span>] <span class="ot">&lt;-</span> <span class="dv">0</span> <span class="co"># time_days is kept for the Cox model below, but not used to impute</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>imp <span class="ot">&lt;-</span> <span class="fu">mice</span>(df_imp, <span class="at">m =</span> <span class="dv">20</span>, <span class="at">predictorMatrix =</span> pred, <span class="at">seed =</span> <span class="dv">123</span>)</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">with</span>(imp, <span class="fu">coxph</span>(<span class="fu">Surv</span>(time_days, outcome) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex))</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="fu">pool</span>(fit) <span class="sc">%&gt;%</span> <span class="fu">summary</span>(<span class="at">conf.int =</span> <span class="cn">TRUE</span>, <span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># pooled hazard ratios</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div></li>
+<li><p><strong>Missing exposure:</strong> here it is more uncertain. In principle exposure can be imputed like any other variable, but it is more fragile, and whether it is defensible at all depends heavily on the situation and on how well the exposure can be predicted from the other data. Seek specific guidance before doing it.</p></li>
+<li><p><strong>Missing outcome:</strong> here imputation gains least. If you impute <em>only</em> the outcome from the same variables already in the analysis model, you typically end up with the same result as complete-case. A real gain requires extra auxiliary variables that predict the outcome. An alternative is <strong>inverse probability weighting</strong> (IPCW), see <a href="./weighting-iptw.html">IP weighting</a>.</p></li>
 </ul>
 <div class="callout callout-style-simple callout-important">
 <div class="callout-body d-flex">
@@ -732,7 +742,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>The MAR assumption is what matters, not the percentage.</strong> mice only corrects bias if missingness is <strong>MAR</strong>: that the <em>reason</em> a value is missing lies in the observed data. If a variable is missing precisely because of the value that is missing (for example, the sickest patients never get it measured), the data are <strong>MNAR</strong> (<em>missing not at random</em>), and then mice can introduce its own bias and give false precision. MAR cannot be tested in the data, only judged on substantive grounds.</p>
+<p><strong>The MAR assumption is what matters, not the percentage.</strong> mice only corrects bias if missingness is <strong>MAR</strong>: that the <em>reason</em> a value is missing lies in the observed data. If a variable is missing precisely because of the value that is missing (for example, the sickest patients never get it measured), the data are <strong>MNAR</strong> (<em>missing not at random</em>), and then mice can introduce its own bias and give false precision.</p>
 <p>This is why imputation is not automatically better than just accepting some missing:</p>
 <ul>
 <li>Under <strong>MCAR</strong> (<em>missing completely at random</em>) complete-case is already unbiased, just less efficient.</li>
@@ -742,17 +752,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-<div class="callout callout-style-simple callout-important">
-<div class="callout-body d-flex">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-body-container">
-<p><strong>How much missing is okay?</strong> There is no real percentage threshold (5% / 10% / 40% are rules of thumb with no foundation). What matters is the mechanism and how well the missing values can be predicted from the rest. In practice: always report how much is missing per variable (STROBE), treat results with high missingness (roughly &gt;40-50% on a key variable) as sensitivity / hypothesis-generating, and <strong>run complete-case and mice side by side</strong> as a sensitivity analysis. If they point the same way, you stand on firmer ground.</p>
-</div>
-</div>
-</div>
-<p>Analysing the imputed dataset belongs to <a href="./analysis.html">Phase 13 - Analysis</a>.</p>
+</section>
+<section id="how-much-missing-is-okay" class="level3">
+<h3 class="anchored" data-anchor-id="how-much-missing-is-okay">How much missing is okay?</h3>
+<p>There is no real percentage threshold (5% / 10% / 40% are rules of thumb with no foundation). What matters is the mechanism and how well the missing values can be predicted from the rest. In practice: report how much is missing per variable (STROBE), treat results with very high missingness on a key variable as hypothesis-generating (a guide for randomised trials gives “more than 40%” as an example, Jakobsen et al.&nbsp;2017, <a href="https://doi.org/10.1186/s12874-017-0442-1">doi:10.1186/s12874-017-0442-1</a>), and run complete-case and mice side by side as a sensitivity analysis. If they point the same way, you stand on firmer ground.</p>
+<p>The analysis models themselves are in <a href="./analysis.html">Phase 13 - Analysis</a>; fit them inside <code>with(imp, ...)</code> and pool as above.</p>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">

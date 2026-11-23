@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-19">
+<meta name="dcterms.date" content="2026-11-23">
 <meta name="description" content="Survival analysis in R: Kaplan-Meier curves, Cox regression, checking proportional hazards, and competing risks with cause-specific Cox and Fine-Gray.">
 
 <title>Time-to-event: survival analysis in R – Register Guide</title>
@@ -639,7 +639,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 19, 2026</p>
+      <p class="date">November 23, 2026</p>
     </div>
   </div>
   
@@ -651,7 +651,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>Time-to-event analysis (survival analysis) looks at the <strong>time until an event</strong> and handles the fact that not everyone reaches the event during follow-up (censoring). It is the typical framework for a cohort study with an outcome over time.</p>
+<p>Use this page when your cohort is built and you want to analyse the time until the outcome: Kaplan-Meier curves, a Cox model for the hazard ratio, the check of proportional hazards, and what to do when death (or another event) can come first. Time-to-event analysis (survival analysis) handles the fact that not everyone reaches the event during follow-up (censoring). You need the analysis-ready dataset with follow-up time and event status from <a href="./joins.html#follow-up-time">Phase 12</a>; when you are done you have curves and estimates to take through <a href="./export.html">output control</a>.</p>
 <p><em>Paths and variable names in the examples are generic - replace them with your own.</em> <code>survival</code>, <code>survminer</code> and <code>tidycmprsk</code> must be installed in your R environment on DST.</p>
 <section id="starting-point" class="level2">
 <h2 class="anchored" data-anchor-id="starting-point">Starting point</h2>
@@ -696,14 +696,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <figcaption>Kaplan-Meier curves with simulated data. <code>ggsurvplot()</code> typically also adds a risk table below the figure.</figcaption>
 </figure>
 </div>
-<div class="callout callout-style-simple callout-warning">
-<div class="callout-body d-flex">
+<div class="callout callout-style-simple callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-body-container">
-<p>Kaplan-Meier can <strong>overestimate the risk</strong> if a competing event (typically death) can preclude your outcome - see <a href="#competing-risks">Competing risks</a> below.</p>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Before you export a Kaplan-Meier curve
 </div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The curve and its risk table are output like any table. Each step in the curve is one or a few events, and each number at risk is a table cell, so check them against the small-cell rule (3 or 5, see <a href="./export.html#figures-and-curves">Export</a>). In the tail of the curve, where few people are left, this usually fails: one way out is to cut the x-axis (<code>xlim =</code> in <code>ggsurvplot()</code>) where the number at risk falls below your threshold.</p>
+<p>One minus the Kaplan-Meier curve also overestimates the risk when a competing event (typically death) can preclude your outcome: see <a href="#competing-risks">Competing risks</a> below.</p>
 </div>
 </div>
 </section>
@@ -717,8 +721,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>cox <span class="sc">%&gt;%</span> <span class="co"># pass the model on to a clean table</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># exponentiate = TRUE -&gt; hazard ratios</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A hazard ratio reads like an OR/RR: <strong>1 = no difference</strong>, above 1 = higher rate, below 1 = lower. See <a href="./regression.html#read-the-output">Reading your result</a>.</p>
-<p><strong>The difference with replacement.</strong> If the comparison cohort is matched <strong>with replacement</strong> (or there is crossover), the same person appears several times and the rows are not independent. Then you add <strong>one single argument</strong> - <code>cluster = pnr</code> - to exactly the same model. It does <strong>not</strong> change the hazard ratio estimate (the HR is the same); it only corrects the <strong>standard errors and confidence intervals</strong>, which would otherwise be artificially narrow. Same idea as in <a href="./regression.html#clustered-standard-errors">Regression</a>.</p>
+<p>A hazard ratio is a ratio of rates (hazards) over follow-up: 1 = no difference, above 1 = higher rate in the exposed, below 1 = lower. It is not a ratio of risks. See <a href="./regression.html#read-the-output">Reading your result</a>.</p>
+<p><strong>The difference with replacement.</strong> If the comparison cohort is matched <strong>with replacement</strong> (or there is crossover), the same person appears several times and the rows are not independent. Then you add one argument, <code>cluster = pnr</code>, to exactly the same model. It does not change the hazard ratio estimate; it replaces the standard errors with robust (sandwich) standard errors that allow for the repeated person, so the confidence intervals are no longer too narrow. Same idea as in <a href="./regression.html#clustered-standard-errors">Regression</a>.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># With replacement (same person several times): the ONLY difference from the model above is cluster = pnr.</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">Surv</span>(time_days, outcome) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,</span>
@@ -750,11 +754,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="check-the-assumption-proportional-hazards" class="level2">
 <h2 class="anchored" data-anchor-id="check-the-assumption-proportional-hazards">Check the assumption: proportional hazards</h2>
-<p>The Cox model assumes <strong>proportional hazards</strong> (PH): that a variable’s effect is constant over time. If it does not hold, the single hazard ratio is misleading. Always check it with <code>cox.zph()</code>, which is based on <em>Schoenfeld residuals</em> (in short, a measure of whether the effect “drifts” over time).</p>
+<p>The Cox model assumes <strong>proportional hazards</strong> (PH): that the hazard ratio is constant over follow-up. If it is not, a single hazard ratio does not describe an effect that changes over time. Check it with <code>cox.zph()</code>, which is based on the scaled Schoenfeld residuals (in short, whether the effect drifts over time).</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>ph <span class="ot">&lt;-</span> <span class="fu">cox.zph</span>(cox) <span class="co"># formal PH test per variable + global</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(ph) <span class="co"># small p-value = sign the assumption is VIOLATED</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(ph) <span class="co"># small p-value = evidence against proportional hazards</span></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(ph) <span class="co"># residual curve per variable; a sloping curve</span></span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co">#   indicates a non-proportional hazard</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>With register-sized data the test has the power to flag even a tiny departure, so a small p-value alone says little. Judge the plot: how much the curve slopes, and whether that changes what you would conclude.</p>
 <details>
 <summary>
 What to do if the assumption is violated
@@ -771,11 +776,11 @@ What to do if the assumption is violated
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p>If another event can <strong>preclude</strong> your outcome (classically: <strong>death</strong>, before the outcome can occur), it is a <em>competing risk</em>. A plain Kaplan-Meier then <strong>overestimates</strong> the risk, because it treats those who died as merely censored. This is the rule rather than the exception in register cohorts with older people or long follow-up.</p>
+<p>If another event can preclude your outcome (classically death, before the outcome can occur), it is a <em>competing risk</em>. One minus the Kaplan-Meier curve then overestimates the risk, because it treats those who died as if they were merely censored and could still get the outcome later. In register cohorts with older people or long follow-up this is common.</p>
 </div>
 </div>
 </div>
-<p>The idea is simple: each person ends up in one of three places, and only the <strong>first</strong> thing that happens counts - (1) they never reach an event during follow-up (<em>censored</em>), (2) they get your <strong>outcome</strong>, or (3) they are hit by the <strong>competing event</strong> (e.g.&nbsp;death). Someone who dies first can never reach the outcome, and the analysis must reflect that.</p>
+<p>Each person ends up in one of three places, and only the first thing that happens counts: (1) they never reach an event during follow-up (<em>censored</em>), (2) they get your outcome, or (3) they have the competing event (e.g.&nbsp;death). Someone who dies first can never reach the outcome, and the analysis must reflect that.</p>
 <section id="set-up-the-data" class="level3">
 <h3 class="anchored" data-anchor-id="set-up-the-data">1. Set up the data</h3>
 <p>You need the same two variables as for an ordinary Cox model - but the status variable now takes <strong>three values</strong> instead of two (so we call it <code>status</code> instead of <code>outcome</code>):</p>
@@ -811,10 +816,10 @@ What to do if the assumption is violated
 </section>
 <section id="regression-pick-the-model-to-match-your-question" class="level3">
 <h3 class="anchored" data-anchor-id="regression-pick-the-model-to-match-your-question">3. Regression: pick the model to match your question</h3>
-<p>Cox can absolutely be used - you just need to know which of two questions you are asking:</p>
+<p>There are two regression models, and they answer different questions:</p>
 <ul>
-<li><strong>Etiology (the rate of the outcome):</strong> run an <strong>ordinary Cox</strong>, but <strong>censor</strong> the competing event. You do that by setting the event to <code>status == "outcome"</code>: both censored and dead people then become “no event”. This is the <em>cause-specific</em> hazard.</li>
-<li><strong>Absolute/cumulative risk:</strong> use <strong>Fine-Gray</strong> (<code>crr</code>), where the dead <strong>stay</strong> in the risk set. <code>crr</code> by default models the first event type after “censored” (here “outcome”) and treats the rest (“death”) as competing. This is the <em>subdistribution</em> hazard.</li>
+<li><strong>The rate of the outcome among those still alive and event-free:</strong> run an ordinary Cox model and censor the competing event. You do that by setting the event to <code>status == "outcome"</code>: both censored and dead people then become “no event”. This is the <em>cause-specific</em> hazard, the usual choice for an etiological question.</li>
+<li><strong>The cumulative incidence (absolute risk) of the outcome:</strong> use <strong>Fine-Gray</strong> (<code>crr</code>), where the dead stay in the risk set. <code>crr</code> by default models the first event type after “censored” (here “outcome”) and treats the rest (“death”) as competing. This is the <em>subdistribution</em> hazard.</li>
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Etiology - cause-specific Cox: status == "outcome" turns death (and censored) into "no event"</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coxph</span>(</span>
@@ -826,11 +831,12 @@ What to do if the assumption is violated
 <span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Absolute risk - Fine-Gray: uses the factor status directly (outcome vs. competing)</span></span>
 <span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="fu">crr</span>(<span class="fu">Surv</span>(time_days, status) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex, <span class="at">data =</span> df) <span class="sc">%&gt;%</span></span>
 <span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tbl_regression</span>(<span class="at">exponentiate =</span> <span class="cn">TRUE</span>) <span class="co"># -&gt; subdistribution hazard ratio</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Neither hazard ratio is a risk ratio. The subdistribution hazard ratio tells you the direction in which the exposure shifts the cumulative incidence (if the model fits), but not by how much; for the absolute risk, report the cumulative incidence (CIF) at fixed time points, for example at 1 and 5 years.</p>
 <details>
 <summary>
 Rule of thumb: which one do I pick?
 </summary>
-<p>If you want to <strong>describe or predict risk</strong> (e.g.&nbsp;“what is the 5-year risk of the outcome?”), use CIF + Fine-Gray. If you want to understand a <strong>causal relationship</strong> (e.g.&nbsp;“does the exposure raise the rate of the outcome?”), use the cause-specific Cox. Many studies report both.</p>
+<p>If you want to describe or predict risk (e.g.&nbsp;“what is the 5-year risk of the outcome?”), use the CIF and Fine-Gray. If you want to know whether the exposure changes the rate of the outcome in those still at risk, use the cause-specific Cox. Many studies report both.</p>
 </details>
 </section>
 </section>
