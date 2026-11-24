@@ -233,48 +233,84 @@ charlson <- charlson_score(data = lpr_diag_data, Person_ID = pnr, diagnosis_vari
 You must extract a lookback period from LPR yourself (often 5 years before index date) and give the function every diagnosis in that window, not a code list: the function matches the codes to Charlson categories itself. Which diagnosis types to include is your choice; the example below keeps types A, B and G (see [Understand LPR](understand-lpr.qmd) for what each type means). The D-prefix (`DG30` etc.) is handled by EpiForsk and does not need to be stripped first.
 
 ```r
-# Example: extract lookback and pass all diagnoses
-# pnr and d_inddto are in lpr_adm - not lpr_diag
+# Example: extract lookback and pass all diagnoses (LPR2 and LPR3)
+# Open lpr_adm, lpr_diag, psyk_adm, psyk_diag, lpr3_k and lpr3_d first, as
+# under "Open registers" in get_lpr_diagnoses() in Extract from LPR.
+library(dplyr)
 
 # One row per (pnr, index_date), with each person's own 5-year lookback
 # window already attached - this table is the size of your cohort, not the
 # register. If your cohort has repeated pnr (e.g. matched with replacement),
-# each occurrence gets its own row and its own window here.
+# each occurrence gets its own row and its own window here. The window runs
+# from window_start up to, but not including, window_end (the index date).
 lookback_keys <- cohort %>%
-  mutate(window_start = index_date - 365.25 * 5,
-         window_end   = index_date - 1)
+  select(pnr, index_date) %>%
+  mutate(window_start = index_date - 1825,   # 5 years = 1825 days, as on the NMI page
+         window_end   = index_date)
 
-lpr2_lookback <- lpr_adm %>%
-  select(pnr, recnum, d_inddto) %>%
-  # Coarse filter first (cheap): narrow to the union of every window in the
-  # cohort, before the join - !! injects a single computed value, not a column
-  filter(d_inddto >= !!min(lookback_keys$window_start)) %>%
-  # copy = TRUE sends the small lookback_keys table into the database, so the
-  # join runs there, not in R. This matters more here than almost anywhere
-  # else in the guide: Charlson needs EVERY A/B/G diagnosis in the window,
-  # not a filtered-down code list, so the unjoined, unwindowed data for a
-  # whole cohort can be large. Collecting it all into R first and only then
-  # joining to the cohort and filtering by index_date can pull tens of GB
-  # into RAM and crash the R session.
-  inner_join(lookback_keys, by = "pnr", copy = TRUE) %>%
-  # Precise filter (correctness): each row against its OWN window, not the global one
-  filter(d_inddto >= window_start, d_inddto < index_date) %>%
-  inner_join(
-    lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B", "G")) %>%   # A/B/G: all codes of these types, no ICD filter
-      select(recnum, c_diag),
-    by = "recnum"
+# LPR3's contact time is a datetime, so its windows must be datetimes too:
+# comparing a datetime with a date on a lazy table can silently go wrong
+# (DST pitfall 4).
+lookback_keys_dt <- lookback_keys %>%
+  mutate(window_start = as.POSIXct(window_start, tz = "UTC"),
+         window_end   = as.POSIXct(window_end, tz = "UTC"))
+
+# The same steps for each source. contacts needs the columns pnr, key and
+# date_contact, and diagnoses the columns key and c_diag.
+window_dx <- function(contacts, diagnoses, keys) {
+  contacts %>%
+    # Coarse filter first (cheap): narrow to the union of every window in the
+    # cohort, before the join - !! injects a single computed value, not a column
+    filter(date_contact >= !!min(keys$window_start)) %>%
+    # copy = TRUE sends the small keys table into the database, so the join
+    # runs there, not in R. This matters more here than almost anywhere else
+    # in the guide: Charlson needs EVERY A/B/G diagnosis in the window, not a
+    # filtered-down code list, so the unjoined, unwindowed data for a whole
+    # cohort can be large. Collecting it all into R first and only then
+    # joining to the cohort and filtering by index_date can pull tens of GB
+    # into RAM and crash the R session.
+    inner_join(keys, by = "pnr", copy = TRUE) %>%
+    # Precise filter (correctness): each row against its OWN window, not the global one
+    filter(date_contact >= window_start, date_contact < window_end) %>%
+    inner_join(diagnoses, by = "key") %>%
+    select(pnr, index_date, date_contact, c_diag) %>%
+    collect()
+}
+
+types <- c("A", "B", "G")   # A/B/G: all codes of these types, no ICD filter (G is LPR2 only)
+
+lookback <- bind_rows(
+  # LPR2 somatic
+  window_dx(
+    lpr_adm  %>% select(pnr, key = recnum, date_contact = d_inddto),
+    lpr_diag %>% filter(c_diagtype %in% !!types) %>% select(key = recnum, c_diag),
+    lookback_keys
+  ),
+  # LPR2 psychiatric
+  window_dx(
+    psyk_adm  %>% select(pnr, key = recnum, date_contact = d_inddto),
+    psyk_diag %>% filter(c_diagtype %in% !!types) %>% select(key = recnum, c_diag),
+    lookback_keys
+  ),
+  # LPR3, with datetime windows; diagnoses later disproved are left out
+  window_dx(
+    lpr3_k %>% select(pnr, key = dw_ek_kontakt, date_contact = kont_starttidspunkt),
+    lpr3_d %>%
+      filter(diag_kode_type %in% !!types,
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+      select(key = dw_ek_kontakt, c_diag = diag_kode),
+    lookback_keys_dt
   ) %>%
-  select(pnr, index_date, d_inddto, c_diag) %>%
-  collect()
+    mutate(date_contact = as.Date(date_contact))   # datetime -> date, now in R
+)
 
-charlson <- charlson_score(data = lpr2_lookback, Person_ID = pnr, diagnosis_variable = c_diag)
+charlson <- charlson_score(data = lookback, Person_ID = pnr, diagnosis_variable = c_diag)
 ```
 :::
 
 ::: {.callout-warning}
 **`Person_ID = pnr` alone is not enough if your cohort has repeated `pnr`.**
-`lpr2_lookback` above is correctly windowed per `(pnr, index_date)`, but
+`lookback` above is correctly windowed per `(pnr, index_date)`, but
 `charlson_score()` itself only groups by the single `Person_ID` column you give it -
 it has no way to know about `index_date`. For a comparison cohort matched
 with replacement, that means diagnoses from *all* of a person's
