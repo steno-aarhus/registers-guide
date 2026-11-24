@@ -172,9 +172,11 @@ stay can be calculated from the migration events or taken from
 ## Count the groups in your cohort {#count}
 
 Check by eye on your own data before you build on it. The sketch reads the most
-recent BEF snapshot on or before the index year and keeps unknown as its own
-category, as on the [socioeconomic variables
-page](socioeconomic-variables.qmd#missing).
+recent BEF snapshot up to the year before index, the same baseline year as the
+[socioeconomic recipes](socioeconomic-variables.qmd), so the status is fixed
+before follow-up starts. It keeps unknown as its own category, as on the
+[socioeconomic variables page](socioeconomic-variables.qmd#missing), and keeps
+people with no BEF row in that period apart from DST's own unknown.
 
 ```r
 library(dplyr) # select, collect, inner_join, filter, arrange, distinct, left_join, mutate, count
@@ -185,10 +187,10 @@ library(fastreg) # read_register
 bef <- read_register("bef") %>%
   rename_with(tolower)
 
-# One row per cohort row: the BEF snapshot from the index year (use the same
-# year rule as in the socioeconomic recipes if you prefer the year before).
-# If your BEF holds several snapshots per year, keep the December one first,
-# as under "Check your BEF" on the socioeconomic variables page.
+# One row per cohort row: the newest BEF snapshot up to the year before index
+# (year_baseline, as in the socioeconomic recipes). If your BEF holds several
+# snapshots per year, keep the December one first, as under "Check your BEF"
+# on the socioeconomic variables page.
 origin <- bef %>%
   select(pnr, year, ie_type, opr_land) %>%
   # only the cohort's pnr, filtered in the database: BEF for the whole
@@ -196,10 +198,11 @@ origin <- bef %>%
   semi_join(distinct(cohort, pnr), by = "pnr", copy = TRUE) %>%
   collect() %>%
   inner_join(
-    cohort %>% mutate(index_year = year(index_date)) %>% select(row_id, pnr, index_year),
-    by = "pnr"
+    cohort %>% mutate(year_baseline = year(index_date) - 1) %>% select(row_id, pnr, year_baseline),
+    by = "pnr",
+    relationship = "many-to-many" # a pnr can have several snapshots AND several cohort rows
   ) %>%
-  filter(year <= index_year) %>%
+  filter(year <= year_baseline) %>%
   arrange(row_id, desc(year)) %>%
   distinct(row_id, .keep_all = TRUE) # newest snapshot per cohort row
 
@@ -207,10 +210,11 @@ cohort <- cohort %>%
   left_join(select(origin, row_id, ie_type, opr_land), by = "row_id") %>%
   mutate(
     origin_group = case_when(
+      !row_id %in% origin$row_id ~ "Not in BEF", # no snapshot up to the baseline year
       ie_type == 1 ~ "Danish origin",
       ie_type == 2 ~ "Immigrant",
       ie_type == 3 ~ "Descendant",
-      TRUE ~ "Missing"
+      TRUE ~ "Missing" # DST's own unknown code, or no value
     )
   )
 
