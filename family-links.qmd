@@ -42,19 +42,34 @@ non-biological relations](#adoption)).
 
 ## Coverage by birth cohort {#coverage}
 
+BEF takes `mor_id` and `far_id` from CPR. The shares below are for persons born in
+Denmark, from CPR as it stood in 2006 (Pedersen et al. 2006). They are the nearest guide to what your
+delivery holds, but count the missing links in your own data.
+
+  | Born in Denmark | Link to a mother | Link to a father |
+  | --------------- | ---------------- | ---------------- |
+  | 1950            | 8.0%             | 7.6%             |
+  | 1960            | 98.7%            | 95.7%            |
+  | 1970            | 99.9%            | 99.2%            |
+
+The same paper says the links for persons born in Denmark in 1969 or later are
+"considered to be 100% correct", and those for 1960-1968 "almost correct",
+because the links for 1969-1978 were checked against the parish registers
+(Pedersen et al. 2006).
+
+::: {.callout-note collapse="true" title="Why older cohorts have fewer links"}
 CPR started in 1968, and the parental links were first built from families
 living at the same address. Until 1978 a link was erased when the child moved
 away from home, when a parent moved, when the child had children or when the
 child turned 18. From 1978 links are kept permanently, and from then on they
 follow the legal relationship (Pedersen et al. 2006).
 
-  | Born in Denmark | What DST and the CPR papers say                                                              |
-  | --------------- | -------------------------------------------------------------------------------------------- |
-  | 1950            | 8.0% have a link to a mother (Pedersen et al. 2006)                                          |
-  | 1960            | 98.7% have a link to a mother. All persons born in 1960 or later have a complete link to both parents in the Family Relations Database (Pedersen 2013) |
-  | 1960-1968       | The links are "almost correct" (Pedersen et al. 2006)                                        |
-  | 1969 or later   | The links are considered 100% correct (Pedersen et al. 2006; Pedersen 2013)                  |
-  | 1970            | 99.9% have a link to a mother (Pedersen et al. 2006)                                         |
+You may also read that everyone born in Denmark in 1960 or later has a complete
+link to both parents (Pedersen 2013). That is about the Family Relations
+Database at the National Centre for Register-based Research (NCRR), which keeps
+only the links it deems valid. It is not a description of `mor_id` and `far_id`
+in BEF.
+:::
 
 For people **born abroad** the links are much rarer, because parent and child are
 not linked at immigration, and a parent needs a Danish CPR number to be linked at
@@ -85,39 +100,48 @@ The rule below takes, for each child, the first non-missing value from the
 snapshots at or after the child's birth. For a child born before the first BEF
 snapshot (December 1985) that is the link as it stood in 1985 or later.
 
+The rule is written as a function, because [Step 3](#siblings) runs it again
+for the siblings outside your cohort.
+
 ```r
 # Step 1: one mother and one father per child, from BEF ------------------------
 library(fastreg) # read_register()
 library(dplyr)   # the verbs are translated to SQL and run in DuckDB
 
-# cohort_pnrs: the pnr of the children you want parents for (your cohort)
-bef <- read_register("bef") %>%
-  rename_with(tolower) %>%
-  semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE)
-# Columns: pnr | foed_dag | mor_id | far_id | referencetid
+# pnrs: the children you want parents for. Returns one row per child:
+# pnr | foed_dag | mor_id | far_id
+parents_from_bef <- function(pnrs) {
+  bef <- read_register("bef") %>%
+    rename_with(tolower) %>%
+    semi_join(tibble(pnr = pnrs), by = "pnr", copy = TRUE)
+  # Columns: pnr | foed_dag | mor_id | far_id | referencetid
 
-# The first non-missing mother id in a snapshot at or after birth. Check how a
-# missing id looks in your delivery (NA or an empty string) before relying on
-# is.na().
-mother <- bef %>%
-  filter(referencetid >= foed_dag, !is.na(mor_id)) %>%
-  group_by(pnr) %>%
-  slice_min(referencetid, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  select(pnr, foed_dag, mor_id)
+  # The first non-missing mother id in a snapshot at or after birth. Check how
+  # a missing id looks in your delivery (NA or an empty string) before relying
+  # on is.na().
+  mother <- bef %>%
+    filter(referencetid >= foed_dag, !is.na(mor_id)) %>%
+    group_by(pnr) %>%
+    slice_min(referencetid, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(pnr, foed_dag, mor_id)
 
-father <- bef %>%
-  filter(referencetid >= foed_dag, !is.na(far_id)) %>%
-  group_by(pnr) %>%
-  slice_min(referencetid, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  select(pnr, far_id)
+  father <- bef %>%
+    filter(referencetid >= foed_dag, !is.na(far_id)) %>%
+    group_by(pnr) %>%
+    slice_min(referencetid, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(pnr, foed_dag, far_id)
 
-# full_join: a child with only one registered parent keeps its row, with NA
-# for the other
-parents <- mother %>%
-  full_join(father, by = "pnr") %>%
-  collect()
+  # full_join: a child with only one registered parent keeps its row, with NA
+  # for the other. foed_dag is in the key so it is kept for both kinds of child.
+  mother %>%
+    full_join(father, by = c("pnr", "foed_dag")) %>%
+    collect()
+}
+
+# cohort_pnrs: the pnr of the people in your cohort
+parents <- parents_from_bef(cohort_pnrs)
 ```
 
 A child with `NA` for both has no link in BEF. Count them by birth year before
@@ -145,11 +169,6 @@ MFR is the better source of the mother when:
 - you need twins and other multiple births, which MFR records
   (`barnsnummer_flerfoldsfoedsel`).
 
-  | Births         | Table          | Child            | Mother           | Father           |
-  | -------------- | -------------- | ---------------- | ---------------- | ---------------- |
-  | 1997-2018      | `mfr`          | `cpr_barn`       | `cpr_moder`      | `cpr_fader`      |
-  | 2019 and later | `mfr_nyfoedte` | `CPRnummer_Barn` | `CPRnummer_Mor`  | `CPRnummer_Far`  |
-
 DST has no MFR table for births from 1973 to 1996. For those years FTBARN's
 `mor1`, the first mother registered in CPR, is the nearest equivalent (see
 [Adoption](#adoption)).
@@ -162,6 +181,12 @@ Two limits:
   before you join on the mother's number.
 - **The declaration says where the mother's link comes from, not the
   father's.** Compare `cpr_fader` with `far_id` in BEF before you rely on it.
+
+::: {.callout-note collapse="true" title="MFR's column names, and a check of BEF against MFR"}
+| Births         | Table          | Child            | Mother           | Father           |
+| -------------- | -------------- | ---------------- | ---------------- | ---------------- |
+| 1997-2018      | `mfr`          | `cpr_barn`       | `cpr_moder`      | `cpr_fader`      |
+| 2019 and later | `mfr_nyfoedte` | `CPRnummer_Barn` | `CPRnummer_Mor`  | `CPRnummer_Far`  |
 
 ```r
 # The parents at birth from MFR (births 1997-2018), beside BEF's -------------
@@ -176,82 +201,13 @@ parents %>%
   inner_join(mfr_parents, by = "pnr") %>%
   count(same_mother = mor_id == mor_mfr)
 ```
+:::
 
-## Step 2 - Siblings {#siblings}
+## Step 2 - Check for adoption with FTBARN {#adoption}
 
-Siblings are children with the same parent id, and the type depends on how many
-parents they share:
-
-- **Full siblings** share both mother and father.
-- **Maternal half-siblings** share the mother only, and **paternal
-  half-siblings** share the father only.
-
-Do not count a pair as full siblings when one of the fathers is missing. The
-pair shares a mother, so it is at least a maternal half-sibling pair, and the
-father is unknown. Say in your methods how you handle those pairs, and run the
-analysis both ways if there are many of them.
-
-The siblings you need are not only the ones in your cohort. If the exposed
-child has a brother who is not in the cohort, he is still a sibling, so build
-`parents` above for everyone whose mother or father is in your cohort, not only
-for the cohort itself.
-
-```r
-# Step 2: sibling pairs and their type ----------------------------------------
-pairs_by <- function(key) {
-  a <- parents %>% rename_with(~ paste0(.x, "_a"))
-  b <- parents %>% rename_with(~ paste0(.x, "_b"))
-  by <- setNames(paste0(key, "_b"), paste0(key, "_a"))
-  a %>%
-    filter(!is.na(.data[[paste0(key, "_a")]])) %>%
-    inner_join(b, by = by, keep = TRUE) %>%   # keep = TRUE: both id columns stay
-    filter(pnr_a < pnr_b)
-}
-
-sibling_pairs <- bind_rows(pairs_by("mor_id"), pairs_by("far_id")) %>%
-  mutate(
-    same_mother = coalesce(mor_id_a == mor_id_b, FALSE),
-    same_father = coalesce(far_id_a == far_id_b, FALSE),
-    type = case_when(
-      same_mother & same_father ~ "full",
-      same_mother               ~ "maternal half",
-      same_father               ~ "paternal half"
-    )
-  ) %>%
-  distinct(pnr_a, pnr_b, type)
-```
-
-The `famnet` package by Luke Johnston finds sibling pairs with
-`fmn_siblings()`, labelling each pair "sibling" without the split into full
-and half siblings above. It is on GitHub only, so it may not install on your
-project. See [Algorithms and packages](packages-overview.qmd).
-
-For a sibling analysis you also need a family id for the strata. For full siblings the
-mother and father ids together identify the family. With half-siblings in the data, a person can belong to
-more than one family, so decide how the strata are formed and state it.
-
-## Step 3 - A parent's characteristic at the child's birth {#parent-characteristics}
-
-Use `mor_id` or `far_id` as the `pnr` of the parent, and look the parent up in
-the register that holds the characteristic, in the year that matters. That
-could be the mother's education, income or employment at the child's birth, or
-her diagnoses before it. The year rule is the one for any other person, so it
-is not repeated here. See [When each dimension is
-measured](socioeconomic-variables.qmd#timing) for education, employment and
-income.
-
-Before you do this, check that the parent ids match the person ids in the
-registers you look them up in. Most non-missing `mor_id` values should appear
-as a `pnr` in BEF. If they do not, the ids are not comparable in your project
-and the lookup will return nothing.
-
-A parent who was not living in Denmark in the year, or who died before it,
-will have no row. That is a missing value in your analysis, so handle it as one
-(see [Missing data](missing-data.qmd)).
-
-## Adoption and other non-biological relations {#adoption}
-
-BEF only has the current legal parents, so it cannot tell you whether the
+Do this before you build siblings. BEF only has the current legal parents, so
+an adopted child shares `mor_id` and `far_id` with its adoptive parents' other
+children, and Step 3 would make them siblings. BEF cannot tell you whether the
 relation is adoptive. FTBARN, the child file of the fertility database, can.
 It has one row per child from 1973 and, besides the parents (`mor1`, `far1`),
 two columns that mark the relation: `mor_foed_adop` for the mother and
@@ -270,11 +226,11 @@ Four points from DST's own documentation:
 
 - **It is presumed, not known.** DST: "A biological relation can only be
   determined with a DNA test, which is not available in the background
-  registers." A child conceived with donor sperm or donor egg looks like a
-  biological relation in the registers.
+  registers" (our translation). A child conceived with donor sperm or donor egg
+  looks like a biological relation in the registers.
 - **Do not count adoptions with it.** DST: "It makes no sense to count the
-  number of adopted or biological relations from the variable." Use it to
-  select or exclude, not to estimate how many.
+  number of adopted or biological relations from the variable" (our
+  translation). Use it to select or exclude, not to estimate how many.
 - **Code 14 is not an adoption.** It marks a parent of the other sex than the
   column, so a co-mother is registered in the father's column with code 14.
 - **Code 12 can concern the other parent.** The child is in the Adoption
@@ -283,6 +239,7 @@ Four points from DST's own documentation:
 In FTBARN, `mor1` is the first mother valid in CPR, and `mor2` the latest one
 when it differs. The relation of `mor1` to the child is in `mor_foed_adop`.
 
+::: {.callout-warning title="No adoption markers for 2019-2023, and wrong ones in older deliveries"}
 DST changed the adoption columns in a correction of 30 October 2025. Version 2
 of the fertility tables for reference years up to 2023 sets
 `mor_foed_adop` and `far_foed_adop` to unknown (99) for 2019 to 2023, because
@@ -291,26 +248,140 @@ other values by mistake. For children born in 2019 to 2023 adoption therefore
 cannot be identified in FTBARN, and a delivery made before the correction has
 wrong values for those years (DST, FTBARN register history). Check the `version`
 column in your delivery.
+:::
+
+The code below sorts each parent into DST's groups. Codes 31 to 39, 99 and a
+missing value all become "unknown": a child in those groups is not
+non-biological, it is a child the registers cannot say anything about.
 
 ```r
-# Adoption markers for the cohort (FTBARN) --------------------------------------
+# Step 2: adoption markers for the cohort (FTBARN) ------------------------------
 ftbarn <- read_register("ftbarn") %>%
   rename_with(tolower) %>%
   semi_join(tibble(pnr = cohort_pnrs), by = "pnr", copy = TRUE) %>%
   select(pnr, mor1, far1, mor_foed_adop, far_foed_adop) %>%
   collect()
 
-# Presumed biological mother and father: DST's codes 21 to 23
+# DST's groups for the codes in mor_foed_adop and far_foed_adop
+foed_adop_group <- function(code) {
+  code <- as.integer(code)
+  case_when(
+    code %in% 21:23 ~ "presumed biological",
+    code %in% 11:18 ~ "presumed non-biological",
+    code == 0       ~ "no parent",
+    .default        = "unknown"   # 31-39, 99 (2019-2023) and missing
+  )
+}
+
 ftbarn <- ftbarn %>%
   mutate(
-    mother_presumed_bio = as.integer(mor_foed_adop) %in% 21:23,
-    father_presumed_bio = as.integer(far_foed_adop) %in% 21:23
+    mother_relation = foed_adop_group(mor_foed_adop),
+    father_relation = foed_adop_group(far_foed_adop)
   )
 ```
 
-State in your methods that the group is *presumed* biological. A child with
-code 31 to 39 is not non-biological. It is a child the registers cannot say
-anything about.
+State in your methods that the group is *presumed* biological, and how many
+children were "unknown".
+
+## Step 3 - Siblings {#siblings}
+
+Siblings are children with the same parent id, and the type depends on how many
+parents they share:
+
+- **Full siblings** share both mother and father.
+- **Maternal half-siblings** share the mother only, and **paternal
+  half-siblings** share the father only.
+
+Do not count a pair as full siblings when one of the fathers is missing. The
+pair shares a mother, so it is at least a maternal half-sibling pair, and the
+father is unknown. The code below gives those pairs their own type ("maternal,
+father unknown"). Say in your methods how you handle them, and run the
+analysis both ways if there are many of them.
+
+The siblings you need are not only the ones in your cohort. If the exposed
+child has a brother who is not in the cohort, he is still a sibling. So first
+find everyone in BEF who has the same mother or father as someone in your
+cohort, and run the rule from Step 1 for them too.
+
+If your design needs biological siblings, use the groups from Step 2 to decide
+which children to keep, for example only children whose mother and father are
+both "presumed biological", and say so in your methods.
+
+```r
+# Step 3: sibling pairs and their type ----------------------------------------
+
+# 3a: everyone who has the same mother or father as someone in the cohort
+parent_ids <- tibble(id = unique(c(na.omit(parents$mor_id), na.omit(parents$far_id))))
+bef_all    <- read_register("bef") %>% rename_with(tolower)
+family_pnrs <- union(
+  bef_all %>% semi_join(parent_ids, by = c("mor_id" = "id"), copy = TRUE) %>% distinct(pnr),
+  bef_all %>% semi_join(parent_ids, by = c("far_id" = "id"), copy = TRUE) %>% distinct(pnr)
+) %>%
+  collect() %>%
+  pull(pnr)
+
+# 3b: the same rule as in Step 1, for the cohort and their siblings
+family <- parents_from_bef(union(cohort_pnrs, family_pnrs))
+
+# 3c: pairs of children with the same id in `key` (mor_id or far_id)
+pairs_by <- function(key) {
+  a <- family %>% rename_with(~ paste0(.x, "_a"))
+  b <- family %>% rename_with(~ paste0(.x, "_b"))
+  by <- setNames(paste0(key, "_b"), paste0(key, "_a"))
+  a %>%
+    filter(!is.na(.data[[paste0(key, "_a")]])) %>%
+    # keep = TRUE: both id columns stay. many-to-many: a mother with three
+    # children matches each child three times, which is what we want here.
+    inner_join(b, by = by, keep = TRUE, relationship = "many-to-many") %>%
+    filter(pnr_a < pnr_b)
+}
+
+# 3d: the type of each pair. A pair found through both parents appears twice,
+# with the same type, and distinct() keeps one.
+sibling_pairs <- bind_rows(pairs_by("mor_id"), pairs_by("far_id")) %>%
+  mutate(
+    same_mother = coalesce(mor_id_a == mor_id_b, FALSE),
+    same_father = coalesce(far_id_a == far_id_b, FALSE),
+    father_unknown = is.na(far_id_a) | is.na(far_id_b),
+    mother_unknown = is.na(mor_id_a) | is.na(mor_id_b),
+    type = case_when(
+      same_mother & same_father    ~ "full",
+      same_mother & father_unknown ~ "maternal, father unknown",
+      same_father & mother_unknown ~ "paternal, mother unknown",
+      same_mother                  ~ "maternal half",
+      same_father                  ~ "paternal half"
+    )
+  ) %>%
+  distinct(pnr_a, pnr_b, type)
+```
+
+The `famnet` package by Luke Johnston finds sibling pairs with
+`fmn_siblings()`, labelling each pair "sibling" without the split into full
+and half siblings above. It is on GitHub only, so it may not install on your
+project. See [Algorithms and packages](packages-overview.qmd).
+
+For a sibling analysis you also need a family id for the strata. For full siblings the
+mother and father ids together identify the family. With half-siblings in the data, a person can belong to
+more than one family, so decide how the strata are formed and state it.
+
+## Step 4 - A parent's characteristic at the child's birth {#parent-characteristics}
+
+Use `mor_id` or `far_id` as the `pnr` of the parent, and look the parent up in
+the register that holds the characteristic, in the year that matters. That
+could be the mother's education, income or employment at the child's birth, or
+her diagnoses before it. The year rule is the one for any other person, so it
+is not repeated here. See [When each dimension is
+measured](socioeconomic-variables.qmd#timing) for education, employment and
+income.
+
+Before you do this, check that the parent ids match the person ids in the
+registers you look them up in. Most non-missing `mor_id` values should appear
+as a `pnr` in BEF. If they do not, the ids are not comparable in your project
+and the lookup will return nothing.
+
+A parent who was not living in Denmark in the year, or who died before it,
+will have no row. That is a missing value in your analysis, so handle it as one
+(see [Missing data](missing-data.qmd)).
 
 ## What to write in your methods {#methods}
 
