@@ -301,14 +301,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./family-links.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Family links: parents, siblings and parents’ characteristics</span></a>
+  <a href="./special-designs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Self-controlled and sibling designs</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./special-designs.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Self-controlled and family-based designs</span></a>
+  <a href="./family-links.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Family links: parents, siblings and parents’ characteristics</span></a>
   </div>
 </li>
       </ul>
@@ -1134,7 +1134,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>      bmi <span class="sc">&gt;=</span> <span class="dv">30</span> <span class="sc">~</span> <span class="st">"Obesity"</span> <span class="co"># a missing bmi matches none of the conditions and stays NA</span></span>
 <span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    )</span>
 <span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Note that <code>TRUE ~ "Obesity"</code> as the last line would also catch every row where <code>bmi</code> is <code>NA</code> (a missing height or weight), because <code>NA &lt; 25</code> is neither true nor false. Use <code>TRUE ~</code> for a catch-all such as “Unknown”, not for a real category.</p>
+<p>Note that <code>TRUE ~ "Obesity"</code> as the last line would also catch every row where <code>bmi</code> is <code>NA</code> (a missing height or weight): <code>case_when()</code> treats a condition that is <code>NA</code> as not met, so the row falls through to <code>TRUE</code>. Use <code>TRUE ~</code> for a catch-all such as “Unknown”, not for a real category.</p>
 <div class="callout callout-style-simple callout-warning">
 <div class="callout-body d-flex">
 <div class="callout-icon-container">
@@ -1326,7 +1326,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span> <span class="co"># group per person</span></span>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(year)) <span class="sc">%&gt;%</span> <span class="co"># newest year first</span></span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="co"># keeps the newest record per person</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><code>slice()</code> only works on data that are already in R. On a lazy table (before <code>collect()</code>) it stops with the error “<code>slice()</code> is not supported on database backends”. Before <code>collect()</code>, use <code>slice_min()</code> or <code>slice_max()</code> with <code>with_ties = FALSE</code> instead (see below).</p>
+<p>Use <code>slice()</code> on data that are already in R. On a lazy table (before <code>collect()</code>) what happens depends on how the table was opened:</p>
+<ul>
+<li>A DuckDB table through dbplyr stops with “<code>slice()</code> is not supported on database backends”.</li>
+<li>An arrow table (<code>open_dataset()</code>) stops too.</li>
+<li>A duckplyr table can run it without an error, by pulling the table into R first. On a whole register that is the RAM problem in <a href="./extraction-step-by-step.html">Phase 5</a>.</li>
+</ul>
+<p>Before <code>collect()</code> on a DuckDB or duckplyr table, use <code>slice_min()</code> or <code>slice_max()</code> with <code>with_ties = FALSE</code> instead (see below). On an arrow table even a grouped <code>slice_max()</code> stops (“Slicing grouped data not supported in Arrow”), so filter first, <code>collect()</code>, and slice in R.</p>
 <p><strong><code>slice_max(column, n = 1)</code></strong> and <strong><code>slice_sample(n = 1)</code></strong> do a similar job without a separate <code>arrange()</code> step: <code>slice_max(date_contact, n = 1)</code> keeps the row with the latest date per group; <code>slice_sample(n = 200)</code> picks a random sample of rows instead (used for a practice cohort, not for choosing a real one).</p>
 <p><code>slice_max()</code> and <code>slice_min()</code> keep <strong>ties</strong> by default, so a person with two contacts on the same latest date gets two rows. Add <code>with_ties = FALSE</code> to get exactly one row per group:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
