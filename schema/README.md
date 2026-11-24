@@ -45,7 +45,7 @@ Every fact records where it came from:
 ```yaml
 provenance:
   source_url: ...
-  source_type: dst_variable_list | dst_documentation | esundhed_kodeark | nomenclature | unverified | unknown
+  source_type: dst_variable_list | dst_documentation | sds_documentation | esundhed_kodeark | nomenclature | unverified | unknown
   verified_on: 2026-08-31
   verified_against: "DST variable list BEF"
   guide_page: register-reference.qmd
@@ -58,6 +58,12 @@ value set AND a validity window for every code. That is where the fact that LPR2
 code `c_kontaars` 4 meant self-inflicted injury until 1993 and suicide from 1994
 comes from. It is deliberately not `dst_documentation`: these sheets are not
 DST's.
+
+`sds_documentation` is any other document from Sundhedsdatastyrelsen: the
+register documentation on esundhed.dk and the pdfs on sundhedsdatastyrelsen.dk
+(MFR, the cancer register, the DRG-grouped LPR3 data and others).
+`dst_documentation` is kept for DST's own pages. The validator rejects
+`dst_documentation` with a source URL on one of Sundhedsdatastyrelsen's hosts.
 
 A boolean `confirmed` would blur two very different things: documented by DST,
 and asserted with no published source behind it. For anyone generating synthetic
