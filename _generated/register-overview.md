@@ -9,6 +9,8 @@
 | [DODSAARS](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARS%20-%20D%C3%B8ds%C3%A5rssagsregistret.html) | `"dodsaars"` | `pnr` | 1970 to 2001 | `d_dodsdto`, `c_dodsmaade`, `c_dod1` |
 | [DODSAARSAGER](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARSAGER%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaarsager"` | `pnr` | 2022 to 2024 | `doedsdato`, `doedsaarsag_tilgrundliggende`, `doedsaarsag_kode_1` |
 | [DODSAASG](https://www.dst.dk/extranet/ForskningVariabellister/DODSAASG%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaasg"` | `pnr` | 2002 to 2022 | `d_dodsdato`, `c_dodtilgrundl_acme`, `c_dod_1a` |
+| [DRG_KONTAKTER](https://www.dst.dk/extranet/ForskningVariabellister/DRG_KONTAKTER%20-%20Landspatientregistret%20(LPR3)%20takster%20%E2%80%93%20DRG%20kontakter.html) | `"drg_kontakter"` | `id`, `drgsghforlob_id`, `pnr` | 2021 to 2025 | `aktivitetsaar`, `dia01`, `drg` |
+| [DRG_SGHFORLOB](https://www.dst.dk/extranet/ForskningVariabellister/DRG_SGHFORLOB%20-%20Landspatientregistret%20(LPR3)%20takster%20%E2%80%93%20DRG%20sygehusforl%C3%B8b.html) | `"drg_sghforlob"` | `id`, `pnr` | 2021 to 2025 | `adiag_drgsghf`, `aktivitetsaar`, `drg_drgsghf` |
 | [FAIK](https://www.dst.dk/extranet/ForskningVariabellister/FAIK%20-%20Familieindkomster.html) | `"faik"` | `familie_id` | 1987 to 2024 | `famaekvivadisp_13`, `year`, `famdisponibel_13` |
 | [FTBARN](https://www.dst.dk/extranet/ForskningVariabellister/FTBARN%20-%20Fertilitet%20-%20b%C3%B8rn.html) | `"ftbarn"` | `PNR` | 1973 to 2025 | `FOED_DAG`, `LEVENDE_ELLER_DOEDFOEDT` |
 | [FTFORAEL](https://www.dst.dk/extranet/ForskningVariabellister/FTFORAEL%20-%20Fertilitet%20-%20for%C3%A6lder.html) | `"ftforael"` | `PNR` | 1973 to 2025 | `FORAELDER_PNR`, `MOR_FAR` |
