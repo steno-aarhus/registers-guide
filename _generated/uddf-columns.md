@@ -5,16 +5,16 @@
 | **`pnr`** | character | join key | Personal identifier |
 | `hfaudd` | character | code | Highest completed education |
 | `hf_vfra` | date | date | Date the education was reached |
+| `hf_vtil` | date | date | Date the education stops being the highest |
 
 <details>
-<summary>All other columns (6)</summary>
+<summary>All other columns (5)</summary>
 
 | Column | Type | Role | Label |
 | --- | --- | --- | --- |
 | `cprtjek` | character | value | CPR check |
 | `cprtype` | character | value | CPR type |
 | `hf_kilde` | character | code | Source of the education record |
-| `hf_vtil` | date | date | Date the education stops being the highest |
 | `instnr` | character | code | Institution number |
 | `version` | character | value | Version |
 
