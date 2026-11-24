@@ -6,119 +6,182 @@ pagetitle: "Healthcare costs from Danish registers (DRG at DST)"
 description: "Healthcare costs from Danish registers: DRG-priced hospital contacts at Statistics Denmark (DST), the tariff year in the LPR3 DRG files, contact or hospital-course prices, and what a DRG price covers."
 ---
 
+Use this page if your study needs healthcare costs per person. The registers
+hold no single cost variable: costs are assembled from several sources, each
+priced in its own way. This page says where the costs are, and how to read the
+DRG registers at Statistics Denmark (DST), which put a price on hospital
+contacts.
+
 ::: {.callout-warning}
-**Under development - confirm everything in your own delivery.** This section
-describes cost sources at the register level. Exact table and column names and
-the available years **change from year to year** (the DRG rate system is updated
-annually) and are not verified here. Use it as a pointer, and clarify the
-specific files with your data manager.
+**Check your own delivery.** The registers and years below were checked against
+[DST's register
+overview](https://www.dst.dk/extranet/ForskningVariabellister/Oversigt%20over%20registre.html)
+in November 2026. The Danish Health Data Authority (Sundhedsdatastyrelsen, SDS)
+changes the tariffs and the grouping logic every year, so column names and
+years can change. Compare with `colnames()` in your own data.
 :::
 
-To compute **healthcare use/costs** per person, they are typically assembled
-from several sources:
+## Where costs come from {#sources}
 
-- **Somatic hospital contacts:** DRG-grouped data from the Danish Health Data
-  Authority (SDS). Rates express average operating expenses per DRG group and
-  are computed annually - see [SDS DRG
-  rates](https://sundhedsdatastyrelsen.dk/data-og-registre/sundhedsoekonomi/drg/drg-takster).
+- **Somatic hospital contacts:** priced by DRG (Diagnosis Related Groups). SDS
+  places each hospital contact in a DRG group and sets a tariff for each group
+  every year, the average operating cost of a patient in that group ([SDS DRG
+  rates](https://sundhedsdatastyrelsen.dk/data-og-registre/sundhedsoekonomi/drg/drg-takster)).
   In the LPR2 period, inpatients were grouped by DRG and outpatients by DAGS
   (Dansk Ambulant Grupperings System) ([SDS, DRG-grouped
   LPR](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=12)).
   Today all somatic patients are settled with DRG tariffs ([Takstvejledning
   2024](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15344/Takstvejledning_2024.pdf),
-  chapter 3). Which files DST holds is in [DRG data at DST](#drg-at-dst).
-- **Psychiatric hospital contacts:** are **not** billed by DRG. Inpatients are
-  settled with a bed-day rate and outpatient visits with a visit rate, and
-  "Frem til takstsystem 2018 blev der beregnet vejledende DRG- og DAGS-takster
-  for psykiatrien" ([Takstvejledning
+  section 3.1). Which registers DST holds is in [DRG data at
+  DST](#drg-at-dst).
+- **Psychiatric hospital contacts:** are not settled by DRG. Inpatients are
+  settled with a bed-day rate and outpatient visits with a visit rate. SDS
+  calculated indicative DRG and DAGS tariffs for psychiatry up to tariff system
+  2018 ([Takstvejledning
   2024](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15344/Takstvejledning_2024.pdf),
-  section 3.2). Keep somatic and psychiatric separate.
-- **Primary sector** (general practice, specialists etc.): fees in `sysi`/`sssy`
-  ([Overview of registers](register-reference.qmd#sysi-sssy)).
-- **Medication:** patient co-payment vs. reimbursement in
+  section 3.2), and DST holds them in `DRGPSYK_HEL` and `DRGPSYK_AMB`. Whether
+  the current DRG registers hold psychiatric activity is unclear, see
+  [Psychiatry in the LPR3 DRG registers](#psychiatry). Keep somatic and
+  psychiatric costs apart.
+- **Primary sector** (general practice, specialists etc.): fees in
+  `sysi`/`sssy` ([Overview of
+  registers](register-reference.qmd#sysi-sssy)).
+- **Prescription medication:** patient co-payment and reimbursement in
   [LMDB](register-reference.qmd#lmdb).
+- **Medication given in hospital:** [Hospital medication
+  (SMR)](hospital-medication.qmd), but read [What a DRG price
+  covers](#drg-price-covers) before you add it to DRG prices.
 
 ## DRG data at DST {#drg-at-dst}
 
-<!-- TODO(Sara): wording for the lead-in to this table -->
-DST holds the DRG-grouped data as separate registers for each period ([DST's
-register
+DST holds the DRG-grouped data in a separate set of registers for each period,
+so a study period that crosses 2018 needs more than one set ([DST's register
 overview](https://www.dst.dk/extranet/ForskningVariabellister/Oversigt%20over%20registre.html)):
 
-  | Register                                                 | Content                                         | Years                        | Status                   |
-  | -------------------------------------------------------- | ----------------------------------------------- | ---------------------------- | ------------------------ |
-  | `DRGSOMA_HEL`, `DRGSOMA_AMB`                             | LPR2, inpatients and outpatients                | 2002-2017                    | Closed 15 January 2024   |
-  | `DRGSOMA_KONTAKT`, `DRGSOMA_SGHFORLOB`, `DRGSOMA_PROCEDURE` | Contacts, hospital courses and procedures     | 2018                         | Closed 15 January 2024   |
-  | `DRGPSYK_HEL`, `DRGPSYK_AMB`                             | Indicative psychiatric tariffs                  | 2004-2018                    | Closed 15 January 2024   |
-  | `DRG_KONTAKTER`, `DRG_SGHFORLOB`                         | LPR3, contacts and hospital courses             | Tariff years 2021-2025       | Updated yearly           |
-  | `DRG_DIAGNOSE`, `DRG_PROCEDURE` and three more            | LPR3, diagnoses, procedures and internal codes  | Tariff years 2022-2025       | Updated yearly           |
+  | Register                                                    | Content                                        | Years                  | Status                 |
+  | ----------------------------------------------------------- | ---------------------------------------------- | ---------------------- | ---------------------- |
+  | `DRGSOMA_HEL`, `DRGSOMA_AMB`                                | LPR2, inpatients and outpatients               | 2002-2017              | Closed 15 January 2024 |
+  | `DRGSOMA_KONTAKT`, `DRGSOMA_SGHFORLOB`, `DRGSOMA_PROCEDURE` | Contacts, hospital courses and procedures      | 2018                   | Closed 15 January 2024 |
+  | `DRGPSYK_HEL`, `DRGPSYK_AMB`                                | Indicative psychiatric tariffs                 | 2004-2018              | Closed 15 January 2024 |
+  | `DRG_KONTAKTER`, `DRG_SGHFORLOB`                            | LPR3, contacts and hospital courses            | Tariff years 2021-2025 | Updated yearly         |
+  | `DRG_DIAGNOSE`, `DRG_PROCEDURE` and three more              | LPR3, diagnoses, procedures and internal codes | Tariff years 2022-2025 | Updated yearly         |
+
+The columns of `DRG_KONTAKTER` and `DRG_SGHFORLOB` are listed on [Overview of
+registers](register-reference.qmd#drg-lpr3).
+
+<details>
+<summary>The LPR2 registers, and stays that crossed into LPR3 in 2019</summary>
+
+- In `DRGSOMA_HEL` and `DRGSOMA_AMB`, `V_PRIS` is given in 1,000 kr. ("Angivet
+  i 1.000 kr."), and for inpatients `V_AAR` is the year of discharge from the
+  last contact of the course, so costs follow the discharge year ([SDS,
+  DRG-grouped
+  LPR](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=12)).
+- A stay that crossed the change to LPR3 in 2019 is priced on its LPR3 course.
+  Its LPR2 course gets the group 90UA07 "Flyttet til DRG LPR3" (moved to DRG
+  LPR3) ([SDS, DRG-grouped LPR3 data, tariff system
+  2019](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15120/DRG_grupperet_LPR3_data_2019.pdf),
+  section 3.4.3.3).
+
+</details>
 
 ## The year of an LPR3 DRG file is the tariff year {#drg-tariff-year}
 
 In `DRG_KONTAKTER` and `DRG_SGHFORLOB` the year in the file name is the tariff
-year, not the year the activity took place. DST: "DRG tabellerne for de
-forskellige takstår indeholder information om kontakter (aktiviteter) for det
-pågældende og de to foregående aktivitetsår, jf. variablen AKTIVITETSAAR"
-([DST, register note for
+year ("Takståret"), not the year the activity took place. Each yearly file
+holds that year and the two years before it, given by `AKTIVITETSAAR` ([DST,
+register note for
 DRG_KONTAKTER](https://www.dst.dk/extranet/ForskningVariabellister/Bemaerkning/DRG_KONTAKTER%20-%20Landspatientregistret%20(LPR3)%20takster%20%E2%80%93%20DRG%20kontakter.html)).
 The first release grouped tariff system 2021 with activity years 2019 to 2021
 and tariff system 2022 with 2020 to 2022 ([DST, register history for
 DRG_KONTAKTER](https://www.dst.dk/extranet/ForskningVariabellister/Registerhistorik/DRG_KONTAKTER.html),
-14 May 2024).
+14 May 2024). `AKTIVITETSAAR` is the year the last contact of the hospital
+course ended ([SDS, DRG-grouped LPR3 data, tariff system
+2025](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638769532677303948/DRG-grupperet%20LPR3-data%20-%20Takstsystem%202025%20-%20Dokumentation.pdf),
+section 3).
 
-- **Do not stack the yearly files.** Most activity is in three files, each
-  time priced with a different tariff system. Choose rows by `AKTIVITETSAAR`.
-- **Activity in 2019 and 2020** is only in the files for tariff years 2021 and
-  2022, so it is priced with those tariffs.
-- **Prices compare within one tariff system.** SDS: tariffs hold for one
-  calendar year, "men i uddata grupperes typisk flere aktivitetsår, så årene
-  kan sammenlignes i samme takstsystem" ([SDS, DRG-grouped LPR3 data, tariff
-  system
+- **Do not stack the yearly files.** Most activity is in three files, priced
+  each time with a different tariff system.
+- **Prices compare within one tariff system.** Tariffs hold for one calendar
+  year, and SDS groups several activity years in each file so that the years
+  "kan sammenlignes i samme takstsystem" (can be compared in the same tariff
+  system) ([SDS, tariff system
   2025](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638769532677303948/DRG-grupperet%20LPR3-data%20-%20Takstsystem%202025%20-%20Dokumentation.pdf),
-  section 6.3). `AKTIVITETSAAR` is the year the last contact of the hospital
-  course ended (same source, section 3).
+  section 6.3).
+- **Prices are in the tariff year's price level.** A tariff system gives its
+  tariffs in that year's price and wage level, for example "2024 pris- og
+  lønniveau" in [Takstvejledning
+  2024](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15344/Takstvejledning_2024.pdf)
+  (section 3.1). Bring all years to one price year before you sum or compare
+  across years.
+
+There are two consistent ways to choose rows. The first is one tariff system:
+take one file and its three activity years. The prices compare across those
+years, but you get three years at most. The second is each year's own tariffs:
+take each activity year from the file with the same tariff year
+(`AKTIVITETSAAR` equal to the year in the file name). There are no files for
+tariff years 2019 and 2020, so take those two activity years from the 2021
+file. The second way follows from how DST builds the files; it is not a DST
+recommendation.
 
 ## Contact or hospital course: price one level {#drg-price-level}
 
-Both levels carry a price: `PRIS_DRG` is the tariff of the contact's DRG group
-and `PRIS_DRG_DRGSGHF` the tariff of the hospital course's DRG group, and
-`TOTALPRIS_*` adds the long-stay price at each level ([SDS, tariff system
+Both registers carry a price. In `DRG_KONTAKTER`, `PRIS_DRG` is the tariff of
+the contact's DRG group. In `DRG_SGHFORLOB`, `PRIS_DRG_DRGSGHF` is the tariff of
+the hospital course's DRG group. `TOTALPRIS_DRG` and `TOTALPRIS_DRGSGHF` add the
+long-stay price at each level ([SDS, tariff system
 2025](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638769532677303948/DRG-grupperet%20LPR3-data%20-%20Takstsystem%202025%20-%20Dokumentation.pdf),
-Tabel 25). Settlement happens "pr. DRG-sygehusforløb" ([Takstvejledning
+Tabel 25). Summing contact and course prices counts the same activity twice.
+
+Use the hospital course unless you have a reason not to. Somatic hospital
+treatment is settled "pr. DRG-sygehusforløb" (per DRG hospital course)
+([Takstsystem
 2026](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639014923392486672/Takstsystem%202026.pdf),
-section 3.1.1). Summing contact and course prices counts the same activity
-twice.
+section 3.1.1), so `TOTALPRIS_DRGSGHF` is the price that was settled. A contact
+price comes from grouping that contact on its own. It helps when you need to
+place costs at a date within a long course, but the sum of the contact prices
+need not equal the course price.
 
 ## What a DRG price covers {#drg-price-covers}
 
-"Taksterne afspejler de beregnede, direkte udgifter til behandling af
-patienten og til udførelse af genoptræningsydelser. Der er således ikke
-inkluderet udgifter til eksempelvis tjenestemandspension, forrentning og
-afskrivning" ([Takstvejledning
+A tariff reflects the calculated direct costs of treating the patient and of
+rehabilitation. It does not include, for example, civil-servant pensions,
+interest or depreciation ([Takstvejledning
 2024](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15344/Takstvejledning_2024.pdf),
-chapter 3). Some services are settled separately at cost, such as SYD02,
-"Udleveret medicin til patienter for mere end 1.000 kr. pr. dag"
-([Takstvejledning
-2026](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639014923392486672/Takstsystem%202026.pdf),
-Bilagstabel 7). Medicine treatment at the hospital is itself grouped and
-priced in DRG, for example in the groups 34PR01 to 34PR10 "Medicin-behandling"
-(same source, Bilag B3.2), so adding costs from the [Hospital Medication
-Register](hospital-medication.qmd) on top of DRG prices can count it twice.
+section 3.1).
 
-## The LPR2 period and 2019 {#drg-lpr2}
+Medication can go wrong in both directions:
 
-- In `DRGSOMA_HEL` and `DRGSOMA_AMB`, `V_PRIS` is "Angivet i 1.000 kr.", and
-  for inpatients `V_AAR` is "Året for udskrivningsdatoen i den sidste kontakt
-  i forløbet", so costs follow the discharge year ([SDS, DRG-grouped
-  LPR](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=12)).
-- A stay that crossed the change to LPR3 in 2019 is priced on its LPR3 course.
-  Its LPR2 course gets the group 90UA07 "Flyttet til DRG LPR3" ([SDS,
-  DRG-grouped LPR3 data, tariff system
-  2019](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15120/DRG_grupperet_LPR3_data_2019.pdf),
-  section 3.4.3.3).
+- **Ordinary hospital medicine is in the DRG price.** Medicine treatment is
+  itself grouped and priced in DRG, for example in the groups 34PR01 to 34PR10
+  "Medicin-behandling" ([Takstsystem
+  2026](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639014923392486672/Takstsystem%202026.pdf),
+  Bilag B3.2). Adding costs from the [Hospital Medication
+  Register](hospital-medication.qmd) on top of DRG prices can count it twice.
+- **Expensive medicine is not.** Medicine dispensed for more than 1,000 kr. per
+  day is a special service (særydelse, SYD02), settled separately at cost
+  ([Takstsystem
+  2026](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/639014923392486672/Takstsystem%202026.pdf),
+  Bilagstabel 7), so the DRG price leaves it out. DST's variable lists for
+  `DRG_KONTAKTER` and `DRG_SGHFORLOB` have no column for special services.
 
-<!-- TODO(Sara): wording, and whether this closing paragraph stays -->
-Availability of cost data varies between projects and years. The pattern is
-inspired by [the Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview),
-but the variable names there are from a 2022 delivery and should not be
-assumed current.
+## Psychiatry in the LPR3 DRG registers {#psychiatry}
+
+SDS writes that the DRG-grouped LPR3 data hold "Kun somatisk aktivitet"
+(somatic activity only) ([SDS, tariff system
+2025](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638769532677303948/DRG-grupperet%20LPR3-data%20-%20Takstsystem%202025%20-%20Dokumentation.pdf),
+section 3.4.1.2). DST's register history for `DRGPSYK_HEL` says the register
+was closed because the psychiatric tariffs are now included with the somatic
+ones "i det nye DRG" (in the new DRG), in `DRG_KONTAKTER` and `DRG_SGHFORLOB`
+([DST, register history for
+DRGPSYK_HEL](https://www.dst.dk/extranet/ForskningVariabellister/Registerhistorik/DRGPSYK_HEL.html),
+15 January 2024). The two statements do not agree. Tabulate `SPECIALE` in your
+own delivery before you assume that psychiatric contacts are present or absent.
+
+## See also
+
+- [Overview of registers](register-reference.qmd#drg-lpr3): the columns of
+  `DRG_KONTAKTER` and `DRG_SGHFORLOB`.
+- [The Plana-Ripoll group's code on OSF](https://osf.io/zhfyp/overview): the
+  idea of assembling costs from these sources comes from there. Its variable
+  names are from a 2022 delivery and should not be assumed current.
