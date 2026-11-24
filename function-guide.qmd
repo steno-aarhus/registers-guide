@@ -451,9 +451,9 @@ df <- df %>%
 ```
 
 Note that `TRUE ~ "Obesity"` as the last line would also catch every row where
-`bmi` is `NA` (a missing height or weight), because `NA < 25` is neither true
-nor false. Use `TRUE ~` for a catch-all such as "Unknown", not for a real
-category.
+`bmi` is `NA` (a missing height or weight): `case_when()` treats a condition
+that is `NA` as not met, so the row falls through to `TRUE`. Use `TRUE ~` for a
+catch-all such as "Unknown", not for a real category.
 
 ::: {.callout-warning}
 **Check the units first.** BMI = weight (kg) / height (m)². If height is in
@@ -671,10 +671,20 @@ group_by(pnr) %>% # group per person
   slice(1) # keeps the newest record per person
 ```
 
-`slice()` only works on data that are already in R. On a lazy table (before
-`collect()`) it stops with the error "`slice()` is not supported on database
-backends". Before `collect()`, use `slice_min()` or `slice_max()` with
-`with_ties = FALSE` instead (see below).
+Use `slice()` on data that are already in R. On a lazy table (before
+`collect()`) what happens depends on how the table was opened:
+
+- A DuckDB table through dbplyr stops with "`slice()` is not supported on
+  database backends".
+- An arrow table (`open_dataset()`) stops too.
+- A duckplyr table can run it without an error, by pulling the table into R
+  first. On a whole register that is the RAM problem in [Phase
+  5](extraction-step-by-step.qmd).
+
+Before `collect()` on a DuckDB or duckplyr table, use `slice_min()` or
+`slice_max()` with `with_ties = FALSE` instead (see below). On an arrow table
+even a grouped `slice_max()` stops ("Slicing grouped data not supported in
+Arrow"), so filter first, `collect()`, and slice in R.
 
 **`slice_max(column, n = 1)`** and **`slice_sample(n = 1)`** do a similar job
 without a separate `arrange()` step: `slice_max(date_contact, n = 1)` keeps the
