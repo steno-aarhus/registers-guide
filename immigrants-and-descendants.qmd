@@ -28,13 +28,18 @@ status, not ethnicity itself ([Hjorth et al.
 | Person of Danish origin, immigrant or descendant | BEF | `ie_type` | 1985 |
 | Country of origin | BEF | `opr_land` | 1985 |
 | Date, direction and country of each migration | VNDS | `haend_dato`, `indud_kode`, `indud_land` | 1973 |
-| First immigration, latest immigration and months of residence | BEF | `foerste_indvandring`, `seneste_indvandring`, `opholdmd_dk` | 2004 |
+| First and latest immigration | BEF | `foerste_indvandring`, `seneste_indvandring` | 2004 |
+| Months of residence in Denmark | BEF | `opholdmd_dk` | 1985 |
 | Ground of residence, for example refugee | OPHG | `kategori`, `grundlag`, `forklar` | 1997 |
 
+BEF is the population register and VNDS the migration register. DST closed
+VNDS in February 2026 and split it into `VNDS_ind`, `VNDS_ud` and `VNDS_hist`;
+see the [register reference](register-reference.qmd) for which one you have.
 Sources: [Hjorth et al. 2025](https://doi.org/10.2147/CLEP.S520772), Table 13,
 and [DST's variable list for
 BEF](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
-Column lists for BEF and VNDS are in the [register
+SEPLINE gives 2004 for all three BEF migration columns, but DST's variable list
+has `opholdmd_dk` from 1985. Column lists for BEF and VNDS are in the [register
 reference](register-reference.qmd).
 
 ## Immigrant, descendant or Danish origin (`ie_type`) {#ie-type}
@@ -42,21 +47,22 @@ reference](register-reference.qmd).
 DST's definitions, from its documentation of
 [IE_TYPE](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/Udlaendinge/IE-TYPE):
 
-| Code | Group | DST's wording, and a translation |
-| ---- | ----- | -------------------------------- |
-| 1 | Persons of Danish origin | "Personer med dansk oprindelse er personer - uanset fødested - der har mindst én forælder, der både er dansk statsborger og født i Danmark." At least one parent is both a Danish citizen and born in Denmark, wherever the person was born. |
-| 2 | Immigrants | "Indvandrere er født i udlandet. Ingen af forældrene er både danske statsborgere og født i Danmark." Born abroad, and no parent is both a Danish citizen and born in Denmark. |
-| 3 | Descendants | "Efterkommere er født i Danmark. Ingen af forældrene er både danske statsborgere og født i Danmark." Born in Denmark, and no parent is both a Danish citizen and born in Denmark. |
+| Code | Group | DST's definition (our translation) |
+| ---- | ----- | ---------------------------------- |
+| 1 | Persons of Danish origin | At least one parent is both a Danish citizen and born in Denmark, wherever the person was born. |
+| 2 | Immigrants | Born abroad, and no parent is both a Danish citizen and born in Denmark. |
+| 3 | Descendants | Born in Denmark, and no parent is both a Danish citizen and born in Denmark. |
 | 9 | Not stated (uoplyst) | |
 
 The codes and labels are in DST's classification [Herkomst,
 v1:1980](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/herkomst),
-valid from 1 January 1980 and still valid. DST's high-quality page lists "uoplyst" as
-`0`, not `9`, so run `count(ie_type)` on your own delivery.
+valid from 1 January 1980 and still valid. DST's own page for IE_TYPE says that
+the variable has no value set, so run `count(ie_type)` on your own delivery to
+see which codes it holds, including the one for unknown.
 
-When no parent is known, DST uses the person's own information: "Hvis der ikke
-findes oplysninger om nogen af forældrene, og personen er født i udlandet,
-opfattes personen også som indvandrer." A person with no known parent who is a
+When no parent is known, DST uses the person's own information: if there is no
+information on either parent and the person was born abroad, the person is also
+counted as an immigrant (our translation). A person with no known parent who is a
 foreign citizen is a descendant, and a person with no known parent who was born
 in Denmark is of Danish origin.
 
@@ -78,18 +84,19 @@ OPR_LAND](https://www.dst.dk/da/Statistik/dokumentation/Times/cpr-oplysninger/op
 So a descendant's country of origin follows the parents, not the place where the
 descendant was born. DST's definition does not tell you whether one of the
 parents was born in Denmark. SEPLINE suggests a separate group for people of
-Danish origin with one parent born in Denmark and one parent born abroad, built
-from the parents' `opr_land` (Table 14 in [Hjorth et al.
-2025](https://doi.org/10.2147/CLEP.S520772)). The parents are found through
-`mor_id` and `far_id` in BEF.
+Danish origin with one parent born in Denmark and one parent born abroad (Table
+14 in [Hjorth et al. 2025](https://doi.org/10.2147/CLEP.S520772)). The parents
+are found through `mor_id` and `far_id` in BEF. A parent's `opr_land` does not
+give that parent's birthplace: by the rules above, a parent born abroad to a
+Danish-born Danish citizen is of Danish origin and has Denmark.
 
 Some codes are not current countries. DST lists former states such as the Soviet
 Union, which appear when a person is still recorded in CPR with that country,
 and areas such as Palestine (5157), Gaza (5223), the West Bank (5393) and East
 Jerusalem (5437). A number of codes were retired and folded into others, for
-example East Germany (5184) into Germany (5180) on 3 October 1990. Group by a
-mapping that handles these, see the [register
-reference](register-reference.qmd).
+example East Germany (5184) into Germany (5180) on 3 October 1990. Group through DST's
+classification below rather than by hand, and check with `anti_join()` that
+every code in your data gets a group.
 
 ## Western and non-Western, and other country groupings {#groupings}
 
@@ -109,10 +116,12 @@ are the EU countries, the United Kingdom, Andorra, Iceland, Liechtenstein,
 Monaco, Norway, San Marino, Switzerland, the Vatican, Canada, the USA, Australia
 and New Zealand. Denmark, the Faroe Islands and Greenland form a group of their
 own. The United Kingdom is Western and not in the EU/EEA group, so the two
-groupings are not the same.
+groupings are not the same. In the EU/EEA grouping, Denmark, the Faroe Islands
+and Greenland sit inside the EU/EEA group, so set people of Danish origin apart
+with `ie_type` first if you compare EU/EEA with the rest.
 
 DST has used the Western and non-Western grouping since 2002. In 2019 DST
-concluded that it "fortsat er anvendelig til statistiske opgørelser" and kept
+concluded that it is still usable for statistics (our translation) and kept
 it. One reason is that it is written into current legislation. DST describes the
 aim as groups that differ as much as possible from each other and are fairly
 uniform within, not groups by culture, and notes that Japan is non-Western. At
@@ -139,7 +148,7 @@ not recommend for small study populations. Some studies approximate refugee
 status by country of origin and arrival in 1986 to 1992 ([Hjorth et al.
 2025](https://doi.org/10.2147/CLEP.S520772), section on ethnicity). Length of
 stay can be calculated from the migration events or taken from
-`opholdmd_dk` in BEF from 2004.
+`opholdmd_dk` in BEF from 1985.
 
 ## Limitations {#limitations}
 
@@ -148,9 +157,11 @@ stay can be calculated from the migration events or taken from
   citizen, DST classifies the child as of Danish origin, and the country of
   origin changes with it. Decide the date at which you fix the status, and
   report it.
-- **Before 2008, only people resident the whole year.** For data before 2008,
+- **Before 2008, one status per year.** SEPLINE states that before 2008
   `ie_type` and `opr_land` are only available for people who lived in Denmark
-  the whole calendar year. Newly registered residents and people without a
+  the whole calendar year. DST's page for IE_TYPE describes the population as
+  people with permanent residence in Denmark on 1 January of the year (our
+  translation). Newly registered residents and people without a
   Danish CPR number, such as asylum seekers, are missing. After 2008 the
   information is quarterly. SEPLINE suggests using a nearby year if the index
   year is missing ([Hjorth et al.
@@ -161,20 +172,23 @@ stay can be calculated from the migration events or taken from
 - **No history before arrival.** Births, diagnoses and education abroad are not
   in the Danish registers. For education, see how [missing education is
   handled](socioeconomic-variables.qmd#education). A sensitivity analysis
-  restricted to people born in Denmark avoids the problem for your outcome.
+  restricted to people born in Denmark reduces the problem for your outcome, but
+  it also removes the immigrants, who may be the group your question is about.
 - **Not a measure of ethnicity.** The definitions depend on citizenship and
   birthplace, and they say nothing about how a person identifies. SEPLINE adds
   that these variables proxy many other circumstances and are often mediators
   of socioeconomic differences, not confounders.
 - **Emigration.** People leave and return. Use the migration events to censor at
-  emigration, see [Phase 10](build-study-population.qmd#step-1).
+  emigration, see [Attach date of death and emigration](joins.qmd#death-emigration).
 
 ## Count the groups in your cohort {#count}
 
 Check by eye on your own data before you build on it. The sketch reads the most
-recent BEF snapshot on or before the index year and keeps unknown as its own
-category, as on the [socioeconomic variables
-page](socioeconomic-variables.qmd#missing).
+recent BEF snapshot up to the year before index, the same baseline year as the
+[socioeconomic recipes](socioeconomic-variables.qmd), so the status is fixed
+before follow-up starts. It keeps unknown as its own category, as on the
+[socioeconomic variables page](socioeconomic-variables.qmd#missing), and keeps
+people with no BEF row in that period apart from DST's own unknown.
 
 ```r
 library(dplyr) # select, collect, inner_join, filter, arrange, distinct, left_join, mutate, count
@@ -185,10 +199,10 @@ library(fastreg) # read_register
 bef <- read_register("bef") %>%
   rename_with(tolower)
 
-# One row per cohort row: the BEF snapshot from the index year (use the same
-# year rule as in the socioeconomic recipes if you prefer the year before).
-# If your BEF holds several snapshots per year, keep the December one first,
-# as under "Check your BEF" on the socioeconomic variables page.
+# One row per cohort row: the newest BEF snapshot up to the year before index
+# (year_baseline, as in the socioeconomic recipes). If your BEF holds several
+# snapshots per year, keep the December one first, as under "Check your BEF"
+# on the socioeconomic variables page.
 origin <- bef %>%
   select(pnr, year, ie_type, opr_land) %>%
   # only the cohort's pnr, filtered in the database: BEF for the whole
@@ -196,10 +210,11 @@ origin <- bef %>%
   semi_join(distinct(cohort, pnr), by = "pnr", copy = TRUE) %>%
   collect() %>%
   inner_join(
-    cohort %>% mutate(index_year = year(index_date)) %>% select(row_id, pnr, index_year),
-    by = "pnr"
+    cohort %>% mutate(year_baseline = year(index_date) - 1) %>% select(row_id, pnr, year_baseline),
+    by = "pnr",
+    relationship = "many-to-many" # a pnr can have several snapshots AND several cohort rows
   ) %>%
-  filter(year <= index_year) %>%
+  filter(year <= year_baseline) %>%
   arrange(row_id, desc(year)) %>%
   distinct(row_id, .keep_all = TRUE) # newest snapshot per cohort row
 
@@ -207,10 +222,11 @@ cohort <- cohort %>%
   left_join(select(origin, row_id, ie_type, opr_land), by = "row_id") %>%
   mutate(
     origin_group = case_when(
+      !row_id %in% origin$row_id ~ "Not in BEF", # no snapshot up to the baseline year
       ie_type == 1 ~ "Danish origin",
       ie_type == 2 ~ "Immigrant",
       ie_type == 3 ~ "Descendant",
-      TRUE ~ "Missing"
+      TRUE ~ "Missing" # DST's own unknown code, or no value
     )
   )
 
