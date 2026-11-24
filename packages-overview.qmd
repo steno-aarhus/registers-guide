@@ -234,30 +234,75 @@ You must extract a lookback period from LPR yourself (often 5 years before index
 
 ```r
 # Example: extract lookback and pass all diagnoses (LPR2 and LPR3)
-# get_lpr_diagnoses() is the helper from Extract from LPR: define it first.
-# Without icd_codes it returns every diagnosis of the types you ask for, for
-# the pnr you give it, from LPR2 (somatic and psychiatric) and LPR3.
+# Open lpr_adm, lpr_diag, psyk_adm, psyk_diag, lpr3_k and lpr3_d first, as
+# under "Open registers" in get_lpr_diagnoses() in Extract from LPR.
 library(dplyr)
 
 # One row per (pnr, index_date), with each person's own 5-year lookback
-# window attached - this table is the size of your cohort, not the register.
-# If your cohort has repeated pnr (e.g. matched with replacement), each
-# occurrence gets its own row and its own window here.
+# window already attached - this table is the size of your cohort, not the
+# register. If your cohort has repeated pnr (e.g. matched with replacement),
+# each occurrence gets its own row and its own window here. The window runs
+# from window_start up to, but not including, window_end (the index date).
 lookback_keys <- cohort %>%
+  select(pnr, index_date) %>%
   mutate(window_start = index_date - 1825,   # 5 years = 1825 days, as on the NMI page
-         window_end   = index_date - 1)
+         window_end   = index_date)
 
-# All A/B/G diagnoses of the cohort, no ICD filter. This is collected into R
-# before the windows are applied, so for a large cohort it can be big: see
-# the RAM tip below get_lpr_diagnoses() in Extract from LPR.
-all_dx <- get_lpr_diagnoses(unique(cohort$pnr), diagtypes = c("A", "B", "G"))
+# LPR3's contact time is a datetime, so its windows must be datetimes too:
+# comparing a datetime with a date on a lazy table can silently go wrong
+# (DST pitfall 4).
+lookback_keys_dt <- lookback_keys %>%
+  mutate(window_start = as.POSIXct(window_start, tz = "UTC"),
+         window_end   = as.POSIXct(window_end, tz = "UTC"))
 
-lookback <- all_dx %>%
-  # many-to-many: a person has many diagnoses and, with repeated pnr, many index dates
-  inner_join(lookback_keys, by = "pnr", relationship = "many-to-many") %>%
-  # each row against its OWN window
-  filter(date_contact >= window_start, date_contact < index_date) %>%
-  select(pnr, index_date, date_contact, c_diag)
+# The same steps for each source. contacts needs the columns pnr, key and
+# date_contact, and diagnoses the columns key and c_diag.
+window_dx <- function(contacts, diagnoses, keys) {
+  contacts %>%
+    # Coarse filter first (cheap): narrow to the union of every window in the
+    # cohort, before the join - !! injects a single computed value, not a column
+    filter(date_contact >= !!min(keys$window_start)) %>%
+    # copy = TRUE sends the small keys table into the database, so the join
+    # runs there, not in R. This matters more here than almost anywhere else
+    # in the guide: Charlson needs EVERY A/B/G diagnosis in the window, not a
+    # filtered-down code list, so the unjoined, unwindowed data for a whole
+    # cohort can be large. Collecting it all into R first and only then
+    # joining to the cohort and filtering by index_date can pull tens of GB
+    # into RAM and crash the R session.
+    inner_join(keys, by = "pnr", copy = TRUE) %>%
+    # Precise filter (correctness): each row against its OWN window, not the global one
+    filter(date_contact >= window_start, date_contact < window_end) %>%
+    inner_join(diagnoses, by = "key") %>%
+    select(pnr, index_date, date_contact, c_diag) %>%
+    collect()
+}
+
+types <- c("A", "B", "G")   # A/B/G: all codes of these types, no ICD filter (G is LPR2 only)
+
+lookback <- bind_rows(
+  # LPR2 somatic
+  window_dx(
+    lpr_adm  %>% select(pnr, key = recnum, date_contact = d_inddto),
+    lpr_diag %>% filter(c_diagtype %in% !!types) %>% select(key = recnum, c_diag),
+    lookback_keys
+  ),
+  # LPR2 psychiatric
+  window_dx(
+    psyk_adm  %>% select(pnr, key = recnum, date_contact = d_inddto),
+    psyk_diag %>% filter(c_diagtype %in% !!types) %>% select(key = recnum, c_diag),
+    lookback_keys
+  ),
+  # LPR3, with datetime windows; diagnoses later disproved are left out
+  window_dx(
+    lpr3_k %>% select(pnr, key = dw_ek_kontakt, date_contact = kont_starttidspunkt),
+    lpr3_d %>%
+      filter(diag_kode_type %in% !!types,
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+      select(key = dw_ek_kontakt, c_diag = diag_kode),
+    lookback_keys_dt
+  ) %>%
+    mutate(date_contact = as.Date(date_contact))   # datetime -> date, now in R
+)
 
 charlson <- charlson_score(data = lookback, Person_ID = pnr, diagnosis_variable = c_diag)
 ```
