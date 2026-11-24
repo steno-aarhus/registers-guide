@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-23">
+<meta name="dcterms.date" content="2026-11-24">
 <meta name="description" content="Extract drug exposure from LMDB, the Danish Prescription Register, in R: filter ATC codes for your cohort, define users, and tell products apart with vnr.">
 
 <title>Medication (ATC) from LMDB – Register Guide</title>
@@ -651,7 +651,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Last modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 23, 2026</p>
+      <p class="date">November 24, 2026</p>
     </div>
   </div>
   
@@ -742,21 +742,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>cohort_pnrs <span class="ot">&lt;-</span> <span class="fu">unique</span>(<span class="fu">readRDS</span>(<span class="st">"path/to/full_cohort.rds"</span>)<span class="sc">$</span>pnr) <span class="co"># your cohort from Phase 10</span></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>medication_rx <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("path/to/lmdb/")</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># ONLY your cohort</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">substr</span>(atc, <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">==</span> <span class="st">"A10BJ"</span>) <span class="sc">%&gt;%</span> <span class="co"># GLP-1 analogues - filter BEFORE collect</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd, vnr) <span class="sc">%&gt;%</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># only HERE is data pulled into RAM - ALL dispensings, one row per fill</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>medication <span class="ot">&lt;-</span> medication_rx <span class="sc">%&gt;%</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(eksd) <span class="sc">%&gt;%</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="co"># first dispensing per person</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication_rx, <span class="st">"path/to/extract_medication_rx.rds"</span>) <span class="co"># keep all fills: the user definition below needs them</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication, <span class="st">"path/to/extract_medication.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Open LMDB once. The later examples on this page use `lmdb` from here.</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>lmdb <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span> <span class="co"># without fastreg: open_dataset("path/to/lmdb/")</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>medication_rx <span class="ot">&lt;-</span> lmdb <span class="sc">%&gt;%</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> cohort_pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># ONLY your cohort</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">substr</span>(atc, <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">==</span> <span class="st">"A10BJ"</span>) <span class="sc">%&gt;%</span> <span class="co"># GLP-1 analogues - filter BEFORE collect</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(pnr, atc, eksd, vnr) <span class="sc">%&gt;%</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="co"># only HERE is data pulled into RAM - ALL dispensings, one row per fill</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>medication <span class="ot">&lt;-</span> medication_rx <span class="sc">%&gt;%</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(eksd) <span class="sc">%&gt;%</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice</span>(<span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="co"># first dispensing per person</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication_rx, <span class="st">"path/to/extract_medication_rx.rds"</span>) <span class="co"># keep all fills: the user definition below needs them</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(medication, <span class="st">"path/to/extract_medication.rds"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><code>substr(atc, 1, 5) == "A10BJ"</code> matches the whole ATC group (all GLP-1 analogues; GLP-1 is glucagon-like peptide-1). For several groups at once, use a regular expression as in LPR: <code>grepl("^A10BJ|^A10BA", atc)</code>. Code matching (regex, <code>%in%</code> with a code list, <code>!!</code>) is explained in <a href="./extract-from-lpr.html">Extract from LPR</a> and <a href="./function-guide.html#filter-conditions">Functions: overview</a>. Reducing to one row per person is explained in <a href="./long-wide.html">Long ↔︎ wide format</a>. Here it is <code>slice(1)</code> for the first dispensing, but it could also be ever/never or a count in a window (see the role table above).</p>
 </section>
 <section id="defining-users" class="level2">
@@ -991,10 +994,9 @@ Many ATC conditions at once: <code>regmorbidity::mb_extract_medication_batch()</
 <section id="atc-level-grouping" class="level3">
 <h3 class="anchored" data-anchor-id="atc-level-grouping">What the level columns are for: grouping</h3>
 <p>When you want a descriptive breakdown by therapeutic subgroup, <code>atc2</code> is a ready-made grouping column and saves you a <code>substr()</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">read_register</span>(<span class="st">"lmdb"</span>) <span class="sc">%&gt;%</span> <span class="co"># the register itself: atc2 was not selected into medication_rx</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(atc2, <span class="at">sort =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># dispensings per therapeutic subgroup</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>lmdb <span class="sc">%&gt;%</span> <span class="co"># the register itself: atc2 was not selected into medication_rx</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(atc2, <span class="at">sort =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span> <span class="co"># dispensings per therapeutic subgroup</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="callout callout-style-simple callout-tip callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
