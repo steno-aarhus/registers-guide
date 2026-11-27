@@ -633,6 +633,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
    
   <ul>
   <li><a href="#estimand" id="toc-estimand" class="nav-link active" data-scroll-target="#estimand">Start from the estimand</a></li>
+  <li><a href="#price-year" id="toc-price-year" class="nav-link" data-scroll-target="#price-year">Prices: bring all costs to one price year</a></li>
+  <li><a href="#discounting" id="toc-discounting" class="nav-link" data-scroll-target="#discounting">Discounting</a></li>
   <li><a href="#describe" id="toc-describe" class="nav-link" data-scroll-target="#describe">Describe the costs first</a></li>
   <li><a href="#models" id="toc-models" class="nav-link" data-scroll-target="#models">Choosing a model</a>
   <ul class="collapse">
@@ -642,8 +644,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </ul></li>
   <li><a href="#censoring" id="toc-censoring" class="nav-link" data-scroll-target="#censoring">Censored costs</a></li>
   <li><a href="#bootstrap" id="toc-bootstrap" class="nav-link" data-scroll-target="#bootstrap">Uncertainty: bootstrap</a></li>
-  <li><a href="#price-year" id="toc-price-year" class="nav-link" data-scroll-target="#price-year">Prices: bring all costs to one price year</a></li>
-  <li><a href="#discounting" id="toc-discounting" class="nav-link" data-scroll-target="#discounting">Discounting</a></li>
   <li><a href="#productivity" id="toc-productivity" class="nav-link" data-scroll-target="#productivity">Productivity costs</a></li>
   <li><a href="#report" id="toc-report" class="nav-link" data-scroll-target="#report">What to report</a></li>
   </ul>
@@ -655,7 +655,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./analysis.html">Analyse and finish · 13-14</a></li><li class="breadcrumb-item"><a href="./analysis.html">13 - Analysis</a></li><li class="breadcrumb-item"><a href="./analysing-costs.html">Analysing costs</a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title">Analysing costs</h1>
-<p class="subtitle lead">Mean cost per person or per person-year: skewed costs with zeros, censoring, one price year and discounting</p>
+<p class="subtitle lead">From costs per person to an excess cost with a confidence interval: skewed costs with zeros, censoring, price year and discounting</p>
 </div>
 
 <div>
@@ -683,9 +683,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<!-- TODO(Sara): wording -->
 <p>Use this page when your outcome is a cost: healthcare costs, lost earnings or both, summed per person over follow-up. It covers the analysis side: what to estimate, how to describe costs, which models fit them, how to handle censoring and uncertainty, and how to bring costs to one price year. Where the cost of each hospital contact, prescription or service comes from is in <a href="./healthcare-costs.html">Healthcare costs</a>.</p>
-<p>You start from an analysis dataset with one row per person (or per person and year), a cost in DKK, follow-up time, exposure and covariates (<a href="./data-manipulation.html">Phase 12</a>). You end with mean costs per group and an excess cost with a confidence interval.</p>
+<p>You start from an analysis dataset with one row per person: the summed cost in DKK over follow-up, follow-up time, exposure and covariates (<a href="./data-manipulation.html">Phase 12</a>). Bring each year’s costs to one price year and discount them before you sum them per person (<a href="#price-year">Prices</a>, <a href="#discounting">Discounting</a>). You end with mean costs per group and an excess cost with a confidence interval.</p>
 <div class="callout callout-style-simple callout-warning callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -702,7 +701,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><em>Variable names in the examples are generic. Replace them with your own.</em> The models use <code>glm()</code> from base R and <code>dplyr</code> for data handling.</p>
 <section id="estimand" class="level2">
 <h2 class="anchored" data-anchor-id="estimand">Start from the estimand</h2>
-<!-- TODO(Sara): wording -->
 <p>Decide what number you want before you choose a model.</p>
 <ul>
 <li><strong>Mean cost per person over a fixed horizon</strong>, for example the five years after the index date. A person who dies contributes the costs up to death and nothing after.</li>
@@ -715,42 +713,70 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>Weighting</strong>: <a href="./weighting-iptw.html">IP weighting (IPTW)</a>.</li>
 <li><strong>Regression standardisation</strong> (the g-formula): fit a cost model, predict the cost for everyone as exposed and as unexposed, and average the two predictions. The fold-out on standardisation in <a href="./weighting-iptw.html">IP weighting</a> explains the idea, and the <a href="#two-part">two-part model</a> below shows it for costs.</li>
 </ul>
-<p><strong>Report the mean, not only the median.</strong> In a skewed distribution the median is lower than the mean, and it cannot be multiplied up to a total. Barber and Thompson write that analysis of costs “needs to focus on arithmetic mean costs, since these will reflect the total cost of treating all patients with the disease” (<a href="https://pubmed.ncbi.nlm.nih.gov/11113956/">Barber &amp; Thompson 2000</a>). Mihaylova et al.&nbsp;make the same point for policy makers (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al. 2011</a>). Medians and quartiles are still useful to describe the distribution.</p>
+<p><strong>Report the mean, not only the median.</strong> In a skewed distribution the median is lower than the mean, and it cannot be multiplied up to a total. Barber and Thompson write that analysis of costs “needs to focus on arithmetic mean costs, since these will reflect the total cost of treating all patients with the disease” (<a href="https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P">Barber &amp; Thompson 2000</a>). Mihaylova et al.&nbsp;make the same point for policy makers (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al. 2011</a>). Medians and quartiles are still useful to describe the distribution.</p>
+</section>
+<section id="price-year" class="level2">
+<h2 class="anchored" data-anchor-id="price-year">Prices: bring all costs to one price year</h2>
+<p>A cost from 2012 is in 2012 prices, and a cost from 2024 in 2024 prices. Before you sum or compare across years, convert every cost to one price year with a price index:</p>
+<blockquote class="blockquote">
+<p>cost in price year B = cost in year t × index(B) / index(t)</p>
+</blockquote>
+<p>Two Danish indices:</p>
+<ul>
+<li><strong>The consumer price index</strong> from DST. Annual averages are in StatBank table <a href="https://www.statbank.dk/PRIS8">PRIS8</a> (from 1900), and the monthly index in <a href="https://www.statbank.dk/PRIS01">PRIS01</a>. Older papers cite table PRIS111, which DST no longer updates: its last month is December 2025.</li>
+<li><strong>The Danish Regions’ price and wage development for health care</strong>, the row “Sundheds-PL ekskl. medicintilskud (sygesikring)” in the Regions’ yearly note on price and wage regulation. It is published as a yearly percentage change. Each year’s note gives the final figure for the year before and estimates for the next two (<a href="https://www.regioner.dk/media/3tnlfxqa/pris-og-loenreguleringen-2025-27.pdf">Pris- og lønreguleringen 2025-27, June 2026</a>). To use it as an index, chain the yearly changes.</li>
+</ul>
+<p>DRG tariffs are computed each year (see <a href="./healthcare-costs.html#drg-tariff-year">Healthcare costs</a>), so hospital costs priced with tariffs from several years need the same conversion.</p>
+</section>
+<section id="discounting" class="level2">
+<h2 class="anchored" data-anchor-id="discounting">Discounting</h2>
+<p>Discounting converts costs that fall in later years to their value in a start year. It is a separate step from the price index: first bring costs to one price year, then discount.</p>
+<p>The Danish Ministry of Finance recommends a real discount rate of 3.5% a year for years 0-35, 2.5% for years 36-70 and 1.5% after year 70 (<a href="https://fm.dk/media/27314/vejledning-i-samfundsoekonomiske-konsekvensvurderinger-juni-2023_web-a.pdf">Vejledning i samfundsøkonomiske konsekvensvurderinger, June 2023</a>, section 4.7, table 4.1). The rate in force is kept in the Ministry’s key figures catalogue, which in June 2026 gives the same rates (<a href="https://fm.dk/media/4tkj2o4w/noegletalskatalog_juni-2026.pdf">Nøgletalskatalog, June 2026</a>). Until January 2021 the rates were 4%, 3% and 2% (Vejledning 2023, preface). The guidance says the rate will be adjusted in the catalogue when the Ministry’s assumptions about the real interest rate change for good.</p>
+<p>In the Ministry’s worked example the value in year 0 is not discounted. For horizons under 35 years each later year is divided by 1.035 once more:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># mutate</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># costs_by_year: one row per person and year of follow-up</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># year_since_start: 0 for the first year of follow-up, 1 for the next, ...</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>costs_by_year <span class="ot">&lt;-</span> costs_by_year <span class="sc">%&gt;%</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cost_discounted =</span> cost_real <span class="sc">/</span> <span class="fl">1.035</span><span class="sc">^</span>year_since_start) <span class="co"># cost_real: cost in one price year</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># then sum cost_discounted per person to get the cost over the horizon</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="describe" class="level2">
 <h2 class="anchored" data-anchor-id="describe">Describe the costs first</h2>
-<!-- TODO(Sara): wording -->
 <p>Look at the distribution before you fit anything. Cost data are non-negative, usually strongly skewed to the right, often have many zeros (people with no contact in the period) and can have heavy tails (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al. 2011</a>).</p>
 <p>Per group, report the number of people, person-years, the share with zero cost, the mean with its standard deviation, the median and quartiles, and the total by cost domain (hospital, primary care, medication).</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># group_by, summarise</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>df <span class="sc">%&gt;%</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(exposure) <span class="sc">%&gt;%</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">person_years =</span> <span class="fu">sum</span>(follow_up_years),</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">share_zero =</span> <span class="fu">mean</span>(cost <span class="sc">==</span> <span class="dv">0</span>),     <span class="co"># share of people with no cost at all</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_cost =</span> <span class="fu">mean</span>(cost),</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_cost =</span> <span class="fu">sd</span>(cost),</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_cost =</span> <span class="fu">median</span>(cost),</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">q1 =</span> <span class="fu">quantile</span>(cost, <span class="fl">0.25</span>),</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">q3 =</span> <span class="fu">quantile</span>(cost, <span class="fl">0.75</span>),</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">total_cost =</span> <span class="fu">sum</span>(cost)</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># group_by, summarise</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># df: one row per person, with cost (DKK over the horizon), follow_up_years,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># exposure (0/1) and covariates. Read it once; the later code uses it too</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/cost_analysis.rds"</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>df <span class="sc">%&gt;%</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(exposure) <span class="sc">%&gt;%</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">person_years =</span> <span class="fu">sum</span>(follow_up_years),</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">share_zero =</span> <span class="fu">mean</span>(cost <span class="sc">==</span> <span class="dv">0</span>),     <span class="co"># share of people with no cost at all</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_cost =</span> <span class="fu">mean</span>(cost),</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd_cost =</span> <span class="fu">sd</span>(cost),</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_cost =</span> <span class="fu">median</span>(cost),</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">q1 =</span> <span class="fu">quantile</span>(cost, <span class="fl">0.25</span>),</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">q3 =</span> <span class="fu">quantile</span>(cost, <span class="fl">0.75</span>),</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">total_cost =</span> <span class="fu">sum</span>(cost)</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The very large values are part of the mean you want to estimate, so removing or capping them changes what the mean describes. A maximum is one person’s value, and a median or percentile in a small group can be too, so check them against the export rules before they leave DST (see <a href="./export.html#min-max-median">Export</a>).</p>
 </section>
 <section id="models" class="level2">
 <h2 class="anchored" data-anchor-id="models">Choosing a model</h2>
-<!-- TODO(Sara): wording -->
-<p>In a large cohort you may not need a model for the crude comparison. In a review aimed at trials, Mihaylova et al.&nbsp;recommend simple methods “in large samples where the near-normality of sample means is assured” (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al.&nbsp;2011</a>), such as a difference in means with a normal-based confidence interval. Barber and Thompson recommend the bootstrap as a check on such methods, or as the main analysis for moderately sized samples of skewed costs (<a href="https://pubmed.ncbi.nlm.nih.gov/11113956/">Barber &amp; Thompson 2000</a>). A model is needed when you adjust or standardise, and then the skewness and the zeros matter.</p>
+<p>In a large cohort you may not need a model for the crude comparison. In a review aimed at trials, Mihaylova et al.&nbsp;recommend simple methods “in large samples where the near-normality of sample means is assured” (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al.&nbsp;2011</a>), such as a difference in means with a normal-based confidence interval. Barber and Thompson recommend the bootstrap as a check on such methods, or as the main analysis for moderately sized samples of skewed costs (<a href="https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P">Barber &amp; Thompson 2000</a>). A model is needed when you adjust or standardise, and then the skewness and the zeros matter.</p>
 <section id="log-ols" class="level3">
 <h3 class="anchored" data-anchor-id="log-ols">Why not linear regression on log costs</h3>
-<p>Taking the log of the cost and fitting <code>lm()</code> gives coefficients on the log scale, and <code>exp()</code> of a predicted log cost is not the mean cost. Getting back to DKK needs a retransformation. Duan’s smearing factor does this when the log-scale error has constant variance. When the variance differs with the covariates, as it often does, the simple retransformation is biased, and a correct one is cumbersome (<a href="https://pubmed.ncbi.nlm.nih.gov/11469231/">Manning &amp; Mullahy 2001</a>; <a href="https://doi.org/10.1016/j.jhealeco.2004.09.011">Manning et al. 2005</a>). The log is also undefined at zero, and adding a constant to the zeros is not recommended (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al.&nbsp;2011</a>).</p>
+<p>Taking the log of the cost and fitting <code>lm()</code> gives coefficients on the log scale, and <code>exp()</code> of a predicted log cost is not the mean cost. Getting back to DKK needs a retransformation. Duan’s smearing factor does this when the log-scale error has constant variance. When the variance differs with the covariates, as it often does, the simple retransformation is biased, and a correct one is cumbersome (<a href="https://doi.org/10.1016/S0167-6296%2801%2900086-8">Manning &amp; Mullahy 2001</a>; <a href="https://doi.org/10.1016/j.jhealeco.2004.09.011">Manning et al. 2005</a>). The log is also undefined at zero, and adding a constant to the zeros is not recommended (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al.&nbsp;2011</a>).</p>
 </section>
 <section id="glm-log" class="level3">
 <h3 class="anchored" data-anchor-id="glm-log">GLM with a log link</h3>
 <p>A generalised linear model with a log link models the mean cost on the DKK scale directly: the predicted mean is exp(xβ), with no smearing factor. <code>exp()</code> of a coefficient is a ratio of mean costs. A difference in DKK comes from standardisation, as in the <a href="#two-part">two-part model</a> below.</p>
-<p>The variance function (the GLM family) says how the variance grows with the mean. The estimate of the mean is usually robust to a wrong variance function, but the precision is not (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al. 2011</a>). Manning and Mullahy write the variance as a power of the mean, var(y | x) proportional to E(y | x)^λ, and propose a Park-type test to estimate λ: regress the log of the squared raw-scale residual on the log of the predicted mean, and read off the slope (<a href="https://pubmed.ncbi.nlm.nih.gov/11469231/">Manning &amp; Mullahy 2001</a>; called a modified Park test in <a href="https://doi.org/10.1016/j.jhealeco.2004.09.011">Manning et al. 2005</a>).</p>
+<p>The variance function (the GLM family) says how the variance grows with the mean. The estimate of the mean is usually robust to a wrong variance function, but the precision is not (<a href="https://doi.org/10.1002/hec.1653">Mihaylova et al. 2011</a>). Manning and Mullahy write the variance as a power of the mean, var(y | x) proportional to E(y | x)^λ, and propose a Park-type test to estimate λ: regress the log of the squared raw-scale residual on the log of the predicted mean, and read off the slope (<a href="https://doi.org/10.1016/S0167-6296%2801%2900086-8">Manning &amp; Mullahy 2001</a>; called a modified Park test in <a href="https://doi.org/10.1016/j.jhealeco.2004.09.011">Manning et al. 2005</a>).</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 17%">
@@ -787,16 +813,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>pos <span class="ot">&lt;-</span> <span class="fu">filter</span>(df, cost <span class="sc">&gt;</span> <span class="dv">0</span>)                          <span class="co"># people with any cost</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">glm</span>(cost <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex, <span class="at">data =</span> pos,</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>           <span class="at">family =</span> <span class="fu">Gamma</span>(<span class="at">link =</span> <span class="st">"log"</span>))             <span class="co"># a first GLM with log link</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">residuals</span>(fit, <span class="at">type =</span> <span class="st">"response"</span>)             <span class="co"># raw-scale residual: cost minus predicted mean</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>park <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">log</span>(res<span class="sc">^</span><span class="dv">2</span>) <span class="sc">~</span> <span class="fu">log</span>(<span class="fu">fitted</span>(fit)))            <span class="co"># log squared residual on log predicted mean</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(park)[<span class="dv">2</span>]                                        <span class="co"># the slope: an estimate of lambda</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Manning and Mullahy also check the residuals from a model for log cost first: if they are heavy-tailed, linear regression on log cost with a careful retransformation can be the more precise choice. In their simulations the test was less informative when the data were heavy-tailed. When the family is picked this way, they recommend robust or bootstrapped standard errors, because the estimated variance function may still be wrong (<a href="https://pubmed.ncbi.nlm.nih.gov/11469231/">Manning &amp; Mullahy 2001</a>).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>pos <span class="ot">&lt;-</span> <span class="fu">filter</span>(df, cost <span class="sc">&gt;</span> <span class="dv">0</span>)                          <span class="co"># people with any cost</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">glm</span>(cost <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex, <span class="at">data =</span> pos,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>           <span class="at">family =</span> <span class="fu">Gamma</span>(<span class="at">link =</span> <span class="st">"log"</span>))             <span class="co"># a first GLM with log link</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">residuals</span>(fit, <span class="at">type =</span> <span class="st">"response"</span>)             <span class="co"># raw-scale residual: cost minus predicted mean</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>park <span class="ot">&lt;-</span> <span class="fu">lm</span>(<span class="fu">log</span>(res<span class="sc">^</span><span class="dv">2</span>) <span class="sc">~</span> <span class="fu">log</span>(<span class="fu">fitted</span>(fit)))            <span class="co"># log squared residual on log predicted mean</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(park)[<span class="dv">2</span>]                                        <span class="co"># the slope: an estimate of lambda</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Manning and Mullahy also check the residuals from a model for log cost first: if they are heavy-tailed, linear regression on log cost with a careful retransformation can be the more precise choice. In their simulations the test was less informative when the data were heavy-tailed. When the family is picked this way, they recommend robust or bootstrapped standard errors, because the estimated variance function may still be wrong (<a href="https://doi.org/10.1016/S0167-6296%2801%2900086-8">Manning &amp; Mullahy 2001</a>).</p>
 </section>
 <section id="two-part" class="level3">
 <h3 class="anchored" data-anchor-id="two-part">Two-part model for costs with many zeros</h3>
@@ -807,36 +833,36 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </ol>
 <p>The mean cost is the product of the two parts: E(cost | x) = Pr(cost &gt; 0 | x) × E(cost | cost &gt; 0, x) (<a href="https://doi.org/10.1177/1536867X1501500102">Belotti et al. 2015</a>). In the review by Mihaylova et al., two-part models “seem to outperform other methods when excess zeros are present”. Hurdle models are the counterpart for counts, such as the number of contacts, not for costs in DKK (<a href="https://doi.org/10.1177/1536867X1501500102">Belotti et al. 2015</a>).</p>
 <p>The sketch fits both parts and standardises: it predicts each person’s mean cost as exposed and as unexposed, and the excess cost is the difference of the two averages. <code>exposure</code> is 0/1 here. If it is a factor, set the levels in <code>mutate()</code> instead.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, mutate</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">"path/to/cost_analysis.rds"</span>) <span class="co"># one row per person: cost over the horizon (DKK), exposure 0/1, covariates</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>excess_cost <span class="ot">&lt;-</span> <span class="cf">function</span>(d) {</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  part1 <span class="ot">&lt;-</span> <span class="fu">glm</span>(<span class="fu">I</span>(cost <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,     <span class="co"># part 1: Pr(any cost)</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>               <span class="at">data =</span> d, <span class="at">family =</span> binomial)</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  part2 <span class="ot">&lt;-</span> <span class="fu">glm</span>(cost <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,             <span class="co"># part 2: mean cost among those with any cost</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>               <span class="at">data =</span> <span class="fu">filter</span>(d, cost <span class="sc">&gt;</span> <span class="dv">0</span>), <span class="at">family =</span> <span class="fu">Gamma</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>  mean_cost_if <span class="ot">&lt;-</span> <span class="cf">function</span>(e) {</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    d_e <span class="ot">&lt;-</span> <span class="fu">mutate</span>(d, <span class="at">exposure =</span> e)                      <span class="co"># everyone exposed (1) or everyone unexposed (0)</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">predict</span>(part1, d_e, <span class="at">type =</span> <span class="st">"response"</span>) <span class="sc">*</span>            <span class="co"># Pr(cost &gt; 0) ...</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>      <span class="fu">predict</span>(part2, d_e, <span class="at">type =</span> <span class="st">"response"</span>)            <span class="co"># ... times E(cost | cost &gt; 0)</span></span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mean</span>(<span class="fu">mean_cost_if</span>(<span class="dv">1</span>)) <span class="sc">-</span> <span class="fu">mean</span>(<span class="fu">mean_cost_if</span>(<span class="dv">0</span>))         <span class="co"># excess mean cost per person, DKK</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="fu">excess_cost</span>(df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The standardised means are averages over everyone in <code>df</code>, so the excess cost is for the whole cohort. To get it for the exposed only, average over the exposed rows. The function returns a single number, so the confidence interval comes from the bootstrap below. <a href="https://doi.org/10.1002/sim.8140">Liu et al. 2019</a> show how to split an effect on the mean cost into its effect on the probability of any cost and on the cost among users.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># filter, mutate</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># df from "Describe the costs first" above: one row per person</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>excess_cost <span class="ot">&lt;-</span> <span class="cf">function</span>(d) {</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  part1 <span class="ot">&lt;-</span> <span class="fu">glm</span>(<span class="fu">I</span>(cost <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,     <span class="co"># part 1: Pr(any cost)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>               <span class="at">data =</span> d, <span class="at">family =</span> binomial)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  part2 <span class="ot">&lt;-</span> <span class="fu">glm</span>(cost <span class="sc">~</span> exposure <span class="sc">+</span> age <span class="sc">+</span> sex,             <span class="co"># part 2: mean cost among those with any cost</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>               <span class="at">data =</span> <span class="fu">filter</span>(d, cost <span class="sc">&gt;</span> <span class="dv">0</span>), <span class="at">family =</span> <span class="fu">Gamma</span>(<span class="at">link =</span> <span class="st">"log"</span>))</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  mean_cost_if <span class="ot">&lt;-</span> <span class="cf">function</span>(e) {</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    d_e <span class="ot">&lt;-</span> <span class="fu">mutate</span>(d, <span class="at">exposure =</span> e)                      <span class="co"># everyone exposed (1) or everyone unexposed (0)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">predict</span>(part1, d_e, <span class="at">type =</span> <span class="st">"response"</span>) <span class="sc">*</span>            <span class="co"># Pr(cost &gt; 0) ...</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>      <span class="fu">predict</span>(part2, d_e, <span class="at">type =</span> <span class="st">"response"</span>)            <span class="co"># ... times E(cost | cost &gt; 0)</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mean</span>(<span class="fu">mean_cost_if</span>(<span class="dv">1</span>)) <span class="sc">-</span> <span class="fu">mean</span>(<span class="fu">mean_cost_if</span>(<span class="dv">0</span>))         <span class="co"># excess mean cost per person, DKK</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="fu">excess_cost</span>(df)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The standardised means are averages over everyone in <code>df</code>, so the excess cost is for the whole cohort. To get it for the exposed only, average over the exposed rows. The function returns a single number, so the confidence interval comes from the bootstrap below.</p>
+<p>The sketch assumes that everyone is followed to the end of the horizon or to death. If some people emigrate or your data end before the horizon, their summed cost is too low and the excess cost is biased. Use the methods under <a href="#censoring">Censored costs</a>, or choose a horizon that everyone can be followed for. <a href="https://doi.org/10.1002/sim.8140">Liu et al. 2019</a> show how to split an effect on the mean cost into its effect on the probability of any cost and on the cost among users.</p>
 </section>
 </section>
 <section id="censoring" class="level2">
 <h2 class="anchored" data-anchor-id="censoring">Censored costs</h2>
-<!-- TODO(Sara): wording -->
-<p>For mean cost per person over a fixed horizon, death ends the costs: it is not censoring. Emigration and the end of your data are censoring, because the costs after that date are unknown. Migration dates come from <a href="./register-reference.html#vnds---migration-register">VNDS</a>.</p>
-<p>Lin et al.&nbsp;write that “the naive sample average of the observed costs from all study subjects or from the uncensored cases only can be severely biased, and the standard survival analysis techniques are not applicable” (<a href="https://doi.org/10.2307/2533947">Lin et al. 1997</a>). Kaplan-Meier with cost in place of time fails because the cost accumulated up to censoring is not independent of the cost up to death (<a href="https://doi.org/10.2147/CEOR.S31552">Wijeysundera et al. 2012</a>). Two estimators were developed for this:</p>
+<p>For mean cost per person over a fixed horizon, death ends the costs: it is not censoring. Emigration and the end of your data are censoring, because the costs after that date are unknown. The dates of death and emigration are under <a href="./outcomes.html#censoring-dates">Outcomes</a>.</p>
+<p>Averaging the observed costs, over everyone or over those with complete follow-up only, is biased when some people are censored (<a href="https://doi.org/10.2307/2533947">Lin et al. 1997</a>). Kaplan-Meier with cost in place of time fails because the cost accumulated up to censoring is not independent of the cost up to death (<a href="https://doi.org/10.2147/CEOR.S31552">Wijeysundera et al. 2012</a>). Two estimators were developed for this:</p>
 <ul>
-<li><strong>Lin et al.&nbsp;(1997)</strong> split follow-up into intervals, take the mean cost in each interval among those alive at its start, and weight it by the Kaplan-Meier probability of being alive at the start (<a href="https://doi.org/10.2307/2533947">Lin et al.&nbsp;1997</a>).</li>
+<li><strong>Lin et al.&nbsp;(1997)</strong> split follow-up into intervals, take the mean cost in each interval among those alive at its start, and weight it by the Kaplan-Meier probability of being alive at the start (<a href="https://doi.org/10.2307/2533947">Lin et al.&nbsp;1997</a>; described in <a href="https://doi.org/10.2147/CEOR.S31552">Wijeysundera et al.&nbsp;2012</a>).</li>
 <li><strong>Bang and Tsiatis (2000)</strong> weight each person with complete follow-up by the inverse of the probability of remaining uncensored, which allows censoring at any time (<a href="https://doi.org/10.1093/biomet/87.2.329">Bang &amp; Tsiatis 2000</a>). The partitioned version also uses the costs a censored person had in the periods before censoring. It needs cost per period, which register data give (<a href="https://doi.org/10.2147/CEOR.S31552">Wijeysundera et al. 2012</a>).</li>
 </ul>
 <p>Both assume that censoring is independent of future costs. Wijeysundera et al. give a worked example for readers without an advanced statistical background, cite simulations in which the simple weighted estimator became unstable with more than 50% censoring, and describe phase-based costing as an alternative when censoring is heavy (<a href="https://doi.org/10.2147/CEOR.S31552">Wijeysundera et al. 2012</a>). The weighting idea is the same as IPCW in <a href="./weighting-iptw.html">IP weighting</a>, with a weight that depends on each person’s follow-up time.</p>
@@ -844,12 +870,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="bootstrap" class="level2">
 <h2 class="anchored" data-anchor-id="bootstrap">Uncertainty: bootstrap</h2>
-<!-- TODO(Sara): wording -->
-<p>The non-parametric bootstrap gives a confidence interval for a difference in mean costs without assuming normality (<a href="https://pubmed.ncbi.nlm.nih.gov/11113956/">Barber &amp; Thompson 2000</a>). For a model-based estimate such as the two-part model above, repeat the whole procedure in each bootstrap sample: both models and the standardisation, and the weights too if you weighted.</p>
+<p>The non-parametric bootstrap gives a confidence interval for a difference in mean costs without assuming normality (<a href="https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P">Barber &amp; Thompson 2000</a>). For a model-based estimate such as the two-part model above, repeat the whole procedure in each bootstrap sample: both models and the standardisation, and the weights too if you weighted.</p>
 <p>Resample the unit that the rows depend on:</p>
 <ul>
 <li><strong>The person</strong>, when a person has several rows (one per year, or matched more than once). This is the same reason as for <a href="./regression.html#clustered-standard-errors">clustered standard errors</a>.</li>
-<li><strong>The matched set</strong>, in a matched cohort. For propensity-score matched pairs, resampling the pairs gave standard errors close to the true sampling variation in simulations (<a href="https://doi.org/10.1002/sim.6276">Austin &amp; Small 2014</a>).</li>
+<li><strong>The matched set</strong>, in a matched cohort. For propensity-score matched pairs, resampling the pairs gave standard errors closer to the true sampling variation than redoing the matching in each bootstrap sample, in simulations (<a href="https://doi.org/10.1002/sim.6276">Austin &amp; Small 2014</a>).</li>
 </ul>
 <div class="callout callout-style-simple callout-note callout-titled">
 <div class="callout-header d-flex align-content-center collapsed" data-bs-toggle="collapse" data-bs-target=".callout-2-contents" aria-controls="callout-2" aria-expanded="false" aria-label="Toggle callout">
@@ -863,54 +888,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div id="callout-2" class="callout-2-contents callout-collapse collapse">
 <div class="callout-body-container callout-body">
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># inner_join</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">2026</span>)</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>ids <span class="ot">&lt;-</span> <span class="fu">unique</span>(df<span class="sc">$</span>pnr)                                    <span class="co"># use match_id instead to resample matched sets</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>boot <span class="ot">&lt;-</span> <span class="fu">replicate</span>(<span class="dv">1000</span>, {</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  draw <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">pnr =</span> <span class="fu">sample</span>(ids, <span class="at">replace =</span> <span class="cn">TRUE</span>))  <span class="co"># draw persons, not rows</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  d_b <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(draw, df, <span class="at">by =</span> <span class="st">"pnr"</span>,</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>                    <span class="at">relationship =</span> <span class="st">"many-to-many"</span>)       <span class="co"># all rows of each drawn person, once per draw</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">excess_cost</span>(d_b)                                       <span class="co"># the function from the two-part model above</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>})</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="fu">quantile</span>(boot, <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.975</span>))                          <span class="co"># percentile 95% interval</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Each replicate refits both models on the whole cohort, so time a few replicates before you start a thousand. The percentile interval is the simplest. Barber and Thompson preferred the bootstrap-t and the bias-corrected and accelerated (BCa) intervals (<a href="https://pubmed.ncbi.nlm.nih.gov/11113956/">Barber &amp; Thompson 2000</a>).</p>
-</div>
-</div>
-</div>
-</section>
-<section id="price-year" class="level2">
-<h2 class="anchored" data-anchor-id="price-year">Prices: bring all costs to one price year</h2>
-<!-- TODO(Sara): wording -->
-<p>A cost from 2012 is in 2012 prices, and a cost from 2024 in 2024 prices. Before you sum or compare across years, convert every cost to one price year with a price index:</p>
-<blockquote class="blockquote">
-<p>cost in price year B = cost in year t × index(B) / index(t)</p>
-</blockquote>
-<p>Two Danish indices:</p>
-<ul>
-<li><strong>The consumer price index</strong> from DST. Annual averages are in StatBank table <a href="https://www.statbank.dk/PRIS8">PRIS8</a> (from 1900), and the monthly index in <a href="https://www.statbank.dk/PRIS01">PRIS01</a>. Older papers cite table PRIS111, which DST no longer updates: its last month is December 2025.</li>
-<li><strong>The Danish Regions’ price and wage development for health care</strong>, “Sundheds-PL ekskl. medicintilskud”. It is published as a yearly percentage change. Each year’s note gives the final figure for the year before and estimates for the next two (<a href="https://www.regioner.dk/media/3tnlfxqa/pris-og-loenreguleringen-2025-27.pdf">Pris- og lønreguleringen 2025-27, June 2026</a>). To use it as an index, chain the yearly changes.</li>
-</ul>
-<p>DRG tariffs are computed each year (see <a href="./healthcare-costs.html#drg-tariff-year">Healthcare costs</a>), so hospital costs priced with tariffs from several years need the same conversion.</p>
-</section>
-<section id="discounting" class="level2">
-<h2 class="anchored" data-anchor-id="discounting">Discounting</h2>
-<!-- TODO(Sara): wording -->
-<p>Discounting converts costs that fall in later years to their value in a start year. It is a separate step from the price index: first bring costs to one price year, then discount.</p>
-<p>The Danish Ministry of Finance recommends a real discount rate of 3.5% a year for years 0-35, 2.5% for years 36-70 and 1.5% after year 70 (<a href="https://fm.dk/media/27314/vejledning-i-samfundsoekonomiske-konsekvensvurderinger-juni-2023_web-a.pdf">Vejledning i samfundsøkonomiske konsekvensvurderinger, June 2023</a>, section 4.7, table 4.1). The rate in force is kept in the Ministry’s key figures catalogue, which in June 2026 gives the same rates (<a href="https://fm.dk/media/4tkj2o4w/noegletalskatalog_juni-2026.pdf">Nøgletalskatalog, June 2026</a>). Until January 2021 the rates were 4%, 3% and 2% (Vejledning 2023, preface). The guidance says the rate will be adjusted in the catalogue when the Ministry’s assumptions about the real interest rate change for good.</p>
-<p>In the Ministry’s worked example the value in year 0 is not discounted. For horizons under 35 years each later year is divided by 1.035 once more:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># mutate</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr) <span class="co"># inner_join</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co"># year_since_start: 0 for the first year of follow-up, 1 for the next, ...</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>costs_by_year <span class="ot">&lt;-</span> costs_by_year <span class="sc">%&gt;%</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cost_discounted =</span> cost_real <span class="sc">/</span> <span class="fl">1.035</span><span class="sc">^</span>year_since_start) <span class="co"># cost_real: cost in one price year</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">2026</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>ids <span class="ot">&lt;-</span> <span class="fu">unique</span>(df<span class="sc">$</span>pnr)                                    <span class="co"># matched sets: use match_id here and in by = below</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>boot <span class="ot">&lt;-</span> <span class="fu">replicate</span>(<span class="dv">1000</span>, {</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  draw <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">pnr =</span> <span class="fu">sample</span>(ids, <span class="at">replace =</span> <span class="cn">TRUE</span>))  <span class="co"># draw persons, not rows</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  d_b <span class="ot">&lt;-</span> <span class="fu">inner_join</span>(draw, df, <span class="at">by =</span> <span class="st">"pnr"</span>,</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>                    <span class="at">relationship =</span> <span class="st">"many-to-many"</span>)       <span class="co"># all rows of each drawn person, once per draw</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">excess_cost</span>(d_b)                                       <span class="co"># the function from the two-part model above</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="fu">quantile</span>(boot, <span class="fu">c</span>(<span class="fl">0.025</span>, <span class="fl">0.975</span>))                          <span class="co"># percentile 95% interval</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Each replicate refits both models on the whole cohort, so time a few replicates before you start a thousand. The percentile interval is the simplest. Barber and Thompson preferred the bootstrap-t and the bias-corrected and accelerated (BCa) intervals (<a href="https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P">Barber &amp; Thompson 2000</a>).</p>
+</div>
+</div>
+</div>
 </section>
 <section id="productivity" class="level2">
 <h2 class="anchored" data-anchor-id="productivity">Productivity costs</h2>
-<!-- TODO(Sara): wording -->
-<p>A societal cost study can add lost production to healthcare costs. Two methods value it differently. The human capital method “counts any hour not worked as an hour lost”. The friction cost method “only counts as lost those hours not worked until another employee takes over the patient’s work”, and the two can give widely different results (<a href="https://doi.org/10.1136/ard.2009.117150">van den Hout 2010</a>; the friction cost method is from <a href="https://pubmed.ncbi.nlm.nih.gov/10154656/">Koopmanschap et al.&nbsp;1995</a>).</p>
+<p>A societal cost study can add lost production to healthcare costs. Two methods value it differently. The human capital method “counts any hour not worked as an hour lost”. The friction cost method “only counts as lost those hours not worked until another employee takes over the patient’s work”, and the two can give widely different results (<a href="https://doi.org/10.1136/ard.2009.117150">van den Hout 2010</a>; the friction cost method is from <a href="https://doi.org/10.1016/0167-6296%2894%2900044-5">Koopmanschap et al.&nbsp;1995</a>).</p>
 <p>Registers at DST that carry the inputs:</p>
 <ul>
 <li><strong>IND</strong> (Indkomst), yearly from 1980, holds personal income. <code>LOENMV_13</code> is wage income (“Lønindkomst i alt”) and includes pay during sickness and parental leave. <code>ERHVERVSINDK_13</code> is wage income plus net income from self-employment (<a href="https://www.dst.dk/extranet/ForskningVariabellister/IND%20-%20Indkomst.html">DST, IND variable list</a>; <a href="https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/personindkomster/loenmv-13">DST, LOENMV_13</a>).</li>
@@ -918,11 +916,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>DREAM</strong>, a database of public benefit spells, gives the type of benefit week by week for each person who received one, such as sickness benefit or unemployment benefit (<a href="https://aku.dst.dk/ext/36881106234/0/forskning/DREAM-Manual-Version-51--pdf">DREAM vejledning, version 51</a>).</li>
 </ul>
 <p>FAIK, used in this guide for SEPLINE’s income measure, is household-equivalised disposable income (<a href="./socioeconomic-variables.html#faik-income">FAIK</a>), not a person’s earnings.</p>
-<p>None of these registers records time spent caring for a relative. A Danish study of informal care for people with dementia collected care time in a postal survey of caregivers, and the value per day depended on the method. With care time valued at a professional caregiver’s wage (the proxy good method) it was EUR 160-223 per day for the primary caregiver. Counting only weekday care by caregivers in the labour market, valued as lost production, it was EUR 35-45 (<a href="https://doi.org/10.1159/000333812">Jakobsen et al.&nbsp;2011</a>).</p>
+<p>None of these registers records time spent caring for a relative. Informal care needs survey data, and its value depends heavily on the valuation method (for dementia in Denmark, see <a href="https://doi.org/10.1159/000333812">Jakobsen et al. 2011</a>).</p>
 </section>
 <section id="report" class="level2">
 <h2 class="anchored" data-anchor-id="report">What to report</h2>
-<!-- TODO(Sara): wording -->
 <p>Each choice on this page changes the number, so a reader needs all of them to interpret the estimate and compare it with other studies:</p>
 <ul>
 <li>The estimand: per person or per person-year, horizon, total or excess, and the comparison group.</li>
@@ -946,9 +943,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="callout-body-container callout-body">
 <ul>
 <li><a href="https://doi.org/10.1002/hec.1653">Mihaylova et al.&nbsp;2011</a>: review of statistical methods for costs, with a summary table of what each handles.</li>
-<li><a href="https://pubmed.ncbi.nlm.nih.gov/11469231/">Manning &amp; Mullahy 2001</a>: log models, GLMs and the Park test.</li>
+<li><a href="https://doi.org/10.1016/S0167-6296%2801%2900086-8">Manning &amp; Mullahy 2001</a>: log models, GLMs and the Park test.</li>
 <li><a href="https://doi.org/10.2147/CEOR.S31552">Wijeysundera et al.&nbsp;2012</a>: censored costs explained for health services researchers, with a worked example.</li>
-<li><a href="https://pubmed.ncbi.nlm.nih.gov/11113956/">Barber &amp; Thompson 2000</a>: the bootstrap for mean costs.</li>
+<li><a href="https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P">Barber &amp; Thompson 2000</a>: the bootstrap for mean costs.</li>
 <li><a href="./healthcare-costs.html">Healthcare costs</a>: where the unit costs come from.</li>
 </ul>
 </div>
