@@ -6,18 +6,17 @@ pagetitle: "Pregnancy and birth variables in the Medical Birth Register (MFR)"
 description: "Gestational age and preterm birth, SGA and LGA and the choice of growth reference, parity and the immigrant pitfall, and multiple births in the Danish Medical Birth Register (MFR), with what to report."
 ---
 
-<!-- TODO(Sara): wording -->
-Use this page when pregnancy or birth variables are an exposure, an outcome or
-a covariate in your study. It covers three groups of variables from the Medical
-Birth Register (MFR): gestational age and size at birth, parity, and multiple
-births. For each it says which column to use, where the register is weak, and
-what to report in the methods.
+Use this page when a pregnancy or birth variable is your exposure, outcome or
+covariate. It covers three groups of variables from the Medical Birth Register
+(MFR): gestational age and size at birth, parity, and multiple births. For each
+it says which column to use, where the register is weak, and what to write in
+your methods.
 
-The MFR tables and their columns are listed in [Overview of
-registers](register-reference.qmd#mfr---medical-birth-register). This page does
-not repeat them. Column names below are in lower case, as the guide writes them
-after `rename_with(tolower)`. Check them against your own delivery with
-`colnames()`.
+The columns of each MFR table are in [Overview of
+registers](register-reference.qmd#mfr---medical-birth-register), and this page
+does not repeat them. The table below spells the names as DST does. The code
+uses lower case, as after `rename_with(tolower)`. Check the names in your own
+delivery with `colnames()`.
 
 ## Which table holds what {#tables}
 
@@ -49,6 +48,17 @@ gives the example 283 days for 40 weeks and 3 days ([SDS, documentation from
 Before 1997 DST has no MFR table, and its fertility datasets (`ftbarn`,
 `ftforael`) do not hold gestational age. See [the pre-1997
 period](register-reference.qmd#ftbarn).
+
+**Two things change in 2019.**
+
+- **The population.** Up to 2018 the register holds births in Denmark to
+  mothers with a Danish CPR number. From 2019 it holds births in Denmark
+  whether or not the mother has one, so a study that crosses 2019 compares two
+  populations ([Family links](family-links.qmd#mfr)).
+- **Missing values.** In the 2019 table numeric fields such as `Vaegt_Barn`
+  and `Paritet` use -1 for "not stated", not `NA`. Recode -1 to `NA` before you
+  compute anything, or a mean is pulled down ([the Nyfoedte
+  section](register-reference.qmd#mfr-nyfoedte) lists the fields).
 
 ## Gestational age and preterm birth {#gestational-age}
 
@@ -104,9 +114,9 @@ Patient Register but not in the MFR ([Bliddal et al.
 2018](https://doi.org/10.1007/s10654-018-0356-1)). A study of stillbirth or
 extreme prematurity that crosses 2004 needs to take this into account.
 
-### Early years of the register {#early-years}
-
-If you use births before 1978 from SDS, note that gestational age was then
+::: {#early-years .callout-note collapse="true" title="Births before 1978, in data from Sundhedsdatastyrelsen (SDS)"}
+DST's MFR tables start in 1997, so this only matters if you have older births
+from SDS. Before 1978 gestational age was
 coded in the variable `fuldb`, with 0 for 40 weeks or more and 1 to 8 for
 increasing prematurity. For 1974 to 1977, 89.6% of children were coded 0,
 against 70.0% in the later years, so the groups are too coarse to use as
@@ -118,6 +128,7 @@ deviations below the mean brought the false positives down to 9%, at the cost
 of more false negatives. The authors note that data from before 1981 are most
 often left out. A sensitivity analysis that starts later is a simple way to
 check how much the early years matter.
+:::
 
 ## Small and large for gestational age {#sga-lga}
 
@@ -144,8 +155,8 @@ used to define SGA in the Danish MFR for 1974 to 1996 ([á Rogvi et al.
 pregnancies in eight populations, with centiles by gestational age and sex
 ([Villar et al. 2014](https://doi.org/10.1016/S0140-6736(14)60932-6)). In 15
 European countries, SGA and LGA prevalence was near 10% with each country's own
-charts. With INTERGROWTH-21st it varied from 3.0% to 10.1% for SGA and from
-24.9% to 8.0% for LGA, along a north to south gradient. Infants who were
+charts. With INTERGROWTH-21st it ranged from 3.0% to 10.1% for SGA and from
+8.0% to 24.9% for LGA, along a north to south gradient. Infants who were
 reclassified from SGA to normal growth by the international chart still had a
 higher perinatal mortality than other normally grown infants (odds ratio 2.7)
 ([Hocquette et al. 2021](https://doi.org/10.1016/j.lanepe.2021.100167)). The
@@ -164,33 +175,31 @@ For very preterm infants the choice of chart changes the SGA prevalence, and
 the chart should be chosen for that age range. Report the chart you used and
 repeat the analysis with a second one.
 
-<!-- TODO(Sara): wording -->
-The sketch below classifies births against a reference table that you build
-from the chart you chose. `ref` has one row per sex and completed week with the
-cut-off weights.
+Once you have chosen a chart, copy its cut-off weights into a small table,
+`ref`, with one row per sex and completed week, and join it onto the births.
+The sketch uses `ga_weeks` from the [preterm code](#preterm) above. In the 2019
+table, recode -1 in the birth weight to `NA` first ([Which table holds
+what](#tables)).
 
 ```r
-library(dplyr) # left_join, mutate, case_when
+library(dplyr) # left_join, mutate, case_when, count
 
-# ref: koen_barn, ga_weeks, p10, p90  (weight in grams, from your chosen chart)
-# check by eye that koen_barn has the same coding in births and in ref
+# ref: one row per sex and completed week, from the chart you chose
+#   koen_barn | ga_weeks | p10 | p90   (p10 and p90 are weights in grams)
+# koen_barn must be coded the same way in ref as in births: check with count()
 births <- births %>%
-  left_join(ref, by = c("koen_barn", "ga_weeks")) %>%
+  left_join(ref, by = c("koen_barn", "ga_weeks")) %>% # adds p10 and p90 to each birth
   mutate(
     size_for_ga = case_when(
-      is.na(vaegt_barn) | is.na(p10) ~ NA_character_,
-      vaegt_barn < p10 ~ "SGA",
-      vaegt_barn > p90 ~ "LGA",
-      TRUE ~ "AGA"
+      is.na(vaegt_barn) | is.na(p10) ~ NA_character_, # no weight, or a week the chart does not cover
+      vaegt_barn < p10 ~ "SGA",                        # below the 10th percentile
+      vaegt_barn > p90 ~ "LGA",                        # above the 90th percentile
+      TRUE ~ "AGA"                                     # appropriate for gestational age
     )
   )
 
-count(births, size_for_ga)
+count(births, size_for_ga) # missing values show up as their own row
 ```
-
-In the 2019 table, `Vaegt_Barn` and other numeric fields use -1 for not stated.
-Recode them to `NA` first, see [the Nyfoedte
-section](register-reference.qmd#mfr-nyfoedte).
 
 ### What to report {#report-ga}
 
@@ -233,8 +242,7 @@ number of births in the MFR, and the documentation says that only births from
 2019](https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx)).
 Check the minimum value in your own file before you use the column.
 
-### Parity in DST's fertility data {#parity-ftforael}
-
+::: {#parity-ftforael .callout-note collapse="true" title="Parity in DST's fertility data (`ftforael`, `ftbarn`)"}
 DST's fertility datasets hold their own parity columns. `medicinsk_paritet` in
 `ftforael` is the child's birth number for the mother. Stillbirths count and a
 multiple birth counts as one. DST adds that children not known in the registers
@@ -246,33 +254,57 @@ DST gives no definition of the other parity columns beyond a short label, see
 "the mother's delivery number as stated in the MFR" ([DST,
 PARITET](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/paritet)).
 
-If you count parity from `ftbarn`, select biological mothers first. Codes 21 to
-23 of `mor_foed_adop` are the ones DST treats as biological. DST says that
-a parent registered shortly after birth is the biological parent for most
-children, but that the code does not account for donor conception, and that
-the variable cannot be used to count adoptions or biological relations ([DST,
+If you count parity from `ftbarn`, keep presumed biological mothers first:
+codes 21 to 23 of `mor_foed_adop` ([DST,
 MOR_FOED_ADOP](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/mor-foed-adop)).
+What the codes mean, and what they cannot tell you, is under
+[Adoption](family-links.qmd#adoption) in Family links.
+:::
 
 ### Deriving parity from successive births {#parity-derive}
 
 You can count the mother's earlier deliveries yourself, to check `paritet` or
 when it is missing. The MFR has one row per child, so a twin delivery gives two
-rows with the same mother and birth date. Collapse to one row per delivery
-first. In the 2019 table `DW_EK_Foedsel` is the key of the birth event, shared
-by the children of one delivery ([the Nyfoedte
-section](register-reference.qmd#mfr-nyfoedte)). In the 1997-2018 table, SDS
+rows. The code below treats births to the same mother at most one day apart as
+one delivery, the rule DST uses for `flerfold` ([Multiple
+births](#multiples-records)), so twins born either side of midnight stay
+together. It also gives each delivery an id, `delivery_id`, which the
+[multiple-births code](#multiples-approaches) uses.
+
+In the 2019 table `DW_EK_Foedsel` is the key of the birth event, shared by the
+children of one delivery ([the Nyfoedte
+section](register-reference.qmd#mfr-nyfoedte)). In the 1997-2018 table SDS
 describes `foedselsloebenummer` only as the birth serial number, so check with
 `count()` whether twins share a value before you rely on it.
 
 ```r
-library(dplyr) # distinct, arrange, group_by, mutate, row_number
+library(dplyr) # count, filter, arrange, group_by, mutate, ungroup, select
 
-deliveries <- births %>% # births = your mfr table, collected, lower-case column names
-  distinct(cpr_moder, foedselsdato) %>% # one row per delivery, also for twins
-  arrange(cpr_moder, foedselsdato) %>%
+# births = your mfr table, collected, lower-case column names, one row per child
+
+# A row without the mother's number or the birth date cannot be placed in a
+# delivery. Count them, so you can report how many you leave out
+count(births, no_mother_or_date = is.na(cpr_moder) | is.na(foedselsdato))
+
+births <- births %>%
+  filter(!is.na(cpr_moder), !is.na(foedselsdato)) %>% # one NA would make every later count NA
+  arrange(cpr_moder, foedselsdato) %>%                 # each mother's children in date order
   group_by(cpr_moder) %>%
-  mutate(parity_derived = row_number()) %>% # 1 = first delivery in the table
-  ungroup()
+  mutate(
+    # TRUE for the first child of a delivery: the mother's first child in the
+    # table, or a child born more than one day after her previous child
+    new_delivery   = c(TRUE, diff(foedselsdato) > 1),
+    # running count of her deliveries: 1 = her first delivery in the table
+    parity_derived = cumsum(new_delivery)
+  ) %>%
+  ungroup() %>%
+  # one id per delivery, shared by twins: the mother plus her delivery number
+  mutate(delivery_id = paste(cpr_moder, parity_derived))
+
+# one row per delivery (its first child), for the time-varying code below
+deliveries <- births %>%
+  filter(new_delivery) %>%
+  select(cpr_moder, foedselsdato, parity_derived)
 ```
 
 The count only sees deliveries that are in your table. A table that starts in
@@ -312,14 +344,15 @@ you derive parity from the table. In the Norwegian register, migrant women
 whose first birth was before arrival had higher odds of preterm birth,
 stillbirth and low Apgar score in later births than migrant women whose first
 birth was in Norway, so the group is not a random subset ([Vik et al.
-2020](https://doi.org/10.1186/s12913-020-05415-y)). Whether the recorded
-`paritet` includes births abroad was not found in a source, so do not assume it.
+2020](https://doi.org/10.1186/s12913-020-05415-y)). The sources on this page do
+not say whether the recorded `paritet` counts births abroad, so do not assume
+that it does.
 
 Options, depending on your question:
 
-- Stratify or restrict by origin, for example women born in Denmark. `opr_land`
-  and `ie_type` in BEF give country of origin and immigrant status, see
-  [Overview of registers](register-reference.qmd).
+- Stratify or restrict by origin, for example women born in Denmark. `ie_type`
+  and `opr_land` in BEF give immigrant status and country of origin, see
+  [Immigrants and descendants](immigrants-and-descendants.qmd).
 - Run the analysis without immigrant women as a sensitivity analysis.
 - State the limitation in the methods and give the share of immigrant women in
   the study population.
@@ -393,16 +426,22 @@ regression. Ordinary logistic regression underestimated all parameters when
 twins were present ([Sauzet and Peacock
 2017](https://doi.org/10.1186/s12874-017-0369-6)).
 
+The sketch needs `delivery_id`, which the [parity code](#parity-derive) above
+gives each delivery. In the 2019 table `dw_ek_foedsel` can be used instead.
+
 ```r
+library(dplyr)   # mutate, arrange
 library(geepack) # geeglm()
 
-# one row per child; delivery_id identifies the delivery, for example mother and
-# birth date pasted together (see the parity section)
+# births: one row per child, with delivery_id from the parity code above
 births <- births %>%
   mutate(delivery_id = factor(delivery_id)) %>% # a character id is read as ONE cluster, without an error
-  arrange(delivery_id)                          # geeglm wants rows of a cluster together
-fit <- geeglm(preterm ~ exposure + parity_cat,
-              id = delivery_id, family = binomial, corstr = "exchangeable",
+  arrange(delivery_id)                          # geeglm wants the rows of a cluster next to each other
+
+fit <- geeglm(preterm ~ exposure + parity_cat,  # preterm 0/1, your exposure and covariates
+              id = delivery_id,                 # children of the same delivery form a cluster
+              family = binomial,
+              corstr = "exchangeable",          # the same correlation between any two children of a delivery
               data = births)
 summary(fit)
 ```
@@ -414,12 +453,12 @@ of 32 twin studies of early-life exposures describes conditional (within-pair)
 methods, which adjust by design for shared confounders, and marginal methods
 such as GEE, which treat pairs as clusters and which the authors say may give
 invalid inference for within-pair questions ([Fasola et al.
-2021](https://pmc.ncbi.nlm.nih.gov/articles/PMC8657152/)).
+2021](https://doi.org/10.3390/ijerph182312696)).
 
 ### Multiples and parity together {#multiples-parity}
 
 A twin delivery adds one to parity, not two. When you count deliveries from
-the MFR, collapse to one row per delivery before you count, as in [the
+the MFR, group the children of one delivery before you count, as in [the
 derivation above](#parity-derive).
 
 ### What to report {#report-multiples}
@@ -433,6 +472,10 @@ derivation above](#parity-derive).
 
 - [Overview of registers](register-reference.qmd#mfr---medical-birth-register):
   the MFR columns and tables
+- [Family links](family-links.qmd): the mother and father of a child, adoption
+  and siblings
+- [Immigrants and descendants](immigrants-and-descendants.qmd): origin, for
+  women whose earlier births were abroad
 - [Time-varying variables](time-varying.qmd): start/stop data for parity
 - [Missing data](missing-data.qmd): for missing gestational age and parity
 - [Bliddal et al. 2018](https://doi.org/10.1007/s10654-018-0356-1): the
