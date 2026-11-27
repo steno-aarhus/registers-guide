@@ -15,7 +15,9 @@ costs](healthcare-costs.qmd).
 
 You start from an analysis dataset with one row per person: the summed cost in
 DKK over follow-up, follow-up time, exposure and covariates ([Phase
-12](data-manipulation.qmd)). You end with mean costs per group and an excess
+12](data-manipulation.qmd)). Bring each year's costs to one price year and
+discount them before you sum them per person ([Prices](#price-year),
+[Discounting](#discounting)). You end with mean costs per group and an excess
 cost with a confidence interval.
 
 ::: {.callout-warning title="Structural guidance, not verified code"}
@@ -219,7 +221,13 @@ excess_cost(df)
 The standardised means are averages over everyone in `df`, so the excess cost
 is for the whole cohort. To get it for the exposed only, average over the
 exposed rows. The function returns a single number, so the confidence interval
-comes from the bootstrap below. [Liu et al.
+comes from the bootstrap below.
+
+The sketch assumes that everyone is followed to the end of the horizon or to
+death. If some people emigrate or your data end before the horizon, their
+summed cost is too low and the excess cost is biased. Use the methods under
+[Censored costs](#censoring), or choose a horizon that everyone can be followed
+for. [Liu et al.
 2019](https://doi.org/10.1002/sim.8140) show how to split an effect on the
 mean cost into its effect on the probability of any cost and on the cost among
 users.
@@ -228,7 +236,8 @@ users.
 
 For mean cost per person over a fixed horizon, death ends the costs: it is not
 censoring. Emigration and the end of your data are censoring, because the costs
-after that date are unknown. Migration dates come from [VNDS](register-reference.qmd#vnds---migration-register).
+after that date are unknown. The dates of death and emigration are under
+[Outcomes](outcomes.qmd#censoring-dates).
 
 Averaging the observed costs, over everyone or over those with complete
 follow-up only, is biased when some people are censored ([Lin et al.
@@ -356,9 +365,11 @@ horizons under 35 years each later year is divided by 1.035 once more:
 ```r
 library(dplyr) # mutate
 
+# costs_by_year: one row per person and year of follow-up
 # year_since_start: 0 for the first year of follow-up, 1 for the next, ...
 costs_by_year <- costs_by_year %>%
   mutate(cost_discounted = cost_real / 1.035^year_since_start) # cost_real: cost in one price year
+# then sum cost_discounted per person to get the cost over the horizon
 ```
 
 ## Productivity costs {#productivity}
