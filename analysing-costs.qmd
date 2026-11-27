@@ -164,73 +164,17 @@ against the export rules before they leave DST (see
 
 ## Choosing a model {#models}
 
-In a large cohort you may not need a model for the crude comparison. In a
-review aimed at trials, Mihaylova et al. recommend simple methods "in large
-samples where the near-normality of sample means is assured" ([Mihaylova et
-al. 2011](https://doi.org/10.1002/hec.1653)), such as a difference in means
-with a normal-based confidence interval. Barber and Thompson recommend the
-bootstrap as a check on such methods, or as the main analysis for moderately
-sized samples of skewed costs ([Barber & Thompson
-2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P)). A model is needed when you
-adjust or standardise, and then the skewness and the zeros matter.
+For the crude comparison in a large cohort you need no model. Mihaylova et
+al. recommend simple methods "in large samples where the near-normality of
+sample means is assured" ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)), such as a difference in means with a
+normal-based confidence interval, and Barber and Thompson recommend the
+bootstrap as a check ([Barber & Thompson 2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P)).
 
-### Why not linear regression on log costs {#log-ols}
-
-Taking the log of the cost and fitting `lm()` gives coefficients on the log
-scale, and `exp()` of a predicted log cost is not the mean cost. Getting back
-to DKK needs a retransformation. Duan's smearing factor does this when the
-log-scale error has constant variance. When the variance differs with the
-covariates, as it often does, the simple retransformation is biased, and a
-correct one is cumbersome ([Manning & Mullahy
-2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8); [Manning et al.
-2005](https://doi.org/10.1016/j.jhealeco.2004.09.011)). The log is also
-undefined at zero, and adding a constant to the zeros is not recommended
-([Mihaylova et al. 2011](https://doi.org/10.1002/hec.1653)).
-
-### GLM with a log link {#glm-log}
-
-A generalised linear model with a log link models the mean cost on the DKK
-scale directly: the predicted mean is exp(xβ), with no smearing factor.
-`exp()` of a coefficient is a ratio of mean costs. A difference in DKK comes from standardisation, as in
-the [two-part model](#two-part) below.
-
-The variance function (the GLM family) says how the variance grows with the
-mean. The estimate of the mean is usually robust to a wrong variance function,
-but the precision is not ([Mihaylova et al.
-2011](https://doi.org/10.1002/hec.1653)). Manning and Mullahy write the
-variance as a power of the mean, var(y | x) proportional to E(y | x)^λ, and
-propose a Park-type test to estimate λ: regress the log of the squared
-raw-scale residual on the log of the predicted mean, and read off the slope
-([Manning & Mullahy 2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8),
-who call it a modified Park test).
-
-  | Slope λ near | Variance                 | `family =` in `glm()`            |
-  | ------------ | ------------------------ | -------------------------------- |
-  | 0            | constant                 | `gaussian(link = "log")`         |
-  | 1            | proportional to the mean | `quasipoisson(link = "log")`     |
-  | 2            | mean squared             | `Gamma(link = "log")`            |
-  | 3            | mean cubed               | `inverse.gaussian(link = "log")` |
-
-```r
-library(dplyr) # filter
-
-pos <- filter(df, cost > 0)                          # people with any cost
-fit <- glm(cost ~ exposure + age + sex, data = pos,
-           family = Gamma(link = "log"))             # a first GLM with log link
-
-res <- residuals(fit, type = "response")             # raw-scale residual: cost minus predicted mean
-park <- lm(log(res^2) ~ log(fitted(fit)))            # log squared residual on log predicted mean
-coef(park)[2]                                        # the slope: an estimate of lambda
-```
-
-Manning and Mullahy start from the residuals of a first GLM. If the residuals
-on the log scale are heavy-tailed (a coefficient of kurtosis above 3), they
-suggest linear regression on log cost instead. If not, the Park test picks the
-family. In their simulations the test was less informative when the data were
-heavy-tailed. When the family is picked this way, they recommend robust or
-bootstrapped standard errors, because the estimated variance function may
-still be wrong ([Manning & Mullahy
-2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8)).
+When you adjust or standardise, use the two-part model below: costs are skewed
+and many people have none, and it handles both. The two fold-outs after it
+explain how to choose the GLM family for its second part, and why taking the
+log of the costs is not the way round the skewness.
 
 ### Two-part model for costs with many zeros {#two-part}
 
@@ -239,15 +183,18 @@ positive costs separately ([Belotti et al.
 2015](https://doi.org/10.1177/1536867X1501500102)):
 
 1. A logistic regression for the probability of any cost.
-2. A GLM with a log link for the cost among those with any cost.
+2. A GLM with a log link for the cost among those with any cost. The sketch
+   uses the gamma family, where the standard deviation grows in proportion to
+   the mean. Manning and Mullahy write that in their experience "many health
+   care expenditure and use data" have this property ([Manning & Mullahy 2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8)). To check it in your
+   own data, see [Choosing the family](#glm-log).
 
 The mean cost is the product of the two parts: E(cost | x) = Pr(cost > 0 | x)
 × E(cost | cost > 0, x) ([Belotti et al.
 2015](https://doi.org/10.1177/1536867X1501500102)). In the review by
 Mihaylova et al., two-part models "seem to outperform other methods when
-excess zeros are present". Hurdle models are the counterpart for counts, such
-as the number of contacts, not for costs in DKK ([Belotti et al.
-2015](https://doi.org/10.1177/1536867X1501500102)).
+excess zeros are present" ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)).
 
 The sketch fits both parts and standardises: it predicts each person's mean
 cost as exposed and as unexposed, and the excess cost is the difference of the
@@ -291,6 +238,64 @@ for. [Liu et al.
 mean cost into its effect on the probability of any cost and on the cost among
 users.
 
+::: {#glm-log .callout-note collapse="true" title="Choosing the family for the GLM in part 2"}
+A generalised linear model with a log link models the mean cost on the DKK
+scale directly: the predicted mean is exp(xβ), with no smearing factor.
+`exp()` of a coefficient is a ratio of mean costs. A difference in DKK comes
+from standardisation, as in the [two-part model](#two-part) above.
+
+The variance function (the GLM family) says how the variance grows with the
+mean. The estimate of the mean is usually robust to a wrong variance function,
+but the precision is not ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)). Manning and Mullahy write the
+variance as a power of the mean, var(y | x) proportional to E(y | x)^λ, and
+propose a Park-type test to estimate λ: regress the log of the squared
+raw-scale residual on the log of the predicted mean, and read off the slope
+([Manning & Mullahy 2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8),
+who call it a modified Park test).
+
+  | Slope λ near | Variance                 | `family =` in `glm()`            |
+  | ------------ | ------------------------ | -------------------------------- |
+  | 0            | constant                 | `gaussian(link = "log")`         |
+  | 1            | proportional to the mean | `quasipoisson(link = "log")`     |
+  | 2            | mean squared             | `Gamma(link = "log")`            |
+  | 3            | mean cubed               | `inverse.gaussian(link = "log")` |
+
+```r
+library(dplyr) # filter
+
+pos <- filter(df, cost > 0)                          # people with any cost
+fit <- glm(cost ~ exposure + age + sex, data = pos,
+           family = Gamma(link = "log"))             # a first GLM with log link
+
+res <- residuals(fit, type = "response")             # raw-scale residual: cost minus predicted mean
+park <- lm(log(res^2) ~ log(fitted(fit)))            # log squared residual on log predicted mean
+coef(park)[2]                                        # the slope: an estimate of lambda
+```
+
+Manning and Mullahy start from the residuals of a first GLM. If the residuals
+on the log scale are heavy-tailed (a coefficient of kurtosis above 3), they
+suggest linear regression on log cost instead. If not, the Park test picks the
+family. In their simulations the test was less informative when the data were
+heavy-tailed. When the family is picked this way, they recommend robust or
+bootstrapped standard errors, because the estimated variance function may
+still be wrong ([Manning & Mullahy
+2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8)).
+:::
+
+::: {#log-ols .callout-note collapse="true" title="Why not linear regression on log costs"}
+Taking the log of the cost and fitting `lm()` gives coefficients on the log
+scale, and `exp()` of a predicted log cost is not the mean cost. Getting back
+to DKK needs a retransformation. Duan's smearing factor does this when the
+log-scale error has constant variance. When the variance differs with the
+covariates, as it often does, the simple retransformation is biased, and a
+correct one is cumbersome ([Manning & Mullahy
+2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8); [Manning et al.
+2005](https://doi.org/10.1016/j.jhealeco.2004.09.011)). The log is also
+undefined at zero, and adding a constant to the zeros is not recommended
+([Mihaylova et al. 2011](https://doi.org/10.1002/hec.1653)).
+:::
+
 ## Censored costs {#censoring}
 
 For mean cost per person over a fixed horizon, death ends the costs: it is not
@@ -298,10 +303,25 @@ censoring. Emigration and the end of your data are censoring, because the costs
 after that date are unknown. The dates of death and emigration are under
 [Outcomes](outcomes.qmd#censoring-dates).
 
+A plain average of the observed costs is then biased. The usual remedy is to
+weight: each person followed to the horizon or to death counts with the
+inverse of the probability of staying uncensored that long ([Bang & Tsiatis
+2000](https://doi.org/10.1093/biomet/87.2.329)). It is the same idea as IPCW in
+[IP weighting](weighting-iptw.qmd), with a weight that depends on each
+person's follow-up time.
+
+The weighting assumes that censoring happens completely at random. Bang and
+Tsiatis call this "a reasonable assumption at least in relation to
+administrative censoring" ([Bang & Tsiatis
+2000](https://doi.org/10.1093/biomet/87.2.329)), which in register data is the
+end of your data. Emigration need not be at random, so compare how many
+emigrate in each group.
+
+::: {.callout-note collapse="true" title="The estimators for censored costs in more detail"}
 The average of the observed costs, over everyone or over the uncensored cases
 only, "can be severely biased, and the standard survival analysis techniques
-are not applicable" ([Lin et al. 1997](https://doi.org/10.2307/2533947)). Kaplan-Meier with cost in place of
-time fails because the cost accumulated up to censoring is not independent of
+are not applicable" ([Lin et al. 1997](https://doi.org/10.2307/2533947)).
+Kaplan-Meier with cost in place of time fails because the cost accumulated up to censoring is not independent of
 the cost up to death ([Wijeysundera et al.
 2012](https://doi.org/10.2147/CEOR.S31552)). Two estimators were developed for
 this:
@@ -319,18 +339,13 @@ this:
   needs cost per period, which register data give ([Wijeysundera et al.
   2012](https://doi.org/10.2147/CEOR.S31552)).
 
-Both assume that censoring happens completely at random. Bang and Tsiatis call
-this "a reasonable assumption at least in relation to administrative
-censoring" ([Bang & Tsiatis 2000](https://doi.org/10.1093/biomet/87.2.329)),
-which in register data is the end of your data. Emigration need not be at
-random, so compare how many emigrate in each group. Wijeysundera et al.
-give a worked example for readers without an advanced statistical background,
-cite simulations in which the simple weighted estimator became unstable with
-more than 50% censoring, and describe phase-based costing as an alternative
-when censoring is heavy ([Wijeysundera et al.
-2012](https://doi.org/10.2147/CEOR.S31552)). The weighting idea is the same as
-IPCW in [IP weighting](weighting-iptw.qmd), with a weight that depends on
-each person's follow-up time.
+Wijeysundera et al. give a worked example for readers without an advanced
+statistical background, cite simulations in which the simple weighted
+estimator became unstable with more than 50% censoring, and describe
+phase-based costing as an alternative when censoring is heavy ([Wijeysundera
+et al. 2012](https://doi.org/10.2147/CEOR.S31552)).
+
+:::
 
 With mean cost per person-year, a person who emigrates contributes the costs and
 the person-years observed before the date, as with a rate.
