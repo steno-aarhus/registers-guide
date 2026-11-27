@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-25">
+<meta name="dcterms.date" content="2026-11-27">
 <meta name="description" content="How to link a person to mother and father with mor_id and far_id in BEF, what the link means, which birth cohorts it covers, how to find siblings, and how to mark adoption with FTBARN.">
 
 <title>Family links: parents, siblings and parents’ characteristics – Register Guide</title>
@@ -669,7 +669,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Last modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 25, 2026</p>
+      <p class="date">November 27, 2026</p>
     </div>
   </div>
   
@@ -749,17 +749,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(fastreg) <span class="co"># read_register()</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)   <span class="co"># the verbs are translated to SQL and run in DuckDB</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># pnrs: the children you want parents for. Returns one row per child:</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># pnr | foed_dag | mor_id | far_id</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># pnrs: the children you want parents for. Returns one row per child with at</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># least one registered parent: pnr | foed_dag | mor_id | far_id</span></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>parents_from_bef <span class="ot">&lt;-</span> <span class="cf">function</span>(pnrs) {</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  bef <span class="ot">&lt;-</span> <span class="fu">read_register</span>(<span class="st">"bef"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Columns: pnr | foed_dag | mor_id | far_id | referencetid</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="co"># The first non-missing mother id in a snapshot at or after birth. Check how</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="co"># a missing id looks in your delivery (NA or an empty string) before relying</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># on is.na().</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">semi_join</span>(<span class="fu">tibble</span>(<span class="at">pnr =</span> pnrs), <span class="at">by =</span> <span class="st">"pnr"</span>, <span class="at">copy =</span> <span class="cn">TRUE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># a missing id is an empty string, not NA, in parquet converted from SAS</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">mor_id =</span> <span class="fu">na_if</span>(mor_id, <span class="st">""</span>), <span class="at">far_id =</span> <span class="fu">na_if</span>(far_id, <span class="st">""</span>))</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Columns: pnr | foed_dag | mor_id | far_id | referencetid</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># The first non-missing mother id in a snapshot at or after birth</span></span>
 <span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  mother <span class="ot">&lt;-</span> bef <span class="sc">%&gt;%</span></span>
 <span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(referencetid <span class="sc">&gt;=</span> foed_dag, <span class="sc">!</span><span class="fu">is.na</span>(mor_id)) <span class="sc">%&gt;%</span></span>
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
@@ -772,18 +772,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(pnr) <span class="sc">%&gt;%</span></span>
 <span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">slice_min</span>(referencetid, <span class="at">n =</span> <span class="dv">1</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, foed_dag, far_id)</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, <span class="at">foed_dag_far =</span> foed_dag, far_id)</span>
 <span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="co"># full_join: a child with only one registered parent keeps its row, with NA</span></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  <span class="co"># for the other. foed_dag is in the key so it is kept for both kinds of child.</span></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  mother <span class="sc">%&gt;%</span></span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    <span class="fu">full_join</span>(father, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"foed_dag"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>()</span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="co"># cohort_pnrs: the pnr of the people in your cohort</span></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>parents <span class="ot">&lt;-</span> <span class="fu">parents_from_bef</span>(cohort_pnrs)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>A child with <code>NA</code> for both has no link in BEF. Count them by birth year before you go on, and report how many children each analysis loses on that account. A different rule, such as the most frequent value or the latest snapshot, is equally valid if you state it. What matters is that the rule is the same for every child.</p>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="co"># full_join on pnr: a child with only one registered parent keeps its row,</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  <span class="co"># with NA for the other. BEF can correct a birth date between snapshots, so</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  <span class="co"># foed_dag is taken from the mother's snapshot, or the father's if she is</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>  <span class="co"># missing, rather than used as a key.</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>  mother <span class="sc">%&gt;%</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">full_join</span>(father, <span class="at">by =</span> <span class="st">"pnr"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">foed_dag =</span> <span class="fu">coalesce</span>(foed_dag, foed_dag_far)) <span class="sc">%&gt;%</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    <span class="fu">select</span>(pnr, foed_dag, mor_id, far_id) <span class="sc">%&gt;%</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    <span class="fu">collect</span>()</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="co"># cohort_pnrs: the pnr of the people in your cohort</span></span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>parents <span class="ot">&lt;-</span> <span class="fu">parents_from_bef</span>(cohort_pnrs)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A child with no link in BEF to either parent is not in <code>parents</code> at all. Join <code>parents</code> back onto your cohort with <code>left_join()</code>, count the children with <code>NA</code> for both by birth year before you go on, and report how many children each analysis loses on that account.</p>
+<p>Two things to check in your own delivery. A missing id in parquet converted from SAS is an empty string, not <code>NA</code>, because a SAS text column has no missing value of its own; the <code>na_if()</code> line turns it into <code>NA</code>, and without it every child without a registered father would share the father id <code>""</code>. And if your BEF has no <code>referencetid</code> column, order the snapshots by the <code>year</code> column the parquet conversion adds: drop <code>referencetid &gt;= foed_dag</code> from the two filters and write <code>slice_min(year, n = 1, with_ties = FALSE)</code>. A child is in BEF only from birth, so this takes the first year with an id. If your delivery has several snapshots a year, keep one per year first, as under “Check your BEF” in <a href="./socioeconomic-variables.html#faik-income">Socioeconomic variables</a>. A different rule, such as the most frequent value or the latest snapshot, is equally valid if you state it. What matters is that the rule is the same for every child.</p>
 <section id="mfr" class="level3">
 <h3 class="anchored" data-anchor-id="mfr">The mother at birth: the Medical Birth Register</h3>
 <p>BEF holds the parents CPR has now. The Medical Birth Register (MFR) holds, for each birth in Denmark, the (assumed) biological parents (Bliddal et al.&nbsp;2018). Sundhedsdatastyrelsen takes the link between mother and child from CPR (“udtræk fra CPR som giver den fornødne kobling mellem mor og barn”, <a href="https://cdn1.gopublic.dk/sundhedsdatastyrelsen/Media/638650989716795161/Registerdeklaration%20for%20foedselsregisteret.pdf">register declaration</a>, section 0.7), and Bliddal et al.&nbsp;describe the identification of the mother for linkage as “virtually complete and … of very high validity”.</p>
@@ -864,7 +869,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="adoption" class="level2">
 <h2 class="anchored" data-anchor-id="adoption">Step 2 - Check for adoption with FTBARN</h2>
 <p>Do this before you build siblings. BEF only has the current legal parents, so an adopted child shares <code>mor_id</code> and <code>far_id</code> with its adoptive parents’ other children, and Step 3 would make them siblings. BEF cannot tell you whether the relation is adoptive. FTBARN, the child file of the fertility database, can. It has one row per child from 1973 and, besides the parents (<code>mor1</code>, <code>far1</code>), two columns that mark the relation: <code>mor_foed_adop</code> for the mother and <code>far_foed_adop</code> for the father.</p>
-<p>DST describes them as marking whether information in the background registers (the Adoption Register, CPR and the Medical Birth Register) points to an adoptive or other non-biological relation. Codes 11 to 18 are a presumed non-biological relation, codes 21 to 23 a presumed biological one, and 30 to 39 cover children born abroad, children born before 1973 and relations with no sign of adoption or early registration. For the father’s column DST’s text gives 1991 instead of 1973 in the grouping, so the cut-off for fathers is unclear. The full list is in the <a href="./register-reference.html#ftbarn">value sets under FTBARN</a>.</p>
+<p>DST describes them as marking whether information in the background registers (the Adoption Register, CPR and the Medical Birth Register) points to an adoptive or other non-biological relation. Codes 11 to 18 are a presumed non-biological relation, codes 21 to 23 a presumed biological one, and 30 to 39 cover children born abroad, children born before 1973 and relations with no sign of adoption or early registration. For the father the year in that last group is 1991, not 1973: DST’s grouping for <code>far_foed_adop</code> puts children born before 1991 in 30 to 39 (<a href="https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/far-foed-adop">DST, FAR_FOED_ADOP</a>). Codes 21 to 23 therefore mark a presumed biological father only for children born from 1991. In the code below the father of an earlier child is “unknown” even when nothing suggests an adoption, so excluding children with an “unknown” father would drop almost every child born before 1991. The full list is in the <a href="./register-reference.html#ftbarn">value sets under FTBARN</a>.</p>
 <p>Four points from DST’s own documentation:</p>
 <ul>
 <li><strong>It is presumed, not known.</strong> DST: “A biological relation can only be determined with a DNA test, which is not available in the background registers” (our translation). A child conceived with donor sperm or donor egg looks like a biological relation in the registers.</li>
