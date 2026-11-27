@@ -1,0 +1,439 @@
+---
+title: "Pregnancy and birth variables"
+subtitle: "Gestational age, birth size, parity and multiple births from the Medical Birth Register"
+date: last-modified
+pagetitle: "Pregnancy and birth variables in the Medical Birth Register (MFR)"
+description: "Gestational age and preterm birth, SGA and LGA and the choice of growth reference, parity and the immigrant pitfall, and multiple births in the Danish Medical Birth Register (MFR), with what to report."
+---
+
+<!-- TODO(Sara): wording -->
+Use this page when pregnancy or birth variables are an exposure, an outcome or
+a covariate in your study. It covers three groups of variables from the Medical
+Birth Register (MFR): gestational age and size at birth, parity, and multiple
+births. For each it says which column to use, where the register is weak, and
+what to report in the methods.
+
+The MFR tables and their columns are listed in [Overview of
+registers](register-reference.qmd#mfr---medical-birth-register). This page does
+not repeat them. Column names below are in lower case, as the guide writes them
+after `rename_with(tolower)`. Check them against your own delivery with
+`colnames()`.
+
+## Which table holds what {#tables}
+
+The MFR has three eras with different tables, and the variable names differ
+between them ([Bliddal et al.
+2018](https://doi.org/10.1007/s10654-018-0356-1);
+[SDS, register page](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/foedselsregisteret)).
+
+| Variable                | 1997-2018 (`mfr`)                    | 2019 onwards (`mfr_nyfoedte`)       |
+| ----------------------- | ------------------------------------ | ----------------------------------- |
+| Gestational age         | `gestationsalder_dage` (days)        | `Gestationsalder` (days), `GestationsalderUger` (full weeks) |
+| Birth weight (g)        | `vaegt_barn`                         | `Vaegt_Barn`                        |
+| Parity                  | `paritet`                            | `Paritet`                           |
+| Multiple births         | `flerfoldsfoedsel_beregnet`, `barnsnummer_flerfoldsfoedsel` (child's number) | `AntalBoernIFoedslen` (children in the birth), `BarnsNummerIFoedslen` (child's number) |
+| Birth serial number     | `foedselsloebenummer`                | `DW_EK_Foedsel` (birth event key)   |
+
+Stillbirths from 1997 to 2018 are in a separate dataset, `mfrdfoed`, with
+gestational age in `gestationsalder_uger` and
+`gestationsalder_dage_efter_uger` (full weeks and the days after them), not in
+total days ([SDS, documentation 1997-2018, tables
+`Doedsfoedsler_blanket` and
+`Hjemmefoedsler_blanket`](https://sundhedsdatastyrelsen.dk/Media/638650989745673989/Dokumentation_Foedselsregisteret_1997_2018.xlsx)).
+The 2019 table holds live births and stillbirths together.
+
+Both gestational age columns are in **days**, so divide by 7 for weeks. SDS
+gives the example 283 days for 40 weeks and 3 days ([SDS, documentation from
+2019](https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx)).
+
+Before 1997 DST has no MFR table, and its fertility datasets (`ftbarn`,
+`ftforael`) do not hold gestational age. See [the pre-1997
+period](register-reference.qmd#ftbarn).
+
+## Gestational age and preterm birth {#gestational-age}
+
+### Missing values and cleaning {#ga-quality}
+
+Gestational age is missing for 8% of births in 1997 and 1% from 2001. SDS does
+not clean the register after entry, so unrealistic gestational ages and birth
+weights stay in the data ([Bliddal et al.
+2018](https://doi.org/10.1007/s10654-018-0356-1)). Look at the distribution
+before you categorise, and decide on a rule for implausible values that you
+can describe in the methods.
+
+### Preterm categories {#preterm}
+
+WHO defines preterm birth as a birth before 37 completed weeks and divides it
+into three groups ([WHO fact sheet on preterm
+birth](https://www.who.int/news-room/fact-sheets/detail/preterm-birth)).
+
+| Group                 | Completed weeks |
+| --------------------- | --------------- |
+| Extremely preterm     | Below 28        |
+| Very preterm          | 28 to below 32  |
+| Moderate to late preterm | 32 to below 37 |
+
+Report the groups, not only the composite, when your question is about causes
+or outcomes that differ along the range. In days the cut points are 196, 224
+and 259.
+
+```r
+library(dplyr) # mutate, case_when
+
+births <- births %>% # births = your mfr table, collected, lower-case column names
+  mutate(
+    ga_weeks = floor(gestationsalder_dage / 7), # completed weeks
+    ga_group = case_when(
+      is.na(ga_weeks) ~ NA_character_,
+      ga_weeks < 28 ~ "extremely preterm",
+      ga_weeks < 32 ~ "very preterm",
+      ga_weeks < 37 ~ "moderate to late preterm",
+      TRUE ~ "term or later"
+    )
+  )
+
+count(births, ga_group) # missing values show up as their own row
+```
+
+### Stillbirth definition changed in 2004 {#stillbirth-2004}
+
+Until 31 March 2004 a stillbirth was a dead fetus delivered after 28 completed
+weeks. From 1 April 2004 it is a dead fetus delivered after 22 completed weeks.
+Stillbirths between 22 and 28 weeks before April 2004 are in the National
+Patient Register but not in the MFR ([Bliddal et al.
+2018](https://doi.org/10.1007/s10654-018-0356-1)). A study of stillbirth or
+extreme prematurity that crosses 2004 needs to take this into account.
+
+### Early years of the register {#early-years}
+
+If you use births before 1978 from SDS, note that gestational age was then
+coded in the variable `fuldb`, with 0 for 40 weeks or more and 1 to 8 for
+increasing prematurity. For 1974 to 1977, 89.6% of children were coded 0,
+against 70.0% in the later years, so the groups are too coarse to use as
+weeks. Gestational age in completed weeks (`svlengde`) is used from 1978 ([á
+Rogvi et al. 2011](https://doi.org/10.1371/journal.pone.0016668)). The same
+paper found that SGA in the early years was classified with 49% false
+positives, mainly because of these intervals. A cut-off of 3 standard
+deviations below the mean brought the false positives down to 9%, at the cost
+of more false negatives. The authors note that data from before 1981 are most
+often left out. A sensitivity analysis that starts later is a simple way to
+check how much the early years matter.
+
+## Small and large for gestational age {#sga-lga}
+
+SGA and LGA compare birth weight with a reference for the same gestational age
+and sex. The usual rule is a birth weight below the 10th percentile for SGA and
+above the 90th for LGA. Some studies use the 3rd percentile for severe SGA. The
+register does not hold a ready-made SGA variable, so you need a reference and
+a rule, and you need to report both.
+
+The reference decides who is classified. Three are in common use.
+
+**Marsál (1996).** Curves built from ultrasound estimates of fetal weight in 86
+uncomplicated pregnancies at four Scandinavian centres, because curves built
+from birth weights underestimate growth in the preterm period. The standard
+deviation is set to 12% of the mean weight, and SGA is below the mean minus 2
+standard deviations. That is a different rule from the 10th percentile and
+classifies a different share of births. Boys weigh 2 to 3% more than girls on
+average ([Marsál et al.
+1996](https://doi.org/10.1111/j.1651-2227.1996.tb14164.x)). The curves were
+used to define SGA in the Danish MFR for 1974 to 1996 ([á Rogvi et al.
+2011](https://doi.org/10.1371/journal.pone.0016668)).
+
+**INTERGROWTH-21st.** An international standard for newborn size from healthy
+pregnancies in eight populations, with centiles by gestational age and sex
+([Villar et al. 2014](https://doi.org/10.1016/S0140-6736(14)60932-6)). In 15
+European countries, SGA and LGA prevalence was near 10% with each country's own
+charts. With INTERGROWTH-21st it varied from 3.0% to 10.1% for SGA and from
+24.9% to 8.0% for LGA, along a north to south gradient. Infants who were
+reclassified from SGA to normal growth by the international chart still had a
+higher perinatal mortality than other normally grown infants (odds ratio 2.7)
+([Hocquette et al. 2021](https://doi.org/10.1016/j.lanepe.2021.100167)). The
+authors conclude that an international chart can classify growth-restricted
+infants as normally grown. The paper includes births from 33 weeks.
+
+**Customised references.** These adjust the expected weight for maternal
+height, weight, parity and ethnic group ([Gardosi and Francis
+1999](https://doi.org/10.1111/j.1471-0528.1999.tb08267.x)). They need those
+inputs. In the MFR, maternal weight, height and BMI exist from 2003 (see
+`bmi_moder`, `hoejde_moder`, `vaegt_moder` in the [column
+table](register-reference.qmd#mfr---medical-birth-register)), so a customised
+reference is only possible for later births.
+
+For very preterm infants the choice of chart changes the SGA prevalence, and
+the chart should be chosen for that age range. Report the chart you used and
+repeat the analysis with a second one.
+
+<!-- TODO(Sara): wording -->
+The sketch below classifies births against a reference table that you build
+from the chart you chose. `ref` has one row per sex and completed week with the
+cut-off weights.
+
+```r
+library(dplyr) # left_join, mutate, case_when
+
+# ref: koen_barn, ga_weeks, p10, p90  (weight in grams, from your chosen chart)
+# check by eye that koen_barn has the same coding in births and in ref
+births <- births %>%
+  left_join(ref, by = c("koen_barn", "ga_weeks")) %>%
+  mutate(
+    size_for_ga = case_when(
+      is.na(vaegt_barn) | is.na(p10) ~ NA_character_,
+      vaegt_barn < p10 ~ "SGA",
+      vaegt_barn > p90 ~ "LGA",
+      TRUE ~ "AGA"
+    )
+  )
+
+count(births, size_for_ga)
+```
+
+In the 2019 table, `Vaegt_Barn` and other numeric fields use -1 for not stated.
+Recode them to `NA` first, see [the Nyfoedte
+section](register-reference.qmd#mfr-nyfoedte).
+
+### What to report {#report-ga}
+
+- Which gestational age variable you used and what you did with missing and
+  implausible values.
+- The preterm cut points, and whether you analysed the three groups or one
+  composite.
+- The growth reference, the rule (percentile or standard deviation) and the
+  cut-offs for SGA and LGA.
+- Whether the analysis is limited to singletons.
+- A sensitivity analysis with a second reference, and one that starts after the
+  early years if your study covers them.
+
+## Parity {#parity}
+
+### What the MFR variable means {#parity-definition}
+
+SDS defines `paritet` as the number of completed pregnancies including
+stillbirths at the end of the current delivery, so 1 is a first birth
+([SDS, documentation
+1997-2018](https://sundhedsdatastyrelsen.dk/Media/638650989745673989/Dokumentation_Foedselsregisteret_1997_2018.xlsx)).
+The 2019 documentation uses the same wording, with -1 for not stated. It counts
+deliveries, not children, so a twin delivery adds one. The variable is not
+gravidity: miscarriages and induced abortions are not part of it.
+
+The midwife records the number of previous live births on the notification form
+for the register. A comparison with the parity calculated in DST's fertility
+database found that more than 99.5% of women with parity one, who had given
+birth from 1978, were classified as such by both ([Knudsen
+1993](https://pubmed.ncbi.nlm.nih.gov/8212355/), abstract in English). That is
+the evidence for first births only. It does not cover higher parity.
+
+Parity is missing for 1 to 3% of births in the years Bliddal et al. tabulate
+([Bliddal et al. 2018](https://doi.org/10.1007/s10654-018-0356-1), Table 5).
+
+From 2019, SDS takes parity from the birth report. If it is missing, or lower
+than the number of births the mother has in the MFR, SDS replaces it with the
+number of births in the MFR, and the documentation says that only births from
+2005 onwards are included in that count ([SDS, documentation from
+2019](https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx)).
+Check the minimum value in your own file before you use the column.
+
+### Parity in DST's fertility data {#parity-ftforael}
+
+DST's fertility datasets hold their own parity columns. `medicinsk_paritet` in
+`ftforael` is the child's birth number for the mother. Stillbirths count and a
+multiple birth counts as one. DST adds that children not known in the registers
+are not counted, such as children born abroad who never received a CPR number,
+and children born before 1960 ([DST,
+MEDICINSK_PARITET](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/medicinsk-paritet)).
+DST gives no definition of the other parity columns beyond a short label, see
+[the column table](register-reference.qmd#ftbarn). `paritet` in `ftforael` is
+"the mother's delivery number as stated in the MFR" ([DST,
+PARITET](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/paritet)).
+
+If you count parity from `ftbarn`, select biological mothers first. Codes 21 to
+23 of `mor_foed_adop` are the ones DST treats as biological. DST says that
+a parent registered shortly after birth is the biological parent for most
+children, but that the code does not account for donor conception, and that
+the variable cannot be used to count adoptions or biological relations ([DST,
+MOR_FOED_ADOP](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/mor-foed-adop)).
+
+### Deriving parity from successive births {#parity-derive}
+
+You can count the mother's earlier deliveries yourself, to check `paritet` or
+when it is missing. The MFR has one row per child, so a twin delivery gives two
+rows with the same mother and birth date. Collapse to one row per delivery
+first. In the 2019 table `DW_EK_Foedsel` is the key of the birth event, shared
+by the children of one delivery ([the Nyfoedte
+section](register-reference.qmd#mfr-nyfoedte)). In the 1997-2018 table, SDS
+describes `foedselsloebenummer` only as the birth serial number, so check with
+`count()` whether twins share a value before you rely on it.
+
+```r
+library(dplyr) # distinct, arrange, group_by, mutate, row_number
+
+deliveries <- births %>% # births = your mfr table, collected, lower-case column names
+  distinct(cpr_moder, foedselsdato) %>% # one row per delivery, also for twins
+  arrange(cpr_moder, foedselsdato) %>%
+  group_by(cpr_moder) %>%
+  mutate(parity_derived = row_number()) %>% # 1 = first delivery in the table
+  ungroup()
+```
+
+The count only sees deliveries that are in your table. A table that starts in
+1997 undercounts parity for women who gave birth earlier. Compare the derived
+value with `paritet`: derived values below the recorded ones are expected for
+women with earlier births outside your table.
+
+### Parity that changes during follow-up {#parity-time-varying}
+
+If you follow women across several pregnancies, parity changes at each
+delivery, and a baseline value is wrong after the next one. Build start/stop
+rows with `tmerge()` as in [Time-varying variables](time-varying.qmd#a-time-varying-covariate),
+with each delivery as a measurement. The table you hand to `tmerge()` needs
+the delivery day on the same scale as follow-up, and the parity after the
+delivery.
+
+```r
+library(dplyr) # left_join, mutate, transmute
+
+# index_dates: cpr_moder, index_date (start of follow-up for each woman)
+measurements <- deliveries %>%
+  left_join(index_dates, by = "cpr_moder") %>%
+  transmute(
+    pnr = cpr_moder,
+    day = as.numeric(foedselsdato - index_date),
+    value = parity_derived
+  )
+# a negative day sets the value at the start of follow-up; see the time-varying page
+```
+
+### Women who gave birth abroad {#parity-immigrants}
+
+The MFR does not include births that took place abroad ([Bliddal et al.
+2018](https://doi.org/10.1007/s10654-018-0356-1)). A woman who immigrated
+after earlier births has a first MFR birth that looks like a first birth when
+you derive parity from the table. In the Norwegian register, migrant women
+whose first birth was before arrival had higher odds of preterm birth,
+stillbirth and low Apgar score in later births than migrant women whose first
+birth was in Norway, so the group is not a random subset ([Vik et al.
+2020](https://doi.org/10.1186/s12913-020-05415-y)). Whether the recorded
+`paritet` includes births abroad was not found in a source, so do not assume it.
+
+Options, depending on your question:
+
+- Stratify or restrict by origin, for example women born in Denmark. `opr_land`
+  and `ie_type` in BEF give country of origin and immigrant status, see
+  [Overview of registers](register-reference.qmd).
+- Run the analysis without immigrant women as a sensitivity analysis.
+- State the limitation in the methods and give the share of immigrant women in
+  the study population.
+
+### What to report {#report-parity}
+
+- Whether parity is the recorded `paritet` or derived, and which table and
+  years it was derived from.
+- Whether it is fixed at baseline or time-varying.
+- How women with earlier births abroad were handled, and how many there are.
+
+## Multiple births {#multiples}
+
+### How they appear in the MFR {#multiples-records}
+
+A multiple birth is a delivery of more than one child. The register unit is
+the child, live-born or stillborn ([SDS, register declaration,
+section 1.2](https://sundhedsdatastyrelsen.dk/Media/638650989716795161/Registerdeklaration%20for%20foedselsregisteret.pdf)),
+so a twin delivery gives two rows. Bliddal et al. count 1,249 multiple
+deliveries among 66,917 in 1997 and 1,064 among 61,687 in 2016, about 2% in
+each of the years they list ([Bliddal et al.
+2018](https://doi.org/10.1007/s10654-018-0356-1), Table 3). The table has more
+infants than deliveries for the same reason.
+
+You can identify them in three ways. Use the column names as your delivery spells them.
+
+| Source | Column | Note |
+| ------ | ------ | ---- |
+| Number of children | `AntalBoernIFoedslen` (2019 onwards) | Number of children in the birth: 1, 2, 3 ([SDS, documentation from 2019](https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx)). For 1997-2018, count the rows per mother and birth date. |
+| Child's order | `flerfoldsfoedsel_beregnet`, `barnsnummer_flerfoldsfoedsel` (1997-2018), `BarnsNummerIFoedslen` (2019 onwards) | The child's number within the birth ([SDS, documentation 1997-2018](https://sundhedsdatastyrelsen.dk/Media/638650989745673989/Dokumentation_Foedselsregisteret_1997_2018.xlsx)). |
+| Diagnosis | `flerfoldsgraviditet` | An ICD-10 code. O30 is multiple gestation: O30.0 twin, O30.1 triplet, O30.2 quadruplet, O30.8 other, O30.9 unspecified ([WHO ICD-10](https://icd.who.int/browse10/2019/en#/O30)). Check how the code is written in your delivery with `count()`. |
+
+Use two of them and check that they agree. In the fertility data, `flerfold` in
+`ftbarn` is 1 single, 2 twin, 3 triplet and 4 quadruplet. DST derives it from
+the MFR and CPR. Children are grouped as a multiple birth if they have the same
+mother and birth dates at most one day apart, and for births registered in the
+MFR if their birth dates are less than 30 days apart ([DST,
+FLERFOLD](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/flerfold)).
+
+### Multiple birth as mediator, confounder or collider {#multiples-causal}
+
+What to do with multiple births depends on the question, so draw the causal
+diagram first. In a study of assisted reproduction and preterm birth,
+plurality lies on the path from exposure to outcome, and adjusting for it
+blocks part of the effect. In a study of maternal age, plurality can be a
+confounder. When plurality and the outcome share a cause that is not
+measured, conditioning on it can open a path that was closed, which is
+collider bias. These are examples, not a rule for your study.
+
+Restricting to singletons, analysing at the pregnancy level and analysing at
+the infant level answer different questions and give different estimands
+([Brown et al. 2025](https://doi.org/10.1097/EDE.0000000000001809)). Choose the
+one that matches the question and say why.
+
+### Approaches {#multiples-approaches}
+
+- **Restrict to singletons.** Common for birth weight, fetal growth and
+  preterm birth, where the process differs in multiples. It conditions on
+  plurality, so it changes the question if plurality is on the causal path.
+- **Pregnancy level.** One row per delivery, with the outcome set to 1 if any
+  child had it. Fits questions about the pregnancy.
+- **Infant level with clustering.** All children, with the dependence between
+  children of the same delivery taken into account.
+
+For a binary outcome at the infant level, a simulation study with preterm
+infants found that generalised estimating equations (GEE) gave the best
+balance between standard error and parameter estimate at any share of twins. A
+logistic random-intercept model could not estimate the correlation between
+siblings when twins were few, and gave results like ordinary logistic
+regression. Ordinary logistic regression underestimated all parameters when
+twins were present ([Sauzet and Peacock
+2017](https://doi.org/10.1186/s12874-017-0369-6)).
+
+```r
+library(geepack) # geeglm()
+
+# one row per child; delivery_id identifies the delivery, for example mother and
+# birth date pasted together (see the parity section)
+births <- births %>%
+  mutate(delivery_id = factor(delivery_id)) %>% # a character id is read as ONE cluster, without an error
+  arrange(delivery_id)                          # geeglm wants rows of a cluster together
+fit <- geeglm(preterm ~ exposure + parity_cat,
+              id = delivery_id, family = binomial, corstr = "exchangeable",
+              data = births)
+summary(fit)
+```
+
+If twins are the subject of the study, the Danish Twin Registry holds twins
+from birth cohorts to 2009, linked to the national registers at Statistics
+Denmark ([Pedersen et al. 2019](https://doi.org/10.1017/thg.2019.72)). A review
+of 32 twin studies of early-life exposures describes conditional (within-pair)
+methods, which adjust by design for shared confounders, and marginal methods
+such as GEE, which treat pairs as clusters and which the authors say may give
+invalid inference for within-pair questions ([Fasola et al.
+2021](https://pmc.ncbi.nlm.nih.gov/articles/PMC8657152/)).
+
+### Multiples and parity together {#multiples-parity}
+
+A twin delivery adds one to parity, not two. When you count deliveries from
+the MFR, collapse to one row per delivery before you count, as in [the
+derivation above](#parity-derive).
+
+### What to report {#report-multiples}
+
+- The approach (singletons only, pregnancy level or infant level) and why.
+- The variable or code used to identify multiple births.
+- The method used to account for clustering, if you kept all children.
+- The share of multiple births in the study population.
+
+## See also
+
+- [Overview of registers](register-reference.qmd#mfr---medical-birth-register):
+  the MFR columns and tables
+- [Time-varying variables](time-varying.qmd): start/stop data for parity
+- [Missing data](missing-data.qmd): for missing gestational age and parity
+- [Bliddal et al. 2018](https://doi.org/10.1007/s10654-018-0356-1): the
+  register profile
