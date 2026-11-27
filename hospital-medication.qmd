@@ -133,13 +133,12 @@ your question. The sketch below uses the declaration's column names in lower
 case and the monoclonal antibodies as the example, under both their old and
 their new ATC code. `smr` is your opened SMR table, opened in the same way as
 `lmdb` in [Extract the dispensings](medication.qmd#the-pattern): `read_register()`
-with your SMR table's name, then `rename_with(tolower)`. fastreg 0.14.1, the
-version on CRAN, converts a file with no year in its name, such as a single SMR
-file, into a folder that its `read_register()` does not look for. Open it with
-`read_parquet_dataset()` and the full path instead, as in [When
-`read_register()` cannot find the
-register](parquet-and-fastreg.qmd#when-read-register-fails). The version of
-fastreg on GitHub finds it.
+with your SMR table's name, then `rename_with(tolower)`. If SMR came as one
+file without a year in its name, fastreg's CRAN version cannot find it by name:
+see [When `read_register()` cannot find the
+register](parquet-and-fastreg.qmd#when-read-register-fails). The sketch also
+counts the rows with dose 0, so you can see where and when they occur in your
+delivery.
 
 ```r
 library(dplyr)   # rename_with, filter, select, collect, mutate, count
@@ -148,14 +147,15 @@ library(ggplot2) # ggplot, geom_col, facet_wrap
 smr_counts <- smr %>%
   rename_with(tolower) %>%
   filter(grepl("^L01XC|^L01F", c_atc)) %>%    # monoclonal antibodies: old code L01XC, current code L01F
-  select(k_region_id, d_adm, c_slettet) %>%   # no c_slettet in your delivery: drop it here
+  select(k_region_id, d_adm, v_adm_dosis, c_slettet) %>% # no c_slettet in your delivery: drop it here
   collect() %>%
   filter(c_slettet == 0) %>%                  # ... and drop this line
   mutate(month = as.Date(format(as.Date(d_adm), "%Y-%m-01"))) %>%
-  count(k_region_id, month)                   # administrations per region and month
+  count(k_region_id, month,
+        dose_0 = v_adm_dosis == 0)            # administrations per region and month, dose 0 or not
 
-ggplot(smr_counts, aes(x = month, y = n)) +
-  geom_col() +
+ggplot(smr_counts, aes(x = month, y = n, fill = dose_0)) +
+  geom_col() +                                 # stacked: the dose-0 rows show as their own colour
   facet_wrap(~ k_region_id, scales = "free_y") # one panel per region
 ```
 
