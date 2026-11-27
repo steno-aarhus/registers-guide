@@ -1,6 +1,6 @@
 ---
 title: "DST pitfalls"
-subtitle: "14 mistakes with DST registers that give a wrong result without a clear error message"
+subtitle: "14 mistakes with Statistics Denmark (DST) registers that give a wrong result without a clear error message"
 date: last-modified
 pagetitle: "Pitfalls with Statistics Denmark (DST) data"
 description: "Common errors with Danish registers at Statistics Denmark (DST): DODSAARS ends in 2001, BEF is a status snapshot, date formats and immortal time bias."
@@ -62,7 +62,7 @@ death_person <- death %>%
 - **Is `dod` in your delivery, and does it reach far enough back?** Your project
   received the years it ordered, not necessarily all of 1970-2025. Check with
   `read_register("dod") %>% summarise(min(doddato), max(doddato)) %>% collect()`.
-- **Is it converted to parquet?** On some projects `dod` sits only as a raw SAS
+- **Is it converted to parquet?** On some projects `dod` sits only as a raw SAS (a statistics program)
   file, so `read_register()` will not find it and you read it with
   `haven::read_sas()` instead. Ask your data manager for the path.
 
@@ -170,7 +170,7 @@ in R. After any date filter, compare `count()` before and after to confirm that
 the filter did what you meant: a filter that keeps nothing, or everything, is
 the warning sign.
 
-`as.Date()` on a datetime uses UTC unless you give it a `tz`. If the collected
+`as.Date()` on a datetime uses UTC (Coordinated Universal Time) unless you give it a `tz`. If the collected
 column carries another time zone (check `attr(x, "tzone")`), a contact just
 after midnight lands on the previous day; `as.Date(x, tz = "Europe/Copenhagen")`
 keeps the local date.
@@ -178,7 +178,7 @@ keeps the local date.
 
 ## 5. BEF is a status snapshot - not a live register
 
-BEF is a status register: it records the population on a reference date, not
+BEF (the population register) is a status register: it records the population on a reference date, not
 continuously. DST classifies every register as one of four [reference
 types](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/registre-og-referencetyper):
 Status (a snapshot on one date, which is BEF), Statusperiode (population fixed
@@ -238,10 +238,10 @@ which is the likely origin of the "a" in the table name. It does not mean that
 the table holds only A-diagnoses (aktionsdiagnose, the main diagnosis of a
 contact).
 
-LPR3 has two diagnosis types, and the table holds both: A (aktionsdiagnose, main
+LPR3 (the patient register from 2019) has two diagnosis types, and the table holds both: A (aktionsdiagnose, main
 diagnosis) and B (bidiagnose, secondary diagnosis). G (grundmorbus, underlying
-condition) is an LPR2 type and is not reported in LPR3. The six LPR2 types and
-their years are in [Understand LPR](understand-lpr.qmd#diagtype). So you still
+condition) is an LPR2 (the patient register up to 2019) type and is not reported in LPR3. The six LPR2 types and
+their years are in [Understand LPR (the National Patient Register)](understand-lpr.qmd#diagtype). So you still
 choose the types yourself with a filter on `diag_kode_type`:
 
 ```r
@@ -257,8 +257,8 @@ type (numeric vs. character), different values, or both.
 
 The case that costs most is ICD-10. LPR stores it with a Danish `D` in front
 (`DE119`), the cause-of-death registers and the cancer register store the plain
-WHO code (`E119`). A code list built for one matches nothing in the other, and
-the habit of stripping the D turns `E119` into `119`. See [ICD codes and the
+WHO (World Health Organization) code (`E119`). A code list built for one matches nothing in the other, and
+the habit of stripping the D turns `E119` into `119`. See [ICD (International Classification of Diseases) codes and the
 D-prefix](understand-lpr.qmd#d-prefix-not-everywhere).
 
 In practice you extract demographic variables (sex, age) from BEF and rarely
@@ -357,7 +357,7 @@ follow-up must coincide.
   before they were exposed (see [Time-varying variables](time-varying.qmd)).
 
 Defining a *baseline covariate* from post-index information is the same error
-(e.g. the OSDC diabetes type, see [OSDC](osdc.qmd)). Whenever
+(e.g. the Open Source Diabetes Classifier, OSDC diabetes type, see [OSDC](osdc.qmd)). Whenever
 a variable is built from the future, ask whether you are conditioning on the
 person having survived to see it. Background: [Hernán & Robins, *What If*,
 §3.6](https://miguelhernan.org/whatifbook) (target trial, time zero).
@@ -368,7 +368,7 @@ In a register converted to parquet with fastreg, `year` says which yearly file a
 row came from. Filtering on it is fast, because only the files for those years
 are read, but it does not tell you when anything happened. `year == 2020` in BEF
 does not say which quarterly snapshot you have. When the timing matters, use the
-register's own date column (`hf_vfra` in UDDA, `d_inddto` in `lpr_adm`,
+register's own date column (`hf_vfra` in the education register, UDDA, `d_inddto` in `lpr_adm`,
 `referencetid` in BEF). The two uses look identical in the code.
 
 It is only a year at all if the register arrived as one file per year. Some
@@ -376,7 +376,7 @@ registers arrive as a single file covering everything, and then every row
 carries the same `year` whatever its date. In the delivery this guide was
 written from, `dodsaars` spans 1970 to 2001 and says 2024 on every row, and
 `lpr_a_kontakt` is one file holding every contact that ended in 2017 or later,
-so counting by `year` puts LPR1, LPR2, MiniPAS (records from private hospitals)
+so counting by `year` puts LPR1 (the oldest format of the National Patient Register), LPR2, MiniPAS (records from private hospitals)
 and LPR3 contacts in the same single year.
 
 Check with `count(year)` before you filter on it. One value means the column
@@ -397,10 +397,9 @@ same thing, because the underlying population differs. For 2005,
 *Hospital statistics 2005* reports 6,336,000 outpatient visits; the web-based
 *Health data* retrieval system reports 1,894,441 outpatient contacts for the
 same year, a difference of more than 3-fold. The first includes psychiatric
-wards and excludes private hospitals, the second does the opposite (Lynge et al.
-2011, [The Danish National Patient
-Register](https://doi.org/10.1177/1403494811401482), Scand J Public Health
-39(Suppl 7):30-33).
+wards and excludes private hospitals, the second does the opposite ([Lynge et al.
+2011](https://doi.org/10.1177/1403494811401482), "The Danish National Patient
+Register", *Scand J Public Health* 39(Suppl 7):30-33).
 
 ::: {.callout-warning}
 **Do not use a published aggregate as ground truth for your own extraction
@@ -440,7 +439,7 @@ earlier than DST's LPR2 files do (31 March 2019), in which case the simple
 filter above silently drops real, unique contacts along with the duplicates.
 See [Extract from
 LPR](extract-from-lpr.qmd#lpr3-filter-caveat) for how to check your own
-delivery's coverage before trusting it. On DARTER specifically, see [DARTER
+delivery's coverage before trusting it. On DARTER (project 708421) specifically, see [DARTER
 pitfalls, 3](darter-pitfalls.qmd#lpr3-lprindberetningssystem) for a worked
 fix.
 :::

@@ -1,6 +1,6 @@
 ---
 title: "Algorithms & special packages"
-subtitle: "Which published algorithm or R package solves which task, and whether it is on DST"
+subtitle: "Which published algorithm or R package solves which task, and whether it is on Statistics Denmark (DST)"
 date: last-modified
 pagetitle: "R packages and algorithms for register data"
 description: "R packages and validated algorithms for Danish register research, and whether they are on DST: heaven, fastreg, survival, gtsummary, riskRegression, OSDC, NMI."
@@ -17,20 +17,20 @@ packages' own documentation.
 ## 1. Validated algorithms
 
 Published, peer-reviewed methods you can use directly to construct covariates.
-SEPLINE is a guideline rather than a package: worked, not yet validated code
+SEPLINE (the national guideline on socioeconomic position in register research) is a guideline rather than a package: worked, not yet validated code
 for it is on [Socioeconomic variables](socioeconomic-variables.qmd).
 
 ::: {.wide-first-col}
   | Algorithm                                                                                           | What it does                                              | Use it to                                                                     | Article                                                          |
   | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-  | **[Open Source Diabetes Classifier (OSDC)](osdc.qmd)**                                              | Classifies everyone in Denmark as T1D, T2D or no diabetes | Define a diabetes population, type and inclusion date                         | [doi:10.2147/CLEP.S407019](https://doi.org/10.2147/CLEP.S407019) |
-  | **[Nordic Multimorbidity Index (NMI)](nmi.qmd)**                                                    | Weighted mortality-risk score (50 predictors)             | Adjust for mortality risk / predict 5-year mortality (not comorbidity burden) | [doi:10.2147/CLEP.S353398](https://doi.org/10.2147/CLEP.S353398) |
-  | **[SEPLINE - Socioeconomic Position in Epidemiological Research](socioeconomic-variables.qmd)** | National guideline for socioeconomic variables            | Education, income, employment as covariates                                   | [doi:10.2147/CLEP.S520772](https://doi.org/10.2147/CLEP.S520772) |
+  | **[Open Source Diabetes Classifier (OSDC)](osdc.qmd)**                                              | Finds people with diabetes and classifies them as T1D or T2D | Define a diabetes population, type and inclusion date                         | [Isaksen et al. 2023](https://doi.org/10.2147/CLEP.S407019)      |
+  | **[Nordic Multimorbidity Index (NMI)](nmi.qmd)**                                                    | Weighted mortality-risk score (50 predictors)             | Predict 5-year mortality; use with care as comorbidity burden | [Kristensen et al. 2022](https://doi.org/10.2147/CLEP.S353398)   |
+  | **[SEPLINE - Socioeconomic Position in Epidemiological Research](socioeconomic-variables.qmd)** | National guideline for socioeconomic variables            | Education, income, employment as covariates                                   | [Hjorth et al. 2025](https://doi.org/10.2147/CLEP.S520772)       |
 :::
 
 ::: {.callout-tip}
 **Charlson for comorbidity burden (not NMI):** both `heaven::charlsonIndex()`
-and `EpiForsk` (see below) calculate Charlson comorbidity score from LPR
+and `EpiForsk` (see below) calculate Charlson comorbidity score from LPR (the National Patient Register)
 diagnoses - both are on DST.
 :::
 
@@ -38,14 +38,14 @@ diagnoses - both are on DST.
 
 ### `heaven` - Danish register data toolkit
 
-*(pre-installed on DST; not on CRAN -
+*(pre-installed on DST; not on the Comprehensive R Archive Network, where R packages are published, CRAN -
 [github.com/tagteam/heaven](https://github.com/tagteam/heaven))*
 
 Functions built specifically for Danish register data by Thomas Gerds
 (University of Copenhagen, Biostatistics): Lexis-splitting for time-varying
-covariates, drug exposure windows from LMDB, risk-set matching, Charlson score,
+covariates, drug exposure windows from LMDB (the prescription register), risk-set matching, Charlson score,
 average income, hypertension from prescriptions, and built-in lookup tables for
-education and ATC codes.
+education and ATC (Anatomical Therapeutic Chemical classification) codes.
 
 <details>
 <summary>What heaven can do - and when to use it</summary>
@@ -220,7 +220,7 @@ lpr_flat <- flatten_date_intervals(
 # overlapping periods are reduced to the total covered period.
 ```
 
-**`charlson_score()`: Danish-calibrated Charlson comorbidity score** from ICD-10 (incl. D-prefix). See the callout below for what it requires.
+**`charlson_score()`: Danish-calibrated Charlson comorbidity score** from ICD-10 (incl. D-prefix). See below for what it requires.
 
 ```r
 charlson <- charlson_score(data = lpr_diag_data, Person_ID = pnr, diagnosis_variable = c_diag)
@@ -228,62 +228,11 @@ charlson <- charlson_score(data = lpr_diag_data, Person_ID = pnr, diagnosis_vari
 # (CCI_Quan, CCI_Christiensen, CCI_Charlson_Deyo).
 ```
 
-::: {.callout-important}
-**What does `charlson_score()` require?**
-You must extract a lookback period from LPR yourself (often 5 years before index date) and give the function every diagnosis in that window, not a code list: the function matches the codes to Charlson categories itself. Which diagnosis types to include is your choice; the example below keeps types A, B and G (see [Understand LPR](understand-lpr.qmd) for what each type means). The D-prefix (`DG30` etc.) is handled by EpiForsk and does not need to be stripped first.
-
-```r
-# Example: extract lookback and pass all diagnoses
-# pnr and d_inddto are in lpr_adm - not lpr_diag
-
-# One row per (pnr, index_date), with each person's own 5-year lookback
-# window already attached - this table is the size of your cohort, not the
-# register. If your cohort has repeated pnr (e.g. matched with replacement),
-# each occurrence gets its own row and its own window here.
-lookback_keys <- cohort %>%
-  mutate(window_start = index_date - 365.25 * 5,
-         window_end   = index_date - 1)
-
-lpr2_lookback <- lpr_adm %>%
-  select(pnr, recnum, d_inddto) %>%
-  # Coarse filter first (cheap): narrow to the union of every window in the
-  # cohort, before the join - !! injects a single computed value, not a column
-  filter(d_inddto >= !!min(lookback_keys$window_start)) %>%
-  # copy = TRUE sends the small lookback_keys table into the database, so the
-  # join runs there, not in R. This matters more here than almost anywhere
-  # else in the guide: Charlson needs EVERY A/B/G diagnosis in the window,
-  # not a filtered-down code list, so the unjoined, unwindowed data for a
-  # whole cohort can be large. Collecting it all into R first and only then
-  # joining to the cohort and filtering by index_date can pull tens of GB
-  # into RAM and crash the R session.
-  inner_join(lookback_keys, by = "pnr", copy = TRUE) %>%
-  # Precise filter (correctness): each row against its OWN window, not the global one
-  filter(d_inddto >= window_start, d_inddto < index_date) %>%
-  inner_join(
-    lpr_diag %>%
-      filter(c_diagtype %in% c("A", "B", "G")) %>%   # A/B/G: all codes of these types, no ICD filter
-      select(recnum, c_diag),
-    by = "recnum"
-  ) %>%
-  select(pnr, index_date, d_inddto, c_diag) %>%
-  collect()
-
-charlson <- charlson_score(data = lpr2_lookback, Person_ID = pnr, diagnosis_variable = c_diag)
-```
-:::
-
-::: {.callout-warning}
-**`Person_ID = pnr` alone is not enough if your cohort has repeated `pnr`.**
-`lpr2_lookback` above is correctly windowed per `(pnr, index_date)`, but
-`charlson_score()` itself only groups by the single `Person_ID` column you give it -
-it has no way to know about `index_date`. For a comparison cohort matched
-with replacement, that means diagnoses from *all* of a person's
-`index_date` windows get pooled into one Charlson score, silently reattached
-to every occurrence of their `pnr`. If this applies to you, build a single
-combined key first (e.g. `mutate(pnr_index = paste(pnr, index_date))`) and
-pass `Person_ID = pnr_index` instead, then split the two columns back apart from
-the result afterwards.
-:::
+`charlson_score()` needs every diagnosis in each person's lookback window, not a
+code list: it matches the codes to Charlson categories itself. The lookback from
+LPR2 (the patient register up to 2019) and LPR3 (from 2019), and what to do if a person is in the cohort more than once, is
+under [Charlson Comorbidity Index](comorbidity.qmd#charlson) on the Comorbidity
+page.
 
 </details>
 
@@ -332,7 +281,7 @@ extraction](first-extraction.qmd).
 *(CRAN; `install.packages("fastreg")` -
 [dp-next.github.io/fastreg](https://dp-next.github.io/fastreg/))*
 
-The recommended tool for converting SAS registers to parquet. It converts
+The recommended tool for converting SAS (a statistics program) registers to parquet. It converts
 (`convert()`, partitioned by year, with a `use_template()` targets pipeline for
 the whole workspace) and reads back (`read_register("bef")` returns a lazy
 DuckDB connection, reading all yearly subfolders as one dataset). Set
@@ -438,7 +387,7 @@ competing risks with a single status variable: 0 = censored, 1 = primary event,
 `riskRegression` for regression.
 
 <details>
-<summary>Example: KM curve and Aalen–Johansen</summary>
+<summary>Example: KM (Kaplan-Meier) curve and Aalen–Johansen</summary>
 
 ```r
 library(prodlim)
@@ -467,10 +416,10 @@ KM alone overestimates cumulative incidence in the presence of competing risks. 
 For regression with competing risks. `CSC()` fits Cause-Specific Cox (one model
 per cause), `FGR()` fits Fine-Gray subdistribution hazard. `predictRisk()`
 computes absolute risk at specific time points. `Score()` validates and compares
-models (Brier score, time-dependent AUC).
+models (Brier score, time-dependent area under the curve, AUC).
 
 <details>
-<summary>Example: CSC model and absolute risk</summary>
+<summary>Example: CSC (cause-specific Cox) model and absolute risk</summary>
 
 ```r
 library(riskRegression)
@@ -493,7 +442,7 @@ ar <- predictRisk(csc_model, newdata = cohort,
 *(CRAN - [github.com/tagteam/Publish](https://github.com/tagteam/Publish))*
 
 `regressionTable()` takes a fitted model (Cox, logistic, linear) and returns a
-table with estimates, 95% CI and p-values. `plotConfidence()` produces forest
+table with estimates, 95% CI (confidence interval) and p-values. `plotConfidence()` produces forest
 plots from the same output.
 
 ```r
@@ -672,7 +621,7 @@ Tools from the [analysis section](analysis.qmd) beyond `survival` and
   | `sandwich`, `lmtest`                                                                                   | cluster-robust standard errors                         | [Regression](regression.qmd#clustered-standard-errors) |
   | [`rms`](https://cran.r-project.org/package=rms)                                                        | flexible regression modelling with splines             | [Regression](regression.qmd#splines)                     |
   | [`survRM2`](https://cran.r-project.org/package=survRM2)                                                | RMST (when proportional hazards is violated)           | [Time-to-event](time-to-event.qmd)                       |
-  | [`SCCS`](https://cran.r-project.org/package=SCCS)                                                      | self-controlled case series                            | [Special designs](special-designs.qmd)                   |
+  | [`SCCS`](https://cran.r-project.org/package=SCCS)                                                      | self-controlled case series                            | [Self-controlled designs](special-designs.qmd)           |
   | [`CMAverse`](https://bs1125.github.io/CMAverse/)                                                       | causal mediation analysis                              | [Regression](regression.qmd)                             |
   | [`pwr`](https://cran.r-project.org/package=pwr)                                                        | power and sample size                                  | [Plan your study](plan-your-study.qmd)                    |
 :::
@@ -692,4 +641,4 @@ packages](https://www.epirhandbook.com/en/new_pages/packages_suggested.html).
   | [ctpteam/RDST](https://github.com/ctpteam/RDST)                                                       | "R on DST" manual: project setup, data access, good coding practice on the DST server                                     |
   | [ctpteam/DST](https://github.com/ctpteam/DST)                                                         | Guide to LPR3, DST manuals, slides and a heaven PDF                                                                       |
   | [steno-aarhus/registers-project-database](https://steno-aarhus.github.io/registers-project-database/) | Steno Diabetes Center Aarhus's own database: variable lists, register descriptions and application templates for the Danish Health Data Authority |
-  | [github.com/tagteam](https://github.com/tagteam)                                                      | `riskRegression`, `prodlim`, `Publish`, `pec`, `heaven` - Thomas Gerds and Brice Ozenne, KU Biostatistics                 |
+  | [github.com/tagteam](https://github.com/tagteam)                                                      | `riskRegression`, `prodlim`, `Publish`, `pec`, `heaven` - Thomas Gerds and Brice Ozenne, KU (University of Copenhagen) Biostatistics                 |

@@ -1,0 +1,460 @@
+---
+title: "Analysing costs"
+subtitle: "From costs per person to an excess cost with a confidence interval: skewed costs with zeros, censoring, price year and discounting"
+date: last-modified
+pagetitle: "Analysing healthcare costs in Danish register data"
+description: "Register-based cost analysis in R: the estimand, excess cost against a comparison group, two-part and GLM models for skewed costs with zeros, censored costs, bootstrap, price indices and discounting."
+---
+
+Use this page when your outcome is a cost: healthcare costs, lost earnings or
+both, summed per person over follow-up. It covers the analysis side: what to
+estimate, how to describe costs, which models fit them, how to handle censoring
+and uncertainty, and how to bring costs to one price year. Where the cost of
+each hospital contact, prescription or service comes from is in [Healthcare
+costs](healthcare-costs.qmd).
+
+You start from an analysis dataset with one row per person: the summed cost in
+DKK (Danish kroner) over follow-up, follow-up time, exposure and covariates ([Phase
+12](data-manipulation.qmd)). Bring each year's costs to one price year and
+discount them before you sum them per person ([Prices](#price-year),
+[Discounting](#discounting)). You end with mean costs per group and an excess
+cost with a confidence interval.
+
+::: {.callout-warning title="Structural guidance, not verified code"}
+The code on this page shows the shape of each step. It has **not been run on
+register data**. Check the column names against your own dataset, and the
+choices against your analysis plan.
+:::
+
+*Variable names in the examples are generic. Replace them with your own.* The
+models use `glm()` from base R and `dplyr` for data handling.
+
+## Start from the estimand {#estimand}
+
+Decide what number you want before you choose a model.
+
+- **Mean cost per person over a fixed horizon**, for example the five years
+  after the index date. A person who dies contributes the costs up to death and
+  nothing after.
+- **Mean cost per person-year**: the summed costs divided by the summed
+  person-years at risk, in the same way as a rate (see [Rates and rate ratios
+  (Poisson)](rates-poisson.qmd)).
+- **Total cost or excess cost.** The total cost is what the exposed group
+  costs. The excess cost (also called attributable or incremental cost) is the
+  difference between the mean cost of the exposed and the mean cost of
+  comparable unexposed people. Excess cost needs a comparison group.
+
+The comparison group is built in the same way as for any other outcome:
+
+- **Matched controls**: [Comparison cohort](comparison-cohort.qmd).
+- **Weighting**: [IP (inverse probability) weighting (IPTW)](weighting-iptw.qmd).
+- **Regression standardisation** (the g-formula): fit a cost model, predict the
+  cost for everyone as exposed and as unexposed, and average the two
+  predictions. The fold-out on standardisation in [IP
+  weighting](weighting-iptw.qmd) explains the idea, and the [two-part
+  model](#two-part) below shows it for costs.
+
+**Report the mean, not only the median.** In a skewed distribution the median
+is lower than the mean, and it cannot be multiplied up to a total. Barber and
+Thompson write that analysis of costs "needs to focus on arithmetic mean
+costs, since these will reflect the total cost of treating all patients with
+the disease" ([Barber & Thompson
+2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P)). Mihaylova et al. make the
+same point for policy makers ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)). Medians and quartiles are still
+useful to describe the distribution.
+
+## Prices: bring all costs to one price year {#price-year}
+
+A cost from 2012 is in 2012 prices, and a cost from 2024 in 2024 prices. Before
+you sum or compare across years, convert every cost to one price year with a
+price index:
+
+> cost in price year B = cost in year t × index(B) / index(t)
+
+Two Danish indices:
+
+- **The consumer price index** from DST (Statistics Denmark). Annual averages are in StatBank table
+  [PRIS8](https://www.statbank.dk/PRIS8) (from 1900), and the monthly index in
+  [PRIS01](https://www.statbank.dk/PRIS01). Older papers cite table PRIS111,
+  which DST no longer updates: its last month is December 2025.
+- **The Danish Regions' price and wage development for health care**, the
+  row "Sundheds-PL ekskl. medicintilskud (sygesikring)" in the Regions' yearly
+  note on price and wage regulation. It is published as a yearly percentage
+  change. Each year's note gives the final figure for the year before and
+  estimates for the next two ([Pris- og lønreguleringen 2025-27, June
+  2026](https://www.regioner.dk/media/3tnlfxqa/pris-og-loenreguleringen-2025-27.pdf)).
+  To use it as an index, chain the yearly changes.
+
+DRG (Diagnosis Related Groups) tariffs are computed each year (see [Healthcare
+costs](healthcare-costs.qmd#drg-tariff-year)), so hospital
+costs priced with tariffs from several years need the same conversion.
+
+## Discounting {#discounting}
+
+Discounting converts costs that fall in later years to their value in a start
+year. It is a separate step from the price index: first bring costs to one
+price year, then discount.
+
+The Danish Ministry of Finance recommends a real discount rate of 3.5% a year
+for years 0-35, 2.5% for years 36-70 and 1.5% after year 70 ([Vejledning i
+samfundsøkonomiske konsekvensvurderinger, June
+2023](https://fm.dk/media/27314/vejledning-i-samfundsoekonomiske-konsekvensvurderinger-juni-2023_web-a.pdf),
+section 4.7, table 4.1). The rate in force is kept in the Ministry's key
+figures catalogue, which in June 2026 gives the same rates
+([Nøgletalskatalog, June
+2026](https://fm.dk/media/4tkj2o4w/noegletalskatalog_juni-2026.pdf)). Until
+January 2021 the rates were 4%, 3% and 2% ([Vejledning
+2023](https://fm.dk/media/27314/vejledning-i-samfundsoekonomiske-konsekvensvurderinger-juni-2023_web-a.pdf),
+preface). The
+guidance says the rate will be adjusted in the catalogue when the Ministry's
+assumptions about the real interest rate change for good.
+
+In the Ministry's worked example the value in year 0 is not discounted. For
+horizons under 35 years each later year is divided by 1.035 once more:
+
+```r
+library(dplyr) # mutate
+
+# costs_by_year: one row per person and year of follow-up
+# year_since_start: 0 for the first year of follow-up, 1 for the next, ...
+costs_by_year <- costs_by_year %>%
+  mutate(cost_discounted = cost_real / 1.035^year_since_start) # cost_real: cost in one price year
+# then sum cost_discounted per person to get the cost over the horizon
+```
+
+## Describe the costs first {#describe}
+
+Look at the distribution before you fit anything. Cost data are non-negative,
+usually strongly skewed to the right, often have many zeros (people with no
+contact in the period) and can have heavy tails ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)).
+
+Per group, report the number of people, person-years, the share with zero
+cost, the mean with its standard deviation, the median and quartiles, and the
+total by cost domain (hospital, primary care, medication).
+
+```r
+library(dplyr) # group_by, summarise
+
+# df: one row per person, with cost (DKK over the horizon), follow_up_years,
+# exposure (0/1) and covariates. Read it once; the later code uses it too
+df <- readRDS("path/to/cost_analysis.rds")
+
+df %>%
+  group_by(exposure) %>%
+  summarise(
+    n = n(),
+    person_years = sum(follow_up_years),
+    share_zero = mean(cost == 0),     # share of people with no cost at all
+    mean_cost = mean(cost),
+    sd_cost = sd(cost),
+    median_cost = median(cost),
+    q1 = quantile(cost, 0.25),
+    q3 = quantile(cost, 0.75),
+    total_cost = sum(cost)
+  )
+```
+
+The very large values are part of the mean you want to estimate, so removing
+or capping them changes what the mean describes. A maximum is one person's
+value, and a median or percentile in a small group can be too, so check them
+against the export rules before they leave DST (see
+[Export](export.qmd#min-max-median)).
+
+## Choosing a model {#models}
+
+For the crude comparison in a large cohort you need no model. Mihaylova et
+al. recommend simple methods "in large samples where the near-normality of
+sample means is assured" ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)), such as a difference in means with a
+normal-based confidence interval, and Barber and Thompson recommend the
+bootstrap as a check ([Barber & Thompson 2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P)).
+
+When you adjust or standardise, use the two-part model below: costs are skewed
+and many people have none, and it handles both. The two fold-outs after it
+explain how to choose the GLM (generalised linear model) family for its second part, and why taking the
+log of the costs is not the way round the skewness.
+
+### Two-part model for costs with many zeros {#two-part}
+
+When many people have no cost, a two-part model fits the zeros and the
+positive costs separately ([Belotti et al.
+2015](https://doi.org/10.1177/1536867X1501500102)):
+
+1. A logistic regression for the probability of any cost.
+2. A GLM with a log link for the cost among those with any cost. The sketch
+   uses the gamma family, where the standard deviation grows in proportion to
+   the mean. Manning and Mullahy write that in their experience "many health
+   care expenditure and use data" have this property ([Manning & Mullahy 2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8)). To check it in your
+   own data, see [Choosing the family](#glm-log).
+
+The mean cost is the product of the two parts: E(cost | x) = Pr(cost > 0 | x)
+× E(cost | cost > 0, x) ([Belotti et al.
+2015](https://doi.org/10.1177/1536867X1501500102)). In the review by
+Mihaylova et al., two-part models "seem to outperform other methods when
+excess zeros are present" ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)).
+
+The sketch fits both parts and standardises: it predicts each person's mean
+cost as exposed and as unexposed, and the excess cost is the difference of the
+two averages. `exposure` is 0/1 here. If it is a factor, set the levels in
+`mutate()` instead.
+
+```r
+library(dplyr) # filter, mutate
+
+# df from "Describe the costs first" above: one row per person
+
+excess_cost <- function(d) {
+  part1 <- glm(I(cost > 0) ~ exposure + age + sex,     # part 1: Pr(any cost)
+               data = d, family = binomial)
+  part2 <- glm(cost ~ exposure + age + sex,             # part 2: mean cost among those with any cost
+               data = filter(d, cost > 0), family = Gamma(link = "log"))
+
+  mean_cost_if <- function(e) {
+    d_e <- mutate(d, exposure = e)                      # everyone exposed (1) or everyone unexposed (0)
+    predict(part1, d_e, type = "response") *            # Pr(cost > 0) ...
+      predict(part2, d_e, type = "response")            # ... times E(cost | cost > 0)
+  }
+
+  mean(mean_cost_if(1)) - mean(mean_cost_if(0))         # excess mean cost per person, DKK
+}
+
+excess_cost(df)
+```
+
+The standardised means are averages over everyone in `df`, so the excess cost
+is for the whole cohort. To get it for the exposed only, average over the
+exposed rows. The function returns a single number, so the confidence interval
+comes from the bootstrap below.
+
+The sketch assumes that everyone is followed to the end of the horizon or to
+death. If some people emigrate or your data end before the horizon, their
+summed cost is too low and the excess cost is biased. Use the methods under
+[Censored costs](#censoring), or choose a horizon that everyone can be followed
+for. [Liu et al.
+2019](https://doi.org/10.1002/sim.8140) show how to split an effect on the
+mean cost into its effect on the probability of any cost and on the cost among
+users.
+
+::: {#glm-log .callout-note collapse="true" title="Choosing the family for the GLM in part 2"}
+A generalised linear model with a log link models the mean cost on the DKK
+scale directly: the predicted mean is exp(xβ), with no smearing factor.
+`exp()` of a coefficient is a ratio of mean costs. A difference in DKK comes
+from standardisation, as in the [two-part model](#two-part) above.
+
+The variance function (the GLM family) says how the variance grows with the
+mean. The estimate of the mean is usually robust to a wrong variance function,
+but the precision is not ([Mihaylova et al.
+2011](https://doi.org/10.1002/hec.1653)). Manning and Mullahy write the
+variance as a power of the mean, var(y | x) proportional to E(y | x)^λ, and
+propose a Park-type test to estimate λ: regress the log of the squared
+raw-scale residual on the log of the predicted mean, and read off the slope
+([Manning & Mullahy 2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8),
+who call it a modified Park test).
+
+  | Slope λ near | Variance                 | `family =` in `glm()`            |
+  | ------------ | ------------------------ | -------------------------------- |
+  | 0            | constant                 | `gaussian(link = "log")`         |
+  | 1            | proportional to the mean | `quasipoisson(link = "log")`     |
+  | 2            | mean squared             | `Gamma(link = "log")`            |
+  | 3            | mean cubed               | `inverse.gaussian(link = "log")` |
+
+```r
+library(dplyr) # filter
+
+pos <- filter(df, cost > 0)                          # people with any cost
+fit <- glm(cost ~ exposure + age + sex, data = pos,
+           family = Gamma(link = "log"))             # a first GLM with log link
+
+res <- residuals(fit, type = "response")             # raw-scale residual: cost minus predicted mean
+park <- lm(log(res^2) ~ log(fitted(fit)))            # log squared residual on log predicted mean
+coef(park)[2]                                        # the slope: an estimate of lambda
+```
+
+Manning and Mullahy start from the residuals of a first GLM. If the residuals
+on the log scale are heavy-tailed (a coefficient of kurtosis above 3), they
+suggest linear regression on log cost instead. If not, the Park test picks the
+family. In their simulations the test was less informative when the data were
+heavy-tailed. When the family is picked this way, they recommend robust or
+bootstrapped standard errors, because the estimated variance function may
+still be wrong ([Manning & Mullahy
+2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8)).
+:::
+
+::: {#log-ols .callout-note collapse="true" title="Why not linear regression on log costs"}
+Taking the log of the cost and fitting `lm()` gives coefficients on the log
+scale, and `exp()` of a predicted log cost is not the mean cost. Getting back
+to DKK needs a retransformation. Duan's smearing factor does this when the
+log-scale error has constant variance. When the variance differs with the
+covariates, as it often does, the simple retransformation is biased, and a
+correct one is cumbersome ([Manning & Mullahy
+2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8); [Manning et al.
+2005](https://doi.org/10.1016/j.jhealeco.2004.09.011)). The log is also
+undefined at zero, and adding a constant to the zeros is not recommended
+([Mihaylova et al. 2011](https://doi.org/10.1002/hec.1653)).
+:::
+
+## Censored costs {#censoring}
+
+For mean cost per person over a fixed horizon, death ends the costs: it is not
+censoring. Emigration and the end of your data are censoring, because the costs
+after that date are unknown. The dates of death and emigration are under
+[Outcomes](outcomes.qmd#censoring-dates).
+
+A plain average of the observed costs is then biased. The usual remedy is to
+weight: each person followed to the horizon or to death counts with the
+inverse of the probability of staying uncensored that long ([Bang & Tsiatis
+2000](https://doi.org/10.1093/biomet/87.2.329)). It is the same idea as IPCW (inverse probability of censoring weighting) in
+[IP weighting](weighting-iptw.qmd), with a weight that depends on each
+person's follow-up time.
+
+The weighting assumes that censoring happens completely at random. Bang and
+Tsiatis call this "a reasonable assumption at least in relation to
+administrative censoring" ([Bang & Tsiatis
+2000](https://doi.org/10.1093/biomet/87.2.329)), which in register data is the
+end of your data. Emigration need not be at random, so compare how many
+emigrate in each group.
+
+::: {.callout-note collapse="true" title="The estimators for censored costs in more detail"}
+The average of the observed costs, over everyone or over the uncensored cases
+only, "can be severely biased, and the standard survival analysis techniques
+are not applicable" ([Lin et al. 1997](https://doi.org/10.2307/2533947)).
+Kaplan-Meier with cost in place of time fails because the cost accumulated up to censoring is not independent of
+the cost up to death ([Wijeysundera et al.
+2012](https://doi.org/10.2147/CEOR.S31552)). Two estimators were developed for
+this:
+
+- **Lin et al. 1997** split follow-up into intervals, take the mean cost in
+  each interval among those alive at its start, and weight it by the
+  Kaplan-Meier probability of being alive at the start. The estimator is
+  consistent only if censoring happens at the interval boundaries ([Lin et al.
+  1997](https://doi.org/10.2307/2533947)).
+- **Bang & Tsiatis 2000** weight each person with complete follow-up by
+  the inverse of the probability of remaining uncensored, which allows
+  censoring at any time ([Bang & Tsiatis
+  2000](https://doi.org/10.1093/biomet/87.2.329)). The partitioned version also
+  uses the costs a censored person had in the periods before censoring. It
+  needs cost per period, which register data give ([Wijeysundera et al.
+  2012](https://doi.org/10.2147/CEOR.S31552)).
+
+Wijeysundera et al. give a worked example for readers without an advanced
+statistical background, cite simulations in which the simple weighted
+estimator became unstable with more than 50% censoring, and describe
+phase-based costing as an alternative when censoring is heavy ([Wijeysundera
+et al. 2012](https://doi.org/10.2147/CEOR.S31552)).
+
+:::
+
+With mean cost per person-year, a person who emigrates contributes the costs and
+the person-years observed before the date, as with a rate.
+
+## Uncertainty: bootstrap {#bootstrap}
+
+The non-parametric bootstrap gives a confidence interval for a difference in
+mean costs without assuming normality ([Barber & Thompson
+2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P)). For a model-based estimate
+such as the two-part model above, repeat the whole procedure in each bootstrap
+sample: both models and the standardisation, and the weights too if you
+weighted.
+
+Resample the unit that the rows depend on:
+
+- **The person**, when a person has several rows (one per year, or matched
+  more than once). This is the same reason as for [clustered standard
+  errors](regression.qmd#clustered-standard-errors).
+- **The matched set**, in a matched cohort. For propensity-score matched pairs,
+  resampling the pairs gave standard errors closer to the true sampling
+  variation than redoing the matching in each bootstrap sample, in simulations
+  ([Austin & Small 2014](https://doi.org/10.1002/sim.6276)).
+
+::: {.callout-note collapse="true" title="Code: bootstrap the excess cost by person"}
+```r
+library(dplyr) # inner_join
+
+set.seed(2026)
+ids <- unique(df$pnr)                                    # matched sets: use match_id here and in by = below
+
+boot <- replicate(1000, {
+  draw <- data.frame(pnr = sample(ids, replace = TRUE))  # draw persons, not rows
+  d_b <- inner_join(draw, df, by = "pnr",
+                    relationship = "many-to-many")       # all rows of each drawn person, once per draw
+  excess_cost(d_b)                                       # the function from the two-part model above
+})
+
+quantile(boot, c(0.025, 0.975))                          # percentile 95% interval
+```
+
+Each replicate refits both models on the whole cohort, so time a few
+replicates before you start a thousand. The percentile interval is the
+simplest. Barber and Thompson preferred the bootstrap-t and the bias-corrected
+and accelerated (BCa) intervals ([Barber & Thompson
+2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P)).
+:::
+
+## Productivity costs {#productivity}
+
+A societal cost study can add lost production to healthcare costs. Two
+methods value it differently. The human capital method "counts any hour not
+worked as an hour lost". The friction cost method "only counts as lost those
+hours not worked until another employee takes over the patient's work", and the
+two can give widely different results ([van den Hout
+2010](https://doi.org/10.1136/ard.2009.117150); the friction cost method is
+from [Koopmanschap et al. 1995](https://doi.org/10.1016/0167-6296%2894%2900044-5)).
+
+Registers at DST that carry the inputs:
+
+- **IND** (Indkomst), yearly from 1980, holds personal income. `LOENMV_13` is
+  wage income ("Lønindkomst i alt") and includes pay during sickness and
+  parental leave. `ERHVERVSINDK_13` is wage income plus net income from
+  self-employment ([DST, IND variable
+  list](https://www.dst.dk/extranet/ForskningVariabellister/IND%20-%20Indkomst.html);
+  [DST, LOENMV_13](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/personindkomster/loenmv-13)).
+- **AKM** (the labour classification module) gives the main labour-market status per year (see [Employment -
+  AKM](socioeconomic-variables.qmd#employment)).
+- **DREAM** (a register of public benefits, week by week), a database of public benefit spells, gives the type of benefit
+  week by week for each person who received one, such as sickness benefit or
+  unemployment benefit ([DREAM vejledning, version
+  51](https://aku.dst.dk/ext/36881106234/0/forskning/DREAM-Manual-Version-51--pdf)).
+
+FAIK (family income), used in this guide for SEPLINE's (the national guideline on socioeconomic position in register research) income measure, is household-equivalised
+disposable income ([FAIK](socioeconomic-variables.qmd#faik-income)), not a
+person's earnings.
+
+None of these registers records time spent caring for a relative. Informal
+care needs survey data, and its value depends heavily on the valuation method
+(for dementia in Denmark, see [Jakobsen et al.
+2011](https://doi.org/10.1159/000333812)).
+
+## What to report {#report}
+
+Each choice on this page changes the number, so a reader needs all of them to
+interpret the estimate and compare it with other studies:
+
+- The estimand: per person or per person-year, horizon, total or excess, and
+  the comparison group.
+- The cost domains included and the source of each unit cost (see [Healthcare
+  costs](healthcare-costs.qmd)).
+- How zeros, very large values, death and censoring were handled.
+- The model: family and link, how you chose them, and the result with another
+  family.
+- The uncertainty method and the unit you resampled.
+- The price year and the price index, and the discount rate with year 0.
+- Mean costs per group in DKK, the excess cost with its confidence interval,
+  and the share with zero cost.
+
+For a guide to how cost-of-illness studies are read and judged, see [Larg & Moss 2011](https://doi.org/10.2165/11588380-000000000-00000).
+
+::: {.callout-tip title="Read more"}
+- [Mihaylova et al. 2011](https://doi.org/10.1002/hec.1653): review of
+  statistical methods for costs, with a summary table of what each handles.
+- [Manning & Mullahy 2001](https://doi.org/10.1016/S0167-6296%2801%2900086-8): log
+  models, GLMs (generalised linear models) and the Park test.
+- [Wijeysundera et al. 2012](https://doi.org/10.2147/CEOR.S31552): censored
+  costs explained for health services researchers, with a worked example.
+- [Barber & Thompson 2000](https://doi.org/10.1002/1097-0258%2820001215%2919:23%3C3219::AID-SIM623%3E3.0.CO;2-P): the
+  bootstrap for mean costs.
+- [Healthcare costs](healthcare-costs.qmd):
+  where the unit costs come from.
+:::

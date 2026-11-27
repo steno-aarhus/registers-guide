@@ -28,8 +28,22 @@ jobs:
         with:
           egress-policy: audit
 
+      # fetch-depth: 0 gets the full history, which the next step needs.
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Every page has `date: last-modified`, which Quarto reads from the
+      # file's modification time. A fresh checkout gives every file the
+      # checkout time, so every page showed the build date. This sets each
+      # page's file time to its last commit, so the date shown is when the
+      # page itself last changed.
+      - name: Date each page by its last commit
+        run: |
+          git ls-files '*.qmd' | while read -r f; do
+            touch -d "@$(git log -1 --format=%ct -- "$f")" "$f"
+          done
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0

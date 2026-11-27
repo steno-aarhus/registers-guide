@@ -50,8 +50,9 @@
 - **`CPRTJEK`:** Likely a CPR-number validity check, by name analogy to mfr_er_cprnummer_gyldigt - not confirmed to share that code system's values, since DST's page for this register defines neither.
 - **`MOR1`:** The earliest mother registered for this child. MOR1 and MOR2 can differ: CRS parental links are sometimes corrected or reassigned after the fact (e.g. following a legal dispute or a data error), and this register keeps both the original and the current answer rather than silently overwriting one with the other.
 - **`MOR2`:** The current/most recently registered mother. See MOR1's reader_note.
-- **`MOR_FOED_ADOP`:** Biological vs adoptive, by the variable name (FOED = født = born, ADOP = adopteret) - not itself confirmed by DST's description text.
+- **`MOR_FOED_ADOP`:** Whether the registers point to an adoptive or other non-biological relation between mor1 and the child. Codes 21-23 are a presumed biological relation. It is presumed, and the variable cannot be used to count adoptions. Code 14 is not an adoption: it marks a parent of the other sex than the column. Unknown (99) for children born 2019-2023 in version 2, and other values by mistake in version 1, so check `version`.
 - **`FAR1`:** The earliest father registered for this child. See MOR1's reader_note - same pattern, paternal side.
+- **`FAR_FOED_ADOP`:** Whether the registers point to an adoptive or other non-biological relation between far1 and the child. Codes 21-23 are a presumed biological relation. It is presumed, and the variable cannot be used to count adoptions. Code 14 is not an adoption: it marks a parent of the other sex than the column. Unknown (99) for children born 2019-2023 in version 2, and other values by mistake in version 1, so check `version`.
 
 </details>
 
@@ -62,6 +63,21 @@
 **Joins to other registers:**
 
 - `PNR` joins to **BEF** (many-to-one).
+
+<details>
+<summary>Value sets for the coded columns (1)</summary>
+
+| Code system | Values |
+| --- | --- |
+| `foed_adop` | `0` Ingen forælder på pladsen, `11` Adoptivrelation iflg. Adoptionsregister, `12` Barn i Adoptionsregister, men adoptivrelationen kan være med anden forælder, `14` Forælder har andet køn (far er kvinde eller mor er mand), `15` Adoptionsmarkering i CPR, `16` Kun mødre: CPR-relation er først gældende fra efter barnet er 30 dage gammelt, `17` Kun mødre: Adoptionsmarkering i tidligere FTDB, `18` Kun mødre til børn født efter 1. januar 1991: Barnet er fødselsregistreret i udlandet, mens mor er bosiddende i DK, `21` Forælder registreret kort efter fødsel, `22` Forælder registreret kort efter fødsel, barnet adopteret efterfølgende, `23` Forælder registreret kort efter fødsel, barnet adopteret efterfølgende, adoption ophævet, `31` Barn er indvandrer, `32` Barn er fødselsregistreret i udlandet, `33` Barn født før 1973, `35` Barn født i udlandet eller før 1973 og efterfølgende adopteret, `39` Øvrige forælderrelationer, `99` Uoplyst |
+
+- **`foed_adop`:** DST groups the codes: 11-18 presumed non-biological, 21-23 presumed biological, 30-39 other (born abroad, born before 1973, or no sign of adoption or early registration). The relation is presumed, since DST says a biological relation can only be determined with a DNA test. The variable cannot be used to count adoptions. In version 2 of the tables for reference years 2019-2023 both columns are set to unknown (99). DST gives that code in the FTBARN register history, not in the value list. The grouping text for the father column gives 1991 instead of 1973 as the cut-off for the group 30-39.
+
+Where these values come from:
+
+- **`foed_adop`:** [DST TIMES documentation: MOR_FOED_ADOP (value set D101500.TXT_FER_FOED_ADOP)](https://www.dst.dk/da/Statistik/dokumentation/Times/fertilitetsdatabasen/mor-foed-adop).
+
+</details>
 
 **Worth knowing:**
 

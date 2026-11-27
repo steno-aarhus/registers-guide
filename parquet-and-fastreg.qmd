@@ -1,6 +1,6 @@
 ---
 title: "Parquet and fastreg"
-subtitle: "Point fastreg at your registers, convert SAS to parquet, and read the ones it cannot find by name"
+subtitle: "Point fastreg at your registers, convert SAS (a statistics program) to parquet, and read the ones it cannot find by name"
 date: last-modified
 description: "Set up fastreg's read_register() on your DST project, convert SAS files to parquet, read files it cannot find by name, and join registers in DuckDB."
 ---
@@ -26,7 +26,7 @@ lets you open a *connection* and read only what you actually ask for.
 
 That is why a filtered, cohort-sized extract from a register with tens of
 millions of rows can come back in seconds, without ever loading the whole
-register into RAM, and why almost every register on DST is worth converting to
+register into RAM, and why almost every register on DST (Statistics Denmark) is worth converting to
 parquet once. The lazy pattern itself is explained in [Phase 5 - Extracting
 data step by step](extraction-step-by-step.qmd).
 
@@ -76,8 +76,8 @@ If your project's registers are already converted, skip this section.
 
 | | SAS (.sas7bdat) | Parquet |
 |---|---|---|
-| Read time (1M rows) | ~30–120 sec | ~1–3 sec |
-| Disk space | Large | 50–75% smaller |
+| Read time | Slow: the whole file is read | Much faster: only the columns you ask for are read |
+| Disk space | Large | Smaller (compressed) |
 | Requires package | `haven` | `arrow` |
 | Lazy evaluation | No - all into RAM | Yes - filter BEFORE collect |
 
@@ -86,7 +86,7 @@ If your project's registers are already converted, skip this section.
 ### Recommended: convert with `fastreg`
 
 The recommended tool is the [`fastreg`](https://dp-next.github.io/fastreg/)
-package (dp-next, on CRAN). It converts SAS registers to Parquet (partitioned by
+package (dp-next, on the Comprehensive R Archive Network, where R packages are published, CRAN). It converts SAS registers to Parquet (partitioned by
 year) and lets you read them back by **name**.
 
 ::: {.callout-important}
@@ -176,6 +176,15 @@ fastreg's `convert()`, and is not meant to guess every way parquet files might
 otherwise be named. If the register is laid out differently - say as one flat
 folder of parquet files, or with filenames without `part-` - `read_register()`
 cannot see it, no matter how correctly you set the path.
+
+**A register delivered as one file with no year in its name** is a common case
+(the hospital medication register, SMR, is one). `convert()` puts it in a
+folder named `year=__HIVE_DEFAULT_PARTITION__`, and up to fastreg 0.15.1,
+which includes the CRAN release 0.14.1, `read_register()` and
+`list_parquet_datasets()` only look for `year=` followed by four digits, so the
+register is not found. Open it with `read_parquet_dataset()` and the full path,
+as below. From 0.15.2 (installed from
+[GitHub](https://github.com/dp-next/fastreg)) `read_register()` finds it.
 
 In that case you use one of fastreg's two other reading functions:
 
@@ -304,7 +313,7 @@ no year subfolders, use `'.../faik/*.parquet'` and leave out
 
 This pattern has been run on DST for the income cutpoints in [Socioeconomic
 variables](socioeconomic-variables.qmd#faik-income) and for extractions from
-LMDB.
+LMDB (the prescription register).
 
 ## See also
 

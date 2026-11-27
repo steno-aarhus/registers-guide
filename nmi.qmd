@@ -1,6 +1,6 @@
 ---
 title: "NMI - Nordic Multimorbidity Index"
-subtitle: "Compute a 5-year mortality-risk score for your cohort from LPR diagnoses and LMDB prescriptions"
+subtitle: "Compute a 5-year mortality-risk score for your cohort from LPR (the National Patient Register) diagnoses and LMDB (the prescription register) prescriptions"
 date: last-modified
 description: "Compute the Nordic Multimorbidity Index (NMI) in R from LPR diagnoses and LMDB prescriptions: a validated score that predicts 5-year mortality."
 ---
@@ -13,14 +13,19 @@ single continuous score. You need your cohort from [Phase
 10](build-study-population.qmd) (`pnr` and `index_date`), and you end with
 `extract_nmi.rds`: one score per person and index date.
 
-**Article:** Kristensen et al. *Clinical Epidemiology* 2022 -
-[doi:10.2147/CLEP.S353398](https://doi.org/10.2147/CLEP.S353398)
+**Article:** [Kristensen et al. 2022](https://doi.org/10.2147/CLEP.S353398),
+*Clinical Epidemiology*
 
 ::: {.callout-warning}
-**Important: NMI is a mortality index, not a measure of comorbidity burden.**
-NMI was developed and validated to predict 5-year mortality (Kristensen et
-al. 2022, \~425,000 Danish residents aged ≥40), and its predictors were selected
-for how much they added to the mortality model - not to cover disease burden. As
+**Important: NMI was developed to predict mortality; use it with care as a
+measure of comorbidity burden.** NMI was developed and validated to predict
+5-year mortality ([Kristensen et al.
+2022](https://doi.org/10.2147/CLEP.S353398), \~425,000 Danish residents aged ≥40).
+The authors call it a multimorbidity measure and write that it "can be used as a
+confounder summary score" (Discussion), on the premise that 5-year mortality is a
+general marker of health and multimorbidity. This guide still does not use it as
+a measure of disease burden, because its predictors were selected and weighted
+for how much they added to the mortality model, not to cover disease burden. As
 a result:
 
 - Several common chronic diseases are not included in the model (e.g.
@@ -30,9 +35,11 @@ a result:
 - Some weights are negative (e.g. statins -3, angiotensin II receptor blockers (ARBs) -2), which
   only makes sense in a mortality model, not in a measure of disease burden.
 
-**If your goal is comorbidity burden, NMI is the wrong tool.** See
+**If your goal is comorbidity burden, define comorbidity directly instead.** See
 [Comorbidity](comorbidity.qmd) for how to define comorbidity from diagnoses
-and prescriptions. Use NMI when your goal is mortality risk.
+and prescriptions. Use NMI when your goal is mortality risk, and if you use it
+as a confounder summary score, say in your methods that it is a mortality-based
+score.
 :::
 
 ## What NMI gives you
@@ -69,7 +76,7 @@ R.
 **Checked (30 August 2026):** every one of the 50 indicators and all 50 weights
 below were compared against SDU's own
 [`online_nmi.do`](https://pharmacoepi.sdu.dk/nmi/online_nmi.do), character by
-character. All 29 diagnosis patterns and 21 ATC patterns match, the weights match
+character. All 29 diagnosis patterns and 21 ATC (Anatomical Therapeutic Chemical classification) patterns match, the weights match
 (including the two negative ones, `C09C/C09D` at -2 and `C10AA` at -3), and both
 assessment windows match: 5 years before index for diagnoses, 6 months for drugs.
 
@@ -88,11 +95,11 @@ compare a sample against the Stata version before you publish.
 ::: {.callout-important}
 **What NMI needs, and over which period:**
 
-- **Diagnoses:** a 5-year lookback before index, from LPR2 somatic and
+- **Diagnoses:** a 5-year lookback before index, from LPR2 (the patient register up to 2019) somatic and
   psychiatric (up to March 2019) and LPR3 (from March 2019). A somatic-only
   pull (e.g. `lpr_adm` alone) misses the psychiatric predictors (F00-03, F10,
-  F17). The article used primary and secondary diagnoses; the example below
-  keeps all diagnosis types, which is broader. Decide which, and report it.
+  F17). The article used primary and secondary diagnoses, and the example below
+  does the same (types A and B). If you add more types, report it.
 - **Prescriptions (ATC):** a 6-month lookback before index, from LMDB. Only
   that window, not the whole register.
 :::
@@ -189,7 +196,7 @@ nmi_icd <- c(
 nmi_diagnoses <- get_lpr_diagnoses(
   pnr_vector = unique(cohort$pnr), # all the cohort's pnr
   icd_codes = nmi_icd, # only NMI codes are collected
-  diagtypes = c("A", "B", "G", "H", "M", "C") # all diagnosis types; c("A", "B") is closer to the article (LPR3's main types are A and B)
+  diagtypes = c("A", "B") # action (A) and secondary (B) diagnoses, as the article's "primary and secondary diagnoses"; add more types (e.g. "G") only if you have a reason, and say so in your methods
 )
 stopifnot(nrow(nmi_diagnoses) > 0) # catch an empty extraction here, not three steps later
 saveRDS(nmi_diagnoses, "path/to/nmi_diagnoses.rds") # columns: pnr, date_contact, c_diag, c_diagtype, icd3
@@ -202,7 +209,7 @@ and, unlike the diagnosis extraction above, already windowed to each person's
 6 months before `index_date`. `read_register()` requires fastreg set up with
 the path to your registers, see [Parquet and
 fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not
-convert them from SAS yourself.
+convert them from SAS (a statistics program) yourself.
 
 ::: {.callout-note collapse="true" title="Why prescriptions are windowed at extraction and diagnoses are not"}
 The deciding factor is rows per person in the raw extract, not
@@ -214,7 +221,7 @@ conditions. That density difference is what turns the compute step's join in ste
 below from harmless (diagnoses) into one that has pulled tens of GB into RAM
 and crashed the R session in practice (prescriptions) - it is not something
 inherent to either register. If your
-own diagnosis extraction turns out to be unusually large (a broad ICD code
+own diagnosis extraction turns out to be unusually large (a broad International Classification of Diseases, ICD code
 list, a hospital-heavy cohort), the same fix applies there too: window at
 extraction instead of after `collect()`, the same way as below.
 :::
@@ -461,8 +468,8 @@ general version of this pattern, used the same way elsewhere in the guide.
 
 The score is one number per (`pnr`, `index_date`) in `extract_nmi.rds`. It is joined to your
 analysis dataset in [Phase 12](joins.qmd); inspect it there. NMI is right-skewed (many low, a
-few high), so median [IQR] often describes it better than the mean, though mean
-+ CI is fine for comparing groups.
+few high), so median [IQR (interquartile range)] often describes it better than the mean, though mean
++ CI (confidence interval) is fine for comparing groups.
 
 <details>
 <summary>See the code: describe the NMI score</summary>
@@ -528,7 +535,7 @@ Apply the same requirement to the comparison cohort's assigned index dates, so t
 
 ## More information
 
-See the [article](https://doi.org/10.2147/CLEP.S353398) for the full predictor
+See [Kristensen et al. 2022](https://doi.org/10.2147/CLEP.S353398) for the full predictor
 list and weights. See [Overview of registers](register-reference.qmd) for
 confirmed column names in LPR and LMDB.
 

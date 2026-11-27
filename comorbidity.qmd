@@ -1,6 +1,6 @@
 ---
 title: "Comorbidity"
-subtitle: "Baseline conditions as covariates: individual diagnoses or a combined measure, from LPR, LMDB or both"
+subtitle: "Baseline conditions as covariates: individual diagnoses or a combined measure, from LPR (the National Patient Register), LMDB (the prescription register) or both"
 date: last-modified
 pagetitle: "Comorbidity in Danish register studies"
 description: "Comorbidity as a covariate in Danish register studies: individual diagnoses or a combined measure, defined from LPR diagnoses, LMDB prescriptions or both."
@@ -30,14 +30,16 @@ approaches:
    from hospital diagnoses, sometimes together with prescriptions. It is
    practical when many conditions are potential confounders, or when you want
    to describe the burden in Table 1. The Charlson Comorbidity Index is one
-   such index; two packages that compute it from LPR diagnoses are listed on
-   [Algorithms & special packages](packages-overview.qmd).
+   such index; the code to compute it from LPR diagnoses is under
+   [Charlson Comorbidity Index](#charlson) below.
 
 ::: {.callout-warning}
-**The Nordic Multimorbidity Index (NMI) is not a measure of comorbidity
-burden.** Despite its name it is a score built to predict 5-year mortality.
-Use it when your question is mortality risk, and not as the combined measure in
-approach 2. See [NMI](nmi.qmd).
+**The Nordic Multimorbidity Index (NMI) was developed to predict mortality; use
+it with care as a measure of comorbidity burden.** Its authors describe it as a
+multimorbidity measure that can be used as a confounder summary score, but its
+predictors and weights were chosen to predict 5-year mortality. This guide
+therefore uses it for mortality risk and not as the combined measure in approach
+2. See [NMI](nmi.qmd) for the reasons.
 :::
 
 With either approach, your own outcome must not be part of what you adjust for.
@@ -109,11 +111,133 @@ a prescription half, flag users as on
 [Medication](medication.qmd#defining-users) and combine the two per person.
 Save the result as `.rds` and link it in [Phase 12](data-manipulation.qmd).
 
+## Charlson Comorbidity Index from LPR {#charlson}
+
+Two packages on DST (Statistics Denmark) compute the Charlson Comorbidity Index from LPR diagnoses:
+`heaven::charlsonIndex()` and `EpiForsk::charlson_score()` (see [Algorithms &
+special packages](packages-overview.qmd)). The example below uses
+`charlson_score()`. You extract the lookback yourself (often 5 years before the
+index date) and give the function every diagnosis in that window, not a code
+list: the function matches the codes to Charlson categories itself. Which
+diagnosis types to include is your choice; the example keeps types A, B and G
+(see [Understand LPR](understand-lpr.qmd) for what each type means). The
+D-prefix (`DG30` etc.) is handled by EpiForsk and does not need to be stripped
+first.
+
+The lookback reads LPR2 (somatic and psychiatric) and LPR3 (the patient register from 2019), because LPR2 ends
+in March 2019 and an index date after that would otherwise miss most
+diagnoses. The LPR3 tables are filtered with `lprindberetningssystem == "LPR3"`
+as on Extract from LPR; read [the warning about that
+filter](extract-from-lpr.qmd#lpr3-filter-caveat) before you use it. The
+window here runs up to, but not including, the index date; the general pattern
+above keeps the index date itself. Pick one and use it for every covariate.
+
+```r
+library(fastreg)  # read_register()
+library(dplyr)
+library(EpiForsk) # charlson_score()
+
+# Open the registers, as in get_lpr_diagnoses() on Extract from LPR
+lpr_adm   <- read_register("lpr_adm")   %>% rename_with(tolower)   # LPR2 somatic contacts
+lpr_diag  <- read_register("lpr_diag")  %>% rename_with(tolower)   # LPR2 somatic diagnoses
+# any_of() renames the psychiatric keys only if your delivery renamed them
+psyk_adm  <- read_register("t_psyk_adm")  %>% rename_with(tolower) %>%
+  rename(any_of(c(pnr = "v_cpr", recnum = "k_recnum")))            # LPR2 psychiatric contacts
+psyk_diag <- read_register("t_psyk_diag") %>% rename_with(tolower) %>%
+  rename(any_of(c(recnum = "v_recnum")))                             # LPR2 psychiatric diagnoses
+lpr3_k    <- read_register("lpr_a_kontakt")  %>% rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3")   # read the warning linked above first
+lpr3_d    <- read_register("lpr_a_diagnose") %>% rename_with(tolower) %>%
+  filter(lprindberetningssystem == "LPR3")   # same filter as the contact table
+
+# One row per (pnr, index_date), with each person's own 5-year lookback
+# window already attached - this table is the size of your cohort, not the
+# register. If your cohort has repeated pnr (e.g. matched with replacement),
+# each occurrence gets its own row and its own window here. The window runs
+# from window_start up to, but not including, window_end (the index date).
+lookback_keys <- cohort %>%
+  select(pnr, index_date) %>%
+  mutate(window_start = index_date - 1825,   # 5 years = 1825 days, as on the NMI page
+         window_end   = index_date)
+
+# LPR3's contact time is a datetime, so its windows must be datetimes too:
+# comparing a datetime with a date on a lazy table can silently go wrong
+# (DST pitfall 4).
+lookback_keys_dt <- lookback_keys %>%
+  mutate(window_start = as.POSIXct(window_start, tz = "UTC"),
+         window_end   = as.POSIXct(window_end, tz = "UTC"))
+
+# The same steps for each source. contacts needs the columns pnr, key and
+# date_contact, and diagnoses the columns key and c_diag.
+window_dx <- function(contacts, diagnoses, keys) {
+  contacts %>%
+    # Coarse filter first (cheap): narrow to the union of every window in the
+    # cohort, before the join - !! injects a single computed value, not a column
+    filter(date_contact >= !!min(keys$window_start)) %>%
+    # copy = TRUE sends the small keys table into the database, so the join
+    # runs there, not in R. This matters more here than almost anywhere else
+    # in the guide: Charlson needs EVERY A/B/G diagnosis in the window, not a
+    # filtered-down code list, so the unjoined, unwindowed data for a whole
+    # cohort can be large. Collecting it all into R first and only then
+    # joining to the cohort and filtering by index_date can pull tens of GB
+    # into RAM and crash the R session.
+    inner_join(keys, by = "pnr", copy = TRUE) %>%
+    # Precise filter (correctness): each row against its OWN window, not the global one
+    filter(date_contact >= window_start, date_contact < window_end) %>%
+    inner_join(diagnoses, by = "key") %>%
+    select(pnr, index_date, date_contact, c_diag) %>%
+    collect()
+}
+
+types <- c("A", "B", "G")   # A/B/G: all codes of these types, no ICD filter (G is LPR2 only)
+
+lookback <- bind_rows(
+  # LPR2 somatic
+  window_dx(
+    lpr_adm  %>% select(pnr, key = recnum, date_contact = d_inddto),
+    lpr_diag %>% filter(c_diagtype %in% !!types) %>% select(key = recnum, c_diag),
+    lookback_keys
+  ),
+  # LPR2 psychiatric
+  window_dx(
+    psyk_adm  %>% select(pnr, key = recnum, date_contact = d_inddto),
+    psyk_diag %>% filter(c_diagtype %in% !!types) %>% select(key = recnum, c_diag),
+    lookback_keys
+  ),
+  # LPR3, with datetime windows; diagnoses later disproved are left out
+  window_dx(
+    lpr3_k %>% select(pnr, key = dw_ek_kontakt, date_contact = kont_starttidspunkt),
+    lpr3_d %>%
+      filter(diag_kode_type %in% !!types,
+             is.na(senere_afkraeftet) | senere_afkraeftet != "Ja") %>%
+      select(key = dw_ek_kontakt, c_diag = diag_kode),
+    lookback_keys_dt
+  ) %>%
+    mutate(date_contact = as.Date(date_contact))   # datetime -> date, now in R
+)
+
+charlson <- charlson_score(data = lookback, Person_ID = pnr, diagnosis_variable = c_diag)
+```
+
+
+::: {.callout-warning}
+**`Person_ID = pnr` alone is not enough if your cohort has repeated `pnr`.**
+`lookback` above is correctly windowed per `(pnr, index_date)`, but
+`charlson_score()` itself only groups by the single `Person_ID` column you give it -
+it has no way to know about `index_date`. For a comparison cohort matched
+with replacement, that means diagnoses from *all* of a person's
+`index_date` windows get pooled into one Charlson score, silently reattached
+to every occurrence of their `pnr`. If this applies to you, build a single
+combined key first (e.g. `mutate(pnr_index = paste(pnr, index_date))`) and
+pass `Person_ID = pnr_index` instead, then split the two columns back apart from
+the result afterwards.
+:::
+
 ## `regmorbidity`: many conditions from editable code lists {#regmorbidity}
 
 [`regmorbidity`](https://github.com/sara-schwartz/regmorbidity) is an R package
 in development for deriving many conditions at once from Danish register data.
-It is on GitHub only (not on CRAN), and parts of it have not been run on DST
+It is on GitHub only (not on the Comprehensive R Archive Network, where R packages are published, CRAN), and parts of it have not been run on DST
 yet: read the package README for what has been tested before you rely on it.
 It computes no score and does not implement a published index. If you have
 code lists to contribute, [get in touch](contribute.qmd).
@@ -131,8 +255,8 @@ code lists to contribute, [get in touch](contribute.qmd).
   date is the date of the qualifying dispensing.
 - **Results are written to disk one file per condition**, so a long run over the
   full register can resume after an interruption.
-- **The bundled code lists take Prior et al. (2016)
-  ([doi:10.1093/aje/kwv324](https://doi.org/10.1093/aje/kwv324)) as their
+- **The bundled code lists take [Prior et al.
+  2016](https://doi.org/10.1093/aje/kwv324) as their
   starting point.** They are meant to be revised for your own study and are
   not an implementation of that paper's index.
 
@@ -144,7 +268,8 @@ code lists to contribute, [get in touch](contribute.qmd).
   definition
 - [Algorithms & special packages](packages-overview.qmd): Charlson functions
   in `heaven` and `EpiForsk`
-- [NMI](nmi.qmd): a mortality-risk score, not a comorbidity measure
+- [NMI](nmi.qmd): a score developed to predict mortality; use with care as a
+  comorbidity measure
 - [Phase 12 - Assemble and prepare the dataset](data-manipulation.qmd): link
   the flags onto the cohort
 - Next page in this phase: [Medication (ATC)](medication.qmd)

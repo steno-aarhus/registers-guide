@@ -1,6 +1,6 @@
 ---
 title: "File types and how to open them"
-subtitle: "Which R function opens each file type on the DST server, and which ones load the whole file into memory"
+subtitle: "Which R function opens each file type on the server at Statistics Denmark (DST), and which ones load the whole file into memory"
 date: last-modified
 pagetitle: "DST file types and how to open them in R"
 description: "Which R function opens each file type on the DST server: parquet with arrow, fastreg or duckplyr, plus RDS, SAS, CSV and xlsx, and which ones load lazily."
@@ -18,10 +18,11 @@ fastreg](parquet-and-fastreg.qmd).
 
 ## What a project folder looks like
 
-A project on the DST server can be organised like this. The raw data DST
-delivers is under `rawdata/`. The folder names under `workdata/` shown here
-(`cleaned-data/`, `parquet-registers/`) are from one project, and yours may
-differ:
+The raw data DST delivers is under `rawdata/`. Under `workdata/` a new project
+gets an empty `[projectnumber]/` folder, and the project decides how to
+organise it. The layout below, with `cleaned-data/` and `workspaces/`, is the
+one used on [DARTER](darter-index.qmd), and the code examples follow it. Yours
+may differ:
 
 ```
 E:/rawdata/[projectnumber]/
@@ -49,7 +50,7 @@ names with File Explorer. Two things are worth knowing:
   has their own subfolder (`[your-name]/`) for scripts, intermediate results and
   output.
 - **Almost all the code in this guide assumes the registers are in parquet:** if
-  your project only has raw SAS files, converting them to parquet is the first
+  your project only has raw SAS (a statistics program) files, converting them to parquet is the first
   job. See [Convert SAS files to
   Parquet](parquet-and-fastreg.qmd#convert-sas-to-parquet).
 
@@ -107,10 +108,9 @@ Danish)](https://www.dst.dk/Site/Dst/SingleFiles/GetArchiveFile.aspx?fi=45004151
   `to_duckdb()` step. It requires that the registers were converted with
   fastreg.
 - **`read_parquet_duckdb()` (duckplyr):** you write the path, like
-  `open_dataset()`, but you get a DuckDB-backed table straight away. It is
-  reported to be the fastest of the three and to keep memory use lowest, and to
-  avoid the `rapi` errors that the arrow-to-DuckDB route (`to_duckdb()`)
-  sometimes throws on very large registers. It does not make it safe to filter a
+  `open_dataset()`, but you get a DuckDB-backed table straight away, without
+  the arrow-to-DuckDB step (`to_duckdb()`). Since fastreg 0.14.3,
+  `read_register()` uses this same function underneath. It does not make it safe to filter a
   datetime column such as `kont_starttidspunkt` with a date: that rule applies
   whichever of the three you use (see [pitfall
   4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format)). It
@@ -190,10 +190,10 @@ it is not a DST variable. Because the files are split by year, filtering on it
 means the other years are never opened, which keeps a query against a very large
 register fast. Use it to limit how much gets read.
 
-Do not use it to decide when something happened. `year == 2020` in BEF does not
+Do not use it to decide when something happened. `year == 2020` in BEF (the population register) does not
 tell you which of the four quarterly snapshots you have, only which folder the
 row sat in. Whenever the timing matters to your research question, use the
-register's own date column (`hf_vfra` in UDDA, `d_inddto` in `lpr_adm`,
+register's own date column (`hf_vfra` in the education register, UDDA, `d_inddto` in `lpr_adm`,
 `referencetid` in BEF) and keep `year` for speed.
 
 The two uses look identical in the code, which is why this is also listed in

@@ -9,10 +9,13 @@
 | [DODSAARS](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARS%20-%20D%C3%B8ds%C3%A5rssagsregistret.html) | `"dodsaars"` | `pnr` | 1970 to 2001 | `d_dodsdto`, `c_dodsmaade`, `c_dod1` |
 | [DODSAARSAGER](https://www.dst.dk/extranet/ForskningVariabellister/DODSAARSAGER%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaarsager"` | `pnr` | 2022 to 2024 | `doedsdato`, `doedsaarsag_tilgrundliggende`, `doedsaarsag_kode_1` |
 | [DODSAASG](https://www.dst.dk/extranet/ForskningVariabellister/DODSAASG%20-%20D%C3%B8ds%C3%A5rsagsregister.html) | `"dodsaasg"` | `pnr` | 2002 to 2022 | `d_dodsdato`, `c_dodtilgrundl_acme`, `c_dod_1a` |
+| [DRG_KONTAKTER](https://www.dst.dk/extranet/ForskningVariabellister/DRG_KONTAKTER%20-%20Landspatientregistret%20(LPR3)%20takster%20%E2%80%93%20DRG%20kontakter.html) | `"drg_kontakter"` | `id`, `drgsghforlob_id`, `pnr` | 2021 to 2025 | `aktivitetsaar`, `dia01`, `drg` |
+| [DRG_SGHFORLOB](https://www.dst.dk/extranet/ForskningVariabellister/DRG_SGHFORLOB%20-%20Landspatientregistret%20(LPR3)%20takster%20%E2%80%93%20DRG%20sygehusforl%C3%B8b.html) | `"drg_sghforlob"` | `id`, `pnr` | 2021 to 2025 | `adiag_drgsghf`, `aktivitetsaar`, `drg_drgsghf` |
 | [FAIK](https://www.dst.dk/extranet/ForskningVariabellister/FAIK%20-%20Familieindkomster.html) | `"faik"` | `familie_id` | 1987 to 2024 | `famaekvivadisp_13`, `year`, `famdisponibel_13` |
 | [FTBARN](https://www.dst.dk/extranet/ForskningVariabellister/FTBARN%20-%20Fertilitet%20-%20b%C3%B8rn.html) | `"ftbarn"` | `PNR` | 1973 to 2025 | `FOED_DAG`, `LEVENDE_ELLER_DOEDFOEDT` |
 | [FTFORAEL](https://www.dst.dk/extranet/ForskningVariabellister/FTFORAEL%20-%20Fertilitet%20-%20for%C3%A6lder.html) | `"ftforael"` | `PNR` | 1973 to 2025 | `FORAELDER_PNR`, `MOR_FAR` |
 | [FTNAEVN](https://www.dst.dk/extranet/ForskningVariabellister/FTNAEVN%20-%20Fertilitet%20-%20N%C3%A6vner.html) | `"ftnaevn"` | `PNR`, `AAR` | 1973 to 2025 |  |
+| [IND](https://www.dst.dk/extranet/ForskningVariabellister/IND%20-%20Indkomst.html) | `"ind"` | `pnr` | 1980 to 2025 | `perindkialt_13`, `loenmv_13`, `erhvervsindk_13` |
 | [LAB_DM_FORSKER](https://sundhedsdatastyrelsen.dk/data-og-registre/nationale-sundhedsregistre/laboratoriedatabasen) | `"lab_dm_forsker"` | `patient_cpr` | 2008 to 2025 | `samplingdate`, `analysiscode`, `value` |
 | [LMDB](https://www.dst.dk/extranet/ForskningVariabellister/LMDB%20-%20L%C3%A6gemiddeldatabasen.html) | `"lmdb"` | `pnr` | 1995-12 to 2025-12 | `eksd`, `atc`, `atc1` |
 | [LPR_A_DIAGNOSE](https://www.dst.dk/extranet/ForskningVariabellister/LPR_A_DIAGNOSE%20-%20Landspatientregistret%20%28LPR3%29%20-Diagnoseoplysning.html) | `"lpr_a_diagnose"` | `dw_ek_kontakt` | 2019 to 2025 | `diag_kode`, `diag_kode_type`, `senere_afkraeftet` |
@@ -31,6 +34,7 @@
 | [UAF_ADM](https://www.dst.dk/extranet/ForskningVariabellister/UAF_ADM%20-%20Landspatientregistret%20uafsluttede%20kontakter%20-%20administrative%20oplysninger.html) | `"uaf_adm"` | `recnum` | 1996 to 2019 | `pnr`, `d_inddto`, `d_uddto` |
 | [UAF_DIAG](https://www.dst.dk/extranet/ForskningVariabellister/UAF_DIAG%20-%20Landspatientregistret%20uafsluttede%20kontakter%20-%20diagnoser.html) | `"uaf_diag"` | `recnum` | 1996 to 2019 | `c_diag`, `c_diagtype`, `year` |
 | [UDDA](https://www.dst.dk/extranet/ForskningVariabellister/UDDA%20-%20Uddannelser%20%28BUE%29.html) | `"udda"` | `pnr` | 1980-12 to 2025-09 | `hfaudd`, `udd`, `hf_vfra` |
+| [UDDF](https://www.dst.dk/extranet/ForskningVariabellister/UDDF%20-%20H%C3%B8jeste%20fuldf%C3%B8rte%20uddannelse%20%28forl%C3%B8b%29.html) | `"uddf"` | `pnr` | 1974-01 to 2025-09 | `hfaudd`, `hf_vfra`, `hf_vtil` |
 | [VNDS](https://www.dst.dk/extranet/ForskningVariabellister/VNDS%20-%20Historiske%20vandringer.html) | `"vnds"` | `pnr` | 1973 to 2024 | `indud_kode`, `haend_dato`, `indud_land` |
 | [VNDS_HIST](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_HIST%20-%20Historiske%20vandringer%20fra%201973%20til%202004.html) | `"vnds_hist"` | `pnr` | 1973 to 2004 | `indud_kode`, `haend_dato`, `indud_land` |
 | [VNDS_IND](https://www.dst.dk/extranet/ForskningVariabellister/VNDS_IND%20-%20Indvandringer.html) | `"vnds_ind"` | `pnr` | 2005 to 2025 | `haend_dato`, `indv_land`, `indvmd` |

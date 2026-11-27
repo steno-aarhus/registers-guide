@@ -9,7 +9,7 @@ description: "Fix R errors in DST register work: six first steps, a stuck consol
 Use this page when something has already gone wrong: a red error message, a
 console that will not respond, or a result that came back empty. Start with the
 six steps, then look your message up in the two error tables, and if you are
-still stuck, the last section says where to ask without breaking DST's rules.
+still stuck, the last section says where to ask without breaking Statistics Denmark's (DST's) rules.
 If your code runs fine but you suspect the *answer* is wrong, use [DST
 pitfalls](dst-pitfalls.qmd) instead: it collects the traps that produce a
 plausible-looking result without any error.
@@ -81,7 +81,7 @@ interrupts. Large `collect()` calls on arrow or DuckDB do this. Then:
 extraction again that took an hour the first time. Save anything expensive with
 `saveRDS()` **before** you start something long, so a restart costs you minutes
 instead of the morning. The same point, from the other direction, is in [File
-formats](file-formats.qmd): a full load of a large SAS file can cost you your
+formats](file-formats.qmd): a full load of a large SAS (a statistics program) file can cost you your
 unsaved work.
 :::
 
@@ -106,7 +106,7 @@ Most R errors are small typos.
 For a fuller walkthrough of debugging (`traceback()`, `browser()`,
 print-debugging and reading error messages), see
 [Debugging](https://r-coding-cafe.zheer.dk/notes/lesson-notes/02-Debugging.html)
-from Zheer's R Coding Café, and the DDEA course's [troubleshooting
+from Zheer's R Coding Café, and the DDEA (Danish Diabetes and Endocrine Academy) course's [troubleshooting
 guide](https://r-cubed-intro.rostools.org/appendix/troubleshooting).
 
 ## Error messages specific to register work {#dst-errors}
@@ -115,12 +115,12 @@ These are the ones you meet in a DST workflow rather than in R generally:
 
   | Error message                                    | Typical cause                                                  | Solution                                                                                        |
   | ------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-  | `Error: Column 'pnr' not found`                  | `rename_with(tolower)` is missing                              | Add `%>% rename_with(tolower)` immediately after `read_register()` - see [pitfall 3](dst-pitfalls.qmd#tolower)  |
+  | `Error: Column 'pnr' not found`                  | The column is called `PNR` and `rename_with(tolower)` is missing. This happens with data not converted with fastreg, or converted with a fastreg older than 0.6.0: from 0.6.0 fastreg writes column names in lower case ([NEWS](https://dp-next.github.io/fastreg/news/)) | Add `%>% rename_with(tolower)` right after you open the data - see [pitfall 3](dst-pitfalls.qmd#tolower)  |
   | `Error: object 'my_list' not found`              | `my_list` was never created in this session (not run, or misspelt) | Run the line that creates it; check the name with `ls()`. `!!` does not fix this - see [pitfall 8](dst-pitfalls.qmd#bang-bang) for what `!!` is for |
   | `Error: could not find function "read_register"` | `library(fastreg)` missing                                     | Add `library(fastreg)` at the top of the script                                                 |
   | `non-numeric argument to binary operator`        | Date column is `character`, not `Date`                         | `mutate(date = as.Date(date))` - see [pitfall 4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) |
   | `rapi_execute` / `rapi_prepare` error, or a date filter that returns 0 rows | `rapi` only means that DuckDB could not run the query - the real cause is in the rest of the message. A common cause: a datetime column (e.g. `kont_starttidspunkt`) is converted with `as.Date()` or compared with a date inside `filter()` before `collect()` | Create the cut-off as a datetime before the pipe, `cutoff <- as.POSIXct("2023-01-01", tz = "UTC")`, then `filter(kont_starttidspunkt >= cutoff)` - see [pitfall 4](dst-pitfalls.qmd#4-date-columns-are-not-always-in-date-format) |
-  | `Error in filter.default(...)`                  | Filtering on a lazy object without `%>%`                       | Switch to `%>%` - see [the pipe](function-guide.qmd#the-pipe)                                   |
+  | `Error in filter.default(...)`, `no applicable method for 'filter'`, or `object 'x' not found` from a `filter()` call | `dplyr` is not loaded, or another package has masked its `filter()`, so R runs `stats::filter()` (the "no applicable method" message also appears when the object is not a data frame or table) | Add `library(dplyr)` as the last of your `library()` calls, or write `dplyr::filter()` |
   | `Can't join ... due to incompatible types`       | Join on columns of different type (e.g. numeric vs. character) on data in R (dplyr) or on a duckplyr table. Arrow gives its own `Incompatible data types` error. A DuckDB table opened through dbplyr gives no error at all, see [No error, but zero rows](#zero-rows) | Use `mutate(pnr = as.character(pnr))` on both sides to match types                                            |
   | `object of type 'closure' is not subsettable`    | The object you meant was never created (or is misspelt), so R found the built-in *function* of that name (e.g. `data`, `df`, `c`) | Create the object first / check its name. Unique object names (not `data`, `df`, `c`) make this error easier to spot |
 
@@ -137,13 +137,13 @@ This is the failure mode that does not announce itself. A filter that cannot
 match returns an empty result, R reports success, and the empty table looks like
 a finding: "no patients were exposed". Two ways to produce it:
 
-- **A pattern longer than the column:** `atc2` in LMDB holds three characters,
+- **A pattern longer than the column:** `atc2` in LMDB (the prescription register) holds three characters,
   so `grepl("N02A", atc2)` compares four characters against three and matches
   nothing. See [Medication (ATC)](medication.qmd#atc-columns).
 - **A type mismatch in a join or filter:** a join on a character `pnr` and a
   numeric one fails in dplyr, duckplyr and arrow (see the table above). A
   DuckDB table opened through dbplyr (`to_duckdb()`, `read_register()` in
-  fastreg 0.14.2 or older, or a `tbl()` on a DBI connection) runs the join
+  fastreg 0.14.2 or older, or a `tbl()` on a R's database interface package, DBI connection) runs the join
   without an error: DuckDB turns the text into a number, so `"0101"` matches
   `101`. That can match too much as well as too little. And converting one side
   yourself can leave values that never meet: a code stored as a number loses

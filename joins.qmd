@@ -10,8 +10,8 @@ description: "Join register extracts on pnr in R with left_join() and filter joi
 
 Use this page to turn your cohort and your separate extracts into the one
 analysis-ready dataset that every analysis page starts from. Your extracts from
-[Phase 6](first-extraction.qmd), [Extract from LPR](extract-from-lpr.qmd) and
-[Phase 11](extract-variables.qmd) are stored as separate RDS files. Once each
+[Phase 6](first-extraction.qmd), [Extract from LPR (the National Patient Register)](extract-from-lpr.qmd) and
+[Phase 11](extract-variables.qmd) are stored as separate RDS (R's own file format, .rds) files. Once each
 extract is down to one row per person ([Long ↔ wide format](long-wide.qmd)),
 you join them onto the cohort, check the joins, and calculate follow-up time and
 the event variable. When you are done you have `analysis.rds`.
@@ -41,7 +41,7 @@ diagnosis in LPR, for instance, happens on `recnum` or `dw_ek_kontakt`, not
 is measured **relative to the index date** (socioeconomic position, a
 comorbidity score) is joined on `pnr` + `index_date`, so it still lands on the
 right row when the same person is in the cohort with more than one index date.
-The ER diagram below shows both - extracts joined onto the cohort:
+The ER (entity-relationship) diagram below shows both - extracts joined onto the cohort:
 
 ```{mermaid}
 erDiagram
@@ -129,7 +129,7 @@ bef_not_in_cohort <- bef %>%
 | `right_join(x, y)` | All from y | Rarely |
 | `full_join(x, y)` | All from both | Rarely |
 | `semi_join(x, y)` | Only x with match in y | Filter a register to only cohort members |
-| `anti_join(x, y)` | Only x without match in y | Find everyone in BEF NOT in the cohort |
+| `anti_join(x, y)` | Only x without match in y | Find everyone in BEF (the population register) NOT in the cohort |
 
 </details>
 
@@ -141,7 +141,7 @@ the listed columns must agree before two rows count as a match (`pnr` *and*
 `year`, not `pnr` *or* `year`).
 
 The typical case is **panel data: registers with one row per person per year**.
-BEF, AKM and so on have a `pnr` row for every calendar year. Join two of
+BEF, AKM (the labour classification module) and so on have a `pnr` row for every calendar year. Join two of
 them on `pnr` alone and each of the person's rows is paired with *all* of the
 person's rows in the other table: with 5 years in BEF and 5 in AKM you get every
 combination, 5 × 5 = 25 rows instead of 5. Add the year as an extra key and
@@ -224,7 +224,7 @@ missing from register X?" (unexpected - investigate).
   | Requires        | That the columns have the same names     | That the tables share one common key column     |
   | Result          | More rows, same number of columns        | Same number of rows, more columns               |
   | Matches on key? | No - all rows from both tables           | Yes - match on `pnr` or other key               |
-  | Typical use     | LPR2 + LPR3 → one combined register      | Link outcome or covariate to cohort table       |
+  | Typical use     | LPR2 (the patient register up to 2019) + LPR3 (from 2019) → one combined register      | Link outcome or covariate to cohort table       |
 
 `bind_rows()` is **not** a join. It does not look at `pnr` and does not match.
 It simply places table 2's rows below table 1's rows - like pasting two Excel
@@ -258,7 +258,7 @@ of death, age) to your cohort table.
 Death and emigration end follow-up, so the follow-up calculation below needs
 both dates on the cohort. `read_register()` requires fastreg set up with the path to your registers - see
 [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you did not convert them
-from SAS yourself.
+from SAS (a statistics program) yourself.
 
 **Date of death (DOD)**
 
@@ -328,7 +328,7 @@ dates then gets the right exit for each of them.
 
 ## Attach covariates measured at index {#attach-covariates}
 
-Socioeconomic position and the NMI score are measured relative to the index
+Socioeconomic position and the NMI (Nordic Multimorbidity Index) score are measured relative to the index
 date, so they are joined on `pnr` + `index_date`. `distinct()` makes sure each
 extract has one row per key before the join.
 
@@ -441,12 +441,19 @@ exposed), leave the line out. The alternative to censoring is to let the person
 needs a dataset with several rows per person, see [Time-varying
 exposure](time-varying.qmd).
 
-**Zero or negative follow-up.** Someone whose outcome, death or emigration is
-recorded on the index date itself gets `time_days = 0` and was never at risk;
-an event *before* index (a prevalent case that slipped through) gives a negative
-time. Both break the analysis (`log(0)` in Poisson, meaningless Cox time), so
-the `filter()` above drops them - count how many, and if same-day events are
-common in your data, decide deliberately whether they belong in the study.
+**Zero or negative follow-up.** The outcome and emigration dates above are
+taken only *after* index, so they cannot give `time_days <= 0`. A death date on
+or before the index date can, and so can an index date after `study_end`. Such a
+person was never at risk, and zero or negative time breaks the analysis
+(`log(0)` in Poisson, meaningless Cox time), so the `filter()` above drops them.
+Count how many, and look at a death on or before index: it points to a problem
+in the cohort or the death register.
+
+The `filter()` does not catch prevalent cases. A person who had the outcome
+before index has no event after index in the extract, so they stay in the cohort
+as at risk, with no warning. Remove prevalent cases in [Phase
+10](build-study-population.qmd), and check by counting the people in the cohort
+with an outcome code on or before index in LPR.
 
 **Competing risks?** If a competing event (typically death) must be handled
 separately (see [Time-to-event](time-to-event.qmd#competing-risks)),
@@ -543,7 +550,9 @@ n_start <- nrow(cohort)   # to check below that no join adds or loses rows
 # People who already had the outcome before index are not at risk of getting it.
 # They were removed in Phase 10 (build-study-population.qmd, Step 3: the
 # `prevalent` object and filter(!pnr %in% prevalent)), so full_cohort.rds holds
-# only people at risk at index. The filter in step 4 catches any that slipped through.
+# only people at risk at index. The filter in step 4 does not catch a prevalent
+# case that slipped through, so count the people with an outcome code on or
+# before index in LPR to check.
 
 # 2. Link the outcome ----------------------------------------------------------
 # One row per person with the FIRST event date after index, or no row at all.
@@ -606,7 +615,7 @@ cohort <- cohort %>%
     ),
     age            = as.numeric(index_date - foed_dag) / 365.25   # age at index, for every row
   ) %>%
-  filter(time_days > 0)   # no follow-up = never at risk (event/death/emigration on index day)
+  filter(time_days > 0)   # no follow-up = never at risk (e.g. death on or before index)
 
 # 5. Link covariates (SES, comorbidity) ----------------------------------------
 # sex and age are already on the cohort (step 0 and step 4). The extracts below

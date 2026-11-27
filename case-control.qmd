@@ -35,7 +35,7 @@ your project.
 - **Classic case-control:** you find cases (with the outcome) and select controls (without the outcome) from the population, often without a defined cohort with follow-up behind it. Exposure is typically ascertained retrospectively (e.g. interview) - vulnerable to recall and selection bias, and choosing controls is hard.
 - **Nested case-control:** the case-control study sits inside a defined cohort (e.g. a registry cohort followed over time). Cases are those who develop the outcome during follow-up; controls are sampled from those who were at risk (outcome-free) exactly when the case had the outcome (risk-set / incidence-density sampling). Exposure comes from registry data collected *before* the outcome → less recall bias.
 
-In register research at DST you almost always do the nested variant: the cohort already exists in the registers. Advantages: exposure is measured beforehand, and the odds ratio from incidence-density sampling estimates the rate/hazard ratio without a rare-outcome assumption. That is what this page shows.
+In register research at DST (Statistics Denmark) you almost always do the nested variant: the cohort already exists in the registers. Advantages: exposure is measured beforehand, and the odds ratio from incidence-density sampling estimates the rate/hazard ratio without a rare-outcome assumption. That is what this page shows.
 
 </details>
 
@@ -46,7 +46,7 @@ case you draw controls who, on the case's index date (= the outcome date), (1)
 have not yet developed the outcome and (2) meet the inclusion criteria. A person
 can be a control for one case and later become a case themselves. That is
 correct in this design: excluding people who later become cases from the
-controls biases the estimate ([Lubin and Gail
+controls biases the estimate ([Lubin & Gail
 1984](https://doi.org/10.2307/2530744)).
 
 It is the same mechanic as the matching in [Comparison
@@ -57,11 +57,11 @@ from there.
 ## Step 1 - Build the dataset for matching {.step-heading}
 
 Identifying cases and excluding prevalent cases are done on [Build your study
-population](build-study-population.qmd). Here you need one row per person with matching variables and the dates eligibility
+population](build-study-population.qmd). Here you need one row per person and residence spell, with matching variables and the dates eligibility
 depends on. Reuse the `pool` from [Comparison cohort, Step
 2](comparison-cohort.qmd#step-2---build-the-comparison-pool) (demographics +
-death date + first exit + first outcome date) and the migration events
-`vnds_ev` from Step 1 there, for the entry (residence) date. For case-control, though:
+death date + first outcome date), and `demographics` and the migration events
+`vnds_ev` from Step 1 there, for the residence spells. For case-control, though:
 
 - **Exposure is not an eligibility criterion here:** unlike the comparison
   cohort, where a control must be exposure-free at index. In case-control,
@@ -74,34 +74,44 @@ death date + first exit + first outcome date) and the migration events
 ```r
 # Step 1: build the dataset for matching ---------------------------------------
 # 'pool' = one row per person from Comparison cohort, Step 2 (pnr, foed_dag, sex, birth_year,
-#          death_date, first_outcome_date, first_exit); 'vnds_ev' = all migration events
-#          from Comparison cohort, Step 1. The exposure date in 'pool' is NOT used here.
+#          death_date, first_outcome_date); 'vnds_ev' = all migration events and
+#          'demographics' = one row per person, both from Comparison cohort, Step 1.
+#          The exposure date in 'pool' is NOT used here.
 STUDY_END <- as.Date("2022-12-31")                # we choose: last day of the study
 
-# Entry = the date a person first meets the inclusion criteria: here age >= 18 and
-# 5 years continuous residence since the latest immigration (or since birth) - adapt
-last_entry <- vnds_ev %>%
-  filter(indud_kode == "I") %>%
-  group_by(pnr) %>%
-  summarise(last_entry = max(haend_dato), .groups = "drop")   # latest immigration
+# Residence spells, as in Comparison cohort, Route A: one row per period of residence,
+# from birth or an immigration to the next migration event (NA = no later event).
+# incidenceMatch() allows only one at-risk interval per row, so a person who left and
+# came back gets one row per spell. join_by(closest()) needs dplyr 1.1.0 or newer.
+spells <- bind_rows(
+  demographics %>% select(pnr, spell_start = foed_dag),                            # from birth
+  vnds_ev %>% filter(indud_kode == "I") %>% select(pnr, spell_start = haend_dato)  # from each immigration
+) %>%
+  left_join(vnds_ev %>% select(pnr, spell_end = haend_dato),
+            join_by(pnr, closest(spell_start < spell_end)))   # the next migration event after the start
 
 all_persons <- pool %>%
-  left_join(last_entry, by = "pnr") %>%
+  inner_join(spells, by = "pnr", relationship = "one-to-many") %>%
   transmute(                                       # keep ONLY the columns we name
+    spell_id   = paste(pnr, spell_start),          # one id per row (incidenceMatch needs a unique id)
     pnr,
-    # 1 = case (outcome within the study period), 0 = potential control.
-    # An outcome after STUDY_END is NOT a case: that person is censored at STUDY_END.
-    case       = if_else(!is.na(first_outcome_date) & first_outcome_date <= STUDY_END, 1L, 0L),
+    # 1 = case: the outcome falls within the study period AND within this spell (resident
+    # when it happened); 0 = potential control. An outcome after STUDY_END is NOT a case.
+    case       = if_else(!is.na(first_outcome_date) & first_outcome_date <= STUDY_END &
+                           spell_start <= first_outcome_date &
+                           (is.na(spell_end) | spell_end > first_outcome_date), 1L, 0L),
     sex        = as.factor(sex),                   # matching variable MUST be factor/character
     birth_year = as.factor(birth_year),            # matching variable
     case_index = if_else(case == 1L, first_outcome_date, as.Date(NA)),  # the case index = outcome date (NA if not a case)
-    entry      = pmax(foed_dag + ceiling(18 * 365.25),                        # age >= 18
-                      coalesce(last_entry, foed_dag) + ceiling(5 * 365.25)),  # 5 years residence
-    # end_fu = when the person leaves the risk set: the EARLIEST of death, first exit,
-    #          own outcome (they become a case then) or study end. pmin = earliest.
-    end_fu     = pmin(death_date, first_exit, first_outcome_date, STUDY_END, na.rm = TRUE)
+    # Entry = the date the person first meets the inclusion criteria within this spell:
+    # here age >= 18 and 5 years continuous residence - adapt
+    entry      = pmax(foed_dag + ceiling(18 * 365.25),     # age >= 18
+                      spell_start + ceiling(5 * 365.25)),  # 5 years residence in this spell
+    # end_fu = when this row leaves the risk set: the EARLIEST of the next migration event
+    #          (end of the spell), death, own outcome (they become a case then) or study end.
+    end_fu     = pmin(spell_end, death_date, first_outcome_date, STUDY_END, na.rm = TRUE)
   ) %>%
-  filter(entry < end_fu)                           # never at risk (e.g. outcome before entry) -> neither case nor control
+  filter(entry < end_fu)                           # never at risk in this spell (e.g. outcome before entry) -> neither case nor control
 ```
 
 ## Step 2 - Sample controls {.step-heading}
@@ -117,7 +127,7 @@ library(heaven)   # incidenceMatch
 
 # Argument (left of =) <- value we set (usually a column name in quotes)
 matched <- incidenceMatch(
-  ptid         = "pnr",                  # the person-id column
+  ptid         = "spell_id",             # the row-id column (one row per person and residence spell)
   event        = "case",                 # the column that is 1 for case (outcome), 0 for potential control
   terms        = c("sex", "birth_year"), # matching variables (exact match; factor/character)
   data         = all_persons,            # the dataset from Step 1
@@ -143,7 +153,7 @@ library(Epi)   # ccwc - case-control within cohort
 
 cohort <- all_persons %>%
   mutate(
-    entry = entry,                                # each person's own entry date (from Step 1)
+    entry = entry,                                # each row's own entry date (from Step 1)
     exit  = end_fu,                               # exit time = end of risk time (from Step 1)
     fail  = case                                  # 1 if the person is a case at exit (0 if outcome after STUDY_END)
   )
@@ -155,7 +165,8 @@ ncc <- ccwc(
   include  = list(pnr),                           # keep pnr in the output
   data     = cohort
 )
-# Output: the matched-set id is called 'Set' here (not 'case.id')
+# Output: the matched-set id is called 'Set' here (not 'case.id') and the case
+# indicator 'Fail' (1 = case, 0 = control)
 ```
 
 </details>
@@ -208,6 +219,6 @@ cc_pnrs <- unique(matched$pnr) # all pnr's (cases + controls) for the other extr
 - [Comparison cohort](comparison-cohort.qmd): same risk-set mechanic for a
   cohort design; build the pool and understand replacement there
 - [Phase 1 - Study preparation](plan-your-study.qmd): cohort vs. case-control
-- [Heide-Jørgensen et al. (2018), *Clinical Epidemiology*
-  10:1325-1337](https://pubmed.ncbi.nlm.nih.gov/30310326/): sampling strategies
+- [Heide-Jørgensen et al. 2018](https://doi.org/10.2147/CLEP.S164456), *Clinical Epidemiology*
+  10:1325-1337: sampling strategies
   and bias in risk-set sampling

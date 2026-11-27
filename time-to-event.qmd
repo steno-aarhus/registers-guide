@@ -19,7 +19,7 @@ to take through [output control](export.qmd).
 
 *Paths and variable names in the examples are generic - replace them with your own.*
 `survival`, `survminer` and `tidycmprsk` must be installed in your R environment
-on DST.
+on DST (Statistics Denmark).
 
 ## Starting point
 
@@ -134,6 +134,16 @@ a tilde (`cluster = pnr`), whereas `sandwich::vcovCL()` on the
 [Regression](regression.qmd#clustered-standard-errors) page uses a
 **formula** with a tilde (`cluster = ~ pnr`). Same idea (cluster on person id),
 just two functions' different ways of receiving the variable.
+
+**Stratified on the matched set.** To compare each exposed person only with
+their own matched comparison persons, add `strata(match_id)` (the matched-set id
+from [Comparison cohort](comparison-cohort.qmd)): each matched set then gets its
+own baseline hazard.
+
+```r
+coxph(Surv(time_days, outcome) ~ exposure + strata(match_id), data = df, cluster = pnr) %>% # cluster = pnr only if people repeat across sets
+  tbl_regression(exponentiate = TRUE) # factors matched on exactly are constant within a set, so the strata already handle them
+```
 
 ::: {.callout-note}
 **What is your time scale?** The time axis (what the x-axis shows on e.g. a
@@ -266,8 +276,9 @@ There are two regression models, and they answer different questions:
 - **The rate of the outcome among those still alive and event-free:** run an
   ordinary Cox model and censor the competing event. You do that by setting the
   event to `status == "outcome"`: both censored and dead people then become "no
-  event". This is the *cause-specific* hazard, the usual choice for an
-  etiological question.
+  event". This is the *cause-specific* hazard, which is better suited to an
+  etiological question ([Lau, Cole & Gange
+  2009](https://doi.org/10.1093/aje/kwp107)).
 - **The cumulative incidence (absolute risk) of the outcome:** use
   **Fine-Gray** (`crr`), where the dead stay in the risk set. `crr` by default
   models the first event type after "censored" (here "outcome") and treats the
@@ -300,7 +311,7 @@ If you want to describe or predict risk (e.g. "what is the 5-year risk of the ou
 
 ## Time-varying covariates (briefly)
 
-If a variable changes during follow-up (e.g. a blood test or BMI), it cannot be
+If a variable changes during follow-up (e.g. a blood test or body mass index, BMI), it cannot be
 a single value per person. It must be in **start/stop format** (one row per
 interval), built with `survival::tmerge()` and analysed with
 `coxph(Surv(tstart, tstop, outcome) ~ ...)`. The reshaping itself is in

@@ -62,23 +62,23 @@
 | Code system | Values |
 | --- | --- |
 | `civst` | `U` Ugift, `G` Gift (+ separeret), `F` Skilt, `E` Enke/Enkemand, `P` Registreret partnerskab, `O` Ophævet partnerskab, `L` Længstlevende af 2 partnere, `D` Død, `9` Uoplyst civilstand |
-| `ie_type` | `1` Dansk, `2` Indvandrere, `3` Efterkommere, `9` Uoplyst |
+| `ie_type` | `1` Personer med dansk oprindelse, `2` Indvandrere, `3` Efterkommere, `9` Uoplyst |
 | `koen` | `1` Mand, `2` Kvinde, `9` Uoplyst |
 | `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
-| `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
+| `reg` | `0` Uoplyst, `81` Region Nordjylland, `82` Region Midtjylland, `83` Region Syddanmark, `84` Region Hovedstaden, `85` Region Sjælland |
 
 - **`civst`:** Codes P, O and L came in with the registered-partnership act of 1 October 1989; before that the set was smaller. Registered partnerships could no longer be entered into from 15 June 2012.
-- **`ie_type`:** DST's current high-quality page for IE_TYPE states that the variable has no value set. The codes here come from the older TIMES3 archive page, which does publish them.
+- **`ie_type`:** DST's current high-quality page for IE_TYPE states that the variable has no value set. The codes here come from DST's herkomst classification, which does publish them.
 - **`koen`:** DST's classification KOEN_V1_1980 also defines `9` for not stated, which a delivery may not contain but a value set should. Sex is taken from the tenth digit of the CPR number: even is female, odd is male.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality - confirmed for two reused codes against a current-only DST source: 707 is Norddjurs today, not its pre-2007 meaning, and likewise 849 is Jammerbugt. `lookup:` below covers only this post-2007 set (99 entries), not the full 278-code `values_from` file. Christiansø (411) is included in `lookup:` even though it is not a municipality (see description above): it is a real value a `kom` column can hold, and DST's own current-only classification lists it as its own area code alongside the 98 municipalities. Excluding it would just move the "unhandled code" problem this fix is meant to solve onto that one value.
-- **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
+- **`reg`:** DST's published classification writes these codes as text with a leading zero, "081" to "085". Check with `count(reg)` whether your delivery holds the number 81 or the text "081" before you filter on it. In R, `"081" == 81` is FALSE, so a filter written for one form returns nothing on the other. Code 0 for unknown is not in DST's published classification. Check with `count(reg)` whether your delivery uses it or leaves the value empty. Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 
 Where these values come from:
 
 - **`civst`:** [DST's variable list for BEF](https://www.dst.dk/da/Statistik/dokumentation/Times/cpr-oplysninger/civst).
-- **`ie_type`:** [DST TIMES3 archive: IE_TYPE](https://www.dst.dk/extranet/staticsites/TIMES3/html/4a82d9a1-4832-4427-b3e9-f3984e36f590.htm).
+- **`ie_type`:** [DST's herkomst classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/herkomst) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/948ef1c3-072c-4d76-ba2b-ce7d34691593csv_da)).
 - **`koen`:** [DST's classification KOEN_V1_1980](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/koen) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e267e7c0-d998-4922-b2c4-6b44b15dd149csv_da)).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
-- **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
+- **`reg`:** [DST's classification of regions, landsdele and municipalities](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/5d18d1e0-400b-4505-92ad-6782915980a3csv_da)).
 
 </details>

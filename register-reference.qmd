@@ -1,9 +1,9 @@
 ---
 title: "Overview of registers"
-subtitle: "Variable names for the most commonly used DST registers"
+subtitle: "Variable names for the most commonly used Statistics Denmark (DST) registers"
 date: last-modified
 pagetitle: "Overview of Danish registers at DST"
-description: "Variable names for common Danish registers at Statistics Denmark (DST): BEF, DOD, DODSAARS, VNDS, LPR2, LPR3, SKS procedures, MFR, LMDB, UDDA, FAIK and AKM."
+description: "Variable names for common Danish registers at Statistics Denmark (DST): BEF, DOD, DODSAARS, VNDS, LPR2, LPR3, SKS procedures, MFR, LMDB, UDDA, UDDF, FAIK, IND, AKM and the DRG registers."
 ---
 
 Use this page to look up which register holds what, what its columns are called
@@ -26,13 +26,13 @@ feedback box on this page. Corrections are welcome.
 <details>
 <summary>Where this comes from, and why it can still be wrong</summary>
 
-The tables on this page are generated from a schema built out of DST's published
+The tables on this page are generated from a schema built out of Statistics Denmark's (DST's) published
 documentation: the [variable
 list](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)
 for each register and DST's [order
 list](https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx),
 which names every variable in every DST register with its period. The health
-registers - LPR, LMDB, the death registers, the cancer register - are documented
+registers - LPR (the National Patient Register), LMDB (the prescription register), the death registers, the cancer register - are documented
 by Sundhedsdatastyrelsen on [esundhed.dk](https://www.esundhed.dk/Dokumentation)
 instead, which is also the only source that publishes data types.
 
@@ -56,7 +56,7 @@ Key columns, the ones you use in the code, are marked in bold. Names apply after
 The code on this page opens registers with `read_register("registername")`
 (fastreg, by name - recommended). That requires fastreg set up with the path to
 your registers, see [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you
-did not convert them from SAS yourself.
+did not convert them from SAS (a statistics program) yourself.
 
 Without fastreg, use `open_dataset("path/to/register/")` instead and replace the
 path with your project's parquet folder. Everything else in the examples works
@@ -75,7 +75,7 @@ question you are asking decides where to go:
   | Does this register reach the end of my follow-up?    | [Datasafari](https://danmarksdatavindue.dk/DDVDatasafari/#/registers) - shows the latest reference date and the next expected update                                                                                                   |
   | Which registers exist at all, and which are closed?  | [Oversigt over registre](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html) - over a thousand, with years covered. **Luk** means closed and never extended, as `dodsaars` and `dodsaasg` both are     |
   | Can I even order this variable, and for which years? | [Bestillingsliste.xlsx](https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx) - every variable in every DST register, with its period. The one to open while you are still planning                                |
-  | What does code `330` mean?                           | [Klassifikationer](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer) - DISCED-15 for education, SOCIO for employment, DISCO for occupation                                                                                  |
+  | What does code `330` mean?                           | [Klassifikationer](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer) - DISCED-15 for education, SOCIO (DST's socioeconomic classification) for employment, DISCO (DST's occupation classification) for occupation                                                                                  |
   | Why does this variable jump in one particular year?  | [Højkvalitetsdokumentation](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable) - breaks in the series and validity periods, for selected variables                          |
   | What does DST *mean* by "beskæftiget"?               | [Hvad betyder](https://www.dst.dk/da/Statistik/dokumentation/hvadbetyder) - the words, not the columns. Look here when a variable measures something narrower than the everyday word suggests                                          |
 
@@ -108,7 +108,7 @@ December only. Whether `year == 2020` corresponds to a particular reference time
 point depends on the project convention - confirm in your project guide. A
 person is in a file only if they were alive and living in Denmark on that file's
 reference date, so someone who dies after that date is still in the file - use
-DOD to determine whether a person was alive on a specific date.
+DOD (the register of deaths) to determine whether a person was alive on a specific date.
 
 BEF **cannot on its own** answer whether a person was resident in Denmark on a
 given date: between two snapshots people can both leave and come back. To decide
@@ -118,7 +118,7 @@ population](build-study-population.qmd#step-1).
 {{< include _generated/bef-columns.md >}}
 
 BEF does **not** contain date of death. Use DOD (`doddato`) for censoring, not
-DODSAARS, which stops in 2001 (see [below](#dod)). DST's own documentation:
+DODSAARS (the cause of death register, 1970-2001), which stops in 2001 (see [below](#dod)). DST's own documentation:
 [statistikdokumentation/befolkningen
 →](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen).
 
@@ -172,10 +172,9 @@ then, trained coders at the National Board of Health interpreted each death
 certificate. From 2007, certificates are submitted electronically and it is the
 certifying doctor who assigns the ICD-10 code directly, with no central review
 of that classification afterwards. `dodsaasg` covers both halves of this change
-(2002-2022) with nothing in the data to tell them apart. See Helweg-Larsen 2011,
-[The Danish Register of Causes of
-Death](https://doi.org/10.1177/1403494811399958), Scand J Public Health
-39(Suppl 7):26-29.
+(2002-2022) with nothing in the data to tell them apart. See [Helweg-Larsen
+2011](https://doi.org/10.1177/1403494811399958), "The Danish Register of Causes
+of Death", *Scand J Public Health* 39(Suppl 7):26-29.
 :::
 
 {{< include _generated/dodsaasg-columns.md >}}
@@ -224,7 +223,7 @@ deaths <- bind_rows(
   distinct(pnr, .keep_all = TRUE) # keeps the DOD row, since it comes first
 ```
 
-On DARTER, see [Register paths and
+On DARTER (project 708421), see [Register paths and
 datastores](darter-register-paths-datastores.qmd#critical-notes).
 
 </details>
@@ -312,7 +311,7 @@ before you combine them with `lpr_adm`.
 ## 3. LPR2 - Psychiatric (1995 -- March 2019)
 
 Psychiatric contacts before March 2019 are in **separate registers** from
-somatic LPR2. From March 2019, LPR3 covers both in one table.
+somatic LPR2. From March 2019, LPR3 (the patient register from 2019) covers both in one table.
 
 []{#psyk-before-1995}
 
@@ -373,7 +372,7 @@ psyk_diag <- read_register("t_psyk_diag") %>%
 
 ::: {.callout-warning}
 **Before you join these two tables: `lpr_a_kontakt`/`lpr_a_diagnose` are not
-pure LPR3.** They also hold LPR1, LPR2 and MiniPAS (records from private
+pure LPR3.** They also hold LPR1 (the oldest format of the National Patient Register), LPR2 and MiniPAS (records from private
 hospitals) rows, tagged by `lprindberetningssystem`, going back to around
 2017. Filter both tables on
 `lprindberetningssystem == "LPR3"` first, or you will double-count contacts
@@ -423,9 +422,10 @@ filter(is.na(senere_afkraeftet) | senere_afkraeftet != "Ja")
 ## 5. LPR - SKS procedure codes
 
 SKS (Sundhedsvæsenets Klassifikations System - the Danish Health Classification
-System) is the Danish classification system for operations and procedures -
-equivalent to the NOMESCO codes used in the other Nordic countries. Bariatric
-surgery has e.g. codes `KJDF10` (RYGB) and `KJDF40` (sleeve gastrectomy). Look
+System) is the Danish classification system for operations and procedures; the
+operation codes are based on the Nordic NOMESCO Classification of Surgical
+Procedures (NCSP). Bariatric surgery has e.g. codes `KJDF10` (gastric bypass) and
+`KJDF40` (sleeve gastrectomy). Look
 up codes in the [SKS browser →](https://medinfo.dk/sks/brows.php) (in Danish).
 
 SKS codes are split across two registers depending on period. For full coverage
@@ -434,7 +434,7 @@ both must be queried and the results bound together.
 Neither procedure table holds `pnr`. It is fetched by joining to `lpr_adm`
 (LPR2) or `lpr_a_kontakt` (LPR3).
 
-### lpr_sksopr - LPR2 SKS procedures (up to 2018)
+### lpr_sksopr - LPR2 SKS procedures (1996 to 31 March 2019)
 
 Location (DARTER): `parquet-registers/lpr_sksopr`
 
@@ -505,7 +505,7 @@ another. Run `colnames()` first.
 ```r
 # With fastreg: read_register("registername") instead of open_dataset("path/to/registername/")
 
-# SKS from LPR2 (up to 2018)
+# SKS from LPR2 (1996 to 31 March 2019)
 surg_lpr2 <- read_register("lpr_sksopr") %>%
   rename_with(tolower) %>%
   filter(toupper(c_opr) %in% !!SKS_CODES) %>%   # !! sends the local R vector to DuckDB
@@ -582,9 +582,12 @@ handle this.
 
 ## 7. Socioeconomic registers
 
-All three registers are used to measure socioeconomic position (SEP) following
-the SEPLINE guidelines (Hjorth et al. 2025): education, income and employment
-as three separate dimensions, not one combined SEP variable.
+UDDA (the education register), FAIK (family income) and AKM (the labour classification module) are the three registers used to measure socioeconomic
+position (SEP) following the SEPLINE (the national guideline on socioeconomic position in register research) guidelines ([Hjorth et al.
+2025](https://doi.org/10.2147/CLEP.S520772)):
+education, income and employment as three separate dimensions, not one
+combined SEP variable. UDDF (highest completed education, history) and IND (personal income) hold the same kinds of information in
+another form: education as dated spells, and income per person.
 
 ### UDDA - Education Register
 
@@ -644,6 +647,20 @@ some rows, miss others, and never tell you. Naming and paths are in [Format
 tables](formatting-tables.qmd#education-level).
 :::
 
+### UDDF - Education Register, spells {#uddf}
+
+Each person's highest completed education as spells: `hf_vfra` is the date an
+education became the highest, and `hf_vtil` the date a higher one replaced it.
+UDDA gives the same education as a yearly status, so use UDDF when you need the
+education at an exact date, such as an index date. DST delivers UDDF as one
+dataset with the whole history and also revises earlier years: in October 2017
+it added new information on the education immigrants brought with them for
+2005-2016 ([register
+history](https://www.dst.dk/extranet/ForskningVariabellister/Registerhistorik/UDDF.html)).
+Two deliveries of UDDF can therefore disagree about the past.
+
+{{< include _generated/uddf-columns.md >}}
+
 ### FAIK - Family Income
 
 Household-equivalised disposable income per year. Link: join BEF (`pnr`,
@@ -665,6 +682,18 @@ SEPLINE classifies income as a 3-year mean against quintile cutpoints from the
 whole population with the same sex and 5-year age group, per year: Low, Medium
 or High. The recipe is in [Socioeconomic
 variables](socioeconomic-variables.qmd#faik-income).
+
+### IND - Personal Income
+
+Income per person per year, from the tax authority's registers. Link: join BEF
+(`pnr`, `year`) with IND (`pnr`, `year`). Variables with the suffix `_13` follow
+DST's 2013 revision of the income statistics. The older variables without it
+end in 2013 and are defined differently, so use the `_13` variable throughout a
+series that crosses 2013. DST's variable list shows many `_13` variables from
+1980, but their documentation pages give them as valid from 1987, as the notes
+below the table say per variable.
+
+{{< include _generated/ind-columns.md >}}
 
 ### AKM - Labour Classification Module
 
@@ -693,6 +722,10 @@ and confirm against your own files with `colnames()`.
 
 ### MFR - Medical Birth Register
 
+How to use gestational age, birth weight, parity and multiple births in an
+analysis is on [Pregnancy and birth variables](pregnancy-and-birth.qmd). This
+section lists the tables and columns.
+
 One row per birth, carrying both mother and child. The mother appears once per
 birth, so a mother of three has three rows; the register is keyed on the child
 through `cpr_barn`.
@@ -707,8 +740,11 @@ documented as matching MFR, alongside its own `MFR_OPLYSNING` column). These
 are demography datasets (parity, birth spacing, fertility-rate denominators),
 not a clinical birth-event table - see below. 1997-2018 is the wide DST
 table below (`mfr`), marked closed by DST with **no successor named on
-DST's own overview**, because the successor is delivered by
-Sundhedsdatastyrelsen's Forskerservice, not DST. Nineteen of `mfr`'s own columns are flags backed by their
+DST's own overview**. The 2019+ register is nonetheless delivered by DST as
+grunddata, as `mfr_nyfoedte` plus ten satellite tables ([Nyt om grunddata, 1st
+quarter
+2025](https://www.dst.dk/da/TilSalg/data-til-forskning/nyt-og-meddelelser/2025/nyt-om-grunddata-1-kvartal-2025),
+in Danish). Nineteen of `mfr`'s own columns are flags backed by their
 own separate DST datasets, plus a full stillbirth detail table - see [MFR
 marker sub-cuts](#mfr-markers) and [`MFRDFOED`](#mfrdfoed) below. From 2019
 onwards the register was fully restructured into
@@ -718,9 +754,9 @@ and the same five `Mor_*` tables) - see [`mfr_nyfoedte`](#mfr-nyfoedte)
 below.
 
 The 2019+ population also differs from the two older eras: 1973-2018
-required the **mother** to have a Danish CPR-number, 2019+ does not. A study
-spanning this boundary is comparing two different populations, not only two
-table shapes.
+required the **mother** to have a Danish CPR-number, 2019+ does not ([Danish Health Data Authority (SDS),
+documentation from 2019](https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx), sheet "Register"). A study spanning this
+boundary is comparing two different populations, not only two table shapes.
 :::
 
 ### FTBARN / FTFORAEL / FTNAEVN - the pre-1997 period {#ftbarn}
@@ -756,8 +792,10 @@ before you pick one for an analysis.
 
 {{< include _generated/ftnaevn-columns.md >}}
 
-`gestationsalder_dage` is in **days**, not weeks. `paritet` counts previous
-births, which is not the same as the number of children currently alive.
+`gestationsalder_dage` is in **days**, not weeks. `paritet` counts this birth
+and the earlier completed pregnancies, stillbirths included, so 1 is a first
+birth. It is not the same as the number of children currently alive. See
+[Pregnancy and birth](pregnancy-and-birth.qmd#parity).
 
 {{< include _generated/mfr-columns.md >}}
 
@@ -966,9 +1004,52 @@ reported.** Coverage is assumed to be high because registration is tied to the
 provider's reimbursement, but that is an inference, not a measured validity, and sysi/sssy
 record almost no clinical information to begin with. Treat diagnoses and
 reasons for contact with more caution than in registers that do have published
-validation studies. See Sahl Andersen et al. 2011, [The Danish National Health
-Service Register](https://doi.org/10.1177/1403494810394718), Scand J Public
-Health 39(Suppl 7):34-37.
+validation studies. See [Sahl Andersen et al.
+2011](https://doi.org/10.1177/1403494810394718), "The Danish National Health
+Service Register", *Scand J Public Health* 39(Suppl 7):34-37.
+:::
+
+**How to read the register.** Use the six-digit `speciale`, which is the
+provider's two-digit specialty (`spec2`) followed by a four-digit service code.
+The same wording, for example "Konsultation", appears under many specialties,
+so a service code is only meaningful together with its specialty ([DST,
+SPECIALE](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/speciale)). `bruhon` is the fee the provider
+received from the public insurance. It leaves out what the patient pays, so it
+is public expenditure and not the total cost ([DST,
+BRUHON](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/bruhon)).
+
+**What is not in it.** The register holds services supported by the public
+health insurance and given by general practitioners, specialists, dentists,
+physiotherapists, chiropractors, podiatrists and psychologists
+([Sundhedsdatastyrelsen, SSR documentation](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=10)). Services settled outside
+the insurance system are not there (see foot therapy in the table below). From 2005 DST removed
+records without public subsidy (a gross fee of 0), mostly physiotherapy and
+dental care ([DST, Lægebesøg, statistical processing](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/statistisk-behandling)).
+
+::: {.callout-note collapse="true" title="Breaks and gaps in contacts, fees and persons"}
+| What | When | Source |
+| --- | --- | --- |
+| DST's definition of a contact changed over time, and DST names a break especially between the years before 2005 and 2005 onwards (our translation). The services themselves have no break ([Sundhedsdatastyrelsen, register declaration](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15928/Registerdeklaration%20Sygesikringsregisteret.pdf)): the break is in how DST counts contacts. | Before 2005 and from 2005 | [DST, KONTAKTAGG](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/kontaktagg) |
+| In radiology (05) and foot therapy (54, 55, 59, 60) only one service per person per treatment date can be a contact. | From 2021 | [DST, KONTAKT](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/kontakt) |
+| DST reviewed which services count as a contact and replaced 2021 to 2023 with quality-improved source data on 21 August 2025, so an extract delivered before that date may count differently. DST's text on Lægebesøg gives the review as 2021 to 2024. | 2021 to 2023 | [DST register history for SSSY](https://www.dst.dk/extranet/ForskningVariabellister/Registerhistorik/SSSY.html), [DST, Lægebesøg](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/sammenlignelighed) |
+| No agreement for foot therapy, and most of the fee was settled outside the insurance system, so it is missing from the data. | June 2005 to June 2011 | [DST, KONTAKTAGG](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/kontaktagg) |
+| Blood tests from general practitioners in the Capital Region went to Region Hovedstaden's hospitals, so laboratory contacts fall sharply there. | 1 January 2016 | [DST, SPEC2](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/spec2) |
+| General practitioners' chronic care fee is paid manually and the services it covers are not registered, so consultations are counted only for patients not on that fee. | From 2018 | [DST, Lægebesøg](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/sammenlignelighed) |
+| Children under 16 got their own health insurance card on 1 January 1996, fully in place in 1997. Before, their services were registered under a parent's CPR-number (DST marks these rows `barnmak` = 1). | Before 1996 | [Sundhedsdatastyrelsen, register declaration](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15928/Registerdeklaration%20Sygesikringsregisteret.pdf), [DST, BARNMAK](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/barnmak) |
+| `bruhon` is in øre for 1990 to 2004 and in whole kroner from 2005. | 1990 to 2004, 2005 on | [DST, BRUHON](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/bruhon) |
+| A wrong report is corrected by a new report with a negative number of services that cancels the earlier one. | All years | [Sundhedsdatastyrelsen](https://www.esundhed.dk/Dokumentation/DocumentationExtended?id=10) |
+:::
+
+::: {.callout-note collapse="true" title="Reimbursed care outside general practice"}
+`spec2` separates the provider groups. Use the six-digit `speciale` within each of them.
+
+| Provider group (`spec2`) | What to keep in mind | Source |
+| --- | --- | --- |
+| Dentists and dental hygienists (50, 49) | Patients usually pay part of the fee, and that part is not in `bruhon`. DST describes a dental contact in two ways: the first visit with an examination in a course of treatment, or consultations and examinations including preventive treatment. Contacts fell 22 per cent in 2013 when the subsidy for scaling was narrowed. | [DST, BRUHON](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/bruhon), [DST, KONTAKTAGG](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/kontaktagg), [DST, Lægebesøg](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/statistisk-behandling), [DST, Lægebesøg, comparability](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/sammenlignelighed) |
+| Physiotherapy (51, 61, 62, and 57, 65 for riding physiotherapy) | Training is often given in groups, and each person's training counts as one contact. DST calls the contact count uncertain. | [DST, KONTAKT](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/kontakt) |
+| Psychology (63) | DST calls the contact count uncertain. Some service codes were counted as contacts only from 2012, and in December 2017 DST added about 90,000 contacts (25 per cent) to 2011. | [DST, KONTAKT](https://www.dst.dk/da/Statistik/dokumentation/Times/sygesikringsstatistik/kontakt), [DST, Lægebesøg](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/sammenlignelighed) |
+| Chiropractors (53, 64) | Under a new agreement of 1 April 2017, contacts in 64 fell 50 per cent and expenditure 20 per cent. | [DST, Lægebesøg](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/sammenlignelighed) |
+| Private specialists | Sundhedsdatastyrelsen notes a small uncertainty in contact counts because contacts have changed service numbers, mainly for specialists other than ophthalmologists and ear-nose-throat doctors. | [Sundhedsdatastyrelsen, register declaration](https://cdn1.gopublic.dk/sundhedsdatastyrelsen/media/15928/Registerdeklaration%20Sygesikringsregisteret.pdf) |
 :::
 
 **`sysi` (1990-2005):**
@@ -978,6 +1059,21 @@ Health 39(Suppl 7):34-37.
 **`sssy` (2005-2025):**
 
 {{< include _generated/sssy-columns.md >}}
+
+**`ssko` (2005-2025):** Contacts already summed per person and two-digit
+specialty, the table DST describes for contact counts ([DST, statistical
+processing of Lægebesøg](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/laegebesoeg/statistisk-behandling)). It holds no fees,
+service codes or dates, so use `sssy` for those.
+
+{{< include _generated/ssko-columns.md >}}
+
+**`syst` (1992-2005):** Services and gross fees already summed per person under
+a four-digit specialty, with a contact count and the insurance group. DST has no
+documentation page for its columns, so what the sums are taken over is not
+stated, and `sysi` is the table for anything at service level
+([DST's variable list for SYST](https://www.dst.dk/extranet/ForskningVariabellister/SYST%20-%20Sygesikring%20%284-cifret%29.html)).
+
+{{< include _generated/syst-columns.md >}}
 
 ### Laboratory results - Laboratoriedatabasens Forskertabel {#lab-forsker}
 
@@ -996,7 +1092,7 @@ clinical epidemiology literature it is usually called RLRR, Register of
 Laboratory Results for Research (see e.g. [Arendt et al.
 2020](https://doi.org/10.2147/CLEP.S245060), Clinical Epidemiology 12:469-475).
 The columns are named in English: `patient_cpr`, `analysiscode`,
-`samplingdate`, `value`, `unit`. NPU is the *coding system* used in
+`samplingdate`, `value`, `unit`. NPU (Nomenclature for Properties and Units, the code system for laboratory analyses) is the *coding system* used in
 `analysiscode`, not a column name.
 :::
 
@@ -1049,35 +1145,22 @@ directly for the actual variable list.
 How to extract a cohort from this table is on [Laboratory
 results](laboratory-results.qmd).
 
-### Healthcare costs (under development)
+### Healthcare costs {#healthcare-costs}
 
-::: {.callout-warning}
-**Under development - confirm everything in your own delivery.** This section
-describes cost sources at the register level. Exact table and column names and
-the available years **change from year to year** (the DRG rate system is updated
-annually) and are not verified here. Use it as a pointer, and clarify the
-specific files with your data manager.
-:::
+Costs per person are assembled from DRG-priced hospital contacts, fees in
+`sysi`/`sssy` and medication in LMDB. Which DRG (Diagnosis Related Groups) registers DST holds, and how to
+read them, is on [Healthcare costs](healthcare-costs.qmd). The column tables for
+the two current DRG registers are below.
 
-To compute **healthcare use/costs** per person, they are typically assembled
-from several sources:
+#### DRG_KONTAKTER and DRG_SGHFORLOB - DRG-grouped LPR3 data {#drg-lpr3}
 
-- **Somatic hospital contacts:** DRG-grouped rates from the Danish Health Data
-  Authority (DRG = inpatient, DAG = outpatient). Rates express average operating
-  expenses per DRG group and are computed annually - see [SDS DRG
-  rates](https://sundhedsdatastyrelsen.dk/data-og-registre/sundhedsoekonomi/drg/drg-takster).
-- **Psychiatric hospital contacts:** are **not** billed by DRG. The main
-  principle is a bed-day rate for inpatients and a visit rate for outpatients -
-  keep somatic and psychiatric separate.
-- **Primary sector** (general practice, specialists etc.): fees in `sysi`/`sssy`
-  (see the section above).
-- **Medication:** patient co-payment vs. reimbursement in
-  [LMDB](#lmdb).
+Contacts are in `DRG_KONTAKTER` and hospital courses in `DRG_SGHFORLOB`, each
+with its own price columns. Sum one level only; which one is on [Healthcare
+costs](healthcare-costs.qmd#drg-price-level).
 
-Availability of cost data varies (some years/sources are missing, e.g. more
-recent DRG years). The pattern is inspired by [the Plana-Ripoll group's code on
-OSF](https://osf.io/zhfyp/overview), but the variable names there are from a
-2022 delivery and should not be assumed current.
+{{< include _generated/drg_kontakter-columns.md >}}
+
+{{< include _generated/drg_sghforlob-columns.md >}}
 
 ## 9. Project-specific registers
 
@@ -1112,18 +1195,18 @@ validity. Cite the profile for each register you use.
 
   | Register                                                              | Data resource profile                                                                                                             |
   | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-  | The Danish health-care system and epidemiological research (overview) | Schmidt et al. 2019, *Clin Epidemiol* - [doi:10.2147/CLEP.S179083](https://doi.org/10.2147/CLEP.S179083)                          |
-  | CPR (Civil Registration System)                                       | Schmidt, Pedersen & Sørensen 2014, *Eur J Epidemiol* - [doi:10.1007/s10654-014-9930-3](https://doi.org/10.1007/s10654-014-9930-3) |
-  | LPR (National Patient Registry)                                       | Schmidt et al. 2015, *Clin Epidemiol* - [doi:10.2147/CLEP.S91125](https://doi.org/10.2147/CLEP.S91125)                            |
-  | LMDB (Prescription Registry)                                          | Pottegård et al. 2017, *Int J Epidemiol* - [doi:10.1093/ije/dyw213](https://doi.org/10.1093/ije/dyw213)                           |
-  | Cause of Death Register                                               | Helweg-Larsen 2011, *Scand J Public Health* - [doi:10.1177/1403494811399958](https://doi.org/10.1177/1403494811399958)            |
-  | Cancer Register                                                       | Gjerstorff 2011, *Scand J Public Health* - [doi:10.1177/1403494810393562](https://doi.org/10.1177/1403494810393562)               |
-  | MFR (Medical Birth Register)                                          | Bliddal et al. 2018, *Eur J Epidemiol* - [doi:10.1007/s10654-018-0356-1](https://doi.org/10.1007/s10654-018-0356-1)               |
-  | sysi/sssy (National Health Service Register)                          | Sahl Andersen et al. 2011, *Scand J Public Health* - [doi:10.1177/1403494810394718](https://doi.org/10.1177/1403494810394718)     |
-  | Laboratory results (overview of Danish laboratory databases)          | Arendt et al. 2020, *Clin Epidemiol* - [doi:10.2147/CLEP.S245060](https://doi.org/10.2147/CLEP.S245060)                           |
+  | The Danish health-care system and epidemiological research (overview) | [Schmidt et al. 2019](https://doi.org/10.2147/CLEP.S179083), *Clin Epidemiol*                          |
+  | CPR (Civil Registration System)                                       | [Schmidt, Pedersen & Sørensen 2014](https://doi.org/10.1007/s10654-014-9930-3), *Eur J Epidemiol* |
+  | LPR (National Patient Registry)                                       | [Schmidt et al. 2015](https://doi.org/10.2147/CLEP.S91125), *Clin Epidemiol*                            |
+  | LMDB (Prescription Registry)                                          | [Pottegård et al. 2017](https://doi.org/10.1093/ije/dyw213), *Int J Epidemiol*                           |
+  | Cause of Death Register                                               | [Helweg-Larsen 2011](https://doi.org/10.1177/1403494811399958), *Scand J Public Health*            |
+  | Cancer Register                                                       | [Gjerstorff 2011](https://doi.org/10.1177/1403494810393562), *Scand J Public Health*               |
+  | MFR (Medical Birth Register)                                          | [Bliddal et al. 2018](https://doi.org/10.1007/s10654-018-0356-1), *Eur J Epidemiol*               |
+  | sysi/sssy (National Health Service Register)                          | [Sahl Andersen et al. 2011](https://doi.org/10.1177/1403494810394718), *Scand J Public Health*     |
+  | Laboratory results (overview of Danish laboratory databases)          | [Arendt et al. 2020](https://doi.org/10.2147/CLEP.S245060), *Clin Epidemiol*                           |
 
 **Reporting:** report observational studies following
-[STROBE](https://www.strobe-statement.org/checklists/). For register-based /
-routinely-collected-data studies, **RECORD** extends STROBE, and **RECORD-PE**
+[STROBE (Strengthening the Reporting of Observational Studies in Epidemiology)](https://www.strobe-statement.org/checklists/). For register-based /
+routinely-collected-data studies, **RECORD** (Reporting of studies Conducted using Observational Routinely-collected health Data) extends STROBE, and **RECORD-PE**
 covers pharmacoepidemiology specifically - see [RECORD-PE (EQUATOR
 Network)](https://www.equator-network.org/reporting-guidelines/record-pe/).

@@ -14,8 +14,14 @@ ALLOWED_ROLES <- c("join_key", "identifier", "date", "value", "code", "derived")
 # Sundhedsdatastyrelsen, not DST, so calling them dst_documentation is wrong on
 # the face of it, and they are a different kind of source: they carry the value
 # set AND a validity window per code, which no DST variable list does.
-ALLOWED_SOURCE_TYPES <- c("dst_variable_list", "dst_documentation", "nomenclature",
-                          "esundhed_kodeark", "unverified", "unknown")
+# `sds_documentation` is any other document from Sundhedsdatastyrelsen (register
+# documentation on esundhed, pdfs on sundhedsdatastyrelsen.dk). Readers weigh a
+# DST page and a Sundhedsdatastyrelsen page differently, so the two are kept apart.
+ALLOWED_SOURCE_TYPES <- c("dst_variable_list", "dst_documentation", "sds_documentation",
+                          "nomenclature", "esundhed_kodeark", "unverified", "unknown")
+# Hosts that publish Sundhedsdatastyrelsen's documents. A source on one of these
+# is never dst_documentation, which keeps the two types from mixing again.
+SDS_URL_PATTERN <- "^https?://(sundhedsdatastyrelsen\\.dk|www\\.esundhed\\.dk|cdn1\\.gopublic\\.dk/sundhedsdatastyrelsen)"
 ALLOWED_ORIGINS <- c("dst", "tooling")
 # "sds" is a register held by Sundhedsdatastyrelsen rather than DST. It reaches
 # a project through Forskerservice, so the documentation, the naming and the
@@ -263,6 +269,10 @@ validate_schema <- function(schema = load_schema()) {
       } else if (!st %in% ALLOWED_SOURCE_TYPES) {
         add(cw, ": source_type '", st, "' is not one of ",
             paste(ALLOWED_SOURCE_TYPES, collapse = "/"))
+      } else if (st == "dst_documentation" &&
+                 grepl(SDS_URL_PATTERN, cl$provenance$source_url %||% "")) {
+        add(cw, ": source_type is dst_documentation, but the source is ",
+            "Sundhedsdatastyrelsen's. Use sds_documentation (or esundhed_kodeark).")
       }
       # `note` was removed on purpose: provenance is structured, free text drifts.
       if (!is.null(cl$note)) {

@@ -70,8 +70,8 @@ directly in RStudio's Help panel. You can also type `?functionname` or
 `help(functionname)` in the console, or `args(functionname)` for a quick list of
 arguments.
 
-For packages on **CRAN** there is an online page with documentation and
-vignettes (e.g. `https://cran.r-project.org/package=MatchIt`). Some DST packages
+For packages on **CRAN** (the Comprehensive R Archive Network, where R packages are published) there is an online page with documentation and
+vignettes (e.g. `https://cran.r-project.org/package=MatchIt`). Some DST (Statistics Denmark) packages
 (e.g. `heaven`) live on GitHub instead - use `?functionname` for the arguments
 and confirm the package's availability on your own project.
 :::
@@ -270,7 +270,7 @@ saveRDS(full_cohort, "path/to/full_cohort.rds") # save dataset to disk
 
 ### `haven::read_sas("file.sas7bdat")`
 
-**What it does:** reads a SAS data file into R.
+**What it does:** reads a SAS (a statistics program) data file into R.
 
 Used to load SAS files - e.g. DST's format tables or registers not yet converted
 to parquet. See [File types](file-formats.qmd) and [Format
@@ -445,13 +445,18 @@ df <- df %>%
       # case_when: several conditions; the FIRST true one wins
       bmi < 25 ~ "Normal",
       bmi < 30 ~ "Overweight",
-      TRUE ~ "Obesity" # TRUE = "everything else"
+      bmi >= 30 ~ "Obesity" # a missing bmi matches none of the conditions and stays NA
     )
   )
 ```
 
+Note that `TRUE ~ "Obesity"` as the last line would also catch every row where
+`bmi` is `NA` (a missing height or weight): `case_when()` treats a condition
+that is `NA` as not met, so the row falls through to `TRUE`. Use `TRUE ~` for a
+catch-all such as "Unknown", not for a real category.
+
 ::: {.callout-warning}
-**Check the units first.** BMI = weight (kg) / height (m)². If height is in
+**Check the units first.** BMI (body mass index) = weight (kg) / height (m)². If height is in
 **cm**, `weight / (height^2)` is wrong. Convert height to metres in a `mutate()`
 step *before* you compute BMI:
 
@@ -562,7 +567,7 @@ you built the columns yourself with a shared prefix (`dx_`, `rx_`).
 
 Used in two places:
 
-1. **NMI score** (Nordic Multimorbidity Index): sums the product of 0/1 flag
+1. **NMI (Nordic Multimorbidity Index) score** (Nordic Multimorbidity Index): sums the product of 0/1 flag
    columns and their individual weights → one weighted score per person, built
    to predict mortality.
 2. **Multimorbidity count**: sums all 0/1 flags → simple count of the number of
@@ -666,11 +671,39 @@ group_by(pnr) %>% # group per person
   slice(1) # keeps the newest record per person
 ```
 
-**`slice_max(column, n = 1)`** and **`slice_sample(n = 1)`** do the same job as
-`arrange() %>% slice()` above, without a separate `arrange()` step:
-`slice_max(date_contact, n = 1)` keeps the row with the latest date per group
-directly; `slice_sample(n = 200)` picks a random sample of rows instead (used
-for a practice cohort, not for choosing a real one).
+Use `slice()` on data that are already in R. On a lazy table (before
+`collect()`) what happens depends on how the table was opened:
+
+- A DuckDB table through dbplyr stops with "`slice()` is not supported on
+  database backends".
+- An arrow table (`open_dataset()`) stops too.
+- A duckplyr table can run it without an error, by pulling the table into R
+  first. On a whole register that is the RAM problem in [Phase
+  5](extraction-step-by-step.qmd).
+
+Before `collect()` on a DuckDB or duckplyr table, use `slice_min()` or
+`slice_max()` with `with_ties = FALSE` instead (see below). On an arrow table
+even a grouped `slice_max()` stops ("Slicing grouped data not supported in
+Arrow"), so filter first, `collect()`, and slice in R.
+
+**`slice_max(column, n = 1)`** and **`slice_sample(n = 1)`** do a similar job
+without a separate `arrange()` step: `slice_max(date_contact, n = 1)` keeps the
+row with the latest date per group; `slice_sample(n = 200)` picks a random
+sample of rows instead (used for a practice cohort, not for choosing a real
+one).
+
+`slice_max()` and `slice_min()` keep **ties** by default, so a person with two
+contacts on the same latest date gets two rows. Add `with_ties = FALSE` to get
+exactly one row per group:
+
+```r
+group_by(pnr) %>%
+  slice_max(date_contact, n = 1, with_ties = FALSE) # one row per person, also if dates tie
+```
+
+When dates tie, the row that is kept is arbitrary. If the result must be
+reproducible, break the tie on a second column after `collect()`, for example
+`arrange(desc(date_contact), recnum) %>% slice(1)` within `group_by(pnr)`.
 
 ## Groups and aggregation {#groups-and-aggregation}
 
@@ -687,7 +720,7 @@ time.
 ```r
 group_by(pnr) %>% # group per person
   arrange(date_contact) %>% # oldest date first
-  slice(1) %>% # earliest contact per person
+  slice(1) %>% # earliest contact per person (after collect(), see slice())
   ungroup() # remove the grouping afterwards
 ```
 
@@ -748,7 +781,7 @@ other counts, or on its own: `n_distinct(cohort$pnr)`.
 **What it does:** divides rows into `n` equal groups (quantiles).
 
 ::: {.callout-warning}
-**Not** used for income quintiles in register-based studies following SEPLINE
+**Not** used for income quintiles in register-based studies following SEPLINE (the national guideline on socioeconomic position in register research)
 guidelines. SEPLINE recommends comparing against population-specific cut-points
 (Q20/Q40/Q60/Q80) stratified by sex × 5-year age group × reference year - not
 `ntile()` on your cohort alone. See [SEPLINE](socioeconomic-variables.qmd).
@@ -791,7 +824,7 @@ inner_join(cohort %>% select(pnr, surgery_date), by = "pnr") # only contacts fro
 but adds **no** columns from `y`. So it is a *filter* where the list of allowed
 values lives in another table.
 
-**Analogy:** You have all of LPR and a list of your cohort. `semi_join` keeps
+**Analogy:** You have all of LPR (the National Patient Register) and a list of your cohort. `semi_join` keeps
 only the LPR rows whose `pnr` is on the cohort list - the same result as
 `filter(pnr %in% ...)`, but faster and more reliable on lazy (Arrow/DuckDB)
 tables.
@@ -837,7 +870,7 @@ full_cohort %>% # start with all cohort members
 rows).
 
 **Analogy:** Like taking three piles of paper and putting them in one pile. Used
-e.g. to combine LPR2 + psychiatric LPR2 + LPR3 into one combined diagnosis
+e.g. to combine LPR2 (the patient register up to 2019) + psychiatric LPR2 + LPR3 (from 2019) into one combined diagnosis
 table.
 
 ```r
@@ -929,7 +962,7 @@ columns are stored as integers to save memory.
 
 **What it does:** extracts part of a text string based on character positions.
 
-**Analogy:** You have the ICD code `"DG30"`. DST has prepended a "D" - it does
+**Analogy:** You have the ICD (International Classification of Diseases) code `"DG30"`. DST has prepended a "D" - it does
 not belong in standard ICD-10. `substr("DG30", 2, 4)` says: "give me characters
 from position 2 to 4" and returns `"G30"`.
 

@@ -14,7 +14,7 @@ outcome. When you are done you have a cohort: a table with `pnr` and
 `index_date` per person, which every later phase builds on ([Phase
 11](extract-variables.qmd) to [Phase 13](analysis.qmd)).
 
-Finding exposed people or cases in hospital data uses the LPR extraction pattern
+Finding exposed people or cases in hospital data uses the LPR (the National Patient Register) extraction pattern
 from [Extract from LPR](extract-from-lpr.qmd), so read that page first. What you
 do after this page depends on your study design, see [the end of this
 page](#what-now-choose-your-design).
@@ -44,7 +44,7 @@ all. That is the source population, and two things decide it: your data
 delivery and a residence criterion.
 
 ::: {.callout-important}
-**Your data delivery sets the outer limit.** DST only delivers data on the
+**Your data delivery sets the outer limit.** DST (Statistics Denmark) only delivers data on the
 population your project is approved for. If your delivery is "persons in BEF
 2005-2024", then a person who only lived in Denmark in 2003 does not exist in
 your extract at all - and no code can pull them in. Check your project guide
@@ -54,8 +54,11 @@ your delivery, but they cannot add people to it.
 
 ### BEF alone cannot decide residence
 
-BEF (the population register) is a snapshot: one picture per reference time point (quarterly since
-2008, yearly before that - see [Overview of registers](register-reference.qmd)).
+BEF (the population register) is a snapshot: DST delivers it as quarterly
+pictures, each a status on the last day of the quarter ([Nyt fra
+Forskningsservice
+4/2019](https://dst.dk/ext/2940168985/0/forskning/Ekstra-Nyt-fra-Forskningsservice-4-kvartal-2019--pdf),
+PDF, Danish). Check which reference dates your own delivery has.
 That means BEF gets it wrong in both directions:
 
 - **Too many included:** the person is in that year's snapshot, but had
@@ -102,7 +105,7 @@ residence at an index date in 2015.
 
 - **The event codes:** run `count(indud_kode)` on your own VNDS. The guide uses
   `"I"` and `"U"`, but confirm the values in your delivery.
-- **Immigration before 1971:** CPR only has complete immigration and emigration
+- **Immigration before 1971:** CPR (the Civil Registration System) only has complete immigration and emigration
   data from 1971 (see [Further information](#further-information)). A person
   born abroad who immigrated before that has no events, and the rule above
   wrongly counts them as resident since birth.
@@ -212,15 +215,15 @@ exposure criterion. The exposure can be defined in several ways:
   | -------------------------------- | ------------------------------- | ---------------------------------------------------------- |
   | Surgery / procedure (SKS code)   | Bariatric surgery KJDF10/KJDF11 | `lpr_sksopr` (LPR2), `lpr_a_procregistrering` (LPR3)        |
   | Hospital diagnosis (ICD code)    | Type 2 diabetes E11             | `lpr_diag` + `lpr_adm`, `lpr_a_diagnose` + `lpr_a_kontakt` |
-  | Medication exposure (ATC code)   | Metformin A10BA02               | LMDB                                                       |
-  | Clinical measurement / biomarker | BMI > 35, HbA1c > 75 mmol/mol   | Laboratory results (HbA1c), clinical quality databases or project-specific data (BMI) |
+  | Medication exposure (ATC code)   | Metformin A10BA02               | LMDB (the prescription register)                                                       |
+  | Clinical measurement / biomarker | BMI (body mass index) > 35, HbA1c > 75 mmol/mol   | Laboratory results (HbA1c), clinical quality databases or project-specific data (BMI) |
 
 Register names may vary on your project - see [Overview of
 registers](register-reference.qmd).
 
 The examples use `read_register()`; it requires fastreg set up with the path to
 your registers - see [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if
-you did not convert them from SAS yourself.
+you did not convert them from SAS (a statistics program) yourself.
 
 <details>
 <summary>Example A: exposure defined by a surgery or procedure (SKS codes)</summary>
@@ -234,11 +237,18 @@ library(dplyr)   # filter, select, group_by, slice, ungroup, bind_rows, mutate
 # without fastreg: open_dataset("E:/workdata/[projectnumber]/cleaned-data/parquet-registers/<register>/") %>% rename_with(tolower) for each register
 
 # Adapt these codes to your study
-RYGB     <- c("KJDF10", "KJDF11")                     # Roux-en-Y gastric bypass
-SG       <- c("KJDF40", "KJDF41", "KJDF96", "KJDF97") # sleeve gastrectomy
-BS_CODES <- c(RYGB, SG)                               # combined vector
+# Code texts from the SKS browser (medinfo.dk/sks/brows.php). Check the validity
+# dates for your study period in SKS: KJDF40/KJDF41 are not in the 2005 edition of the
+# SKS operation classification, so they cannot catch sleeve operations before
+# they were introduced.
+RYGB     <- c("KJDF10", "KJDF11") # "Gastric bypass", "Laparoskopisk gastric bypass"
+SG       <- c("KJDF40", "KJDF41") # "Sleeve gastrektomi", "Laparoskopisk sleeve gastrektomi"
+# KJDF96/KJDF97 are "Anden (laparoskopisk) volumenindskrænkende operation på
+# mavesæk" (other volume-reducing stomach operation), not sleeve codes as such.
+# Add them only if "other" belongs in your exposure definition.
+BS_CODES <- c(RYGB, SG)           # combined vector
 
-# 1A.1 LPR2: procedures up to 2018/2019 ----------------------------------------
+# 1A.1 LPR2: procedures 1996 to 31 March 2019 ----------------------------------
 lpr_sksopr <- read_register("lpr_sksopr") %>%
   rename_with(tolower)
 lpr_adm    <- read_register("lpr_adm") %>%
@@ -334,7 +344,7 @@ including a prevalence study without a comparison group, so it
 belongs here where you build the exposed cohort.
 
 Count how many drop out at each exclusion step, so you can describe the
-attrition and later draw a STROBE flow diagram (also called a participant or
+attrition and later draw a STROBE (Strengthening the Reporting of Observational Studies in Epidemiology) flow diagram (also called a participant or
 attrition diagram; see the [STROBE
 checklist](https://www.strobe-statement.org/checklists/)). The generic
 N-counting template is in [Phase 6](first-extraction.qmd).
@@ -483,9 +493,11 @@ possible to work out](export.qmd#back-calculation).
 - **(Nested) case-control:** continue to [Case-control](case-control.qmd),
   where your "exposed" group above is instead your cases, and you sample controls who were at risk when the case
   had the outcome.
-- **Self-controlled or family-based design:** the person, or the family, is
-  their own control - see [Self-controlled and family-based
+- **Self-controlled or sibling design:** the person, or the family, is
+  their own control - see [Self-controlled and sibling
   designs](special-designs.qmd).
+- **Parents, siblings or a parent's characteristics:** see [Family
+  links](family-links.qmd) for how to link a child to its parents.
 
 ## Further information
 

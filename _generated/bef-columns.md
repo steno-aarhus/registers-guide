@@ -50,7 +50,8 @@
 | `version` | numeric | code | Module data version | 2004-12 to 2026-09 |
 | `betalingskom` | character | code | Betalingskommune | 1985 to 2026 |
 
-- **`mor_id`:** A pnr-like identifier for the mother, so BEF can be turned into a family structure without a separate register. It is only filled where the link is registered, which is not the case for everyone born before CPR.
+- **`mor_id`:** The mother's person id, from the parental link in CPR. It is the legal parent, not necessarily the biological one, and missing where no link is registered: for many people born before 1960, for many people born abroad, and for a second parent not yet registered on a newborn. BEF is a snapshot register, so the value can differ between snapshots. See [Family links](family-links.qmd).
+- **`far_id`:** The father's person id, from the parental link in CPR. See mor_id.
 - **`aegte_id`:** Not proof of a current marriage. What it points to depends on civst: the current spouse if married (G), the former spouse if divorced (F), the deceased spouse if widowed (E), and the same for registered partnerships (P, O, L). Read it together with civst before treating it as a living partner.
 - **`fdato`:** Not on DST's variable list for BEF, which documents foed_dag instead. Present in this delivery. Prefer foed_dag unless you have checked what yours contains.
 - **`antefam`:** A household can hold several families. That is why the family counts and the household counts differ, and why FAIK's household income cannot be read as one family's income without checking this.
@@ -81,7 +82,7 @@
 | Code system | Values |
 | --- | --- |
 | `koen` | `1` Mand, `2` Kvinde, `9` Uoplyst |
-| `reg` | `0` Uoplyst, `81` Nordjylland, `82` Midtjylland, `83` Syddanmark, `84` Hovedstaden, `85` Sjælland |
+| `reg` | `0` Uoplyst, `81` Region Nordjylland, `82` Region Midtjylland, `83` Region Syddanmark, `84` Region Hovedstaden, `85` Region Sjælland |
 | `civst` | `U` Ugift, `G` Gift (+ separeret), `F` Skilt, `E` Enke/Enkemand, `P` Registreret partnerskab, `O` Ophævet partnerskab, `L` Længstlevende af 2 partnere, `D` Død, `9` Uoplyst civilstand |
 | `kom` | Not listed here - see [DST's classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) |
 | `familie_type` | `1` Ægtepar, `2` Registreret partnerskab, `3` Samlevende par, `4` Samboende par, `5` Enlig (herunder også ikke hjemmeboende børn), `7` Ægtepar forskellig køn, `8` Ægtepar samme køn, `9` Enlig, `10` Ikke hjemmeboende børn |
@@ -91,7 +92,7 @@
 | `herkomst` | `1` Personer med dansk oprindelse, `2` Indvandrere, `3` Efterkommere, `9` Uoplyst |
 
 - **`koen`:** DST's classification KOEN_V1_1980 also defines `9` for not stated, which a delivery may not contain but a value set should. Sex is taken from the tenth digit of the CPR number: even is female, odd is male.
-- **`reg`:** Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
+- **`reg`:** DST's published classification writes these codes as text with a leading zero, "081" to "085". Check with `count(reg)` whether your delivery holds the number 81 or the text "081" before you filter on it. In R, `"081" == 81` is FALSE, so a filter written for one form returns nothing on the other. Code 0 for unknown is not in DST's published classification. Check with `count(reg)` whether your delivery uses it or leaves the value empty. Do not confuse these with AMT, the pre-2007 counties, which has 16 codes in the ranges 11-14, 21-24, 31-37 and 88. Different geography, different era.
 - **`civst`:** Codes P, O and L came in with the registered-partnership act of 1 October 1989; before that the set was smaller. Registered partnerships could no longer be entered into from 15 June 2012.
 - **`kom`:** These codes are valid from 1 January 2007. A study reaching further back needs the pre-reform classification, where the same number can mean a different municipality - confirmed for two reused codes against a current-only DST source: 707 is Norddjurs today, not its pre-2007 meaning, and likewise 849 is Jammerbugt. `lookup:` below covers only this post-2007 set (99 entries), not the full 278-code `values_from` file. Christiansø (411) is included in `lookup:` even though it is not a municipality (see description above): it is a real value a `kom` column can hold, and DST's own current-only classification lists it as its own area code alongside the 98 municipalities. Excluding it would just move the "unhandled code" problem this fix is meant to solve onto that one value.
 - **`familie_type`:** There is no code 6, and the set changed in December 2015. Codes 7 and 8 split the old "Ægtepar" by sex, and codes 9 and 10 split the old "Enlig", which had included children not living at home. A series that crosses 2015 therefore changes composition without any code going missing: 1 and 5 stop being used and four new codes appear. The exact switch-over dates are on DST's page and should be read there before a study is dated around them.
@@ -101,7 +102,7 @@
 Where these values come from:
 
 - **`koen`:** [DST's classification KOEN_V1_1980](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/koen) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e267e7c0-d998-4922-b2c4-6b44b15dd149csv_da)).
-- **`reg`:** [DST's regional classification](https://www.dst.dk/extranet/ForskningVariabellister/BEF%20-%20Befolkningen.html).
+- **`reg`:** [DST's classification of regions, landsdele and municipalities](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/nuts) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/5d18d1e0-400b-4505-92ad-6782915980a3csv_da)).
 - **`civst`:** [DST's variable list for BEF](https://www.dst.dk/da/Statistik/dokumentation/Times/cpr-oplysninger/civst).
 - **`kom`:** [DST's municipality classification](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer/amt-kom) ([the code list as CSV](https://www.dst.dk/klassifikationsbilag/e6e3c1d3-df3b-4e69-bc2b-c5d3f343833ccsv_da)).
 - **`familie_type`:** [DST high-quality variable documentation: familie-type](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable/familier/familie-type).
