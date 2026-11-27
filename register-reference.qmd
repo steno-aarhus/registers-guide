@@ -1,6 +1,6 @@
 ---
 title: "Overview of registers"
-subtitle: "Variable names for the most commonly used DST registers"
+subtitle: "Variable names for the most commonly used Statistics Denmark (DST) registers"
 date: last-modified
 pagetitle: "Overview of Danish registers at DST"
 description: "Variable names for common Danish registers at Statistics Denmark (DST): BEF, DOD, DODSAARS, VNDS, LPR2, LPR3, SKS procedures, MFR, LMDB, UDDA, UDDF, FAIK, IND, AKM and the DRG registers."
@@ -26,13 +26,13 @@ feedback box on this page. Corrections are welcome.
 <details>
 <summary>Where this comes from, and why it can still be wrong</summary>
 
-The tables on this page are generated from a schema built out of DST's published
+The tables on this page are generated from a schema built out of Statistics Denmark's (DST's) published
 documentation: the [variable
 list](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html)
 for each register and DST's [order
 list](https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx),
 which names every variable in every DST register with its period. The health
-registers - LPR, LMDB, the death registers, the cancer register - are documented
+registers - LPR (the National Patient Register), LMDB (the prescription register), the death registers, the cancer register - are documented
 by Sundhedsdatastyrelsen on [esundhed.dk](https://www.esundhed.dk/Dokumentation)
 instead, which is also the only source that publishes data types.
 
@@ -56,7 +56,7 @@ Key columns, the ones you use in the code, are marked in bold. Names apply after
 The code on this page opens registers with `read_register("registername")`
 (fastreg, by name - recommended). That requires fastreg set up with the path to
 your registers, see [Parquet and fastreg](parquet-and-fastreg.qmd#convert-sas-to-parquet) if you
-did not convert them from SAS yourself.
+did not convert them from SAS (a statistics program) yourself.
 
 Without fastreg, use `open_dataset("path/to/register/")` instead and replace the
 path with your project's parquet folder. Everything else in the examples works
@@ -75,7 +75,7 @@ question you are asking decides where to go:
   | Does this register reach the end of my follow-up?    | [Datasafari](https://danmarksdatavindue.dk/DDVDatasafari/#/registers) - shows the latest reference date and the next expected update                                                                                                   |
   | Which registers exist at all, and which are closed?  | [Oversigt over registre](https://www.dst.dk/extranet/forskningvariabellister/Oversigt%20over%20registre.html) - over a thousand, with years covered. **Luk** means closed and never extended, as `dodsaars` and `dodsaasg` both are     |
   | Can I even order this variable, and for which years? | [Bestillingsliste.xlsx](https://www.dst.dk/extranet/forskningvariabellister/Bestillingsliste.xlsx) - every variable in every DST register, with its period. The one to open while you are still planning                                |
-  | What does code `330` mean?                           | [Klassifikationer](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer) - DISCED-15 for education, SOCIO for employment, DISCO for occupation                                                                                  |
+  | What does code `330` mean?                           | [Klassifikationer](https://www.dst.dk/da/Statistik/dokumentation/nomenklaturer) - DISCED-15 for education, SOCIO (DST's socioeconomic classification) for employment, DISCO (DST's occupation classification) for occupation                                                                                  |
   | Why does this variable jump in one particular year?  | [Højkvalitetsdokumentation](https://www.dst.dk/da/TilSalg/data-til-forskning/generelt-om-data/dokumentation-af-data/hoejkvalitetsvariable) - breaks in the series and validity periods, for selected variables                          |
   | What does DST *mean* by "beskæftiget"?               | [Hvad betyder](https://www.dst.dk/da/Statistik/dokumentation/hvadbetyder) - the words, not the columns. Look here when a variable measures something narrower than the everyday word suggests                                          |
 
@@ -108,7 +108,7 @@ December only. Whether `year == 2020` corresponds to a particular reference time
 point depends on the project convention - confirm in your project guide. A
 person is in a file only if they were alive and living in Denmark on that file's
 reference date, so someone who dies after that date is still in the file - use
-DOD to determine whether a person was alive on a specific date.
+DOD (the register of deaths) to determine whether a person was alive on a specific date.
 
 BEF **cannot on its own** answer whether a person was resident in Denmark on a
 given date: between two snapshots people can both leave and come back. To decide
@@ -118,7 +118,7 @@ population](build-study-population.qmd#step-1).
 {{< include _generated/bef-columns.md >}}
 
 BEF does **not** contain date of death. Use DOD (`doddato`) for censoring, not
-DODSAARS, which stops in 2001 (see [below](#dod)). DST's own documentation:
+DODSAARS (the cause of death register, 1970-2001), which stops in 2001 (see [below](#dod)). DST's own documentation:
 [statistikdokumentation/befolkningen
 →](https://www.dst.dk/da/Statistik/dokumentation/statistikdokumentation/befolkningen).
 
@@ -223,7 +223,7 @@ deaths <- bind_rows(
   distinct(pnr, .keep_all = TRUE) # keeps the DOD row, since it comes first
 ```
 
-On DARTER, see [Register paths and
+On DARTER (project 708421), see [Register paths and
 datastores](darter-register-paths-datastores.qmd#critical-notes).
 
 </details>
@@ -299,7 +299,7 @@ Join: `lpr_adm` **LEFT JOIN** `lpr_diag` **ON** `recnum`.
 ## 3. LPR2 - Psychiatric (1995 -- March 2019)
 
 Psychiatric contacts before March 2019 are in **separate registers** from
-somatic LPR2. From March 2019, LPR3 covers both in one table.
+somatic LPR2. From March 2019, LPR3 (the patient register from 2019) covers both in one table.
 
 []{#psyk-before-1995}
 
@@ -360,7 +360,7 @@ psyk_diag <- read_register("t_psyk_diag") %>%
 
 ::: {.callout-warning}
 **Before you join these two tables: `lpr_a_kontakt`/`lpr_a_diagnose` are not
-pure LPR3.** They also hold LPR1, LPR2 and MiniPAS (records from private
+pure LPR3.** They also hold LPR1 (the oldest format of the National Patient Register), LPR2 and MiniPAS (records from private
 hospitals) rows, tagged by `lprindberetningssystem`, going back to around
 2017. Filter both tables on
 `lprindberetningssystem == "LPR3"` first, or you will double-count contacts
@@ -570,11 +570,11 @@ handle this.
 
 ## 7. Socioeconomic registers
 
-UDDA, FAIK and AKM are the three registers used to measure socioeconomic
-position (SEP) following the SEPLINE guidelines ([Hjorth et al.
+UDDA (the education register), FAIK (family income) and AKM (the labour classification module) are the three registers used to measure socioeconomic
+position (SEP) following the SEPLINE (the national guideline on socioeconomic position in register research) guidelines ([Hjorth et al.
 2025](https://doi.org/10.2147/CLEP.S520772)):
 education, income and employment as three separate dimensions, not one
-combined SEP variable. UDDF and IND hold the same kinds of information in
+combined SEP variable. UDDF (highest completed education, history) and IND (personal income) hold the same kinds of information in
 another form: education as dated spells, and income per person.
 
 ### UDDA - Education Register
@@ -742,7 +742,7 @@ and the same five `Mor_*` tables) - see [`mfr_nyfoedte`](#mfr-nyfoedte)
 below.
 
 The 2019+ population also differs from the two older eras: 1973-2018
-required the **mother** to have a Danish CPR-number, 2019+ does not ([SDS,
+required the **mother** to have a Danish CPR-number, 2019+ does not ([Danish Health Data Authority (SDS),
 documentation from 2019](https://sundhedsdatastyrelsen.dk/Media/638650989728109987/Dokumentation_Foedselsregisteret_2019_og_frem.xlsx), sheet "Register"). A study spanning this
 boundary is comparing two different populations, not only two table shapes.
 :::
@@ -1080,7 +1080,7 @@ clinical epidemiology literature it is usually called RLRR, Register of
 Laboratory Results for Research (see e.g. [Arendt et al.
 2020](https://doi.org/10.2147/CLEP.S245060), Clinical Epidemiology 12:469-475).
 The columns are named in English: `patient_cpr`, `analysiscode`,
-`samplingdate`, `value`, `unit`. NPU is the *coding system* used in
+`samplingdate`, `value`, `unit`. NPU (Nomenclature for Properties and Units, the code system for laboratory analyses) is the *coding system* used in
 `analysiscode`, not a column name.
 :::
 
@@ -1136,7 +1136,7 @@ results](laboratory-results.qmd).
 ### Healthcare costs {#healthcare-costs}
 
 Costs per person are assembled from DRG-priced hospital contacts, fees in
-`sysi`/`sssy` and medication in LMDB. Which DRG registers DST holds, and how to
+`sysi`/`sssy` and medication in LMDB. Which DRG (Diagnosis Related Groups) registers DST holds, and how to
 read them, is on [Healthcare costs](healthcare-costs.qmd). The column tables for
 the two current DRG registers are below.
 
@@ -1194,7 +1194,7 @@ validity. Cite the profile for each register you use.
   | Laboratory results (overview of Danish laboratory databases)          | [Arendt et al. 2020](https://doi.org/10.2147/CLEP.S245060), *Clin Epidemiol*                           |
 
 **Reporting:** report observational studies following
-[STROBE](https://www.strobe-statement.org/checklists/). For register-based /
-routinely-collected-data studies, **RECORD** extends STROBE, and **RECORD-PE**
+[STROBE (Strengthening the Reporting of Observational Studies in Epidemiology)](https://www.strobe-statement.org/checklists/). For register-based /
+routinely-collected-data studies, **RECORD** (Reporting of studies Conducted using Observational Routinely-collected health Data) extends STROBE, and **RECORD-PE**
 covers pharmacoepidemiology specifically - see [RECORD-PE (EQUATOR
 Network)](https://www.equator-network.org/reporting-guidelines/record-pe/).
