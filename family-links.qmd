@@ -146,24 +146,36 @@ parents_from_bef <- function(pnrs) {
 parents <- parents_from_bef(cohort_pnrs)
 ```
 
-A child with no link in BEF to either parent is not in `parents` at all. Join
-`parents` back onto your cohort with `left_join()`, count the children with
-`NA` for both by birth year before you go on, and report how many children each
-analysis loses on that account.
+A child with no link in BEF to either parent is not in `parents` at all, so
+join `parents` back onto your cohort and count the children without one:
 
-Two things to check in your own delivery. A missing id in parquet converted
-from SAS is an empty string, not `NA`, because a SAS text column has no missing
-value of its own; the `na_if()` line turns it into `NA`, and without it every
-child without a registered father would share the father id `""`. And if your
-BEF has no `referencetid` column, order the snapshots by the `year` column the
-parquet conversion adds: drop `referencetid >= foed_dag` from the two filters
-and write `slice_min(year, n = 1, with_ties = FALSE)`. A child is in BEF only
-from birth, so this takes the first year with an id. If your delivery has
-several snapshots a year, keep one per year first, as under "Check your BEF" in
-[Socioeconomic variables](socioeconomic-variables.qmd#faik-income). A
-different rule, such as the most frequent value or the latest snapshot, is
-equally valid if you state it. What matters is that the rule is the same for
-every child.
+```r
+library(dplyr) # left_join, count
+
+# cohort: one row per child in your cohort, with pnr and birth_year
+cohort_parents <- cohort %>%
+  left_join(parents, by = "pnr") # children with no parent in BEF get NA for both
+
+count(cohort_parents, birth_year, no_parent = is.na(mor_id) & is.na(far_id))
+```
+
+Report how many children each analysis loses on that account. Without the
+`na_if()` line in the function, a missing id stays an empty string, and every
+child without a registered father would share the father id `""`.
+
+The rule in the function, the first snapshot with an id, is one choice. The
+most frequent value or the latest snapshot is equally valid if you state it.
+What matters is that the rule is the same for every child.
+
+::: {.callout-note collapse="true" title="If your BEF has no `referencetid` column"}
+Some deliveries have no `referencetid`. Order the snapshots by the `year`
+column the parquet conversion adds instead: drop `referencetid >= foed_dag`
+from the two filters, and write `slice_min(year, n = 1, with_ties = FALSE)`. A
+child is in BEF only from birth, so this takes the first year with an id. If
+your delivery has several snapshots a year, keep one per year first, as under
+"Check your BEF" in [Socioeconomic
+variables](socioeconomic-variables.qmd#faik-income).
+:::
 
 ### The mother at birth: the Medical Birth Register {#mfr}
 
