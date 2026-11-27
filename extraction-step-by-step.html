@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-23">
+<meta name="dcterms.date" content="2026-11-27">
 <meta name="description" content="The extraction pattern for Danish registers in R: open a register lazily with fastreg or arrow, filter and select, then collect() or compute() in DuckDB.">
 
 <title>Extracting register data step by step in R – Register Guide</title>
@@ -677,7 +677,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Last modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 23, 2026</p>
+      <p class="date">November 27, 2026</p>
     </div>
   </div>
   
@@ -690,7 +690,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>This page teaches the one pattern that every extraction in the guide follows: open a register as a lazy connection, filter the rows, select the columns, and only then fetch the result into R with <code>collect()</code>. Read it after <a href="./file-formats.html">Phase 4 - File types and loading</a>, where you saw that parquet registers are opened lazily, and before you try the pattern yourself in <a href="./first-extraction.html">Phase 6</a>. When you are done you can read any extraction in the guide, and you can tell whether an object is data in R or still an unsent query.</p>
-<p>The reason for the pattern is size. <code>read_csv()</code> or <code>readRDS()</code> reads the entire file into memory at once, which works for your own small datasets, but BEF and LMDB have many millions of rows and would crash your session. A lazy connection lets you filter before you fetch, so only the rows you need reach memory.</p>
+<p>The reason for the pattern is size. <code>read_csv()</code> or <code>readRDS()</code> reads the entire file into memory at once, which works for your own small datasets, but BEF (the population register) and LMDB (the prescription register) have many millions of rows and would crash your session. A lazy connection lets you filter before you fetch, so only the rows you need reach memory.</p>
 <section id="the-pattern-open-connection-filter-select-fetch" class="level2">
 <h2 class="anchored" data-anchor-id="the-pattern-open-connection-filter-select-fetch">The pattern: open connection → filter → select → fetch</h2>
 <p>Think of a supermarket. You can either buy the whole shop and sort at home - or send a shopping list and only have what is on the list delivered. Lazy loading is the latter: you describe what you want, and only fetch the items at the end with <code>collect()</code>.</p>
@@ -730,7 +730,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Why <code>rename_with(tolower)</code> as the first step?</strong> Column names in DST registers are not capitalised consistently (<code>PNR</code>, <code>pnr</code>, <code>Pnr</code>). With everything in lower case from the start, the rest of your code can use <code>pnr</code> everywhere. Add it right after <code>read_register()</code> or <code>open_dataset()</code>, before you filter or select.</p>
+<p><strong>Why <code>rename_with(tolower)</code> as the first step?</strong> Column names in DST (Statistics Denmark) registers are not capitalised consistently (<code>PNR</code>, <code>pnr</code>, <code>Pnr</code>). With everything in lower case from the start, the rest of your code can use <code>pnr</code> everywhere. Add it right after <code>read_register()</code> or <code>open_dataset()</code>, before you filter or select.</p>
 </div>
 </div>
 </div>
@@ -826,7 +826,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Never write an actual CPR number (pnr) in your code.</strong> Use only variable names and vectors. A CPR number identifies a person, and a script is the file you are most likely to show a colleague or bring home.</p>
+<p><strong>Never write an actual CPR (the Civil Registration System) number (pnr) in your code.</strong> Use only variable names and vectors. A CPR number identifies a person, and a script is the file you are most likely to show a colleague or bring home.</p>
 </div>
 </div>
 </div>
@@ -834,7 +834,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <summary>
 What <code>!!</code> means, and when you need it
 </summary>
-<p>Sometimes you filter on a <strong>list you defined in R yourself</strong> - typically a set of ICD or year codes:</p>
+<p>Sometimes you filter on a <strong>list you defined in R yourself</strong> - typically a set of ICD (International Classification of Diseases) or year codes:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>my_codes <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"DE10"</span>, <span class="st">"DE11"</span>, <span class="st">"DE14"</span>)   <span class="co"># local R vector you created</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>register <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">substr</span>(c_diag, <span class="dv">1</span>, <span class="dv">4</span>) <span class="sc">%in%</span> <span class="sc">!!</span>my_codes)   <span class="co"># first 4 characters, so DE109, DE112 ... also match</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The lazy query is not executed by R, but by the database engine (Arrow/DuckDB), which runs <em>separately</em> from R and does not know your local variables. When the query is built, dplyr checks each name: if the register has a <em>column</em> called <code>my_codes</code>, it uses the column; if not, it looks up the R vector <code>my_codes</code> and copies its values into the query. So the code above usually works without <code>!!</code> too. The risk is a name clash: if your local variable has the same name as a column (e.g.&nbsp;a local <code>year</code> and the register’s <code>year</code> column), the column silently wins. <code>!!</code> removes that ambiguity - it means: <em>“this is an R object, not a column name - look up its values in R and use them in the query.”</em></p>
@@ -848,7 +848,7 @@ What <code>!!</code> means, and when you need it
 </div>
 </div>
 </div>
-<p>The other place this comes up is subsetting a register to your cohort’s <code>pnr</code>. There you use <code>semi_join()</code>, which takes an ordinary local table and avoids <code>!!</code> entirely. See <a href="./extract-from-lpr.html">Extract from LPR</a>.</p>
+<p>The other place this comes up is subsetting a register to your cohort’s <code>pnr</code>. There you use <code>semi_join()</code>, which takes an ordinary local table and avoids <code>!!</code> entirely. See <a href="./extract-from-lpr.html">Extract from LPR (the National Patient Register)</a>.</p>
 </details>
 </section>
 </section>

@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-23">
+<meta name="dcterms.date" content="2026-11-27">
 <meta name="description" content="R code to extract diagnoses from the Danish National Patient Register (LPR2 and LPR3): one or several outcomes, a reusable function and one row per person.">
 
 <title>Extract diagnoses from LPR2 and LPR3 in R – Register Guide</title>
@@ -670,7 +670,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="Breadcrumbs"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./understand-lpr.html">Build the study · 9-10</a></li><li class="breadcrumb-item"><a href="./understand-lpr.html">9 - Hospital contacts (LPR)</a></li><li class="breadcrumb-item"><a href="./extract-from-lpr.html">Extract from LPR</a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title">Extract from LPR</h1>
-<p class="subtitle lead">R code for diagnoses from LPR2 and LPR3: one outcome, several outcomes, a reusable function</p>
+<p class="subtitle lead">R code for diagnoses from LPR2 (the patient register up to 2019) and LPR3 (the patient register from 2019): one outcome, several outcomes, a reusable function</p>
 </div>
 
 <div>
@@ -686,7 +686,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Last modified</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 23, 2026</p>
+      <p class="date">November 27, 2026</p>
     </div>
   </div>
   
@@ -698,7 +698,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>This page has the code for pulling diagnoses out of LPR: for one outcome, for several outcomes at once, and as a reusable function, <code>get_lpr_diagnoses()</code>, that the later pages call. You need it whenever an outcome, an exposure or a comorbidity is defined by hospital diagnoses. When you are done you have one table with <code>pnr</code>, contact date and ICD code from LPR2 and LPR3 combined, and you know how to reduce it to one row per person.</p>
+<p>This page has the code for pulling diagnoses out of LPR (the National Patient Register): for one outcome, for several outcomes at once, and as a reusable function, <code>get_lpr_diagnoses()</code>, that the later pages call. You need it whenever an outcome, an exposure or a comorbidity is defined by hospital diagnoses. When you are done you have one table with <code>pnr</code>, contact date and ICD (International Classification of Diseases) code from LPR2 and LPR3 (from 2019) combined, and you know how to reduce it to one row per person.</p>
 <p>Read <a href="./understand-lpr.html">Understand LPR</a> first. The code relies on what that page explains: the two periods (LPR2 and LPR3), the D-prefix, the diagnosis types (A/B/G) and the filter for retracted diagnoses. The extraction pattern itself (open lazily, filter, <code>collect()</code>) is the one from <a href="./extraction-step-by-step.html">Phase 5</a> and <a href="./first-extraction.html">Phase 6</a>, applied to each LPR period.</p>
 <p>The examples assume you already have a cohort: <code>cohort</code>, a data.frame with <code>pnr</code> and <code>index_date</code> per person, built in <a href="./build-study-population.html">Phase 10</a>. That phase comes later and uses the pattern you learn here, so read them in order and come back to this code once your cohort exists. They also use <code>inner_join()</code> and <code>bind_rows()</code>, explained in <a href="./data-manipulation.html">Phase 12</a>.</p>
 <section id="before-you-run" class="level2">
@@ -711,7 +711,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <i class="callout-icon"></i>
 </div>
 <div class="callout-body-container">
-<p><strong>Check that your LPR2 files reach the end of March 2019 before you rely on the <code>lprindberetningssystem == "LPR3"</code> filter.</strong> The filter solves one confirmed problem: <code>lpr_a_kontakt</code> also holds older LPR2 contacts, which would be counted twice if you did not filter them out. It does not guarantee that your combined series has no gap around the transition. DST’s LPR2 files end on 31 March 2019, but the files in your own delivery can end earlier.</p>
+<p><strong>Check that your LPR2 files reach the end of March 2019 before you rely on the <code>lprindberetningssystem == "LPR3"</code> filter.</strong> The filter solves one confirmed problem: <code>lpr_a_kontakt</code> also holds older LPR2 contacts, which would be counted twice if you did not filter them out. It does not guarantee that your combined series has no gap around the transition. Statistics Denmark’s (DST’s) LPR2 files end on 31 March 2019, but the files in your own delivery can end earlier.</p>
 <p>Check it before you rely on a count that spans the transition:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">read_register</span>(<span class="st">"lpr_adm"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename_with</span>(tolower) <span class="sc">%&gt;%</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">max_date =</span> <span class="fu">max</span>(d_inddto, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
@@ -734,7 +734,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>Several outcomes:</strong> pull all A and B diagnoses once into a table called <code>all_dx</code>, then filter that table per outcome. It is the same code with three small changes, see <a href="#several-outcomes">Several outcomes at once</a>. You query LPR once instead of scanning the registers again for each outcome, and the function <a href="#reusable-function"><code>get_lpr_diagnoses()</code></a> does it in one call.</li>
 </ul>
 <p>Either way the shape is the same, and it follows from <a href="./understand-lpr.html#contact-and-diagnosis-tables">how LPR is built</a>: a hospital contact’s <code>pnr</code> and date are in one table and the ICD code in another, so every extract is a join between a contact register and a diagnosis register, done once per LPR period and then stacked.</p>
-<p>The examples use <code>read_register("name")</code> (fastreg); without fastreg use <code>open_dataset("path/to/&lt;register&gt;/")</code>. LPR is one of the largest registers, so it must be in parquet: reading it from SAS pulls the whole thing into RAM. Convert first if nobody has: <a href="./parquet-and-fastreg.html#convert-sas-to-parquet">Parquet and fastreg</a>.</p>
+<p>The examples use <code>read_register("name")</code> (fastreg); without fastreg use <code>open_dataset("path/to/&lt;register&gt;/")</code>. LPR is one of the largest registers, so it must be in parquet: reading it from SAS (a statistics program) pulls the whole thing into RAM. Convert first if nobody has: <a href="./parquet-and-fastreg.html#convert-sas-to-parquet">Parquet and fastreg</a>.</p>
 <p>The code filters to your cohort with <code>semi_join(tibble(pnr = ...))</code> rather than <code>filter(pnr %in% ...)</code>, because it pushes down into Arrow/DuckDB better and needs no <code>!!</code> - see <a href="./function-guide.html#semi-join"><code>semi_join()</code></a>. You still need <code>!!</code> for a local code list inside <code>filter()</code>, e.g.&nbsp;<code>substr(c_diag, 2, 4) %in% !!CODES</code>. <code>CODES</code> must then hold three-character codes. The left side is always three characters, so a four-character code such as <code>E119</code> silently matches nothing: filter on <code>E11</code> and narrow afterwards on the full <code>c_diag</code>.</p>
 </section>
 <section id="one-outcome" class="level2">
@@ -919,7 +919,7 @@ Try it yourself: runnable example on synthetic data (local R, not DST)
 </div>
 </div>
 </div>
-<p>The example extracts CVD diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the same steps as above, runnable locally on synthetic data. It follows the <a href="#one-outcome">one-outcome route</a>: specific codes are filtered out <em>before</em> <code>collect()</code>.</p>
+<p>The example extracts CVD (cardiovascular disease) diagnoses (ischaemic heart disease, ICD-10 I20–I25) from LPR2 and LPR3 combined - the same steps as above, runnable locally on synthetic data. It follows the <a href="#one-outcome">one-outcome route</a>: specific codes are filtered out <em>before</em> <code>collect()</code>.</p>
 <p>The synthetic LPR data is generated with <a href="https://github.com/sara-schwartz/fiktive"><code>fiktive</code></a>, which you already know from <a href="./first-extraction.html#preparation-install-fiktive-and-generate-synthetic-data">Phase 6 - First extraction</a>. Phase 6 saves <code>bef</code> and <code>lpr_adm</code> only. Run the block below for the diagnosis tables. It uses the same <code>n</code>, window, and seed, so <code>lpr_adm</code> matches.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install fiktive for the first time:</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># install.packages("remotes"); remotes::install_github("sara-schwartz/fiktive")</span></span>
@@ -1160,7 +1160,7 @@ Try it yourself: runnable example on synthetic data (local R, not DST)
 <span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>cohort_diagnoses <span class="ot">&lt;-</span> cohort <span class="sc">%&gt;%</span></span>
 <span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(diagnosis_flags_collapsed, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"pnr"</span>, <span class="st">"index_date"</span>)) <span class="sc">%&gt;%</span></span>
 <span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">starts_with</span>(<span class="st">"dx_"</span>), <span class="sc">~</span> <span class="fu">replace_na</span>(., <span class="dv">0</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>It gives one 0/1 flag per comorbidity per person, ready to enter your model as covariates. (The same <code>group_by(pnr, index_date) %&gt;% summarise(any(.))</code> pattern is used on the <a href="./nmi.html">NMI</a> page, for example.)</p>
+<p>It gives one 0/1 flag per comorbidity per person, ready to enter your model as covariates. (The same <code>group_by(pnr, index_date) %&gt;% summarise(any(.))</code> pattern is used on the <a href="./nmi.html">Nordic Multimorbidity Index, NMI</a> page, for example.)</p>
 <p>Step 2 groups on <code>pnr</code> and <code>index_date</code>, and step 3 rejoins on both. If your cohort has one row per person, that gives the same result as <code>pnr</code> alone. If a <code>pnr</code> is repeated (e.g.&nbsp;a comparison group matched with replacement), it keeps each row’s flags tied to that row’s own index date, see <a href="./comparison-cohort.html#step-4---assemble-validate-and-save">the callout on repeated <code>pnr</code> on Comparison cohort</a>.</p>
 </section>
 <section id="clean-diagnoses" class="level2">
@@ -1171,7 +1171,7 @@ Try it yourself: runnable example on synthetic data (local R, not DST)
 </ul>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>all_dx <span class="ot">&lt;-</span> all_dx <span class="sc">%&gt;%</span></span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">substr</span>(<span class="fu">toupper</span>(c_diag), <span class="dv">1</span>, <span class="dv">5</span>) <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"DZ763"</span>, <span class="st">"DZ032"</span>, <span class="st">"DZ038"</span>, <span class="st">"DZ039"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>What to remove depends on your project and question: <code>DZ03*</code> (observation for suspected disease) is genuinely relevant in some studies and should be kept there. The pattern is adapted from <a href="https://osf.io/zhfyp/overview">the Plana-Ripoll group’s code on OSF</a>; verify against your own data.</p>
+<p>What to remove depends on your project and question: <code>DZ03*</code> (observation for suspected disease) is genuinely relevant in some studies and should be kept there. The pattern is adapted from <a href="https://osf.io/zhfyp/overview">the Plana-Ripoll group’s code on OSF (Open Science Framework)</a>; verify against your own data.</p>
 </section>
 <section id="next-steps" class="level2">
 <h2 class="anchored" data-anchor-id="next-steps">Next steps</h2>
