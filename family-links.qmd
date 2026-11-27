@@ -106,17 +106,17 @@ for the siblings outside your cohort.
 library(fastreg) # read_register()
 library(dplyr)   # the verbs are translated to SQL and run in DuckDB
 
-# pnrs: the children you want parents for. Returns one row per child:
-# pnr | foed_dag | mor_id | far_id
+# pnrs: the children you want parents for. Returns one row per child with at
+# least one registered parent: pnr | foed_dag | mor_id | far_id
 parents_from_bef <- function(pnrs) {
   bef <- read_register("bef") %>%
     rename_with(tolower) %>%
-    semi_join(tibble(pnr = pnrs), by = "pnr", copy = TRUE)
+    semi_join(tibble(pnr = pnrs), by = "pnr", copy = TRUE) %>%
+    # a missing id is an empty string, not NA, in parquet converted from SAS
+    mutate(mor_id = na_if(mor_id, ""), far_id = na_if(far_id, ""))
   # Columns: pnr | foed_dag | mor_id | far_id | referencetid
 
-  # The first non-missing mother id in a snapshot at or after birth. Check how
-  # a missing id looks in your delivery (NA or an empty string) before relying
-  # on is.na().
+  # The first non-missing mother id in a snapshot at or after birth
   mother <- bef %>%
     filter(referencetid >= foed_dag, !is.na(mor_id)) %>%
     group_by(pnr) %>%
@@ -129,12 +129,16 @@ parents_from_bef <- function(pnrs) {
     group_by(pnr) %>%
     slice_min(referencetid, n = 1, with_ties = FALSE) %>%
     ungroup() %>%
-    select(pnr, foed_dag, far_id)
+    select(pnr, foed_dag_far = foed_dag, far_id)
 
-  # full_join: a child with only one registered parent keeps its row, with NA
-  # for the other. foed_dag is in the key so it is kept for both kinds of child.
+  # full_join on pnr: a child with only one registered parent keeps its row,
+  # with NA for the other. BEF can correct a birth date between snapshots, so
+  # foed_dag is taken from the mother's snapshot, or the father's if she is
+  # missing, rather than used as a key.
   mother %>%
-    full_join(father, by = c("pnr", "foed_dag")) %>%
+    full_join(father, by = "pnr") %>%
+    mutate(foed_dag = coalesce(foed_dag, foed_dag_far)) %>%
+    select(pnr, foed_dag, mor_id, far_id) %>%
     collect()
 }
 
@@ -142,8 +146,21 @@ parents_from_bef <- function(pnrs) {
 parents <- parents_from_bef(cohort_pnrs)
 ```
 
-A child with `NA` for both has no link in BEF. Count them by birth year before
-you go on, and report how many children each analysis loses on that account. A
+A child with no link in BEF to either parent is not in `parents` at all. Join
+`parents` back onto your cohort with `left_join()`, count the children with
+`NA` for both by birth year before you go on, and report how many children each
+analysis loses on that account.
+
+Two things to check in your own delivery. A missing id in parquet converted
+from SAS is an empty string, not `NA`, because a SAS text column has no missing
+value of its own; the `na_if()` line turns it into `NA`, and without it every
+child without a registered father would share the father id `""`. And if your
+BEF has no `referencetid` column, order the snapshots by the `year` column the
+parquet conversion adds: drop `referencetid >= foed_dag` from the two filters
+and write `slice_min(year, n = 1, with_ties = FALSE)`. A child is in BEF only
+from birth, so this takes the first year with an id. If your delivery has
+several snapshots a year, keep one per year first, as under "Check your BEF" in
+[Socioeconomic variables](socioeconomic-variables.qmd#faik-income). A
 different rule, such as the most frequent value or the latest snapshot, is
 equally valid if you state it. What matters is that the rule is the same for
 every child.
